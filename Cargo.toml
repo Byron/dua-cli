@@ -1,6 +1,6 @@
 [package]
-name = "dua"
-version = "1.0.0"
+name = "dua-cli"
+version = "0.1.0"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
 publish = false
 edition = "2018"
@@ -14,7 +14,10 @@ structopt = "0.2.14"
 name="dua"
 path="src/main.rs"
 
+[lib]
+name="dua"
+
 [profile.release]
 panic = 'unwind'
 incremental = false
-overflow-checks = true
+overflow-checks = false
