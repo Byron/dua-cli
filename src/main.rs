@@ -1,6 +1,5 @@
 extern crate failure;
 extern crate failure_tools;
-extern crate dua;
 #[macro_use]
 extern crate structopt;
 

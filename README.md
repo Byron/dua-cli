@@ -3,5 +3,3 @@ DUA (-> Disk Usage Analyzer) is a tool to conveniently learn about the usage of 
 ### Tasks
 
 * [ ] Simple CLI to list top-level directories similar to sn-sort
-* [ ] A multi-threaded directory walker capable of being used for all kinds of directory-based computations.
-       Ideally, each listing of a directory can be handled by a separate thread.
