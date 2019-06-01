@@ -5,8 +5,7 @@ extern crate structopt;
 
 use failure::Error;
 use failure_tools::ok_or_exit;
-use std::io;
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 use structopt::StructOpt;
 
 mod options {
