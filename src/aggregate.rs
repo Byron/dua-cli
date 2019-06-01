@@ -83,10 +83,13 @@ fn write_path(
     num_bytes: u64,
     num_errors: u64,
 ) -> Result<(), io::Error> {
+    use termion::color;
     writeln!(
         out,
-        "{:>10}\t{}{}",
+        "{}{:>10}{}\t{}{}",
+        options.color.display(color::Fg(color::Green)),
         options.format_bytes(num_bytes),
+        options.color.display(color::Fg(color::Reset)),
         path.as_ref().display(),
         if num_errors == 0 {
             Cow::Borrowed("")

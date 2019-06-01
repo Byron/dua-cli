@@ -1,4 +1,5 @@
 use jwalk::WalkDir;
+use std::fmt;
 use std::path::Path;
 
 pub enum ByteFormat {
@@ -12,9 +13,39 @@ pub enum Sorting {
     Alphabetical,
 }
 
+#[derive(Clone, Copy)]
+pub enum Color {
+    None,
+    Terminal,
+}
+
+pub struct DisplayColor<C> {
+    kind: Color,
+    color: C,
+}
+
+impl Color {
+    pub fn display<C>(&self, color: C) -> DisplayColor<C> {
+        DisplayColor { kind: *self, color }
+    }
+}
+
+impl<C> fmt::Display for DisplayColor<C>
+where
+    C: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self.kind {
+            Color::None => Ok(()),
+            Color::Terminal => self.color.fmt(f),
+        }
+    }
+}
+
 pub struct WalkOptions {
     pub threads: usize,
     pub format: ByteFormat,
+    pub color: Color,
 }
 
 impl WalkOptions {

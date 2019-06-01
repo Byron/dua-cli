@@ -11,6 +11,8 @@ failure-tools = "4.0.2"
 structopt = "0.2.14"
 jwalk = "0.4.0"
 byte-unit = "2.1.0"
+termion = "1.5.2"
+atty = "0.2.11"
 
 [[bin]]
 name="dua"
