@@ -24,10 +24,18 @@ SUCCESSFULLY=0
       )
       ls
       (with "multiple given paths"
-        it "produces a human-readable (metric) aggregate of the current directory, with total" && {
-          WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
-          expect_run ${SUCCESSFULLY} "$exe" a . . dir ./dir/ ./dir/sub
-        }
+        (when "specifying a subcommand"
+          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+            WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
+            expect_run ${SUCCESSFULLY} "$exe" aggregate . . dir ./dir/ ./dir/sub
+          }
+        )
+        (when "specifying no subcommand"
+          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+            WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
+            expect_run ${SUCCESSFULLY} "$exe" . . dir ./dir/ ./dir/sub
+          }
+        )
       )
     )
 

@@ -50,6 +50,10 @@ mod options {
         /// Bytes - plain bytes without any formatting
         #[structopt(short = "f", long = "format")]
         pub format: Option<ByteFormat>,
+
+        /// One or more input files. If unset, we will assume the current directory
+        #[structopt(parse(from_os_str))]
+        pub input: Vec<PathBuf>,
     }
 
     #[derive(Debug, StructOpt)]
@@ -77,7 +81,15 @@ fn run() -> Result<(), Error> {
     };
     let res = match opt.command {
         Some(Aggregate { input }) => dua::aggregate(stdout_locked, walk_options, input),
-        None => dua::aggregate(stdout_locked, walk_options, vec![PathBuf::from(".")]),
+        None => dua::aggregate(
+            stdout_locked,
+            walk_options,
+            if opt.input.len() == 0 {
+                vec![PathBuf::from(".")]
+            } else {
+                opt.input
+            },
+        ),
     }?;
 
     if res.num_errors > 0 {
