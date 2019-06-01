@@ -7,7 +7,8 @@ use structopt::StructOpt;
 use dua::{ByteFormat, Color};
 use failure::Error;
 use failure_tools::ok_or_exit;
-use std::{io, io::Write, path::PathBuf, process};
+use std::path::PathBuf;
+use std::{fs, io, io::Write, process};
 
 mod options;
 
@@ -34,7 +35,17 @@ fn run() -> Result<(), Error> {
             statistics,
         }) => (
             statistics,
-            dua::aggregate(stdout_locked, walk_options, !no_total, !no_sort, input)?,
+            dua::aggregate(
+                stdout_locked,
+                walk_options,
+                !no_total,
+                !no_sort,
+                if input.len() == 0 {
+                    cwd_dirlist()?
+                } else {
+                    input
+                },
+            )?,
         ),
         None => (
             false,
@@ -44,7 +55,7 @@ fn run() -> Result<(), Error> {
                 true,
                 true,
                 if opt.input.len() == 0 {
-                    vec![PathBuf::from(".")]
+                    cwd_dirlist()?
                 } else {
                     opt.input
                 },
@@ -59,6 +70,17 @@ fn run() -> Result<(), Error> {
         process::exit(1);
     }
     Ok(())
+}
+
+fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
+    let mut v: Vec<_> = fs::read_dir(".")?
+        .filter_map(|e| {
+            e.ok()
+                .and_then(|e| e.path().strip_prefix(".").ok().map(ToOwned::to_owned))
+        })
+        .collect();
+    v.sort();
+    Ok(v)
 }
 
 fn main() {

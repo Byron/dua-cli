@@ -18,12 +18,27 @@ WITH_FAILURE=1
     cp -R "$fixtures/sample-01/" .
     (with "no arguments"
       (with "no given path"
-        it "produces a human-readable (metric) aggregate of the current directory, without total" && {
-          WITH_SNAPSHOT="$snapshot/success-no-arguments" \
-          expect_run ${SUCCESSFULLY} "$exe"
-        }
+        (with "no subcommand"
+          it "produces a human-readable (metric) aggregate of everything within the current directory, with total" && {
+            WITH_SNAPSHOT="$snapshot/success-no-arguments" \
+            expect_run ${SUCCESSFULLY} "$exe"
+          }
+        )
+        (with "the aggregate sub-command"
+          (with "no sorting option"
+            it "produces a human-readable (metric) aggregate of everything within the current directory, with total" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate
+            }
+          )
+          (with "sorting disabled"
+            it "produces a human-readable (metric) aggregate of everything within the current directory, alphabetically sorted, with total" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-no-sort" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --no-sort
+            }
+          )
+        )
       )
-      ls
       (with "multiple given paths"
         (when "specifying the 'aggregate' subcommand"
           (with "no option to adjust the total"

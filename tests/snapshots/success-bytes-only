@@ -1,1 +1,6 @@
- 1258947 b	.
+       0 b	b.empty
+     256 b	a
+     256 b	c.lnk
+     666 b	.hidden.666
+ 1258024 b	dir
+ 1259202 b	total
