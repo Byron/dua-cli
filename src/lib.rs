@@ -6,6 +6,12 @@ pub struct WalkOptions {
 }
 
 impl WalkOptions {
+    pub fn format_bytes(&self, b: u64) -> String {
+        use byte_unit::Byte;
+        Byte::from_bytes(b as u128)
+            .get_appropriate_unit(false)
+            .format(2)
+    }
     pub fn iter_from_path(&self, path: &Path) -> WalkDir {
         WalkDir::new(path)
             .preload_metadata(true)
@@ -57,7 +63,12 @@ mod aggregate {
                 }
             }
 
-            writeln!(out, "{}\t{}", num_bytes, path.as_ref().display())?;
+            writeln!(
+                out,
+                "{}\t{}",
+                options.format_bytes(num_bytes),
+                path.as_ref().display()
+            )?;
         }
         Ok(res)
     }

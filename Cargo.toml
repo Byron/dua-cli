@@ -10,6 +10,7 @@ failure = "0.1.1"
 failure-tools = "4.0.2"
 structopt = "0.2.14"
 jwalk = "0.4.0"
+byte-unit = "2.1.0"
 
 [[bin]]
 name="dua"
