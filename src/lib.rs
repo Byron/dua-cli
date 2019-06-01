@@ -58,6 +58,7 @@ mod aggregate {
     pub fn aggregate(
         mut out: impl io::Write,
         options: WalkOptions,
+        compute_total: bool,
         paths: impl IntoIterator<Item = impl AsRef<Path>>,
     ) -> Result<WalkResult, Error> {
         let mut res = WalkResult::default();
@@ -90,8 +91,14 @@ mod aggregate {
             total += num_bytes;
             res.num_errors += num_errors;
         }
-        if num_roots > 1 {
-            write_path(&mut out, &options, Path::new("total"), total, res.num_errors)?;
+        if num_roots > 1 && compute_total {
+            write_path(
+                &mut out,
+                &options,
+                Path::new("total"),
+                total,
+                res.num_errors,
+            )?;
         }
         Ok(res)
     }

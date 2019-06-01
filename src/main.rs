@@ -61,6 +61,9 @@ mod options {
         /// Aggregrate the consumed space of one or more directories or files
         #[structopt(name = "aggregate", alias = "a")]
         Aggregate {
+            /// If set, no total column will be computed for multiple inputs
+            #[structopt(long = "no-total")]
+            no_total: bool,
             /// One or more input files. If unset, we will assume the current directory
             #[structopt(parse(from_os_str))]
             input: Vec<PathBuf>,
@@ -69,7 +72,6 @@ mod options {
 }
 
 fn run() -> Result<(), Error> {
-    use io::Write;
     use options::Command::*;
 
     let opt: options::Args = options::Args::from_args();
@@ -80,10 +82,13 @@ fn run() -> Result<(), Error> {
         format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
     };
     let res = match opt.command {
-        Some(Aggregate { input }) => dua::aggregate(stdout_locked, walk_options, input),
+        Some(Aggregate { input, no_total }) => {
+            dua::aggregate(stdout_locked, walk_options, !no_total, input)
+        }
         None => dua::aggregate(
             stdout_locked,
             walk_options,
+            true,
             if opt.input.len() == 0 {
                 vec![PathBuf::from(".")]
             } else {

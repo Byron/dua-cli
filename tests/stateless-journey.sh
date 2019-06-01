@@ -25,11 +25,19 @@ WITH_FAILURE=1
       )
       ls
       (with "multiple given paths"
-        (when "specifying a subcommand"
-          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
-            WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
-            expect_run ${SUCCESSFULLY} "$exe" aggregate . . dir ./dir/ ./dir/sub
-          }
+        (when "specifying the 'aggregate' subcommand"
+          (with "no option to adjust the total"
+            it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate . . dir ./dir/ ./dir/sub
+            }
+          )
+          (with "the --no-total option set"
+            it "produces a human-readable (metric) aggregate of the current directory, without total" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-no-total" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --no-total . . dir ./dir/ ./dir/sub
+            }
+          )
         )
         (when "specifying no subcommand"
           it "produces a human-readable (metric) aggregate of the current directory, with total" && {
