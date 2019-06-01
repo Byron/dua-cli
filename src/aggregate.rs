@@ -11,6 +11,7 @@ pub fn aggregate(
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) -> Result<WalkResult, Error> {
     let mut res = WalkResult::default();
+    res.stats.smallest_file_in_bytes = u64::max_value();
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
@@ -19,9 +20,10 @@ pub fn aggregate(
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
         for entry in options.iter_from_path(path.as_ref(), Sorting::None) {
+            res.stats.files_traversed += 1;
             match entry {
                 Ok(entry) => {
-                    num_bytes += match entry.metadata {
+                    let file_size = match entry.metadata {
                         Some(Ok(ref m)) if !m.is_dir() => m.len(),
                         Some(Ok(_)) => 0,
                         Some(Err(_)) => {
@@ -32,6 +34,11 @@ pub fn aggregate(
                             "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
                         ),
                     };
+                    res.stats.largest_file_in_bytes =
+                        res.stats.largest_file_in_bytes.max(file_size);
+                    res.stats.smallest_file_in_bytes =
+                        res.stats.smallest_file_in_bytes.min(file_size);
+                    num_bytes += file_size;
                 }
                 Err(_) => num_errors += 1,
             }
@@ -45,12 +52,18 @@ pub fn aggregate(
         total += num_bytes;
         res.num_errors += num_errors;
     }
+
+    if res.stats.files_traversed == 0 {
+        res.stats.smallest_file_in_bytes = 0;
+    }
+
     if sort_by_size_in_bytes {
         aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
             write_path(&mut out, &options, path, num_bytes, num_errors)?;
         }
     }
+
     if num_roots > 1 && compute_total {
         write_path(
             &mut out,

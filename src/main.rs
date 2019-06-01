@@ -7,7 +7,7 @@ use structopt::StructOpt;
 use dua::ByteFormat;
 use failure::Error;
 use failure_tools::ok_or_exit;
-use std::{io, path::PathBuf, process};
+use std::{io, io::Write, path::PathBuf, process};
 
 mod options;
 
@@ -21,25 +21,35 @@ fn run() -> Result<(), Error> {
         threads: opt.threads.unwrap_or(0),
         format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
     };
-    let res = match opt.command {
+    let (show_statistics, res) = match opt.command {
         Some(Aggregate {
             input,
             no_total,
             no_sort,
-        }) => dua::aggregate(stdout_locked, walk_options, !no_total, !no_sort, input),
-        None => dua::aggregate(
-            stdout_locked,
-            walk_options,
-            true,
-            true,
-            if opt.input.len() == 0 {
-                vec![PathBuf::from(".")]
-            } else {
-                opt.input
-            },
+            statistics,
+        }) => (
+            statistics,
+            dua::aggregate(stdout_locked, walk_options, !no_total, !no_sort, input)?,
         ),
-    }?;
+        None => (
+            false,
+            dua::aggregate(
+                stdout_locked,
+                walk_options,
+                true,
+                true,
+                if opt.input.len() == 0 {
+                    vec![PathBuf::from(".")]
+                } else {
+                    opt.input
+                },
+            )?,
+        ),
+    };
 
+    if show_statistics {
+        writeln!(io::stderr(), "{:?}", res.stats).ok();
+    }
     if res.num_errors > 0 {
         process::exit(1);
     }

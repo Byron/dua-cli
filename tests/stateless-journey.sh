@@ -44,6 +44,12 @@ WITH_FAILURE=1
               expect_run ${SUCCESSFULLY} "$exe" aggregate --no-sort . . dir ./dir/ ./dir/sub
             }
           )
+          (with "the --stats option set"
+            it "produces a human-readable aggregate, and statistics about the iteration in RON" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-statistics" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --stats . . dir ./dir/ ./dir/sub
+            }
+          )
         )
         (when "specifying no subcommand"
           it "produces a human-readable aggregate" && {

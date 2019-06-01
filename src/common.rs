@@ -57,7 +57,15 @@ impl WalkOptions {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct Statistics {
+    pub files_traversed: u64,
+    pub smallest_file_in_bytes: u64,
+    pub largest_file_in_bytes: u64,
+}
+
 #[derive(Default)]
 pub struct WalkResult {
     pub num_errors: u64,
+    pub stats: Statistics,
 }
