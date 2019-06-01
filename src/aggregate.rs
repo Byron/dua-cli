@@ -3,6 +3,9 @@ use failure::Error;
 use std::borrow::Cow;
 use std::{io, path::Path};
 
+/// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
+/// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
+/// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
     options: WalkOptions,

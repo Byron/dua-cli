@@ -19,7 +19,7 @@ fn run() -> Result<(), Error> {
     let stdout_locked = stdout.lock();
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
-        format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
+        byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
         color: if atty::is(atty::Stream::Stdout) {
             Color::Terminal
         } else {
