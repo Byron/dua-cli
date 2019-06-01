@@ -6,6 +6,7 @@ edition = "2018"
 include = ["src/**/*", "Cargo.toml"]
 repository = "https://github.com/Byron/dua-cli"
 readme = "README.md"
+description = "A tool to conveniently learn about the disk usage of directories, fast!"
 license = "MIT"
 
 [dependencies]
