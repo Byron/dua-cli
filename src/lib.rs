@@ -42,7 +42,8 @@ mod aggregate {
                 match entry {
                     Ok(entry) => {
                         num_bytes += match entry.metadata {
-                            Some(Ok(m)) => m.len(),
+                            Some(Ok(ref m)) if !m.is_dir() => m.len(),
+                            Some(Ok(_)) => 0,
                             Some(Err(_)) => {
                                 res.num_errors += 1;
                                 0
