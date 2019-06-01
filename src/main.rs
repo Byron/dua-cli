@@ -54,6 +54,7 @@ mod options {
 
     #[derive(Debug, StructOpt)]
     pub enum Command {
+        /// Aggregrate the consumed space of one or more directories or files
         #[structopt(name = "aggregate", alias = "a")]
         Aggregate {
             /// One or more input files. If unset, we will assume the current directory
@@ -75,7 +76,7 @@ fn run() -> Result<(), Error> {
         format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
     };
     let res = match opt.command {
-        Some(Aggregate { input: _ }) => unimplemented!(),
+        Some(Aggregate { input }) => dua::aggregate(stdout_locked, walk_options, input),
         None => dua::aggregate(stdout_locked, walk_options, vec![PathBuf::from(".")]),
     }?;
 

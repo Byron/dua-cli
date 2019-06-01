@@ -60,7 +60,10 @@ mod aggregate {
         paths: impl IntoIterator<Item = impl AsRef<Path>>,
     ) -> Result<WalkResult, Error> {
         let mut res = WalkResult::default();
+        let mut total = 0;
+        let mut num_roots = 0;
         for path in paths.into_iter() {
+            num_roots += 1;
             let mut num_bytes = 0u64;
             for entry in options.iter_from_path(path.as_ref()) {
                 match entry {
@@ -81,14 +84,27 @@ mod aggregate {
                 }
             }
 
-            writeln!(
-                out,
-                "{}\t{}",
-                options.format_bytes(num_bytes),
-                path.as_ref().display()
-            )?;
+            write_path(&mut out, &options, path, num_bytes)?;
+            total += num_bytes;
+        }
+        if num_roots > 1 {
+            write_path(&mut out, &options, Path::new("<TOTAL>"), total)?;
         }
         Ok(res)
+    }
+
+    fn write_path(
+        out: &mut impl io::Write,
+        options: &WalkOptions,
+        path: impl AsRef<Path>,
+        num_bytes: u64,
+    ) -> Result<(), io::Error> {
+        writeln!(
+            out,
+            "{}\t{}",
+            options.format_bytes(num_bytes),
+            path.as_ref().display()
+        )
     }
 }
 
