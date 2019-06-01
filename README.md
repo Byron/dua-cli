@@ -1,5 +1,7 @@
 DUA (-> Disk Usage Analyzer) is a tool to conveniently learn about the usage of memory of a given directory. It's parallel by default and will max out your SSD, providing relevant information as fast as possible.
 
+[![asciicast](https://asciinema.org/a/au3neIHDGtYYj4blyTXR8VkJz.svg)](https://asciinema.org/a/au3neIHDGtYYj4blyTXR8VkJz)
+
 ### Installation
 
 Via `cargo`, which can be obtained using [rustup][rustup]
