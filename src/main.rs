@@ -5,33 +5,55 @@ extern crate structopt;
 
 use failure::Error;
 use failure_tools::ok_or_exit;
+use std::io;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 mod options {
     use std::path::PathBuf;
 
     #[derive(Debug, StructOpt)]
-    #[structopt(name = "example", about = "An example of StructOpt usage.")]
+    #[structopt(name = "dua", about = "A tool to learn about disk usage, fast!")]
     pub struct Args {
-        /// Activate debug mode
-        #[structopt(short = "d", long = "debug")]
-        debug: bool,
-        /// Set speed
-        #[structopt(short = "s", long = "speed", default_value = "42")]
-        speed: f64,
-        /// Input file
-        #[structopt(parse(from_os_str))]
-        input: PathBuf,
-        /// Output file, stdout if not present
-        #[structopt(parse(from_os_str))]
-        output: Option<PathBuf>,
+        #[structopt(subcommand)]
+        pub command: Option<Command>,
+
+        /// The amount of threads to use. Defaults to the amount of logical processors.
+        /// Set to 1 to use only a single thread.
+        #[structopt(short = "t", long = "threads")]
+        pub threads: Option<usize>,
+    }
+
+    #[derive(Debug, StructOpt)]
+    pub enum Command {
+        #[structopt(name = "aggregate", alias = "a")]
+        Aggregate {
+            /// One or more input files. If unset, we will assume the current directory
+            #[structopt(parse(from_os_str))]
+            input: Vec<PathBuf>,
+        },
     }
 }
 
 fn run() -> Result<(), Error> {
-    let opt = options::Args::from_args();
-    println!("{:?}", opt);
-    dua::fun()
+    use io::Write;
+    use options::Command::*;
+
+    let opt: options::Args = options::Args::from_args();
+    let stdout = io::stdout();
+    let stdout_locked = stdout.lock();
+    let walk_options = dua::WalkOptions {
+        threads: opt.threads.unwrap_or(0),
+    };
+    let res = match opt.command {
+        Some(Aggregate { input: _ }) => unimplemented!(),
+        None => dua::aggregate(stdout_locked, walk_options, vec![PathBuf::from(".")]),
+    }?;
+
+    if res.num_errors > 0 {
+        writeln!(io::stderr(), "{}", res).ok();
+    }
+    Ok(())
 }
 
 fn main() {
