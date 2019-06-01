@@ -1,10 +1,15 @@
 use jwalk::WalkDir;
-use std::{fmt, path::Path};
+use std::path::Path;
 
 pub enum ByteFormat {
     Metric,
     Binary,
     Bytes,
+}
+
+pub enum Sorting {
+    None,
+    Alphabetical,
 }
 
 pub struct WalkOptions {
@@ -25,9 +30,14 @@ impl WalkOptions {
             .get_appropriate_unit(binary)
             .format(2)
     }
-    pub fn iter_from_path(&self, path: &Path) -> WalkDir {
+
+    pub fn iter_from_path(&self, path: &Path, sort: Sorting) -> WalkDir {
         WalkDir::new(path)
             .preload_metadata(true)
+            .sort(match sort {
+                Sorting::Alphabetical => true,
+                Sorting::None => false,
+            })
             .skip_hidden(false)
             .num_threads(self.threads)
     }
@@ -36,10 +46,4 @@ impl WalkOptions {
 #[derive(Default)]
 pub struct WalkResult {
     pub num_errors: u64,
-}
-
-impl fmt::Display for WalkResult {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Encountered {} IO error(s)", self.num_errors)
-    }
 }

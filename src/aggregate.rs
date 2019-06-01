@@ -1,4 +1,4 @@
-use crate::{WalkOptions, WalkResult};
+use crate::{Sorting, WalkOptions, WalkResult};
 use failure::Error;
 use std::borrow::Cow;
 use std::{io, path::Path};
@@ -16,7 +16,7 @@ pub fn aggregate(
         num_roots += 1;
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
-        for entry in options.iter_from_path(path.as_ref()) {
+        for entry in options.iter_from_path(path.as_ref(), Sorting::None) {
             match entry {
                 Ok(entry) => {
                     num_bytes += match entry.metadata {
@@ -60,7 +60,7 @@ fn write_path(
 ) -> Result<(), io::Error> {
     writeln!(
         out,
-        "{}\t{}{}",
+        "{:8}\t{}{}",
         options.format_bytes(num_bytes),
         path.as_ref().display(),
         if num_errors == 0 {
