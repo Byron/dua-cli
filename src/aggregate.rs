@@ -60,7 +60,7 @@ fn write_path(
 ) -> Result<(), io::Error> {
     writeln!(
         out,
-        "{:8}\t{}{}",
+        "{:>10}\t{}{}",
         options.format_bytes(num_bytes),
         path.as_ref().display(),
         if num_errors == 0 {

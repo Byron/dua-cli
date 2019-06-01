@@ -26,9 +26,23 @@ impl WalkOptions {
             Binary => true,
             Metric => false,
         };
-        Byte::from_bytes(b as u128)
+        let b = Byte::from_bytes(b as u128)
             .get_appropriate_unit(binary)
-            .format(2)
+            .format(2);
+        let mut splits = b.split(' ');
+        match (splits.next(), splits.next()) {
+            (Some(bytes), Some(unit)) => format!(
+                "{:>8} {:>unit_width$}",
+                bytes,
+                unit,
+                unit_width = match self.format {
+                    Binary => 3,
+                    Metric => 2,
+                    _ => 2,
+                }
+            ),
+            _ => b,
+        }
     }
 
     pub fn iter_from_path(&self, path: &Path, sort: Sorting) -> WalkDir {
