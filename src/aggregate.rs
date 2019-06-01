@@ -7,11 +7,13 @@ pub fn aggregate(
     mut out: impl io::Write,
     options: WalkOptions,
     compute_total: bool,
+    sort_by_size_in_bytes: bool,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) -> Result<WalkResult, Error> {
     let mut res = WalkResult::default();
     let mut total = 0;
     let mut num_roots = 0;
+    let mut aggregates = Vec::new();
     for path in paths.into_iter() {
         num_roots += 1;
         let mut num_bytes = 0u64;
@@ -35,9 +37,19 @@ pub fn aggregate(
             }
         }
 
-        write_path(&mut out, &options, path, num_bytes, num_errors)?;
+        if sort_by_size_in_bytes {
+            aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
+        } else {
+            write_path(&mut out, &options, path, num_bytes, num_errors)?;
+        }
         total += num_bytes;
         res.num_errors += num_errors;
+    }
+    if sort_by_size_in_bytes {
+        aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
+        for (path, num_bytes, num_errors) in aggregates.into_iter() {
+            write_path(&mut out, &options, path, num_bytes, num_errors)?;
+        }
     }
     if num_roots > 1 && compute_total {
         write_path(

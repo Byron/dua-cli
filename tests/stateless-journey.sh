@@ -27,26 +27,32 @@ WITH_FAILURE=1
       (with "multiple given paths"
         (when "specifying the 'aggregate' subcommand"
           (with "no option to adjust the total"
-            it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+            it "produces a human-readable aggregate, with total" && {
               WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
               expect_run ${SUCCESSFULLY} "$exe" aggregate . . dir ./dir/ ./dir/sub
             }
           )
           (with "the --no-total option set"
-            it "produces a human-readable (metric) aggregate of the current directory, without total" && {
+            it "produces a human-readable aggregate, without total" && {
               WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-no-total" \
               expect_run ${SUCCESSFULLY} "$exe" aggregate --no-total . . dir ./dir/ ./dir/sub
             }
           )
+          (with "the --no-sort option set"
+            it "produces a human-readable aggregate, sorted in order specified on the command-line" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-no-sort" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --no-sort . . dir ./dir/ ./dir/sub
+            }
+          )
         )
         (when "specifying no subcommand"
-          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+          it "produces a human-readable aggregate" && {
             WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
             expect_run ${SUCCESSFULLY} "$exe" . . dir ./dir/ ./dir/sub
           }
         )
         (when "specifying no subcommand and some of the directories don't exist"
-          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+          it "produces a human-readable aggregate, with the number of errors per root" && {
             WITH_SNAPSHOT="$snapshot/failure-no-arguments-multiple-input-paths-some-not-existing" \
             expect_run ${WITH_FAILURE} "$exe" . . foo bar baz
           }

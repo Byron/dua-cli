@@ -49,6 +49,10 @@ pub enum Command {
     /// Aggregrate the consumed space of one or more directories or files
     #[structopt(name = "aggregate", alias = "a")]
     Aggregate {
+        /// If set, paths will be printed in their order of occurrence on the command-line.
+        /// Otherwise they are sorted by their size in bytes, ascending.
+        #[structopt(long = "no-sort")]
+        no_sort: bool,
         /// If set, no total column will be computed for multiple inputs
         #[structopt(long = "no-total")]
         no_total: bool,

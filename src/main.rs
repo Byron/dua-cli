@@ -22,12 +22,15 @@ fn run() -> Result<(), Error> {
         format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
     };
     let res = match opt.command {
-        Some(Aggregate { input, no_total }) => {
-            dua::aggregate(stdout_locked, walk_options, !no_total, input)
-        }
+        Some(Aggregate {
+            input,
+            no_total,
+            no_sort,
+        }) => dua::aggregate(stdout_locked, walk_options, !no_total, !no_sort, input),
         None => dua::aggregate(
             stdout_locked,
             walk_options,
+            true,
             true,
             if opt.input.len() == 0 {
                 vec![PathBuf::from(".")]
