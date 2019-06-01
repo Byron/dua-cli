@@ -11,6 +11,7 @@ snapshot="$root/snapshots"
 fixtures="$root/fixtures"
 
 SUCCESSFULLY=0
+WITH_FAILURE=1
 
 (with "a sample directory"
   (sandbox
@@ -34,6 +35,12 @@ SUCCESSFULLY=0
           it "produces a human-readable (metric) aggregate of the current directory, with total" && {
             WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
             expect_run ${SUCCESSFULLY} "$exe" . . dir ./dir/ ./dir/sub
+          }
+        )
+        (when "specifying no subcommand and some of the directories don't exist"
+          it "produces a human-readable (metric) aggregate of the current directory, with total" && {
+            WITH_SNAPSHOT="$snapshot/failure-no-arguments-multiple-input-paths-some-not-existing" \
+            expect_run ${WITH_FAILURE} "$exe" . . foo bar baz
           }
         )
       )

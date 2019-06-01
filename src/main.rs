@@ -7,7 +7,7 @@ use structopt::StructOpt;
 use dua::ByteFormat;
 use failure::Error;
 use failure_tools::ok_or_exit;
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, process};
 
 mod options {
     use dua::ByteFormat as LibraryByteFormat;
@@ -93,7 +93,7 @@ fn run() -> Result<(), Error> {
     }?;
 
     if res.num_errors > 0 {
-        writeln!(io::stderr(), "{}", res).ok();
+        process::exit(1);
     }
     Ok(())
 }
