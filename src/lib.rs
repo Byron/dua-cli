@@ -25,8 +25,26 @@ impl fmt::Display for WalkResult {
     }
 }
 
+pub fn file_size_no_symlink_follow(meta: &fs::Metadata) -> u64 {
+    match meta.file_type().is_symlink() {
+        //        true => sys::symlink_size(meta),
+        true => unimplemented!("{} {}", sys::symlink_size(meta), meta.len()),
+        false => meta.len(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod sys {
+    use std::fs::Metadata;
+    use std::os::macos::fs::MetadataExt;
+
+    pub fn symlink_size(meta: &Metadata) -> u64 {
+        meta.st_size()
+    }
+}
+
 mod aggregate {
-    use crate::{WalkOptions, WalkResult};
+    use crate::{file_size_no_symlink_follow, WalkOptions, WalkResult};
     use failure::Error;
     use std::io;
     use std::path::Path;
@@ -43,7 +61,7 @@ mod aggregate {
                 match entry {
                     Ok(entry) => {
                         num_bytes += match entry.metadata {
-                            Some(Ok(m)) => m.len(),
+                            Some(Ok(m)) => file_size_no_symlink_follow(&m),
                             Some(Err(_)) => {
                                 res.num_errors += 1;
                                 0
@@ -65,5 +83,5 @@ mod aggregate {
 
 pub use aggregate::aggregate;
 use jwalk::WalkDir;
-use std::fmt;
 use std::path::Path;
+use std::{fmt, fs};
