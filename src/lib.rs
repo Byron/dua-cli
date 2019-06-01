@@ -1,33 +1,51 @@
 extern crate failure;
 extern crate jwalk;
 
-pub struct WalkOptions {
-    pub threads: usize,
-}
+mod common {
+    use jwalk::WalkDir;
+    use std::{fmt, path::Path};
 
-impl WalkOptions {
-    pub fn format_bytes(&self, b: u64) -> String {
-        use byte_unit::Byte;
-        Byte::from_bytes(b as u128)
-            .get_appropriate_unit(false)
-            .format(2)
+    pub enum ByteFormat {
+        Metric,
+        Binary,
+        Bytes,
     }
-    pub fn iter_from_path(&self, path: &Path) -> WalkDir {
-        WalkDir::new(path)
-            .preload_metadata(true)
-            .skip_hidden(false)
-            .num_threads(self.threads)
+
+    pub struct WalkOptions {
+        pub threads: usize,
+        pub format: ByteFormat,
     }
-}
 
-#[derive(Default)]
-pub struct WalkResult {
-    pub num_errors: usize,
-}
+    impl WalkOptions {
+        pub fn format_bytes(&self, b: u64) -> String {
+            use byte_unit::Byte;
+            use ByteFormat::*;
+            let binary = match self.format {
+                Bytes => return format!("{} b", b),
+                Binary => true,
+                Metric => false,
+            };
+            Byte::from_bytes(b as u128)
+                .get_appropriate_unit(binary)
+                .format(2)
+        }
+        pub fn iter_from_path(&self, path: &Path) -> WalkDir {
+            WalkDir::new(path)
+                .preload_metadata(true)
+                .skip_hidden(false)
+                .num_threads(self.threads)
+        }
+    }
 
-impl fmt::Display for WalkResult {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Encountered {} IO errors", self.num_errors)
+    #[derive(Default)]
+    pub struct WalkResult {
+        pub num_errors: usize,
+    }
+
+    impl fmt::Display for WalkResult {
+        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            write!(f, "Encountered {} IO errors", self.num_errors)
+        }
     }
 }
 
@@ -55,7 +73,7 @@ mod aggregate {
                                 0
                             }
                             None => unreachable!(
-                                "we ask for metadata, so we at least have Some(Err(..)))"
+                                "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
                             ),
                         };
                     }
@@ -75,5 +93,4 @@ mod aggregate {
 }
 
 pub use aggregate::aggregate;
-use jwalk::WalkDir;
-use std::{fmt, path::Path};
+pub use common::*;
