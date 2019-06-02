@@ -27,6 +27,11 @@ dua aggregate --help
 
 A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all just using the keyboard.
 
+##### Other Features
+
+ * [ ] Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
+ * [ ] Evaluate unit coloring
+
 #### ✅v1.0 (_released_) - aggregate directories, fast
 
 Simple CLI to list top-level directories similar to sn-sort, but faster and more tailored to getting an idea of where most space is used.
