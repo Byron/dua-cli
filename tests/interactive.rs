@@ -1,5 +1,5 @@
 mod app {
-    use dua::interactive::{EntryData, GraphIndexType, TerminalApp, Tree};
+    use dua::interactive::{EntryData, TerminalApp, Tree, TreeIndexType};
     use dua::{ByteFormat, Color, Sorting, WalkOptions};
     use failure::Error;
     use petgraph::prelude::NodeIndex;
@@ -123,7 +123,7 @@ mod app {
 
     fn make_add_node<'a>(
         t: &'a mut Tree,
-    ) -> impl FnMut(&str, u64, Option<NodeIndex<GraphIndexType>>) -> NodeIndex<GraphIndexType> + 'a
+    ) -> impl FnMut(&str, u64, Option<NodeIndex<TreeIndexType>>) -> NodeIndex<TreeIndexType> + 'a
     {
         move |name, size, maybe_from_idx| {
             let n = t.add_node(EntryData {

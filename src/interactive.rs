@@ -6,8 +6,9 @@ mod app {
     use termion::input::{Keys, TermReadEventsAndRaw};
     use tui::{backend::Backend, Terminal};
 
-    pub type GraphIndexType = u32;
-    pub type Tree = Graph<EntryData, (), Directed, GraphIndexType>;
+    pub type TreeIndexType = u32;
+    pub type TreeIndex = NodeIndex<TreeIndexType>;
+    pub type Tree = Graph<EntryData, (), Directed, TreeIndexType>;
 
     #[derive(Eq, PartialEq, Debug, Default)]
     pub struct EntryData {
@@ -24,7 +25,7 @@ mod app {
         /// A tree representing the entire filestem traversal
         pub tree: Tree,
         /// The top-level node of the tree.
-        pub root_index: NodeIndex<GraphIndexType>,
+        pub root_index: TreeIndex,
         /// Amount of files or directories we have seen during the filesystem traversal
         pub entries_traversed: u64,
         /// Total amount of IO errors encountered when traversing the filesystem
@@ -52,6 +53,20 @@ mod app {
         where
             B: Backend,
         {
+            fn set_size_or_panic(
+                tree: &mut Tree,
+                parent_node_idx: TreeIndex,
+                current_size_at_depth: u64,
+            ) {
+                tree.node_weight_mut(parent_node_idx)
+                    .expect("node for parent index we just retrieved")
+                    .size = current_size_at_depth;
+            }
+            fn parent_or_panic(tree: &mut Tree, parent_node_idx: TreeIndex) -> TreeIndex {
+                tree.neighbors_directed(parent_node_idx, Direction::Incoming)
+                    .next()
+                    .expect("every node in the iteration has a parent")
+            }
             let mut tree = Tree::new();
             let mut io_errors = 0u64;
             let mut entries_traversed = 0u64;
@@ -93,17 +108,14 @@ mod app {
                                         let size_at_level_above = sizes_per_depth_level
                                             .pop()
                                             .expect("sizes per level to be in sync with graph");
-                                        tree.node_weight_mut(parent_node_idx)
-                                            .expect("node for parent index we just retrieved")
-                                            .size = current_size_at_depth;
+                                        set_size_or_panic(
+                                            &mut tree,
+                                            parent_node_idx,
+                                            current_size_at_depth,
+                                        );
                                         current_size_at_depth += size_at_level_above;
-                                        parent_node_idx = tree
-                                            .neighbors_directed(
-                                                parent_node_idx,
-                                                Direction::Incoming,
-                                            )
-                                            .next()
-                                            .expect("every node in the iteration has a parent");
+                                        parent_node_idx =
+                                            parent_or_panic(&mut tree, parent_node_idx);
                                     }
                                     current_size_at_depth += file_size;
                                     tree.node_weight_mut(parent_node_idx)
@@ -115,50 +127,29 @@ mod app {
                                 }
                             };
 
-                            previous_depth = entry.depth;
                             data.size = file_size;
                             let entry_index = tree.add_node(data);
+
                             tree.add_edge(parent_node_idx, entry_index, ());
                             previous_node_idx = entry_index;
+                            previous_depth = entry.depth;
                         }
                         Err(_) => io_errors += 1,
                     }
                 }
             }
 
-            dbg!(previous_depth);
-            dbg!(&sizes_per_depth_level);
-            dbg!(current_size_at_depth);
-            if previous_depth == 1 {
-                for node in &[parent_node_idx, root_index] {
-                    tree.node_weight_mut(*node)
-                        .expect("node for parent index we just retrieved")
-                        .size = current_size_at_depth;
-                }
-            } else {
-                sizes_per_depth_level.push(current_size_at_depth);
-                current_size_at_depth = 0;
-                for _ in 0..previous_depth {
-                    let size_at_level_above = sizes_per_depth_level
-                        .pop()
-                        .expect("sizes per level to be in sync with graph");
-                    dbg!((
-                        size_at_level_above,
-                        tree.node_weight_mut(parent_node_idx).unwrap()
-                    ));
-                    current_size_at_depth += size_at_level_above;
-                    tree.node_weight_mut(parent_node_idx)
-                        .expect("node for parent index we just retrieved")
-                        .size = current_size_at_depth;
-                    parent_node_idx = tree
-                        .neighbors_directed(parent_node_idx, Direction::Incoming)
-                        .next()
-                        .expect("every node in the iteration has a parent (outer)");
-                }
-                tree.node_weight_mut(root_index)
-                    .expect("node for parent index we just retrieved")
-                    .size = current_size_at_depth;
+            sizes_per_depth_level.push(current_size_at_depth);
+            current_size_at_depth = 0;
+            for _ in 0..previous_depth {
+                let size_at_level_above = sizes_per_depth_level
+                    .pop()
+                    .expect("sizes per level to be in sync with graph");
+                current_size_at_depth += size_at_level_above;
+                set_size_or_panic(&mut tree, parent_node_idx, current_size_at_depth);
+                parent_node_idx = parent_or_panic(&mut tree, parent_node_idx);
             }
+            set_size_or_panic(&mut tree, root_index, current_size_at_depth);
 
             Ok(TerminalApp {
                 tree,
