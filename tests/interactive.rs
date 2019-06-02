@@ -13,12 +13,12 @@ mod app {
 
     #[test]
     fn journey_with_single_path() -> Result<(), Error> {
-        let (_, app) = initialized_app_and_terminal("sample-01")?;
-        let expected_tree = sample_01_tree();
+        let (_, mut app) = initialized_app_and_terminal("sample-01")?;
+        let mut expected_tree = sample_01_tree();
 
         assert_eq!(
-            debug(app.tree),
-            debug(expected_tree),
+            debug(app.tree.node_weights_mut().collect::<Vec<_>>()),
+            debug(expected_tree.node_weights_mut().collect::<Vec<_>>()),
             "filesystem graph is stable and matches the directory structure"
         );
         Ok(())
@@ -45,12 +45,28 @@ mod app {
     }
 
     fn sample_01_tree() -> Tree {
-        let mut expected_tree = Tree::new();
-        expected_tree.add_node(EntryData {
-            name: OsString::from("foo"),
-            size: 231,
-            metadata_io_error: false,
-        });
-        expected_tree
+        let mut t = Tree::new();
+        let mut add_node = |name, size| {
+            t.add_node(EntryData {
+                name: OsString::from(name),
+                size,
+                metadata_io_error: false,
+            });
+        };
+        add_node("", 0);
+        add_node("sample-01", 0);
+        add_node(".hidden.666", 666);
+        add_node("a", 256);
+        add_node("b.empty", 0);
+        add_node("c.lnk", 1);
+        add_node("dir", 0);
+        add_node("1000bytes", 1000);
+        add_node("dir-a.1mb", 1_000_000);
+        add_node("dir-a.kb", 1024);
+        add_node("empty-dir", 0);
+        add_node(".gitkeep", 0);
+        add_node("sub", 0);
+        add_node("dir-sub-a.256kb", 256_000);
+        t
     }
 }

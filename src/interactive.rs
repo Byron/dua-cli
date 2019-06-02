@@ -1,7 +1,7 @@
 mod app {
     use crate::{WalkOptions, WalkResult};
     use failure::Error;
-    use petgraph::{prelude::NodeIndex, Directed, Graph};
+    use petgraph::{prelude::NodeIndex, Directed, Direction, Graph};
     use std::{ffi::OsString, io, path::PathBuf};
     use termion::input::{Keys, TermReadEventsAndRaw};
     use tui::{backend::Backend, Terminal};
@@ -55,19 +55,17 @@ mod app {
             let mut tree = Tree::new();
             let mut io_errors = 0u64;
             let mut entries_traversed = 0u64;
+
             let root_index = tree.add_node(EntryData::default());
+            let (mut previous_node_idx, mut parent_node_idx) = (root_index, root_index);
+            let mut previous_depth = 0;
+
             for path in input.into_iter() {
-                let path_idx = tree.add_node(EntryData {
-                    name: path.file_name().unwrap_or_default().into(),
-                    ..Default::default()
-                });
-                tree.add_edge(root_index, path_idx, ());
                 for entry in options.iter_from_path(path.as_ref()) {
                     entries_traversed += 1;
                     let mut data = EntryData::default();
                     match entry {
                         Ok(entry) => {
-                            dbg!((&entry.file_name, entry.depth));
                             data.name = entry.file_name;
                             let file_size = match entry.metadata {
                                 Some(Ok(ref m)) if !m.is_dir() => m.len(),
@@ -81,9 +79,21 @@ mod app {
                                     "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
                                 ),
                             };
+
+                            parent_node_idx = match (entry.depth, previous_depth) {
+                                (n, p) if n > p => previous_node_idx,
+                                (n, p) if n < p => tree
+                                    .neighbors_directed(parent_node_idx, Direction::Incoming)
+                                    .next()
+                                    .expect("every node in the iteration has a parent"),
+                                _ => parent_node_idx,
+                            };
+
+                            previous_depth = entry.depth;
                             data.size = file_size;
-                            let entry_node = tree.add_node(data);
-                            tree.add_edge(path_idx, entry_node, ());
+                            let entry_index = tree.add_node(data);
+                            tree.add_edge(parent_node_idx, entry_index, ());
+                            previous_node_idx = entry_index;
                         }
                         Err(_) => io_errors += 1,
                     }
