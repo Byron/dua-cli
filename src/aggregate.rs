@@ -1,7 +1,8 @@
 use crate::{Sorting, WalkOptions, WalkResult};
 use failure::Error;
 use std::borrow::Cow;
-use std::{io, path::Path};
+use std::{fmt, io, path::Path};
+use termion::color;
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
@@ -50,7 +51,14 @@ pub fn aggregate(
         if sort_by_size_in_bytes {
             aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
         } else {
-            write_path(&mut out, &options, path, num_bytes, num_errors)?;
+            write_path(
+                &mut out,
+                &options,
+                &path,
+                num_bytes,
+                num_errors,
+                path_color(&path),
+            )?;
         }
         total += num_bytes;
         res.num_errors += num_errors;
@@ -63,7 +71,14 @@ pub fn aggregate(
     if sort_by_size_in_bytes {
         aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
-            write_path(&mut out, &options, path, num_bytes, num_errors)?;
+            write_path(
+                &mut out,
+                &options,
+                &path,
+                num_bytes,
+                num_errors,
+                path_color(&path),
+            )?;
         }
     }
 
@@ -74,30 +89,41 @@ pub fn aggregate(
             Path::new("total"),
             total,
             res.num_errors,
+            color::Fg(color::Reset),
         )?;
     }
     Ok(res)
 }
 
-fn write_path(
+fn path_color(path: impl AsRef<Path>) -> Box<dyn fmt::Display> {
+    if path.as_ref().is_file() {
+        Box::new(color::Fg(color::LightBlack))
+    } else {
+        Box::new(color::Fg(color::Reset))
+    }
+}
+
+fn write_path<C: fmt::Display>(
     out: &mut impl io::Write,
     options: &WalkOptions,
     path: impl AsRef<Path>,
     num_bytes: u64,
     num_errors: u64,
+    path_color: C,
 ) -> Result<(), io::Error> {
-    use termion::color;
     writeln!(
         out,
-        "{}{:>10}{}\t{}{}",
-        options.color.display(color::Fg(color::Green)),
+        "{byte_color}{:>10}{byte_color_reset}\t{path_color}{}{path_color_reset}{}",
         options.format_bytes(num_bytes),
-        options.color.display(color::Fg(color::Reset)),
         path.as_ref().display(),
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
             Cow::Owned(format!("\t<{} IO Error(s)>", num_errors))
-        }
+        },
+        byte_color = options.color.display(color::Fg(color::Green)),
+        byte_color_reset = options.color.display(color::Fg(color::Reset)),
+        path_color = options.color.display(path_color),
+        path_color_reset = options.color.display(color::Fg(color::Reset)),
     )
 }
