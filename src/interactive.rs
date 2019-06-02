@@ -1,3 +1,35 @@
+mod widgets {
+    use super::{Tree, TreeIndex};
+    use petgraph::Direction;
+    use tui::buffer::Buffer;
+    use tui::layout::{Corner, Rect};
+    use tui::widgets::{Block, Borders, List, Text, Widget};
+
+    pub struct Entries<'a> {
+        pub tree: &'a Tree,
+        pub root: TreeIndex,
+    }
+
+    impl<'a> Widget for Entries<'a> {
+        fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+            let Self { tree, root } = self;
+            List::new(
+                tree.neighbors_directed(*root, Direction::Outgoing)
+                    .filter_map(|w| {
+                        tree.node_weight(w).map(|w| {
+                            Text::Raw(
+                                format!("{} | ----- | {}", w.size, w.name.to_string_lossy()).into(),
+                            )
+                        })
+                    }),
+            )
+            .block(Block::default().borders(Borders::ALL).title("Entries"))
+            .start_corner(Corner::TopLeft)
+            .draw(area, buf);
+        }
+    }
+}
+
 mod app {
     use crate::{WalkOptions, WalkResult};
     use failure::Error;
@@ -5,6 +37,7 @@ mod app {
     use std::time::{Duration, Instant};
     use std::{ffi::OsString, io, path::PathBuf};
     use termion::input::{Keys, TermReadEventsAndRaw};
+    use tui::widgets::Widget;
     use tui::{backend::Backend, Terminal};
 
     pub type TreeIndexType = u32;
@@ -49,7 +82,7 @@ mod app {
         }
 
         pub fn initialize<B>(
-            _terminal: &mut Terminal<B>,
+            terminal: &mut Terminal<B>,
             options: WalkOptions,
             input: Vec<PathBuf>,
         ) -> Result<TerminalApp, Error>
@@ -85,11 +118,12 @@ mod app {
 
             let mut last_checked = Instant::now();
 
-            const INITIAL_CHECK_INTERVAL: usize = 1_000;
+            const INITIAL_CHECK_INTERVAL: usize = 500;
             let mut check_instant_every = INITIAL_CHECK_INTERVAL;
-            let mut last_seen_eid = 0;
+            let mut last_seen_eid;
 
             for path in input.into_iter() {
+                last_seen_eid = 0;
                 for (eid, entry) in options
                     .iter_from_path(path.as_ref())
                     .into_iter()
@@ -165,6 +199,15 @@ mod app {
                             as usize;
                         last_seen_eid = eid;
                         last_checked = now;
+
+                        terminal.draw(|mut f| {
+                            let full_screen = f.size();
+                            super::widgets::Entries {
+                                tree: &tree,
+                                root: root_index,
+                            }
+                            .render(&mut f, full_screen)
+                        })?;
                     }
                 }
             }
