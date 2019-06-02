@@ -2,6 +2,7 @@ mod app {
     use crate::{WalkOptions, WalkResult};
     use failure::Error;
     use petgraph::{prelude::NodeIndex, Directed, Direction, Graph};
+    use std::time::{Duration, Instant};
     use std::{ffi::OsString, io, path::PathBuf};
     use termion::input::{Keys, TermReadEventsAndRaw};
     use tui::{backend::Backend, Terminal};
@@ -31,6 +32,8 @@ mod app {
         /// Total amount of IO errors encountered when traversing the filesystem
         pub io_errors: u64,
     }
+
+    const GUI_REFRESH_RATE: Duration = Duration::from_millis(100);
 
     impl TerminalApp {
         pub fn process_events<B, R>(
@@ -80,8 +83,18 @@ mod app {
             let mut current_size_at_depth = 0;
             let mut previous_depth = 0;
 
+            let mut last_checked = Instant::now();
+
+            const INITIAL_CHECK_INTERVAL: usize = 1_000;
+            let mut check_instant_every = INITIAL_CHECK_INTERVAL;
+            let mut last_seen_eid = 0;
+
             for path in input.into_iter() {
-                for entry in options.iter_from_path(path.as_ref()) {
+                for (eid, entry) in options
+                    .iter_from_path(path.as_ref())
+                    .into_iter()
+                    .enumerate()
+                {
                     entries_traversed += 1;
                     let mut data = EntryData::default();
                     match entry {
@@ -138,6 +151,20 @@ mod app {
                             previous_depth = entry.depth;
                         }
                         Err(_) => io_errors += 1,
+                    }
+
+                    if eid != 0
+                        && eid % check_instant_every == 0
+                        && last_checked.elapsed() >= GUI_REFRESH_RATE
+                    {
+                        let now = Instant::now();
+                        let elapsed = (now - last_checked).as_millis() as f64;
+                        check_instant_every = (INITIAL_CHECK_INTERVAL as f64
+                            * ((eid - last_seen_eid) as f64 / INITIAL_CHECK_INTERVAL as f64)
+                            * (GUI_REFRESH_RATE.as_millis() as f64 / elapsed))
+                            as usize;
+                        last_seen_eid = eid;
+                        last_checked = now;
                     }
                 }
             }
