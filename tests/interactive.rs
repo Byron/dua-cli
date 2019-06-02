@@ -18,8 +18,8 @@ mod app {
         let expected_tree = sample_01_tree();
 
         assert_eq!(
-            debug(app.tree.raw_edges()),
-            debug(expected_tree.raw_edges()),
+            debug(app.tree),
+            debug(expected_tree),
             "filesystem graph is stable and matches the directory structure"
         );
         Ok(())
@@ -58,9 +58,10 @@ mod app {
             }
             n
         };
-        let r = add_node("", 0, None);
+        let root_size = 1259325;
+        let r = add_node("", root_size, None);
         {
-            let s = add_node("sample-01", 0, Some(r));
+            let s = add_node("sample-01", root_size, Some(r));
             {
                 add_node(".hidden.666", 666, Some(s));
                 add_node("a", 256, Some(s));
@@ -80,6 +81,7 @@ mod app {
                         add_node("dir-sub-a.256kb", 256_000, Some(sub));
                     }
                 }
+                add_node("z123.b", 123, Some(s));
             }
         }
         t

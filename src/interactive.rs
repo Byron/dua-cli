@@ -58,6 +58,8 @@ mod app {
 
             let root_index = tree.add_node(EntryData::default());
             let (mut previous_node_idx, mut parent_node_idx) = (root_index, root_index);
+            let mut sizes_per_depth_level = Vec::new();
+            let mut current_size_at_depth = 0;
             let mut previous_depth = 0;
 
             for path in input.into_iter() {
@@ -66,6 +68,7 @@ mod app {
                     let mut data = EntryData::default();
                     match entry {
                         Ok(entry) => {
+                            dbg!(entry.depth);
                             data.name = entry.file_name;
                             let file_size = match entry.metadata {
                                 Some(Ok(ref m)) if !m.is_dir() => m.len(),
@@ -80,13 +83,21 @@ mod app {
                                 ),
                             };
 
-                            parent_node_idx = match (entry.depth, previous_depth) {
-                                (n, p) if n > p => previous_node_idx,
-                                (n, p) if n < p => tree
-                                    .neighbors_directed(parent_node_idx, Direction::Incoming)
-                                    .next()
-                                    .expect("every node in the iteration has a parent"),
-                                _ => parent_node_idx,
+                            match (entry.depth, previous_depth) {
+                                (n, p) if n > p => {
+                                    sizes_per_depth_level.push(current_size_at_depth);
+                                    current_size_at_depth = 0;
+                                    parent_node_idx = previous_node_idx;
+                                }
+                                (n, p) if n < p => {
+                                    parent_node_idx = tree
+                                        .neighbors_directed(parent_node_idx, Direction::Incoming)
+                                        .next()
+                                        .expect("every node in the iteration has a parent");
+                                }
+                                _ => {
+                                    current_size_at_depth += file_size;
+                                }
                             };
 
                             previous_depth = entry.depth;
