@@ -1,5 +1,5 @@
 mod app {
-    use dua::interactive::{App, ItemData, Tree};
+    use dua::interactive::{EntryData, TerminalApp, Tree};
     use dua::{ByteFormat, Color, Sorting, WalkOptions};
     use failure::Error;
     use pretty_assertions::assert_eq;
@@ -13,7 +13,7 @@ mod app {
 
     #[test]
     fn journey_with_single_path() -> Result<(), Error> {
-        let (terminal, app) = initialized_app_and_terminal("sample-01")?;
+        let (_, app) = initialized_app_and_terminal("sample-01")?;
         let expected_tree = sample_01_tree();
 
         assert_eq!(
@@ -26,12 +26,12 @@ mod app {
 
     fn initialized_app_and_terminal(
         fixture_path: &str,
-    ) -> Result<(Terminal<TestBackend>, App), Error> {
+    ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
         let mut terminal = Terminal::new(TestBackend::new(40, 20))?;
         let input = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures")
             .join(fixture_path);
-        let app = App::initialize(
+        let app = TerminalApp::initialize(
             &mut terminal,
             WalkOptions {
                 threads: 1,
@@ -46,9 +46,10 @@ mod app {
 
     fn sample_01_tree() -> Tree {
         let mut expected_tree = Tree::new();
-        expected_tree.add_node(ItemData {
+        expected_tree.add_node(EntryData {
             name: OsString::from("foo"),
             size: 231,
+            metadata_io_error: false,
         });
         expected_tree
     }

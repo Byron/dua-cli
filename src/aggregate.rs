@@ -1,4 +1,4 @@
-use crate::{Sorting, WalkOptions, WalkResult};
+use crate::{WalkOptions, WalkResult};
 use failure::Error;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};
@@ -25,7 +25,7 @@ pub fn aggregate(
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
         for entry in options.iter_from_path(path.as_ref()) {
-            stats.files_traversed += 1;
+            stats.entries_traversed += 1;
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.metadata {
@@ -63,7 +63,7 @@ pub fn aggregate(
         res.num_errors += num_errors;
     }
 
-    if stats.files_traversed == 0 {
+    if stats.entries_traversed == 0 {
         stats.smallest_file_in_bytes = 0;
     }
 
@@ -130,8 +130,8 @@ fn write_path<C: fmt::Display>(
 /// Statistics obtained during a filesystem walk
 #[derive(Default, Debug)]
 pub struct Statistics {
-    /// The amount of files we have seen
-    pub files_traversed: u64,
+    /// The amount of entries we have seen during filesystem traversal
+    pub entries_traversed: u64,
     /// The size of the smallest file encountered in bytes
     pub smallest_file_in_bytes: u64,
     /// The size of the largest file encountered in bytes
