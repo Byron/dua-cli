@@ -39,7 +39,7 @@ fn run() -> Result<(), Error> {
                     .with_context(|_| "Interactive mode requires a connected terminal")?
             };
             let mut app = dua::interactive::App::initialize(&mut terminal, walk_options, input)?;
-            app.event_loop(&mut terminal, io::stdin().keys())?
+            app.process_events(&mut terminal, io::stdin().keys())?
         }
         Some(Aggregate {
             input,

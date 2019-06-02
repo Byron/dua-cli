@@ -9,7 +9,7 @@ mod app {
     pub struct App {}
 
     impl App {
-        pub fn event_loop<B, R>(
+        pub fn process_events<B, R>(
             &mut self,
             terminal: &mut Terminal<B>,
             keys: Keys<R>,
