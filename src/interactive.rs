@@ -67,6 +67,9 @@ mod app {
                     .next()
                     .expect("every node in the iteration has a parent")
             }
+            fn pop_or_panic(v: &mut Vec<u64>) -> u64 {
+                v.pop().expect("sizes per level to be in sync with graph")
+            }
             let mut tree = Tree::new();
             let mut io_errors = 0u64;
             let mut entries_traversed = 0u64;
@@ -105,22 +108,22 @@ mod app {
                                 }
                                 (n, p) if n < p => {
                                     for _ in n..p {
-                                        let size_at_level_above = sizes_per_depth_level
-                                            .pop()
-                                            .expect("sizes per level to be in sync with graph");
                                         set_size_or_panic(
                                             &mut tree,
                                             parent_node_idx,
                                             current_size_at_depth,
                                         );
-                                        current_size_at_depth += size_at_level_above;
+                                        current_size_at_depth +=
+                                            pop_or_panic(&mut sizes_per_depth_level);
                                         parent_node_idx =
                                             parent_or_panic(&mut tree, parent_node_idx);
                                     }
                                     current_size_at_depth += file_size;
-                                    tree.node_weight_mut(parent_node_idx)
-                                        .expect("node for parent index we just retrieved")
-                                        .size = current_size_at_depth;
+                                    set_size_or_panic(
+                                        &mut tree,
+                                        parent_node_idx,
+                                        current_size_at_depth,
+                                    );
                                 }
                                 _ => {
                                     current_size_at_depth += file_size;
@@ -142,10 +145,7 @@ mod app {
             sizes_per_depth_level.push(current_size_at_depth);
             current_size_at_depth = 0;
             for _ in 0..previous_depth {
-                let size_at_level_above = sizes_per_depth_level
-                    .pop()
-                    .expect("sizes per level to be in sync with graph");
-                current_size_at_depth += size_at_level_above;
+                current_size_at_depth += pop_or_panic(&mut sizes_per_depth_level);
                 set_size_or_panic(&mut tree, parent_node_idx, current_size_at_depth);
                 parent_node_idx = parent_or_panic(&mut tree, parent_node_idx);
             }
