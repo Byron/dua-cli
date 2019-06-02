@@ -134,10 +134,7 @@ mod app {
                     .pop()
                     .expect("sizes per level to be in sync with graph");
                 parent_node_idx = tree
-                    .neighbors_directed(
-                        parent_node_idx,
-                        Direction::Incoming,
-                    )
+                    .neighbors_directed(parent_node_idx, Direction::Incoming)
                     .next()
                     .expect("every node in the iteration has a parent test");
                 tree.node_weight_mut(parent_node_idx)
