@@ -1,7 +1,8 @@
 mod app {
-    use dua::interactive::{EntryData, TerminalApp, Tree};
+    use dua::interactive::{EntryData, GraphIndexType, TerminalApp, Tree};
     use dua::{ByteFormat, Color, Sorting, WalkOptions};
     use failure::Error;
+    use petgraph::prelude::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::{ffi::OsString, fmt, path::Path};
     use tui::backend::TestBackend;
@@ -13,12 +14,12 @@ mod app {
 
     #[test]
     fn journey_with_single_path() -> Result<(), Error> {
-        let (_, mut app) = initialized_app_and_terminal("sample-01")?;
-        let mut expected_tree = sample_01_tree();
+        let (_, app) = initialized_app_and_terminal("sample-01")?;
+        let expected_tree = sample_01_tree();
 
         assert_eq!(
-            debug(app.tree.node_weights_mut().collect::<Vec<_>>()),
-            debug(expected_tree.node_weights_mut().collect::<Vec<_>>()),
+            debug(app.tree.raw_edges()),
+            debug(expected_tree.raw_edges()),
             "filesystem graph is stable and matches the directory structure"
         );
         Ok(())
@@ -46,27 +47,41 @@ mod app {
 
     fn sample_01_tree() -> Tree {
         let mut t = Tree::new();
-        let mut add_node = |name, size| {
-            t.add_node(EntryData {
+        let mut add_node = |name, size, maybe_from_idx: Option<NodeIndex<GraphIndexType>>| {
+            let n = t.add_node(EntryData {
                 name: OsString::from(name),
                 size,
                 metadata_io_error: false,
             });
+            if let Some(from) = maybe_from_idx {
+                t.add_edge(from, n, ());
+            }
+            n
         };
-        add_node("", 0);
-        add_node("sample-01", 0);
-        add_node(".hidden.666", 666);
-        add_node("a", 256);
-        add_node("b.empty", 0);
-        add_node("c.lnk", 1);
-        add_node("dir", 0);
-        add_node("1000bytes", 1000);
-        add_node("dir-a.1mb", 1_000_000);
-        add_node("dir-a.kb", 1024);
-        add_node("empty-dir", 0);
-        add_node(".gitkeep", 0);
-        add_node("sub", 0);
-        add_node("dir-sub-a.256kb", 256_000);
+        let r = add_node("", 0, None);
+        {
+            let s = add_node("sample-01", 0, Some(r));
+            {
+                add_node(".hidden.666", 666, Some(s));
+                add_node("a", 256, Some(s));
+                add_node("b.empty", 0, Some(s));
+                add_node("c.lnk", 1, Some(s));
+                let d = add_node("dir", 0, Some(s));
+                {
+                    add_node("1000bytes", 1000, Some(d));
+                    add_node("dir-a.1mb", 1_000_000, Some(d));
+                    add_node("dir-a.kb", 1024, Some(d));
+                    let e = add_node("empty-dir", 0, Some(d));
+                    {
+                        add_node(".gitkeep", 0, Some(e));
+                    }
+                    let sub = add_node("sub", 0, Some(d));
+                    {
+                        add_node("dir-sub-a.256kb", 256_000, Some(sub));
+                    }
+                }
+            }
+        }
         t
     }
 }
