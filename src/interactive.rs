@@ -127,8 +127,24 @@ mod app {
             }
 
             dbg!(previous_depth);
-            dbg!(sizes_per_depth_level);
+            dbg!(&sizes_per_depth_level);
             dbg!(current_size_at_depth);
+            for _ in 0..previous_depth {
+                let size_at_level_above = sizes_per_depth_level
+                    .pop()
+                    .expect("sizes per level to be in sync with graph");
+                parent_node_idx = tree
+                    .neighbors_directed(
+                        parent_node_idx,
+                        Direction::Incoming,
+                    )
+                    .next()
+                    .expect("every node in the iteration has a parent test");
+                tree.node_weight_mut(parent_node_idx)
+                    .expect("node for parent index we just retrieved")
+                    .size = current_size_at_depth;
+                current_size_at_depth += size_at_level_above;
+            }
             // TODO finish size computation - there may still be unresolved sizes on the stack
 
             Ok(TerminalApp {
