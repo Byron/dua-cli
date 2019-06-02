@@ -105,6 +105,10 @@ mod app {
                                             .next()
                                             .expect("every node in the iteration has a parent");
                                     }
+                                    current_size_at_depth += file_size;
+                                    tree.node_weight_mut(parent_node_idx)
+                                        .expect("node for parent index we just retrieved")
+                                        .size = current_size_at_depth;
                                 }
                                 _ => {
                                     current_size_at_depth += file_size;
