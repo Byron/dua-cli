@@ -44,7 +44,7 @@ WITH_FAILURE=1
           (with "no option to adjust the total"
             it "produces a human-readable aggregate, with total" && {
               WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths" \
-              expect_run ${SUCCESSFULLY} "$exe" aggregate . . dir ./dir/ ./dir/sub
+              expect_run ${SUCCESSFULLY} "$exe" a . . dir ./dir/ ./dir/sub
             }
           )
           (with "the --no-total option set"
@@ -95,5 +95,11 @@ WITH_FAILURE=1
         }
       )
     )
+  )
+  (with "interactive mode"
+    it "fails as there is no TTY connected" && {
+      WITH_SNAPSHOT="$snapshot/failure-interactive-without-tty" \
+      expect_run ${WITH_FAILURE} "$exe" i
+    }
   )
 )

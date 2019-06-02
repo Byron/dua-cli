@@ -40,13 +40,20 @@ pub struct Args {
     #[structopt(short = "f", long = "format")]
     pub format: Option<ByteFormat>,
 
-    /// One or more input files. If unset, we will use all entries in the current working directory.
+    /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[structopt(parse(from_os_str))]
     pub input: Vec<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
+    /// Launch the terminal user interface
+    #[structopt(name = "interactive", alias = "i")]
+    Interactive {
+        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
+        #[structopt(parse(from_os_str))]
+        input: Vec<PathBuf>,
+    },
     /// Aggregrate the consumed space of one or more directories or files
     #[structopt(name = "aggregate", alias = "a")]
     Aggregate {
@@ -60,7 +67,7 @@ pub enum Command {
         /// If set, no total column will be computed for multiple inputs
         #[structopt(long = "no-total")]
         no_total: bool,
-        /// One or more input files. If unset, we will use all entries in the current working directory.
+        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[structopt(parse(from_os_str))]
         input: Vec<PathBuf>,
     },

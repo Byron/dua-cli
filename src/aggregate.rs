@@ -13,9 +13,10 @@ pub fn aggregate(
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
-) -> Result<WalkResult, Error> {
+) -> Result<(WalkResult, Statistics), Error> {
     let mut res = WalkResult::default();
-    res.stats.smallest_file_in_bytes = u64::max_value();
+    let mut stats = Statistics::default();
+    stats.smallest_file_in_bytes = u64::max_value();
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
@@ -24,7 +25,7 @@ pub fn aggregate(
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
         for entry in options.iter_from_path(path.as_ref(), Sorting::None) {
-            res.stats.files_traversed += 1;
+            stats.files_traversed += 1;
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.metadata {
@@ -38,10 +39,8 @@ pub fn aggregate(
                             "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
                         ),
                     };
-                    res.stats.largest_file_in_bytes =
-                        res.stats.largest_file_in_bytes.max(file_size);
-                    res.stats.smallest_file_in_bytes =
-                        res.stats.smallest_file_in_bytes.min(file_size);
+                    stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
+                    stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
                     num_bytes += file_size;
                 }
                 Err(_) => num_errors += 1,
@@ -64,8 +63,8 @@ pub fn aggregate(
         res.num_errors += num_errors;
     }
 
-    if res.stats.files_traversed == 0 {
-        res.stats.smallest_file_in_bytes = 0;
+    if stats.files_traversed == 0 {
+        stats.smallest_file_in_bytes = 0;
     }
 
     if sort_by_size_in_bytes {
@@ -92,7 +91,7 @@ pub fn aggregate(
             color::Fg(color::Reset),
         )?;
     }
-    Ok(res)
+    Ok((res, stats))
 }
 
 fn path_color(path: impl AsRef<Path>) -> Box<dyn fmt::Display> {
@@ -126,4 +125,15 @@ fn write_path<C: fmt::Display>(
         path_color = options.color.display(path_color),
         path_color_reset = options.color.display(color::Fg(color::Reset)),
     )
+}
+
+/// Statistics obtained during a filesystem walk
+#[derive(Default, Debug)]
+pub struct Statistics {
+    /// The amount of files we have seen
+    pub files_traversed: u64,
+    /// The size of the smallest file encountered in bytes
+    pub smallest_file_in_bytes: u64,
+    /// The size of the largest file encountered in bytes
+    pub largest_file_in_bytes: u64,
 }

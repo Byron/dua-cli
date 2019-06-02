@@ -96,21 +96,9 @@ impl WalkOptions {
     }
 }
 
-/// Statistics obtained during a filesystem walk
-#[derive(Default, Debug)]
-pub struct Statistics {
-    /// The amount of files we have seen
-    pub files_traversed: u64,
-    /// The size of the smallest file encountered in bytes
-    pub smallest_file_in_bytes: u64,
-    /// The size of the largest file encountered in bytes
-    pub largest_file_in_bytes: u64,
-}
-
 /// Information we gather during a filesystem walk
 #[derive(Default)]
 pub struct WalkResult {
     /// The amount of io::errors we encountered. Can happen when fetching meta-data, or when reading the directory contents.
     pub num_errors: u64,
-    pub stats: Statistics,
 }

@@ -5,10 +5,12 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use dua::{ByteFormat, Color};
-use failure::Error;
+use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
-use std::path::PathBuf;
-use std::{fs, io, io::Write, process};
+use std::{fs, io, io::Write, path::PathBuf, process};
+use termion::input::TermRead;
+use termion::{raw::IntoRawMode, screen::AlternateScreen};
+use tui::{backend::TermionBackend, Terminal};
 
 mod options;
 
@@ -27,49 +29,60 @@ fn run() -> Result<(), Error> {
             Color::None
         },
     };
-    let (show_statistics, res) = match opt.command {
+    let res = match opt.command {
+        Some(Interactive { input }) => {
+            let mut terminal = {
+                let stdout = io::stdout().into_raw_mode()?;
+                let stdout = AlternateScreen::from(stdout);
+                let backend = TermionBackend::new(stdout);
+                Terminal::new(backend)
+                    .with_context(|_| "Interactive mode requires a connected terminal")?
+            };
+            let mut app = dua::interactive::App::initialize(&mut terminal, walk_options, input)?;
+            app.event_loop(&mut terminal, io::stdin().keys())?
+        }
         Some(Aggregate {
             input,
             no_total,
             no_sort,
             statistics,
-        }) => (
-            statistics,
-            dua::aggregate(
+        }) => {
+            let (res, stats) = dua::aggregate(
                 stdout_locked,
                 walk_options,
                 !no_total,
                 !no_sort,
-                if input.len() == 0 {
-                    cwd_dirlist()?
-                } else {
-                    input
-                },
-            )?,
-        ),
-        None => (
-            false,
+                paths_from(input)?,
+            )?;
+            if statistics {
+                writeln!(io::stderr(), "{:?}", stats).ok();
+            }
+            res
+        }
+        None => {
             dua::aggregate(
                 stdout_locked,
                 walk_options,
                 true,
                 true,
-                if opt.input.len() == 0 {
-                    cwd_dirlist()?
-                } else {
-                    opt.input
-                },
-            )?,
-        ),
+                paths_from(opt.input)?,
+            )?
+            .0
+        }
     };
 
-    if show_statistics {
-        writeln!(io::stderr(), "{:?}", res.stats).ok();
-    }
     if res.num_errors > 0 {
         process::exit(1);
     }
     Ok(())
+}
+
+fn paths_from(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
+    if paths.len() == 0 {
+        cwd_dirlist()
+    } else {
+        Ok(paths)
+    }
 }
 
 fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
