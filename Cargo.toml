@@ -18,6 +18,7 @@ byte-unit = "2.1.0"
 termion = "1.5.2"
 atty = "0.2.11"
 tui = "0.6.0"
+petgraph = "0.4.13"
 
 [[bin]]
 name="dua"
@@ -30,3 +31,6 @@ name="dua"
 panic = 'unwind'
 incremental = false
 overflow-checks = false
+
+[dev-dependencies]
+pretty_assertions = "0.6.1"

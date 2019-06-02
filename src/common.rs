@@ -12,8 +12,10 @@ pub enum ByteFormat {
     Bytes,
 }
 
-pub(crate) enum Sorting {
+/// Identify the kind of sorting to apply during filesystem iteration
+pub enum Sorting {
     None,
+    AlphabeticalByFileName,
 }
 
 /// Specify the kind of color to use
@@ -55,6 +57,7 @@ pub struct WalkOptions {
     pub threads: usize,
     pub byte_format: ByteFormat,
     pub color: Color,
+    pub sorting: Sorting,
 }
 
 impl WalkOptions {
@@ -85,11 +88,12 @@ impl WalkOptions {
         }
     }
 
-    pub(crate) fn iter_from_path(&self, path: &Path, sort: Sorting) -> WalkDir {
+    pub(crate) fn iter_from_path(&self, path: &Path) -> WalkDir {
         WalkDir::new(path)
             .preload_metadata(true)
-            .sort(match sort {
+            .sort(match self.sorting {
                 Sorting::None => false,
+                Sorting::AlphabeticalByFileName => true,
             })
             .skip_hidden(false)
             .num_threads(self.threads)

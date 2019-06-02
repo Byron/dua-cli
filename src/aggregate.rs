@@ -24,7 +24,7 @@ pub fn aggregate(
         num_roots += 1;
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
-        for entry in options.iter_from_path(path.as_ref(), Sorting::None) {
+        for entry in options.iter_from_path(path.as_ref()) {
             stats.files_traversed += 1;
             match entry {
                 Ok(entry) => {
