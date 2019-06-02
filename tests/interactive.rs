@@ -58,7 +58,7 @@ mod app {
             }
             n
         };
-        let root_size = 1259325;
+        let root_size = 1259070;
         let r = add_node("", root_size, None);
         {
             let s = add_node("sample-01", root_size, Some(r));
@@ -67,7 +67,7 @@ mod app {
                 add_node("a", 256, Some(s));
                 add_node("b.empty", 0, Some(s));
                 add_node("c.lnk", 1, Some(s));
-                let d = add_node("dir", 0, Some(s));
+                let d = add_node("dir", 1258024, Some(s));
                 {
                     add_node("1000bytes", 1000, Some(d));
                     add_node("dir-a.1mb", 1_000_000, Some(d));
@@ -76,7 +76,7 @@ mod app {
                     {
                         add_node(".gitkeep", 0, Some(e));
                     }
-                    let sub = add_node("sub", 0, Some(d));
+                    let sub = add_node("sub", 256_000, Some(d));
                     {
                         add_node("dir-sub-a.256kb", 256_000, Some(sub));
                     }

@@ -68,7 +68,6 @@ mod app {
                     let mut data = EntryData::default();
                     match entry {
                         Ok(entry) => {
-                            dbg!(entry.depth);
                             data.name = entry.file_name;
                             let file_size = match entry.metadata {
                                 Some(Ok(ref m)) if !m.is_dir() => m.len(),
@@ -86,14 +85,26 @@ mod app {
                             match (entry.depth, previous_depth) {
                                 (n, p) if n > p => {
                                     sizes_per_depth_level.push(current_size_at_depth);
-                                    current_size_at_depth = 0;
+                                    current_size_at_depth = file_size;
                                     parent_node_idx = previous_node_idx;
                                 }
                                 (n, p) if n < p => {
-                                    parent_node_idx = tree
-                                        .neighbors_directed(parent_node_idx, Direction::Incoming)
-                                        .next()
-                                        .expect("every node in the iteration has a parent");
+                                    for _ in n..p {
+                                        let size_at_level_above = sizes_per_depth_level
+                                            .pop()
+                                            .expect("sizes per level to be in sync with graph");
+                                        tree.node_weight_mut(parent_node_idx)
+                                            .expect("node for parent index we just retrieved")
+                                            .size = current_size_at_depth;
+                                        current_size_at_depth += size_at_level_above;
+                                        parent_node_idx = tree
+                                            .neighbors_directed(
+                                                parent_node_idx,
+                                                Direction::Incoming,
+                                            )
+                                            .next()
+                                            .expect("every node in the iteration has a parent");
+                                    }
                                 }
                                 _ => {
                                     current_size_at_depth += file_size;
@@ -110,6 +121,11 @@ mod app {
                     }
                 }
             }
+
+            dbg!(previous_depth);
+            dbg!(sizes_per_depth_level);
+            dbg!(current_size_at_depth);
+            // TODO finish size computation - there may still be unresolved sizes on the stack
 
             Ok(TerminalApp {
                 tree,
