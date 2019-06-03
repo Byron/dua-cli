@@ -1,8 +1,12 @@
 use crate::{WalkOptions, WalkResult};
 use failure::Error;
 use petgraph::{prelude::NodeIndex, Directed, Direction, Graph};
-use std::time::{Duration, Instant};
-use std::{ffi::OsString, io, path::PathBuf};
+use std::{
+    ffi::OsString,
+    io,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::widgets::Widget;
 use tui::{backend::Backend, Terminal};
@@ -191,11 +195,11 @@ impl TerminalApp {
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        use termion::event::Key::Ctrl;
+        use termion::event::Key::{Char, Ctrl};
 
         for key in keys.filter_map(Result::ok) {
             match key {
-                Ctrl('c') => break,
+                Ctrl('c') | Char('\n') => break,
                 _ => dbg!(&key),
             };
         }
@@ -213,14 +217,10 @@ impl TerminalApp {
         B: Backend,
     {
         Ok(TerminalApp {
-            traversal: Traversal::from_walk(options, input, |t| {
+            traversal: Traversal::from_walk(options, input, |traversal| {
                 terminal.draw(|mut f| {
                     let full_screen = f.size();
-                    super::widgets::Entries {
-                        tree: &t.tree,
-                        root: t.root_index,
-                    }
-                    .render(&mut f, full_screen)
+                    super::widgets::InitWindow { traversal }.render(&mut f, full_screen)
                 })?;
                 Ok(())
             })?,

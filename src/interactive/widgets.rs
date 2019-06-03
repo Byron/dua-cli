@@ -1,12 +1,33 @@
-use super::{Tree, TreeIndex};
+use super::{Traversal, Tree, TreeIndex};
 use petgraph::Direction;
-use tui::buffer::Buffer;
-use tui::layout::{Corner, Rect};
-use tui::widgets::{Block, Borders, List, Text, Widget};
+use tui::{
+    buffer::Buffer,
+    layout::{Corner, Rect},
+    widgets::{Block, Borders, List, Text, Widget},
+};
 
 pub struct Entries<'a> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
+}
+
+pub struct InitWindow<'a> {
+    pub traversal: &'a Traversal,
+}
+
+impl<'a> Widget for InitWindow<'a> {
+    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+        let Self {
+            traversal: Traversal {
+                tree, root_index, ..
+            },
+        } = self;
+        Entries {
+            tree: tree,
+            root: *root_index,
+        }
+        .draw(area, buf);
+    }
 }
 
 impl<'a> Widget for Entries<'a> {
