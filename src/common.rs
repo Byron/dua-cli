@@ -5,7 +5,26 @@ use crate::{
 use itertools::Itertools;
 use jwalk::WalkDir;
 use petgraph::Direction;
-use std::{fmt, path::Path};
+use std::{fmt, path::Path, path::PathBuf};
+
+pub(crate) fn path_of(tree: &Tree, mut node_idx: TreeIndex) -> PathBuf {
+    const THE_ROOT: usize = 1;
+    let mut entries = Vec::new();
+
+    while let Some(parent_idx) = tree.neighbors_directed(node_idx, petgraph::Incoming).next() {
+        entries.push(get_entry_or_panic(tree, node_idx));
+        node_idx = parent_idx;
+    }
+    entries.push(get_entry_or_panic(tree, node_idx));
+    entries
+        .iter()
+        .rev()
+        .skip(THE_ROOT)
+        .fold(PathBuf::new(), |mut acc, entry| {
+            acc.push(&entry.name);
+            acc
+        })
+}
 
 pub(crate) fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
     tree.node_weight(node_idx)

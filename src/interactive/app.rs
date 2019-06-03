@@ -1,5 +1,5 @@
 use super::widgets::{DisplayState, MainWindow};
-use crate::{sorted_entries, traverse::Traversal, ByteFormat, WalkOptions, WalkResult};
+use crate::{path_of, sorted_entries, traverse::Traversal, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use itertools::Itertools;
 use petgraph::Direction;
@@ -83,6 +83,12 @@ impl TerminalApp {
                                 .map(|(idx, _)| *idx);
                     }
                 }
+                Char('O') => match self.state.selected {
+                    Some(ref idx) => {
+                        open::that(path_of(&self.traversal.tree, *idx)).ok();
+                    }
+                    None => {}
+                },
                 Char('o') => self.enter_node(),
                 Char('k') => self.change_vertical_index(CursorDirection::Up),
                 Char('j') => self.change_vertical_index(CursorDirection::Down),
