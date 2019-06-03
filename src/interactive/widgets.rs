@@ -1,10 +1,10 @@
 use super::DisplayOptions;
 use crate::{
-    get_entry_or_panic, sorted_entries,
+    sorted_entries,
     traverse::{Traversal, Tree, TreeIndex},
     ByteFormat,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -138,36 +138,19 @@ impl<'a> Widget for Entries<'a> {
                 .next()
                 .is_none()
         };
-        let path_of = |mut node_idx| {
-            const THE_ROOT: usize = 1;
-            let mut entries = Vec::new();
-
-            while let Some(parent_idx) =
-                tree.neighbors_directed(node_idx, petgraph::Incoming).next()
-            {
-                entries.push(get_entry_or_panic(tree, node_idx));
-                node_idx = parent_idx;
-            }
-            entries.push(get_entry_or_panic(tree, node_idx));
-            entries
-                .iter()
-                .rev()
-                .skip(THE_ROOT)
-                .fold(PathBuf::new(), |mut acc, entry| {
-                    acc.push(&entry.name);
-                    acc
-                })
-        };
+        let path_of = |node_idx| crate::common::path_of(tree, node_idx);
 
         let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
-        let block_title = match path_of(*root).to_string_lossy().to_string() {
+        let title = match path_of(*root).to_string_lossy().to_string() {
             ref p if p.is_empty() => Path::new(".")
                 .canonicalize()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| String::from(".")),
             p => p,
         };
+        let title = format!(" {} ", title);
+        let block = Block::default().borders(Borders::ALL).title(&title);
         List::new(entries.iter().map(|(node_idx, w)| {
             let style = match selected {
                 Some(idx) if *idx == *node_idx => Style {
@@ -196,11 +179,7 @@ impl<'a> Widget for Entries<'a> {
                 style,
             )
         }))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(&format!(" {} ", block_title,)),
-        )
+        .block(block)
         .start_corner(Corner::TopLeft)
         .draw(area, buf);
     }
