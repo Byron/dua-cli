@@ -154,6 +154,7 @@ impl TerminalApp {
                     root: traversal.root_index,
                     selected: None,
                     sorting: Default::default(),
+                    message: Some("-> scanning <-".into()),
                 };
                 MainWindow {
                     traversal,
@@ -175,9 +176,10 @@ impl TerminalApp {
                 root,
                 selected,
                 sorting,
+                message: None,
             },
             display: display_options,
-            traversal: traversal,
+            traversal,
         })
     }
 }

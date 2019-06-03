@@ -48,6 +48,7 @@ pub struct DisplayState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
     pub sorting: SortMode,
+    pub message: Option<String>,
 }
 
 pub struct MainWindow<'a, 'b> {
@@ -60,6 +61,7 @@ pub struct Footer {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
+    pub message: Option<String>,
 }
 
 impl Widget for Footer {
@@ -73,12 +75,16 @@ impl Widget for Footer {
             area.x + margin,
             area.y,
             format!(
-                "Total disk usage: {}  Entries: {}",
+                "Total disk usage: {}  Entries: {} {}",
                 match self.total_bytes {
                     Some(b) => format!("{}", self.format.display(b)).trim().to_owned(),
                     None => "-".to_owned(),
                 },
-                self.entries_traversed
+                self.entries_traversed,
+                match self.message {
+                    Some(ref m) => m.as_str(),
+                    None => "",
+                }
             ),
             (area.width - margin) as usize,
             Style {
@@ -89,7 +95,7 @@ impl Widget for Footer {
         )
     }
 }
-impl<'a, 'b> Widget for MainWindow<'a, 'b> {
+impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             traversal:
@@ -120,6 +126,7 @@ impl<'a, 'b> Widget for MainWindow<'a, 'b> {
             total_bytes: *total_bytes,
             entries_traversed: *entries_traversed,
             format: display.byte_format,
+            message: state.message.clone(),
         }
         .draw(footer, buf);
     }
