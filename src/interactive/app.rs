@@ -26,6 +26,11 @@ pub struct TerminalApp {
     pub state: DisplayState,
 }
 
+enum CursorDirection {
+    Down,
+    Up,
+}
+
 impl TerminalApp {
     fn draw<B>(&self, terminal: &mut Terminal<B>) -> Result<(), Error>
     where
@@ -63,24 +68,10 @@ impl TerminalApp {
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
-                Char('j') => {
-                    let entries =
-                        sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
-                    let next_selected_pos = match self.state.selected {
-                        Some(ref selected) => entries
-                            .iter()
-                            .find_position(|(idx, _)| *idx == *selected)
-                            .map(|(idx, _)| idx + 1)
-                            .unwrap_or(0),
-                        None => 0,
-                    };
-                    self.state.selected = match entries.get(next_selected_pos) {
-                        Some((idx, _)) => Some(*idx),
-                        None => self.state.selected,
-                    };
-                }
+                Char('k') => self.change_vertical_index(CursorDirection::Up),
+                Char('j') => self.change_vertical_index(CursorDirection::Down),
                 Char('s') => self.state.sorting.toggle_size(),
-                Ctrl('c') | Char('\n') | Char('q') => break,
+                Ctrl('c') | Char('q') => break,
                 _ => {}
             };
             self.draw(terminal)?;
@@ -88,6 +79,25 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
+    }
+
+    fn change_vertical_index(&mut self, direction: CursorDirection) -> () {
+        let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+        let next_selected_pos = match self.state.selected {
+            Some(ref selected) => entries
+                .iter()
+                .find_position(|(idx, _)| *idx == *selected)
+                .map(|(idx, _)| match direction {
+                    CursorDirection::Down => idx.saturating_add(1),
+                    CursorDirection::Up => idx.saturating_sub(1),
+                })
+                .unwrap_or(0),
+            None => 0,
+        };
+        self.state.selected = match entries.get(next_selected_pos) {
+            Some((idx, _)) => Some(*idx),
+            None => self.state.selected,
+        };
     }
 
     pub fn initialize<B>(

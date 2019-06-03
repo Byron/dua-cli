@@ -118,13 +118,34 @@ mod app {
         }
 
         // Entry-Navigation
-        // when hitting the j key
         {
+            // when hitting the j key
             app.process_events(&mut terminal, b"j".keys())?;
             assert_eq!(
                 node_by_name(&app, fixture_str(long_root)),
                 node_by_index(&app, *app.state.selected.as_ref().unwrap()),
                 "it moves the cursor down and selects the next entry based on the current sort mode"
+            );
+            // when hitting it while there is nowhere to go
+            app.process_events(&mut terminal, b"j".keys())?;
+            assert_eq!(
+                node_by_name(&app, fixture_str(long_root)),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it stays at the previous position"
+            );
+            // when hitting the k key
+            app.process_events(&mut terminal, b"k".keys())?;
+            assert_eq!(
+                node_by_name(&app, fixture_str(short_root)),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it moves the cursor up and selects the next entry based on the current sort mode"
+            );
+            // when hitting the k key again
+            app.process_events(&mut terminal, b"k".keys())?;
+            assert_eq!(
+                node_by_name(&app, fixture_str(short_root)),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it stays at the current cursor position as there is nowhere to go"
             );
         }
 
