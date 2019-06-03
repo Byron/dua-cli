@@ -204,8 +204,7 @@ mod app {
             app.process_events(&mut terminal, b"ju".keys())?;
             {
                 assert_eq!(
-                    app.traversal.root_index,
-                    app.state.root,
+                    app.traversal.root_index, app.state.root,
                     "it keeps the root - it can't go further up"
                 );
                 assert_eq!(

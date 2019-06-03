@@ -1,5 +1,9 @@
-use super::{DisplayOptions, Traversal, Tree, TreeIndex};
-use crate::{get_entry_or_panic, sorted_entries, ByteFormat};
+use super::DisplayOptions;
+use crate::{
+    get_entry_or_panic, sorted_entries,
+    traverse::{Traversal, Tree, TreeIndex},
+    ByteFormat,
+};
 use std::path::PathBuf;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};

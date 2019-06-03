@@ -1,5 +1,5 @@
 use super::widgets::{DisplayState, MainWindow};
-use crate::{interactive::Traversal, sorted_entries, ByteFormat, WalkOptions, WalkResult};
+use crate::{sorted_entries, traverse::Traversal, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use itertools::Itertools;
 use petgraph::Direction;

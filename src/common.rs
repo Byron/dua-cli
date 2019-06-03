@@ -1,4 +1,7 @@
-use crate::interactive::{widgets::SortMode, EntryData, Tree, TreeIndex};
+use crate::{
+    interactive::widgets::SortMode,
+    traverse::{EntryData, Tree, TreeIndex},
+};
 use itertools::Itertools;
 use jwalk::WalkDir;
 use petgraph::Direction;
