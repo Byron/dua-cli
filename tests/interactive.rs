@@ -1,18 +1,15 @@
 mod app {
     use dua::{
         interactive::{widgets::SortMode, TerminalApp},
-        traverse::{EntryData, Tree, TreeIndex, TreeIndexType},
+        traverse::{EntryData, Tree, TreeIndex},
         ByteFormat, Color, TraversalSorting, WalkOptions,
     };
     use failure::Error;
     use petgraph::prelude::NodeIndex;
     use pretty_assertions::assert_eq;
-    use std::ffi::OsStr;
-    use std::path::PathBuf;
-    use std::{ffi::OsString, fmt, path::Path};
+    use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
     use termion::input::TermRead;
-    use tui::backend::TestBackend;
-    use tui::Terminal;
+    use tui::{backend::TestBackend, Terminal};
 
     const FIXTURE_PATH: &'static str = "tests/fixtures";
 
@@ -315,8 +312,7 @@ mod app {
 
     fn make_add_node<'a>(
         t: &'a mut Tree,
-    ) -> impl FnMut(&str, u64, Option<NodeIndex<TreeIndexType>>) -> NodeIndex<TreeIndexType> + 'a
-    {
+    ) -> impl FnMut(&str, u64, Option<NodeIndex>) -> NodeIndex + 'a {
         move |name, size, maybe_from_idx| {
             let n = t.add_node(EntryData {
                 name: OsString::from(name),

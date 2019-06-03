@@ -54,12 +54,18 @@ make
 
 Thanks to [jwalk][jwalk], all there was left to do is to write a command-line interface. As `jwalk` matures, **dua** should benefit instantly.
 
-### Tradeoffs
+### Limitations
 
+* In interactive mode, you will need about 60MB of memory for 1 million entries in the graph.
+* In interactive mode, the maximum amount of files is limited to 2^32 - 1 (`u32::max_value() - 1`) entries.
+  * One node is used as to 'virtual' root
+  * The actual amount of nodes stored might be lower, as there might be more edges than nodes, which are also limited by a `u32` (I guess)
+  * The limitation is imposed by the underlying [`petgraph`][petgraph] crate, which declares it as `unsafe` to use u64 for instance.
+  * It's possibly *UB* when that limit is reached, however, it was never observed either.
 * Dedication to `termion`
   * we use [`termion`][termion] exlusively, and even though [`tui`][tui] supports multiple backends, we only support its termion backend. _Reason_: `tui` is only used for parts of the program, and in all other parts `termion` is used for coloring the output. Thus we wouldn't support changing to a different backend anyway unless everything is done with TUI, which is really not what it is made for.
 
-
+[petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
 [termion]: https://crates.io/crates/termion

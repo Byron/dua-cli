@@ -4,9 +4,8 @@ use petgraph::graph::NodeIndex;
 use petgraph::{Directed, Direction, Graph};
 use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
 
-pub type TreeIndexType = u32;
-pub type TreeIndex = NodeIndex<TreeIndexType>;
-pub type Tree = Graph<EntryData, (), Directed, TreeIndexType>;
+pub type TreeIndex = NodeIndex;
+pub type Tree = Graph<EntryData, (), Directed>;
 
 #[derive(Eq, PartialEq, Debug, Default)]
 pub struct EntryData {
