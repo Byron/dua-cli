@@ -86,7 +86,11 @@ impl Traversal {
                 let mut data = EntryData::default();
                 match entry {
                     Ok(entry) => {
-                        data.name = entry.file_name;
+                        data.name = if entry.depth < 1 {
+                            path.clone().into()
+                        } else {
+                            entry.file_name
+                        };
                         let file_size = match entry.metadata {
                                 Some(Ok(ref m)) if !m.is_dir() => m.len(),
                                 Some(Ok(_)) => 0,

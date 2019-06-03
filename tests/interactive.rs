@@ -1,4 +1,5 @@
 mod app {
+    use dua::interactive::TreeIndex;
     use dua::{
         interactive::{widgets::SortMode, EntryData, TerminalApp, Tree, TreeIndexType},
         ByteFormat, Color, TraversalSorting, WalkOptions,
@@ -11,13 +12,15 @@ mod app {
     use tui::backend::TestBackend;
     use tui::Terminal;
 
+    const FIXTURE_PATH: &'static str = "tests/fixtures";
+
     fn debug(item: impl fmt::Debug) -> String {
         format!("{:?}", item)
     }
 
     #[test]
     fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(), Error> {
-        let (_, app) = initialized_app_and_terminal("sample-01")?;
+        let (_, app) = initialized_app_and_terminal(&["sample-01"])?;
         let expected_tree = sample_01_tree();
 
         assert_eq!(
@@ -30,7 +33,7 @@ mod app {
 
     #[test]
     fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<(), Error> {
-        let (_, app) = initialized_app_and_terminal("sample-02")?;
+        let (_, app) = initialized_app_and_terminal(&["sample-02"])?;
         let expected_tree = sample_02_tree();
 
         assert_eq!(
@@ -43,11 +46,22 @@ mod app {
 
     #[test]
     fn simple_user_journey() -> Result<(), Error> {
-        let (mut terminal, mut app) = initialized_app_and_terminal("sample-02")?;
+        let long_root = "sample-02/dir";
+        let (mut terminal, mut app) = initialized_app_and_terminal(&["sample-02", long_root])?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
             "it starts in descending order by size"
+        );
+
+        assert_eq!(
+            app.traversal
+                .tree
+                .node_weight(TreeIndex::new(11))
+                .unwrap()
+                .name,
+            OsString::from(format!("{}/{}", FIXTURE_PATH, long_root)),
+            "the roots are always listed with the given (possibly long) names",
         );
 
         // when hitting the S key
@@ -62,12 +76,15 @@ mod app {
     }
 
     fn initialized_app_and_terminal(
-        fixture_path: &str,
+        fixture_paths: &[&str],
     ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
         let mut terminal = Terminal::new(TestBackend::new(40, 20))?;
-        let input = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures")
-            .join(fixture_path);
+        std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
+
+        let input = fixture_paths
+            .iter()
+            .map(|p| Path::new(FIXTURE_PATH).join(p))
+            .collect();
         let app = TerminalApp::initialize(
             &mut terminal,
             WalkOptions {
@@ -76,7 +93,7 @@ mod app {
                 color: Color::None,
                 sorting: TraversalSorting::AlphabeticalByFileName,
             },
-            vec![input],
+            input,
         )?;
         Ok((terminal, app))
     }
@@ -88,7 +105,11 @@ mod app {
             let root_size = 1259070;
             let r = add_node("", root_size, None);
             {
-                let s = add_node("sample-01", root_size, Some(r));
+                let s = add_node(
+                    format!("{}/{}", FIXTURE_PATH, "sample-01").as_str(),
+                    root_size,
+                    Some(r),
+                );
                 {
                     add_node(".hidden.666", 666, Some(s));
                     add_node("a", 256, Some(s));
@@ -121,7 +142,11 @@ mod app {
             let root_size = 1540;
             let r = add_node("", root_size, None);
             {
-                let s = add_node("sample-02", root_size, Some(r));
+                let s = add_node(
+                    format!("{}/{}", FIXTURE_PATH, "sample-02").as_str(),
+                    root_size,
+                    Some(r),
+                );
                 {
                     add_node("a", 256, Some(s));
                     add_node("b", 1, Some(s));
