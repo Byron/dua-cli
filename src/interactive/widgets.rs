@@ -4,6 +4,7 @@ use crate::{
     traverse::{Traversal, Tree, TreeIndex},
     ByteFormat,
 };
+use itertools::Itertools;
 use std::path::Path;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
@@ -151,7 +152,21 @@ impl<'a> Widget for Entries<'a> {
         };
         let title = format!(" {} ", title);
         let block = Block::default().borders(Borders::ALL).title(&title);
-        List::new(entries.iter().map(|(node_idx, w)| {
+        let offset = match selected {
+            Some(selected) => {
+                let pos = entries
+                    .iter()
+                    .find_position(|(idx, _)| *idx == *selected)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(0);
+                match block.inner(area).height as usize {
+                    h if pos >= h => pos - h + 1,
+                    _ => 0,
+                }
+            }
+            None => 0,
+        };
+        List::new(entries.iter().skip(offset).map(|(node_idx, w)| {
             let style = match selected {
                 Some(idx) if *idx == *node_idx => Style {
                     fg: Color::Black,
