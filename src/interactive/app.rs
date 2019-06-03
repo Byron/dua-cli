@@ -69,26 +69,8 @@ impl TerminalApp {
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
-                Char('u') => {
-                    if let Some(parent_idx) = self
-                        .traversal
-                        .tree
-                        .neighbors_directed(self.state.root, Direction::Incoming)
-                        .next()
-                    {
-                        self.state.root = parent_idx;
-                        self.state.selected =
-                            sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
-                                .get(0)
-                                .map(|(idx, _)| *idx);
-                    }
-                }
-                Char('O') => match self.state.selected {
-                    Some(ref idx) => {
-                        open::that(path_of(&self.traversal.tree, *idx)).ok();
-                    }
-                    None => {}
-                },
+                Char('O') => self.open_that(),
+                Char('u') => self.exit_node(),
                 Char('o') => self.enter_node(),
                 Char('k') => self.change_vertical_index(CursorDirection::Up),
                 Char('j') => self.change_vertical_index(CursorDirection::Down),
@@ -101,6 +83,30 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
+    }
+
+    fn exit_node(&mut self) -> () {
+        if let Some(parent_idx) = self
+            .traversal
+            .tree
+            .neighbors_directed(self.state.root, Direction::Incoming)
+            .next()
+        {
+            self.state.root = parent_idx;
+            self.state.selected =
+                sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
+                    .get(0)
+                    .map(|(idx, _)| *idx);
+        }
+    }
+
+    fn open_that(&mut self) -> () {
+        match self.state.selected {
+            Some(ref idx) => {
+                open::that(path_of(&self.traversal.tree, *idx)).ok();
+            }
+            None => {}
+        }
     }
 
     fn enter_node(&mut self) -> () {
