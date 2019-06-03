@@ -54,6 +54,13 @@ make
 
 Thanks to [jwalk][jwalk], all there was left to do is to write a command-line interface. As `jwalk` matures, **dua** should benefit instantly.
 
+### Tradeoffs
+
+* Dedication to `termion`
+  * we use [`termion`][termion] exlusively, and even though [`tui`][tui] supports multiple backends, we only support its termion backend. _Reason_: `tui` is only used for parts of the program, and in all other parts `termion` is used for coloring the output. Thus we wouldn't support changing to a different backend anyway unless everything is done with TUI, which is really not what it is made for.
+
 
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
+[termion]: https://crates.io/crates/termion
+[tui]: https://github.com/fdehau/tui-rs
