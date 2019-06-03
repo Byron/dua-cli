@@ -1,7 +1,7 @@
 mod app {
-    use dua::interactive::TreeIndex;
     use dua::{
-        interactive::{widgets::SortMode, EntryData, TerminalApp, Tree, TreeIndexType},
+        interactive::{widgets::SortMode, TerminalApp},
+        traverse::{EntryData, Tree, TreeIndex, TreeIndexType},
         ByteFormat, Color, TraversalSorting, WalkOptions,
     };
     use failure::Error;
