@@ -13,6 +13,7 @@ pub struct Entries<'a> {
     pub root: TreeIndex,
     pub display: DisplayOptions,
     pub sorting: SortMode,
+    pub selected: Option<TreeIndex>,
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
@@ -105,6 +106,7 @@ impl<'a, 'b> Widget for MainWindow<'a, 'b> {
             root: state.root,
             display: *display,
             sorting: state.sorting,
+            selected: state.selected,
         }
         .draw(entries, buf);
 
@@ -124,15 +126,29 @@ impl<'a> Widget for Entries<'a> {
             root,
             display,
             sorting,
+            selected,
         } = self;
-        List::new(sorted_entries(tree, *root, *sorting).map(|(_, w)| {
-            Text::Raw(
+        List::new(sorted_entries(tree, *root, *sorting).map(|(node_idx, w)| {
+            let style = match selected {
+                Some(idx) if *idx == node_idx => Style {
+                    fg: Color::Black,
+                    bg: Color::White,
+                    ..Default::default()
+                },
+                _ => Style {
+                    fg: Color::White,
+                    bg: Color::Reset,
+                    ..Default::default()
+                },
+            };
+            Text::Styled(
                 format!(
                     "{} | ----- | {}",
                     display.byte_format.display(w.size),
                     w.name.to_string_lossy()
                 )
                 .into(),
+                style,
             )
         }))
         .block(Block::default().borders(Borders::ALL).title("Entries"))
