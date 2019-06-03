@@ -20,10 +20,10 @@ pub struct DisplayState {
     pub selected: Option<TreeIndex>,
 }
 
-pub struct MainWindow<'a> {
+pub struct MainWindow<'a, 'b> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
-    pub state: DisplayState,
+    pub state: &'b DisplayState,
 }
 
 pub struct Footer {
@@ -59,7 +59,7 @@ impl Widget for Footer {
         )
     }
 }
-impl<'a> Widget for MainWindow<'a> {
+impl<'a, 'b> Widget for MainWindow<'a, 'b> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             traversal:
