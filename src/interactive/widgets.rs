@@ -1,5 +1,5 @@
 use super::{DisplayOptions, Traversal, Tree, TreeIndex};
-use crate::{get_size_or_panic, ByteFormat};
+use crate::ByteFormat;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -20,7 +20,7 @@ pub struct MainWindow<'a> {
 }
 
 pub struct Footer {
-    pub total_bytes: u64,
+    pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
 }
@@ -37,7 +37,10 @@ impl Widget for Footer {
             area.y,
             format!(
                 "Total disk usage: {}  Entries: {}",
-                format!("{}", self.format.display(self.total_bytes)).trim(),
+                match self.total_bytes {
+                    Some(b) => format!("{}", self.format.display(b)).trim().to_owned(),
+                    None => "-".to_owned(),
+                },
                 self.entries_traversed
             ),
             (area.width - margin) as usize,
@@ -57,6 +60,7 @@ impl<'a> Widget for MainWindow<'a> {
                     tree,
                     root_index,
                     entries_traversed,
+                    total_bytes,
                     ..
                 },
             display,
@@ -74,7 +78,7 @@ impl<'a> Widget for MainWindow<'a> {
         .draw(entries, buf);
 
         Footer {
-            total_bytes: get_size_or_panic(&tree, *root_index),
+            total_bytes: *total_bytes,
             entries_traversed: *entries_traversed,
             format: display.byte_format,
         }
@@ -92,17 +96,16 @@ impl<'a> Widget for Entries<'a> {
         } = self;
         List::new(
             tree.neighbors_directed(*root, Direction::Outgoing)
-                .filter_map(|w| {
-                    tree.node_weight(w).map(|w| {
-                        Text::Raw(
-                            format!(
-                                "{} | ----- | {}",
-                                display.byte_format.display(w.size),
-                                w.name.to_string_lossy()
-                            )
-                            .into(),
+                .filter_map(|w| tree.node_weight(w))
+                .map(|w| {
+                    Text::Raw(
+                        format!(
+                            "{} | ----- | {}",
+                            display.byte_format.display(w.size),
+                            w.name.to_string_lossy()
                         )
-                    })
+                        .into(),
+                    )
                 }),
         )
         .block(Block::default().borders(Borders::ALL).title("Entries"))

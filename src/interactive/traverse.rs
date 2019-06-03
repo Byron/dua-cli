@@ -30,6 +30,8 @@ pub struct Traversal {
     pub entries_traversed: u64,
     /// Total amount of IO errors encountered when traversing the filesystem
     pub io_errors: u64,
+    /// Total amount of bytes seen during the traversal
+    pub total_bytes: Option<u64>,
 }
 
 impl Traversal {
@@ -164,6 +166,7 @@ impl Traversal {
         }
         let root_size = t.recompute_root_size();
         set_size_or_panic(&mut t.tree, t.root_index, root_size);
+        t.total_bytes = Some(root_size);
 
         Ok(t)
     }
