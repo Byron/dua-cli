@@ -186,17 +186,32 @@ impl Traversal {
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal
-#[derive(Default, Debug)]
 pub struct TerminalApp {
     pub traversal: Traversal,
+    pub display: DisplayOptions,
 }
 
 const GUI_REFRESH_RATE: Duration = Duration::from_millis(100);
 
 impl TerminalApp {
+    fn draw<B>(&self, terminal: &mut Terminal<B>) -> Result<(), Error>
+    where
+        B: Backend,
+    {
+        let Self { traversal, display } = self;
+        terminal.draw(|mut f| {
+            let full_screen = f.size();
+            super::widgets::MainWindow {
+                traversal,
+                display: *display,
+            }
+            .render(&mut f, full_screen)
+        })?;
+        Ok(())
+    }
     pub fn process_events<B, R>(
         &mut self,
-        _terminal: &mut Terminal<B>,
+        terminal: &mut Terminal<B>,
         keys: Keys<R>,
     ) -> Result<WalkResult, Error>
     where
@@ -205,11 +220,13 @@ impl TerminalApp {
     {
         use termion::event::Key::{Char, Ctrl};
 
+        self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
                 Ctrl('c') | Char('\n') | Char('q') => break,
-                _ => dbg!(&key),
+                _ => {}
             };
+            self.draw(terminal)?;
         }
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
@@ -226,10 +243,11 @@ impl TerminalApp {
     {
         let display_options: DisplayOptions = options.clone().into();
         Ok(TerminalApp {
+            display: display_options,
             traversal: Traversal::from_walk(options, input, move |traversal| {
                 terminal.draw(|mut f| {
                     let full_screen = f.size();
-                    super::widgets::InitWindow {
+                    super::widgets::MainWindow {
                         traversal,
                         display: display_options,
                     }
