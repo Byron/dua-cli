@@ -1,4 +1,5 @@
 mod app {
+    use dua::interactive::TreeIndex;
     use dua::{
         interactive::{widgets::SortMode, EntryData, TerminalApp, Tree, TreeIndexType},
         ByteFormat, Color, TraversalSorting, WalkOptions,
@@ -6,6 +7,8 @@ mod app {
     use failure::Error;
     use petgraph::prelude::NodeIndex;
     use pretty_assertions::assert_eq;
+    use std::ffi::OsStr;
+    use std::path::PathBuf;
     use std::{ffi::OsString, fmt, path::Path};
     use termion::input::TermRead;
     use tui::backend::TestBackend;
@@ -43,8 +46,28 @@ mod app {
         Ok(())
     }
 
-    fn node_by(app: &TerminalApp, id: TreeIndexType) -> &EntryData {
+    fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
+        app.traversal.tree.node_weight(id).unwrap()
+    }
+
+    fn node_by_id(app: &TerminalApp, id: TreeIndexType) -> &EntryData {
         app.traversal.tree.node_weight(id.into()).unwrap()
+    }
+
+    fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
+        let name = name.as_ref();
+        let t: Vec<_> = app
+            .traversal
+            .tree
+            .node_indices()
+            .map(|idx| (idx, node_by_index(app, idx)))
+            .filter_map(|(idx, e)| if e.name == name { Some(idx) } else { None })
+            .collect();
+        match t.len() {
+            1 => t[0],
+            0 => panic!("Node named '{}' not found in tree", name.to_string_lossy()),
+            n => panic!("Node named '{}' found {} times", name.to_string_lossy(), n),
+        }
     }
 
     #[test]
@@ -59,19 +82,16 @@ mod app {
             "it will sort entries in descending order by size"
         );
 
+        let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
         assert_eq!(
-            node_by(&app, 11).name,
-            OsString::from(format!("{}/{}", FIXTURE_PATH, long_root)),
+            node_by_index(&app, index_by_name(&app, &first_selected_path)).name,
+            first_selected_path,
             "the roots are always listed with the given (possibly long) names",
         );
 
         assert_eq!(
-            node_by(&app, 1).name,
-            node_by(
-                &app,
-                app.state.selected.as_ref().unwrap().index() as TreeIndexType
-            )
-            .name,
+            node_by_id(&app, 1).name,
+            node_by_index(&app, *app.state.selected.as_ref().unwrap()).name,
             "it selects the first node in the list",
         );
 
@@ -86,16 +106,21 @@ mod app {
         Ok(())
     }
 
+    fn fixture(p: impl AsRef<Path>) -> PathBuf {
+        Path::new(FIXTURE_PATH).join(p)
+    }
+
+    fn fixture_str(p: impl AsRef<Path>) -> String {
+        fixture(p).to_str().unwrap().to_owned()
+    }
+
     fn initialized_app_and_terminal(
         fixture_paths: &[&str],
     ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
         let mut terminal = Terminal::new(TestBackend::new(40, 20))?;
         std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
-        let input = fixture_paths
-            .iter()
-            .map(|p| Path::new(FIXTURE_PATH).join(p))
-            .collect();
+        let input = fixture_paths.iter().map(fixture).collect();
         let app = TerminalApp::initialize(
             &mut terminal,
             WalkOptions {
@@ -116,11 +141,7 @@ mod app {
             let root_size = 1259070;
             let r = add_node("", root_size, None);
             {
-                let s = add_node(
-                    format!("{}/{}", FIXTURE_PATH, "sample-01").as_str(),
-                    root_size,
-                    Some(r),
-                );
+                let s = add_node(&fixture_str("sample-01"), root_size, Some(r));
                 {
                     add_node(".hidden.666", 666, Some(s));
                     add_node("a", 256, Some(s));
