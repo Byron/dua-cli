@@ -115,6 +115,11 @@ mod app {
                 node_by_index(&app, *app.state.selected.as_ref().unwrap()),
                 "it selects the first node in the list",
             );
+
+            assert_eq!(
+                app.traversal.root_index, app.state.root,
+                "the root is the 'virtual' root",
+            );
         }
 
         // SORTING
@@ -179,19 +184,35 @@ mod app {
                     "it selects the first entry in the directory"
                 );
 
-                // when trying to enter a file (a node with no children)
-                app.process_events(&mut terminal, b"jo".keys())?;
+                // when hitting the u key while inside a sub-directory
+                app.process_events(&mut terminal, b"u".keys())?;
                 {
                     assert_eq!(
-                        new_root_idx, app.state.root,
-                        "it does not enter it, keeping the previous root"
+                        app.traversal.root_index,
+                        app.state.root,
+                        "it sets the root to be the (roots) parent directory, being the virtual root"
                     );
                     assert_eq!(
-                        node_by_index(&app, index_by_name(&app, ".hidden.666")),
+                        node_by_name(&app, fixture_str(short_root)),
                         node_by_index(&app, *app.state.selected.as_ref().unwrap()),
-                        "it does not change the selection"
+                        "changes the selection to the first item in the list of entries"
                     );
                 }
+            }
+            // when hitting the u key while inside of the root directory
+            // We are moving the cursor down just to have a non-default selection
+            app.process_events(&mut terminal, b"ju".keys())?;
+            {
+                assert_eq!(
+                    app.traversal.root_index,
+                    app.state.root,
+                    "it keeps the root - it can't go further up"
+                );
+                assert_eq!(
+                    node_by_name(&app, fixture_str(long_root)),
+                    node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                    "keeps the previous selection"
+                );
             }
         }
 

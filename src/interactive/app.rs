@@ -2,6 +2,7 @@ use super::widgets::{DisplayState, MainWindow};
 use crate::{interactive::Traversal, sorted_entries, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use itertools::Itertools;
+use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::widgets::Widget;
@@ -68,6 +69,20 @@ impl TerminalApp {
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
+                Char('u') => {
+                    if let Some(parent_idx) = self
+                        .traversal
+                        .tree
+                        .neighbors_directed(self.state.root, Direction::Incoming)
+                        .next()
+                    {
+                        self.state.root = parent_idx;
+                        self.state.selected =
+                            sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
+                                .get(0)
+                                .map(|(idx, _)| *idx);
+                    }
+                }
                 Char('o') => self.enter_node(),
                 Char('k') => self.change_vertical_index(CursorDirection::Up),
                 Char('j') => self.change_vertical_index(CursorDirection::Down),
