@@ -4,10 +4,13 @@ use jwalk::WalkDir;
 use petgraph::Direction;
 use std::{fmt, path::Path};
 
-pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
+pub(crate) fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
     tree.node_weight(node_idx)
         .expect("node should always be retrievable with valid index")
-        .size
+}
+
+pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
+    get_entry_or_panic(tree, node_idx).size
 }
 
 pub(crate) fn sorted_entries(

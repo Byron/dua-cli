@@ -1,5 +1,6 @@
 use super::{DisplayOptions, Traversal, Tree, TreeIndex};
-use crate::{sorted_entries, ByteFormat};
+use crate::{get_entry_or_panic, sorted_entries, ByteFormat};
+use std::path::PathBuf;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -128,6 +129,27 @@ impl<'a> Widget for Entries<'a> {
             sorting,
             selected,
         } = self;
+        let is_dir = |mut node_idx| {
+            const THE_ROOT: usize = 1;
+            let mut entries = Vec::new();
+
+            while let Some(parent_idx) =
+                tree.neighbors_directed(node_idx, petgraph::Incoming).next()
+            {
+                entries.push(get_entry_or_panic(tree, node_idx));
+                node_idx = parent_idx;
+            }
+            entries.push(get_entry_or_panic(tree, node_idx));
+            entries
+                .iter()
+                .rev()
+                .skip(THE_ROOT)
+                .fold(PathBuf::new(), |mut acc, entry| {
+                    acc.push(&entry.name);
+                    acc
+                })
+                .is_dir()
+        };
         let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
         List::new(entries.iter().map(|(node_idx, w)| {
@@ -145,9 +167,10 @@ impl<'a> Widget for Entries<'a> {
             };
             Text::Styled(
                 format!(
-                    "{} | {:.02}% | {}",
+                    "{} | {:>5.02}% | {}{}",
                     display.byte_format.display(w.size),
                     (w.size as f64 / total as f64) * 100.0,
+                    if is_dir(*node_idx) { "/" } else { " " },
                     w.name.to_string_lossy()
                 )
                 .into(),
