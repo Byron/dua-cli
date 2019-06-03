@@ -1,6 +1,6 @@
 mod app {
     use dua::interactive::{EntryData, TerminalApp, Tree, TreeIndexType};
-    use dua::{ByteFormat, Color, Sorting, WalkOptions};
+    use dua::{ByteFormat, Color, TraversalSorting, WalkOptions};
     use failure::Error;
     use petgraph::prelude::NodeIndex;
     use pretty_assertions::assert_eq;
@@ -51,7 +51,7 @@ mod app {
                 threads: 1,
                 byte_format: ByteFormat::Metric,
                 color: Color::None,
-                sorting: Sorting::AlphabeticalByFileName,
+                sorting: TraversalSorting::AlphabeticalByFileName,
             },
             vec![input],
         )?;

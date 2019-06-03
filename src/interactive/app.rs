@@ -1,4 +1,4 @@
-use crate::{WalkOptions, WalkResult};
+use crate::{ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use petgraph::{prelude::NodeIndex, Directed, Direction, Graph};
 use std::{
@@ -37,18 +37,26 @@ pub struct Traversal {
     pub io_errors: u64,
 }
 
+/// Options to configure how we display things
+#[derive(Clone, Copy)]
+pub struct DisplayOptions {
+    pub byte_format: ByteFormat,
+}
+
+impl From<WalkOptions> for DisplayOptions {
+    fn from(WalkOptions { byte_format, .. }: WalkOptions) -> Self {
+        DisplayOptions { byte_format }
+    }
+}
+
 impl Traversal {
     pub fn from_walk(
         options: WalkOptions,
         input: Vec<PathBuf>,
         mut update: impl FnMut(&Traversal) -> Result<(), Error>,
     ) -> Result<Traversal, Error> {
-        fn set_size_or_panic(
-            tree: &mut Tree,
-            parent_node_idx: TreeIndex,
-            current_size_at_depth: u64,
-        ) {
-            tree.node_weight_mut(parent_node_idx)
+        fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u64) {
+            tree.node_weight_mut(node_idx)
                 .expect("node for parent index we just retrieved")
                 .size = current_size_at_depth;
         }
@@ -199,7 +207,7 @@ impl TerminalApp {
 
         for key in keys.filter_map(Result::ok) {
             match key {
-                Ctrl('c') | Char('\n') => break,
+                Ctrl('c') | Char('\n') | Char('q') => break,
                 _ => dbg!(&key),
             };
         }
@@ -216,11 +224,16 @@ impl TerminalApp {
     where
         B: Backend,
     {
+        let display_options: DisplayOptions = options.clone().into();
         Ok(TerminalApp {
-            traversal: Traversal::from_walk(options, input, |traversal| {
+            traversal: Traversal::from_walk(options, input, move |traversal| {
                 terminal.draw(|mut f| {
                     let full_screen = f.size();
-                    super::widgets::InitWindow { traversal }.render(&mut f, full_screen)
+                    super::widgets::InitWindow {
+                        traversal,
+                        display: display_options,
+                    }
+                    .render(&mut f, full_screen)
                 })?;
                 Ok(())
             })?,

@@ -4,7 +4,7 @@ extern crate structopt;
 
 use structopt::StructOpt;
 
-use dua::{ByteFormat, Color, Sorting};
+use dua::{ByteFormat, Color, TraversalSorting};
 use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
@@ -28,7 +28,7 @@ fn run() -> Result<(), Error> {
         } else {
             Color::None
         },
-        sorting: Sorting::None,
+        sorting: TraversalSorting::None,
     };
     let res = match opt.command {
         Some(Interactive { input }) => {

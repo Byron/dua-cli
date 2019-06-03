@@ -113,7 +113,7 @@ fn write_path<C: fmt::Display>(
     writeln!(
         out,
         "{byte_color}{:>10}{byte_color_reset}\t{path_color}{}{path_color_reset}{}",
-        options.format_bytes(num_bytes),
+        options.byte_format.display(num_bytes),
         path.as_ref().display(),
         if num_errors == 0 {
             Cow::Borrowed("")
