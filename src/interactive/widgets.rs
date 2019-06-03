@@ -4,7 +4,7 @@ use crate::{
     traverse::{Traversal, Tree, TreeIndex},
     ByteFormat,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -133,7 +133,7 @@ impl<'a> Widget for Entries<'a> {
             sorting,
             selected,
         } = self;
-        let is_dir = |mut node_idx| {
+        let path_of = |mut node_idx| {
             const THE_ROOT: usize = 1;
             let mut entries = Vec::new();
 
@@ -152,8 +152,9 @@ impl<'a> Widget for Entries<'a> {
                     acc.push(&entry.name);
                     acc
                 })
-                .is_dir()
         };
+        let is_dir = |node_idx| path_of(node_idx).is_dir();
+
         let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
         List::new(entries.iter().map(|(node_idx, w)| {
@@ -175,13 +176,22 @@ impl<'a> Widget for Entries<'a> {
                     display.byte_format.display(w.size),
                     (w.size as f64 / total as f64) * 100.0,
                     if is_dir(*node_idx) { "/" } else { " " },
-                    w.name.to_string_lossy()
+                    w.name.to_string_lossy(),
                 )
                 .into(),
                 style,
             )
         }))
-        .block(Block::default().borders(Borders::ALL).title("Entries"))
+        .block(Block::default().borders(Borders::ALL).title(&format!(
+            " {} ",
+            match path_of(self.root).to_string_lossy().to_string() {
+                ref p if p.is_empty() => Path::new(".")
+                    .canonicalize()
+                    .map(|p|p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| String::from(".")),
+                p => p,
+            },
+        )))
         .start_corner(Corner::TopLeft)
         .draw(area, buf);
     }
