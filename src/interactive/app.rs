@@ -34,14 +34,11 @@ pub struct Traversal {
 }
 
 impl Traversal {
-    pub fn from_walk<B>(
-        terminal: &mut Terminal<B>,
+    pub fn from_walk(
         options: WalkOptions,
         input: Vec<PathBuf>,
-    ) -> Result<Traversal, Error>
-    where
-        B: Backend,
-    {
+        mut update: impl FnMut(&Traversal) -> Result<(), Error>,
+    ) -> Result<Traversal, Error> {
         fn set_size_or_panic(
             tree: &mut Tree,
             parent_node_idx: TreeIndex,
@@ -158,14 +155,7 @@ impl Traversal {
                     last_seen_eid = eid;
                     last_checked = now;
 
-                    terminal.draw(|mut f| {
-                        let full_screen = f.size();
-                        super::widgets::Entries {
-                            tree: &t.tree,
-                            root: t.root_index,
-                        }
-                        .render(&mut f, full_screen)
-                    })?;
+                    update(&t)?;
                 }
             }
         }
@@ -213,7 +203,17 @@ impl TerminalApp {
         B: Backend,
     {
         Ok(TerminalApp {
-            traversal: Traversal::from_walk(terminal, options, input)?,
+            traversal: Traversal::from_walk(options, input, |t| {
+                terminal.draw(|mut f| {
+                    let full_screen = f.size();
+                    super::widgets::Entries {
+                        tree: &t.tree,
+                        root: t.root_index,
+                    }
+                    .render(&mut f, full_screen)
+                })?;
+                Ok(())
+            })?,
         })
     }
 }
