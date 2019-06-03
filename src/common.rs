@@ -1,6 +1,13 @@
+use crate::interactive::{Tree, TreeIndex};
 use jwalk::WalkDir;
 use std::fmt;
 use std::path::Path;
+
+pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
+    tree.node_weight(node_idx)
+        .expect("node should always be retrievable with valid index")
+        .size
+}
 
 /// Specifies a way to format bytes
 #[derive(Clone, Copy)]

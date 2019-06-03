@@ -1,4 +1,4 @@
-use crate::WalkOptions;
+use crate::{get_size_or_panic, WalkOptions};
 use failure::Error;
 use petgraph::graph::NodeIndex;
 use petgraph::{Directed, Direction, Graph};
@@ -162,8 +162,16 @@ impl Traversal {
             set_size_or_panic(&mut t.tree, parent_node_idx, current_size_at_depth);
             parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
         }
-        set_size_or_panic(&mut t.tree, t.root_index, current_size_at_depth);
+        let root_size = t.recompute_root_size();
+        set_size_or_panic(&mut t.tree, t.root_index, root_size);
 
         Ok(t)
+    }
+
+    fn recompute_root_size(&self) -> u64 {
+        self.tree
+            .neighbors_directed(self.root_index, Direction::Outgoing)
+            .map(|idx| get_size_or_panic(&self.tree, idx))
+            .sum()
     }
 }

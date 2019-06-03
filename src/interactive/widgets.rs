@@ -1,5 +1,5 @@
 use super::{DisplayOptions, Traversal, Tree, TreeIndex};
-use crate::ByteFormat;
+use crate::{get_size_or_panic, ByteFormat};
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -49,13 +49,6 @@ impl Widget for Footer {
         )
     }
 }
-
-fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
-    tree.node_weight(node_idx)
-        .expect("node should always be retrievable with valid index")
-        .size
-}
-
 impl<'a> Widget for MainWindow<'a> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
