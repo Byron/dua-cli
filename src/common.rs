@@ -1,12 +1,27 @@
-use crate::interactive::{Tree, TreeIndex};
+use crate::interactive::{widgets::SortMode, EntryData, Tree, TreeIndex};
+use itertools::Itertools;
 use jwalk::WalkDir;
-use std::fmt;
-use std::path::Path;
+use petgraph::Direction;
+use std::{fmt, path::Path};
 
 pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
     tree.node_weight(node_idx)
         .expect("node should always be retrievable with valid index")
         .size
+}
+
+pub(crate) fn sorted_entries(
+    tree: &Tree,
+    node_idx: TreeIndex,
+    sorting: SortMode,
+) -> std::vec::IntoIter<(TreeIndex, &EntryData)> {
+    use SortMode::*;
+    tree.neighbors_directed(node_idx, Direction::Outgoing)
+        .filter_map(|idx| tree.node_weight(idx).map(|w| (idx, w)))
+        .sorted_by(|(_, l), (_, r)| match sorting {
+            SizeDescending => r.size.cmp(&l.size),
+            SizeAscending => l.size.cmp(&r.size),
+        })
 }
 
 /// Specifies a way to format bytes

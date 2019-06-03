@@ -1,5 +1,4 @@
 mod app {
-    use dua::interactive::TreeIndex;
     use dua::{
         interactive::{widgets::SortMode, EntryData, TerminalApp, Tree, TreeIndexType},
         ByteFormat, Color, TraversalSorting, WalkOptions,
@@ -44,24 +43,36 @@ mod app {
         Ok(())
     }
 
+    fn node_by(app: &TerminalApp, id: TreeIndexType) -> &EntryData {
+        app.traversal.tree.node_weight(id.into()).unwrap()
+    }
+
     #[test]
     fn simple_user_journey() -> Result<(), Error> {
         let long_root = "sample-02/dir";
         let (mut terminal, mut app) = initialized_app_and_terminal(&["sample-02", long_root])?;
+
+        // after initialization, we expect that...
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
-            "it starts in descending order by size"
+            "it will sort entries in descending order by size"
         );
 
         assert_eq!(
-            app.traversal
-                .tree
-                .node_weight(TreeIndex::new(11))
-                .unwrap()
-                .name,
+            node_by(&app, 11).name,
             OsString::from(format!("{}/{}", FIXTURE_PATH, long_root)),
             "the roots are always listed with the given (possibly long) names",
+        );
+
+        assert_eq!(
+            node_by(&app, 1).name,
+            node_by(
+                &app,
+                app.state.selected.as_ref().unwrap().index() as TreeIndexType
+            )
+            .name,
+            "it selects the first node in the list",
         );
 
         // when hitting the S key
@@ -69,7 +80,7 @@ mod app {
         assert_eq!(
             app.state.sorting,
             SortMode::SizeAscending,
-            "it sets the sort to size ascending"
+            "it sets the sort mode to ascending by size"
         );
 
         Ok(())

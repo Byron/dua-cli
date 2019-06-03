@@ -1,5 +1,5 @@
 use super::widgets::{DisplayState, MainWindow};
-use crate::{interactive::Traversal, ByteFormat, WalkOptions, WalkResult};
+use crate::{interactive::Traversal, sorted_entries, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
@@ -99,11 +99,17 @@ impl TerminalApp {
             })?;
             Ok(())
         })?;
+
+        let sorting = Default::default();
+        let root = traversal.root_index;
+        let selected = sorted_entries(&traversal.tree, root, sorting)
+            .next()
+            .map(|(idx, _)| idx);
         Ok(TerminalApp {
             state: DisplayState {
-                root: traversal.root_index,
-                selected: None,
-                sorting: Default::default(),
+                root,
+                selected,
+                sorting,
             },
             display: display_options,
             traversal: traversal,

@@ -1,6 +1,5 @@
 use super::{DisplayOptions, Traversal, Tree, TreeIndex};
-use crate::ByteFormat;
-use itertools::Itertools;
+use crate::{sorted_entries, ByteFormat};
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -126,27 +125,16 @@ impl<'a> Widget for Entries<'a> {
             display,
             sorting,
         } = self;
-        use petgraph::Direction;
-        use SortMode::*;
-        List::new(
-            tree.neighbors_directed(*root, Direction::Outgoing)
-                .filter_map(|w| tree.node_weight(w))
-                .sorted_by(|l, r| match sorting {
-                    SizeDescending => l.size.cmp(&r.size),
-                    SizeAscending => r.size.cmp(&l.size),
-                })
-                .rev()
-                .map(|w| {
-                    Text::Raw(
-                        format!(
-                            "{} | ----- | {}",
-                            display.byte_format.display(w.size),
-                            w.name.to_string_lossy()
-                        )
-                        .into(),
-                    )
-                }),
-        )
+        List::new(sorted_entries(tree, *root, *sorting).map(|(_, w)| {
+            Text::Raw(
+                format!(
+                    "{} | ----- | {}",
+                    display.byte_format.display(w.size),
+                    w.name.to_string_lossy()
+                )
+                .into(),
+            )
+        }))
         .block(Block::default().borders(Borders::ALL).title("Entries"))
         .start_corner(Corner::TopLeft)
         .draw(area, buf);
