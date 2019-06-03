@@ -18,7 +18,7 @@ mod app {
         let expected_tree = sample_01_tree();
 
         assert_eq!(
-            debug(app.tree),
+            debug(app.traversal.tree),
             debug(expected_tree),
             "filesystem graph is stable and matches the directory structure"
         );
@@ -31,7 +31,7 @@ mod app {
         let expected_tree = sample_02_tree();
 
         assert_eq!(
-            debug(app.tree),
+            debug(app.traversal.tree),
             debug(expected_tree),
             "filesystem graph is stable and matches the directory structure"
         );

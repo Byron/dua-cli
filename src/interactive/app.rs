@@ -20,9 +20,9 @@ pub struct EntryData {
     pub metadata_io_error: bool,
 }
 
-/// State and methods representing the interactive disk usage analyser for the terminal
+/// The result of the previous filesystem traversal
 #[derive(Default, Debug)]
-pub struct TerminalApp {
+pub struct Traversal {
     /// A tree representing the entire filestem traversal
     pub tree: Tree,
     /// The top-level node of the tree.
@@ -33,26 +33,12 @@ pub struct TerminalApp {
     pub io_errors: u64,
 }
 
-const GUI_REFRESH_RATE: Duration = Duration::from_millis(100);
-
-impl TerminalApp {
-    pub fn process_events<B, R>(
-        &mut self,
-        _terminal: &mut Terminal<B>,
-        _keys: Keys<R>,
-    ) -> Result<WalkResult, Error>
-    where
-        B: Backend,
-        R: io::Read + TermReadEventsAndRaw,
-    {
-        unimplemented!()
-    }
-
-    pub fn initialize<B>(
+impl Traversal {
+    pub fn from_walk<B>(
         terminal: &mut Terminal<B>,
         options: WalkOptions,
         input: Vec<PathBuf>,
-    ) -> Result<TerminalApp, Error>
+    ) -> Result<Traversal, Error>
     where
         B: Backend,
     {
@@ -102,17 +88,17 @@ impl TerminalApp {
                     Ok(entry) => {
                         data.name = entry.file_name;
                         let file_size = match entry.metadata {
-                            Some(Ok(ref m)) if !m.is_dir() => m.len(),
-                            Some(Ok(_)) => 0,
-                            Some(Err(_)) => {
-                                io_errors += 1;
-                                data.metadata_io_error = true;
-                                0
-                            }
-                            None => unreachable!(
-                                "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
-                            ),
-                        };
+                                Some(Ok(ref m)) if !m.is_dir() => m.len(),
+                                Some(Ok(_)) => 0,
+                                Some(Err(_)) => {
+                                    io_errors += 1;
+                                    data.metadata_io_error = true;
+                                    0
+                                }
+                                None => unreachable!(
+                                    "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
+                                ),
+                            };
 
                         match (entry.depth, previous_depth) {
                             (n, p) if n > p => {
@@ -187,11 +173,46 @@ impl TerminalApp {
         }
         set_size_or_panic(&mut tree, root_index, current_size_at_depth);
 
-        Ok(TerminalApp {
+        Ok(Traversal {
             tree,
             root_index,
             entries_traversed,
             io_errors,
+        })
+    }
+}
+
+/// State and methods representing the interactive disk usage analyser for the terminal
+#[derive(Default, Debug)]
+pub struct TerminalApp {
+    pub traversal: Traversal,
+}
+
+const GUI_REFRESH_RATE: Duration = Duration::from_millis(100);
+
+impl TerminalApp {
+    pub fn process_events<B, R>(
+        &mut self,
+        _terminal: &mut Terminal<B>,
+        _keys: Keys<R>,
+    ) -> Result<WalkResult, Error>
+    where
+        B: Backend,
+        R: io::Read + TermReadEventsAndRaw,
+    {
+        unimplemented!()
+    }
+
+    pub fn initialize<B>(
+        terminal: &mut Terminal<B>,
+        options: WalkOptions,
+        input: Vec<PathBuf>,
+    ) -> Result<TerminalApp, Error>
+    where
+        B: Backend,
+    {
+        Ok(TerminalApp {
+            traversal: Traversal::from_walk(terminal, options, input)?,
         })
     }
 }
