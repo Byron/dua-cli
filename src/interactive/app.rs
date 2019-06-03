@@ -28,8 +28,10 @@ pub struct TerminalApp {
 }
 
 enum CursorDirection {
+    PageDown,
     Down,
     Up,
+    PageUp,
 }
 
 impl TerminalApp {
@@ -72,8 +74,10 @@ impl TerminalApp {
                 Char('O') => self.open_that(),
                 Char('u') => self.exit_node(),
                 Char('o') => self.enter_node(),
+                Ctrl('u') => self.change_vertical_index(CursorDirection::PageUp),
                 Char('k') => self.change_vertical_index(CursorDirection::Up),
                 Char('j') => self.change_vertical_index(CursorDirection::Down),
+                Ctrl('d') => self.change_vertical_index(CursorDirection::PageDown),
                 Char('s') => self.state.sorting.toggle_size(),
                 Ctrl('c') | Char('q') => break,
                 _ => {}
@@ -126,8 +130,10 @@ impl TerminalApp {
                 .iter()
                 .find_position(|(idx, _)| *idx == *selected)
                 .map(|(idx, _)| match direction {
+                    CursorDirection::PageDown => idx.saturating_add(10),
                     CursorDirection::Down => idx.saturating_add(1),
                     CursorDirection::Up => idx.saturating_sub(1),
+                    CursorDirection::PageUp => idx.saturating_sub(10),
                 })
                 .unwrap_or(0),
             None => 0,
