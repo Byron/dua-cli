@@ -54,14 +54,29 @@ mod app {
         node_by_index(app, index_by_name(&app, name))
     }
 
-    fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
+    fn index_by_name_and_size(
+        app: &TerminalApp,
+        name: impl AsRef<OsStr>,
+        size: Option<u64>,
+    ) -> TreeIndex {
         let name = name.as_ref();
         let t: Vec<_> = app
             .traversal
             .tree
             .node_indices()
             .map(|idx| (idx, node_by_index(app, idx)))
-            .filter_map(|(idx, e)| if e.name == name { Some(idx) } else { None })
+            .filter_map(|(idx, e)| {
+                if e.name == name
+                    && match size {
+                        Some(s) => s == e.size,
+                        None => true,
+                    }
+                {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
             .collect();
         match t.len() {
             1 => t[0],
@@ -69,11 +84,14 @@ mod app {
             n => panic!("Node named '{}' found {} times", name.to_string_lossy(), n),
         }
     }
+    fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
+        index_by_name_and_size(app, name, None)
+    }
 
     #[test]
     fn simple_user_journey() -> Result<(), Error> {
         let long_root = "sample-02/dir";
-        let short_root = "sample-02";
+        let short_root = "sample-01";
         let (mut terminal, mut app) = initialized_app_and_terminal(&[short_root, long_root])?;
 
         // POST-INIT
@@ -147,6 +165,34 @@ mod app {
                 node_by_index(&app, *app.state.selected.as_ref().unwrap()),
                 "it stays at the current cursor position as there is nowhere to go"
             );
+            // when hitting the o key with a directory selected
+            app.process_events(&mut terminal, b"o".keys())?;
+            {
+                let new_root_idx = index_by_name(&app, fixture_str(short_root));
+                assert_eq!(
+                    new_root_idx, app.state.root,
+                    "it enters the entry if it is a directory, changing the root"
+                );
+                assert_eq!(
+                    index_by_name(&app, "dir"),
+                    *app.state.selected.as_ref().unwrap(),
+                    "it selects the first entry in the directory"
+                );
+
+                // when trying to enter a file (a node with no children)
+                app.process_events(&mut terminal, b"jo".keys())?;
+                {
+                    assert_eq!(
+                        new_root_idx, app.state.root,
+                        "it does not enter it, keeping the previous root"
+                    );
+                    assert_eq!(
+                        node_by_index(&app, index_by_name(&app, ".hidden.666")),
+                        node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                        "it does not change the selection"
+                    );
+                }
+            }
         }
 
         Ok(())

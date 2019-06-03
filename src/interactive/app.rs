@@ -68,6 +68,7 @@ impl TerminalApp {
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
+                Char('o') => self.enter_node(),
                 Char('k') => self.change_vertical_index(CursorDirection::Up),
                 Char('j') => self.change_vertical_index(CursorDirection::Down),
                 Char('s') => self.state.sorting.toggle_size(),
@@ -79,6 +80,16 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
+    }
+
+    fn enter_node(&mut self) -> () {
+        if let Some(idx) = self.state.selected {
+            let entries = sorted_entries(&self.traversal.tree, idx, self.state.sorting);
+            if let Some((next_selection, _)) = entries.get(0) {
+                self.state.root = idx;
+                self.state.selected = Some(*next_selection);
+            }
+        }
     }
 
     fn change_vertical_index(&mut self, direction: CursorDirection) -> () {
