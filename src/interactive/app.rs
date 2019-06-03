@@ -59,12 +59,18 @@ impl Traversal {
         fn pop_or_panic(v: &mut Vec<u64>) -> u64 {
             v.pop().expect("sizes per level to be in sync with graph")
         }
-        let mut tree = Tree::new();
-        let mut io_errors = 0u64;
-        let mut entries_traversed = 0u64;
 
-        let root_index = tree.add_node(EntryData::default());
-        let (mut previous_node_idx, mut parent_node_idx) = (root_index, root_index);
+        let mut t = {
+            let mut tree = Tree::new();
+            let root_index = tree.add_node(EntryData::default());
+            Traversal {
+                tree,
+                root_index,
+                ..Default::default()
+            }
+        };
+
+        let (mut previous_node_idx, mut parent_node_idx) = (t.root_index, t.root_index);
         let mut sizes_per_depth_level = Vec::new();
         let mut current_size_at_depth = 0;
         let mut previous_depth = 0;
@@ -82,7 +88,7 @@ impl Traversal {
                 .into_iter()
                 .enumerate()
             {
-                entries_traversed += 1;
+                t.entries_traversed += 1;
                 let mut data = EntryData::default();
                 match entry {
                     Ok(entry) => {
@@ -91,7 +97,7 @@ impl Traversal {
                                 Some(Ok(ref m)) if !m.is_dir() => m.len(),
                                 Some(Ok(_)) => 0,
                                 Some(Err(_)) => {
-                                    io_errors += 1;
+                                    t.io_errors += 1;
                                     data.metadata_io_error = true;
                                     0
                                 }
@@ -109,17 +115,17 @@ impl Traversal {
                             (n, p) if n < p => {
                                 for _ in n..p {
                                     set_size_or_panic(
-                                        &mut tree,
+                                        &mut t.tree,
                                         parent_node_idx,
                                         current_size_at_depth,
                                     );
                                     current_size_at_depth +=
                                         pop_or_panic(&mut sizes_per_depth_level);
-                                    parent_node_idx = parent_or_panic(&mut tree, parent_node_idx);
+                                    parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
                                 }
                                 current_size_at_depth += file_size;
                                 set_size_or_panic(
-                                    &mut tree,
+                                    &mut t.tree,
                                     parent_node_idx,
                                     current_size_at_depth,
                                 );
@@ -130,13 +136,13 @@ impl Traversal {
                         };
 
                         data.size = file_size;
-                        let entry_index = tree.add_node(data);
+                        let entry_index = t.tree.add_node(data);
 
-                        tree.add_edge(parent_node_idx, entry_index, ());
+                        t.tree.add_edge(parent_node_idx, entry_index, ());
                         previous_node_idx = entry_index;
                         previous_depth = entry.depth;
                     }
-                    Err(_) => io_errors += 1,
+                    Err(_) => t.io_errors += 1,
                 }
 
                 if eid != 0
@@ -155,8 +161,8 @@ impl Traversal {
                     terminal.draw(|mut f| {
                         let full_screen = f.size();
                         super::widgets::Entries {
-                            tree: &tree,
-                            root: root_index,
+                            tree: &t.tree,
+                            root: t.root_index,
                         }
                         .render(&mut f, full_screen)
                     })?;
@@ -168,17 +174,12 @@ impl Traversal {
         current_size_at_depth = 0;
         for _ in 0..previous_depth {
             current_size_at_depth += pop_or_panic(&mut sizes_per_depth_level);
-            set_size_or_panic(&mut tree, parent_node_idx, current_size_at_depth);
-            parent_node_idx = parent_or_panic(&mut tree, parent_node_idx);
+            set_size_or_panic(&mut t.tree, parent_node_idx, current_size_at_depth);
+            parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
         }
-        set_size_or_panic(&mut tree, root_index, current_size_at_depth);
+        set_size_or_panic(&mut t.tree, t.root_index, current_size_at_depth);
 
-        Ok(Traversal {
-            tree,
-            root_index,
-            entries_traversed,
-            io_errors,
-        })
+        Ok(t)
     }
 }
 
