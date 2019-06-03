@@ -26,7 +26,7 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    fn draw_to_terminal<B>(&self, terminal: &mut Terminal<B>) -> Result<(), Error>
+    fn draw<B>(&self, terminal: &mut Terminal<B>) -> Result<(), Error>
     where
         B: Backend,
     {
@@ -35,6 +35,7 @@ impl TerminalApp {
             display,
             state,
         } = self;
+
         terminal.draw(|mut f| {
             let full_screen = f.size();
             MainWindow {
@@ -44,6 +45,7 @@ impl TerminalApp {
             }
             .render(&mut f, full_screen)
         })?;
+
         Ok(())
     }
     pub fn process_events<B, R>(
@@ -57,13 +59,14 @@ impl TerminalApp {
     {
         use termion::event::Key::{Char, Ctrl};
 
-        self.draw_to_terminal(terminal)?;
+        self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
+                Char('s') => self.state.sorting.toggle_size(),
                 Ctrl('c') | Char('\n') | Char('q') => break,
                 _ => {}
             };
-            self.draw_to_terminal(terminal)?;
+            self.draw(terminal)?;
         }
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
@@ -85,6 +88,7 @@ impl TerminalApp {
                 let state = DisplayState {
                     root: traversal.root_index,
                     selected: None,
+                    sorting: Default::default(),
                 };
                 MainWindow {
                     traversal,
@@ -99,6 +103,7 @@ impl TerminalApp {
             state: DisplayState {
                 root: traversal.root_index,
                 selected: None,
+                sorting: Default::default(),
             },
             display: display_options,
             traversal: traversal,

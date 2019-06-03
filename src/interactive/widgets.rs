@@ -13,11 +13,35 @@ pub struct Entries<'a> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
+    pub sorting: SortMode,
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
+pub enum SortMode {
+    SizeDescending,
+    SizeAscending,
+}
+
+impl SortMode {
+    pub fn toggle_size(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            SizeAscending => SizeDescending,
+            SizeDescending => SizeAscending,
+        }
+    }
+}
+
+impl Default for SortMode {
+    fn default() -> Self {
+        SortMode::SizeDescending
+    }
 }
 
 pub struct DisplayState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
+    pub sorting: SortMode,
 }
 
 pub struct MainWindow<'a, 'b> {
@@ -81,6 +105,7 @@ impl<'a, 'b> Widget for MainWindow<'a, 'b> {
             tree: &tree,
             root: state.root,
             display: *display,
+            sorting: state.sorting,
         }
         .draw(entries, buf);
 
@@ -95,16 +120,21 @@ impl<'a, 'b> Widget for MainWindow<'a, 'b> {
 
 impl<'a> Widget for Entries<'a> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        use petgraph::Direction;
         let Self {
             tree,
             root,
             display,
+            sorting,
         } = self;
+        use petgraph::Direction;
+        use SortMode::*;
         List::new(
             tree.neighbors_directed(*root, Direction::Outgoing)
                 .filter_map(|w| tree.node_weight(w))
-                .sorted_by(|l, r| l.size.cmp(&r.size))
+                .sorted_by(|l, r| match sorting {
+                    SizeDescending => l.size.cmp(&r.size),
+                    SizeAscending => r.size.cmp(&l.size),
+                })
                 .rev()
                 .map(|w| {
                     Text::Raw(

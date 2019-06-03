@@ -1,10 +1,13 @@
 mod app {
-    use dua::interactive::{EntryData, TerminalApp, Tree, TreeIndexType};
-    use dua::{ByteFormat, Color, TraversalSorting, WalkOptions};
+    use dua::{
+        interactive::{widgets::SortMode, EntryData, TerminalApp, Tree, TreeIndexType},
+        ByteFormat, Color, TraversalSorting, WalkOptions,
+    };
     use failure::Error;
     use petgraph::prelude::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::{ffi::OsString, fmt, path::Path};
+    use termion::input::TermRead;
     use tui::backend::TestBackend;
     use tui::Terminal;
 
@@ -35,6 +38,26 @@ mod app {
             debug(expected_tree),
             "filesystem graph is stable and matches the directory structure"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn simple_user_journey() -> Result<(), Error> {
+        let (mut terminal, mut app) = initialized_app_and_terminal("sample-02")?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::SizeDescending,
+            "it starts in descending order by size"
+        );
+
+        // when hitting the S key
+        app.process_events(&mut terminal, b"s".keys())?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::SizeAscending,
+            "it sets the sort to size ascending"
+        );
+
         Ok(())
     }
 
