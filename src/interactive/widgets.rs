@@ -133,6 +133,11 @@ impl<'a> Widget for Entries<'a> {
             sorting,
             selected,
         } = self;
+        let is_top = |node_idx| {
+            tree.neighbors_directed(node_idx, petgraph::Incoming)
+                .next()
+                .is_none()
+        };
         let path_of = |mut node_idx| {
             const THE_ROOT: usize = 1;
             let mut entries = Vec::new();
@@ -153,10 +158,16 @@ impl<'a> Widget for Entries<'a> {
                     acc
                 })
         };
-        let is_dir = |node_idx| path_of(node_idx).is_dir();
 
         let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
+        let block_title = match path_of(*root).to_string_lossy().to_string() {
+            ref p if p.is_empty() => Path::new(".")
+                .canonicalize()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| String::from(".")),
+            p => p,
+        };
         List::new(entries.iter().map(|(node_idx, w)| {
             let style = match selected {
                 Some(idx) if *idx == *node_idx => Style {
@@ -175,23 +186,21 @@ impl<'a> Widget for Entries<'a> {
                     "{} | {:>5.02}% | {}{}",
                     display.byte_format.display(w.size),
                     (w.size as f64 / total as f64) * 100.0,
-                    if is_dir(*node_idx) { "/" } else { " " },
+                    match path_of(*node_idx) {
+                        ref p if p.is_dir() && !is_top(*root) => "/",
+                        _ => " ",
+                    },
                     w.name.to_string_lossy(),
                 )
                 .into(),
                 style,
             )
         }))
-        .block(Block::default().borders(Borders::ALL).title(&format!(
-            " {} ",
-            match path_of(self.root).to_string_lossy().to_string() {
-                ref p if p.is_empty() => Path::new(".")
-                    .canonicalize()
-                    .map(|p|p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| String::from(".")),
-                p => p,
-            },
-        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(&format!(" {} ", block_title,)),
+        )
         .start_corner(Corner::TopLeft)
         .draw(area, buf);
     }
