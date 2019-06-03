@@ -1,5 +1,6 @@
 use super::{DisplayOptions, Traversal, Tree, TreeIndex};
 use crate::ByteFormat;
+use itertools::Itertools;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
 use tui::{
@@ -97,6 +98,8 @@ impl<'a> Widget for Entries<'a> {
         List::new(
             tree.neighbors_directed(*root, Direction::Outgoing)
                 .filter_map(|w| tree.node_weight(w))
+                .sorted_by(|l, r| l.size.cmp(&r.size))
+                .rev()
                 .map(|w| {
                     Text::Raw(
                         format!(
