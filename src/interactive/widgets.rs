@@ -15,9 +15,15 @@ pub struct Entries<'a> {
     pub display: DisplayOptions,
 }
 
+pub struct DisplayState {
+    pub root: TreeIndex,
+    pub selected: Option<TreeIndex>,
+}
+
 pub struct MainWindow<'a> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
+    pub state: DisplayState,
 }
 
 pub struct Footer {
@@ -59,13 +65,13 @@ impl<'a> Widget for MainWindow<'a> {
             traversal:
                 Traversal {
                     tree,
-                    root_index,
                     entries_traversed,
                     total_bytes,
                     ..
                 },
             display,
-        } = *self;
+            state,
+        } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Max(256), Constraint::Length(1)].as_ref())
@@ -73,8 +79,8 @@ impl<'a> Widget for MainWindow<'a> {
         let (entries, footer) = (regions[0], regions[1]);
         Entries {
             tree: &tree,
-            root: *root_index,
-            display: display,
+            root: state.root,
+            display: *display,
         }
         .draw(entries, buf);
 

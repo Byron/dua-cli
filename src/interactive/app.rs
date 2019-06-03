@@ -1,3 +1,4 @@
+use super::widgets::{DisplayState, MainWindow};
 use crate::{interactive::Traversal, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
 use std::{io, path::PathBuf};
@@ -31,9 +32,14 @@ impl TerminalApp {
         let Self { traversal, display } = self;
         terminal.draw(|mut f| {
             let full_screen = f.size();
-            super::widgets::MainWindow {
+            let root = traversal.root_index;
+            MainWindow {
                 traversal,
                 display: *display,
+                state: DisplayState {
+                    root,
+                    selected: None,
+                },
             }
             .render(&mut f, full_screen)
         })?;
@@ -77,9 +83,13 @@ impl TerminalApp {
             traversal: Traversal::from_walk(options, input, move |traversal| {
                 terminal.draw(|mut f| {
                     let full_screen = f.size();
-                    super::widgets::MainWindow {
+                    MainWindow {
                         traversal,
                         display: display_options,
+                        state: DisplayState {
+                            root: traversal.root_index,
+                            selected: None,
+                        },
                     }
                     .render(&mut f, full_screen)
                 })?;
