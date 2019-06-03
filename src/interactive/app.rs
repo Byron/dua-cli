@@ -185,13 +185,23 @@ impl TerminalApp {
     pub fn process_events<B, R>(
         &mut self,
         _terminal: &mut Terminal<B>,
-        _keys: Keys<R>,
+        keys: Keys<R>,
     ) -> Result<WalkResult, Error>
     where
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        unimplemented!()
+        use termion::event::Key::Ctrl;
+
+        for key in keys.filter_map(Result::ok) {
+            match key {
+                Ctrl('c') => break,
+                _ => dbg!(&key),
+            };
+        }
+        Ok(WalkResult {
+            num_errors: self.traversal.io_errors,
+        })
     }
 
     pub fn initialize<B>(
