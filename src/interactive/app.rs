@@ -1,6 +1,7 @@
 use super::widgets::{DisplayState, MainWindow};
 use crate::{interactive::Traversal, sorted_entries, ByteFormat, WalkOptions, WalkResult};
 use failure::Error;
+use itertools::Itertools;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::widgets::Widget;
@@ -62,6 +63,22 @@ impl TerminalApp {
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
+                Char('j') => {
+                    let entries =
+                        sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+                    let next_selected_pos = match self.state.selected {
+                        Some(ref selected) => entries
+                            .iter()
+                            .find_position(|(idx, _)| *idx == *selected)
+                            .map(|(idx, _)| idx + 1)
+                            .unwrap_or(0),
+                        None => 0,
+                    };
+                    self.state.selected = match entries.get(next_selected_pos) {
+                        Some((idx, _)) => Some(*idx),
+                        None => self.state.selected,
+                    };
+                }
                 Char('s') => self.state.sorting.toggle_size(),
                 Ctrl('c') | Char('\n') | Char('q') => break,
                 _ => {}

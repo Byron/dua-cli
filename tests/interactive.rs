@@ -50,8 +50,8 @@ mod app {
         app.traversal.tree.node_weight(id).unwrap()
     }
 
-    fn node_by_id(app: &TerminalApp, id: TreeIndexType) -> &EntryData {
-        app.traversal.tree.node_weight(id.into()).unwrap()
+    fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> &EntryData {
+        node_by_index(app, index_by_name(&app, name))
     }
 
     fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
@@ -73,35 +73,60 @@ mod app {
     #[test]
     fn simple_user_journey() -> Result<(), Error> {
         let long_root = "sample-02/dir";
-        let (mut terminal, mut app) = initialized_app_and_terminal(&["sample-02", long_root])?;
+        let short_root = "sample-02";
+        let (mut terminal, mut app) = initialized_app_and_terminal(&[short_root, long_root])?;
 
+        // POST-INIT
         // after initialization, we expect that...
-        assert_eq!(
-            app.state.sorting,
-            SortMode::SizeDescending,
-            "it will sort entries in descending order by size"
-        );
+        {
+            assert_eq!(
+                app.state.sorting,
+                SortMode::SizeDescending,
+                "it will sort entries in descending order by size"
+            );
 
-        let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
-        assert_eq!(
-            node_by_index(&app, index_by_name(&app, &first_selected_path)).name,
-            first_selected_path,
-            "the roots are always listed with the given (possibly long) names",
-        );
+            let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
+            assert_eq!(
+                node_by_name(&app, &first_selected_path).name,
+                first_selected_path,
+                "the roots are always listed with the given (possibly long) names",
+            );
 
-        assert_eq!(
-            node_by_id(&app, 1).name,
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()).name,
-            "it selects the first node in the list",
-        );
+            assert_eq!(
+                node_by_name(&app, fixture_str(short_root)),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it selects the first node in the list",
+            );
+        }
 
-        // when hitting the S key
-        app.process_events(&mut terminal, b"s".keys())?;
-        assert_eq!(
-            app.state.sorting,
-            SortMode::SizeAscending,
-            "it sets the sort mode to ascending by size"
-        );
+        // SORTING
+        {
+            // when hitting the S key
+            app.process_events(&mut terminal, b"s".keys())?;
+            assert_eq!(
+                app.state.sorting,
+                SortMode::SizeAscending,
+                "it sets the sort mode to ascending by size"
+            );
+            // when hitting the S key again
+            app.process_events(&mut terminal, b"s".keys())?;
+            assert_eq!(
+                app.state.sorting,
+                SortMode::SizeDescending,
+                "it sets the sort mode to descending by size"
+            );
+        }
+
+        // Entry-Navigation
+        // when hitting the j key
+        {
+            app.process_events(&mut terminal, b"j".keys())?;
+            assert_eq!(
+                node_by_name(&app, fixture_str(long_root)),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it moves the cursor down and selects the next entry based on the current sort mode"
+            );
+        }
 
         Ok(())
     }
