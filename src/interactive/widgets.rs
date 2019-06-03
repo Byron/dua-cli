@@ -128,9 +128,11 @@ impl<'a> Widget for Entries<'a> {
             sorting,
             selected,
         } = self;
-        List::new(sorted_entries(tree, *root, *sorting).map(|(node_idx, w)| {
+        let entries = sorted_entries(tree, *root, *sorting);
+        let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
+        List::new(entries.iter().map(|(node_idx, w)| {
             let style = match selected {
-                Some(idx) if *idx == node_idx => Style {
+                Some(idx) if *idx == *node_idx => Style {
                     fg: Color::Black,
                     bg: Color::White,
                     ..Default::default()
@@ -143,8 +145,9 @@ impl<'a> Widget for Entries<'a> {
             };
             Text::Styled(
                 format!(
-                    "{} | ----- | {}",
+                    "{} | {:.02}% | {}",
                     display.byte_format.display(w.size),
+                    (w.size as f64 / total as f64) * 100.0,
                     w.name.to_string_lossy()
                 )
                 .into(),

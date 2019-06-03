@@ -14,7 +14,7 @@ pub(crate) fn sorted_entries(
     tree: &Tree,
     node_idx: TreeIndex,
     sorting: SortMode,
-) -> std::vec::IntoIter<(TreeIndex, &EntryData)> {
+) -> Vec<(TreeIndex, &EntryData)> {
     use SortMode::*;
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| tree.node_weight(idx).map(|w| (idx, w)))
@@ -22,6 +22,7 @@ pub(crate) fn sorted_entries(
             SizeDescending => r.size.cmp(&l.size),
             SizeAscending => l.size.cmp(&r.size),
         })
+        .collect()
 }
 
 /// Specifies a way to format bytes

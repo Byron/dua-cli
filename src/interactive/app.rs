@@ -103,8 +103,8 @@ impl TerminalApp {
         let sorting = Default::default();
         let root = traversal.root_index;
         let selected = sorted_entries(&traversal.tree, root, sorting)
-            .next()
-            .map(|(idx, _)| idx);
+            .get(0)
+            .map(|(idx, _)| *idx);
         Ok(TerminalApp {
             state: DisplayState {
                 root,
