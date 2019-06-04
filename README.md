@@ -29,8 +29,8 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
 
 ##### Other Features
 
- * [ ] Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
- * [ ] Evaluate unit coloring
+ * [x] Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
+ * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
 #### ✅v1.0 (_released_) - aggregate directories, fast
 

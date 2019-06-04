@@ -37,7 +37,7 @@ impl Widget for Header {
             text(env!("CARGO_PKG_VERSION")),
             text("    "),
             italic("(press "),
-            modified("?", Modifier::BOLD|Modifier::UNDERLINED),
+            modified("?", Modifier::BOLD | Modifier::UNDERLINED),
             italic(" for help)"),
         ];
         Paragraph::new(lines.iter())

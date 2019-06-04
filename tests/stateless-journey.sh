@@ -82,18 +82,14 @@ WITH_FAILURE=1
     )
 
     (with "the byte format set"
-      (with "human-binary"
-        it "produces a human-readable aggregate of the current directory, without total" && {
-          WITH_SNAPSHOT="$snapshot/success-bytes-binary" \
-          expect_run ${SUCCESSFULLY} "$exe" --format binary
-        }
-      )
-      (with "bytes"
-        it "produces a human-readable aggregate of the current directory, without total" && {
-          WITH_SNAPSHOT="$snapshot/success-bytes-only" \
-          expect_run ${SUCCESSFULLY} "$exe" --format bytes
-        }
-      )
+      for format in binary bytes metric gb gib mb mib; do
+        (with $format
+          it "produces a human-readable aggregate of the current directory, without total" && {
+            WITH_SNAPSHOT="$snapshot/success-bytes-$format" \
+            expect_run ${SUCCESSFULLY} "$exe" --format $format
+          }
+        )
+      done
     )
   )
   (with "interactive mode"

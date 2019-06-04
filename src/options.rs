@@ -7,7 +7,11 @@ arg_enum! {
     pub enum ByteFormat {
         Metric,
         Binary,
-        Bytes
+        Bytes,
+        GB,
+        GiB,
+        MB,
+        MiB
     }
 }
 
@@ -17,6 +21,10 @@ impl From<ByteFormat> for LibraryByteFormat {
             ByteFormat::Metric => LibraryByteFormat::Metric,
             ByteFormat::Binary => LibraryByteFormat::Binary,
             ByteFormat::Bytes => LibraryByteFormat::Bytes,
+            ByteFormat::GB => LibraryByteFormat::GB,
+            ByteFormat::GiB => LibraryByteFormat::GiB,
+            ByteFormat::MB => LibraryByteFormat::MB,
+            ByteFormat::MiB => LibraryByteFormat::MiB,
         }
     }
 }
@@ -37,6 +45,10 @@ pub struct Args {
     /// Metric - uses 1000 as base (default)
     /// Binary - uses 1024 as base
     /// Bytes - plain bytes without any formatting
+    /// GB - only gigabytes
+    /// GiB - only gibibytes
+    /// MB - only megabytes
+    /// MiB - only mebibytes
     #[structopt(short = "f", long = "format")]
     pub format: Option<ByteFormat>,
 

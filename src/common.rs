@@ -2,6 +2,7 @@ use crate::{
     interactive::SortMode,
     traverse::{EntryData, Tree, TreeIndex},
 };
+use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
 use itertools::Itertools;
 use jwalk::WalkDir;
 use petgraph::Direction;
@@ -59,6 +60,14 @@ pub enum ByteFormat {
     Binary,
     /// raw bytes, without additional formatting
     Bytes,
+    /// only gigabytes without smart-unit
+    GB,
+    /// only gibibytes without smart-unit
+    GiB,
+    /// only megabytes without smart-unit
+    MB,
+    /// only mebibytes without smart-unit
+    MiB,
 }
 
 impl ByteFormat {
@@ -67,6 +76,8 @@ impl ByteFormat {
         match self {
             Metric | Binary => 10,
             Bytes => 12,
+            MiB|MB => 12,
+            _ => 10,
         }
     }
     pub fn display(&self, bytes: u64) -> ByteFormatDisplay {
@@ -87,14 +98,23 @@ impl fmt::Display for ByteFormatDisplay {
         use byte_unit::Byte;
         use ByteFormat::*;
 
-        let binary = match self.format {
+        let format = match self.format {
             Bytes => return write!(f, "{} b", self.bytes),
-            Binary => true,
-            Metric => false,
+            Binary => (true, None),
+            Metric => (false, None),
+            GB => (false, Some((n_gb_bytes!(1), ByteUnit::GB))),
+            GiB => (false, Some((n_gib_bytes!(1), ByteUnit::GiB))),
+            MB => (false, Some((n_mb_bytes!(1), ByteUnit::MB))),
+            MiB => (false, Some((n_mib_bytes!(1), ByteUnit::MiB))),
         };
-        let b = Byte::from_bytes(self.bytes as u128)
-            .get_appropriate_unit(binary)
-            .format(2);
+
+        let b = match format {
+            (_, Some((divisor, unit))) => Byte::from_unit(self.bytes as f64 / divisor as f64, unit)
+                .expect("byte count > 0")
+                .get_adjusted_unit(unit),
+            (binary, None) => Byte::from_bytes(self.bytes as u128).get_appropriate_unit(binary),
+        }
+        .format(2);
         let mut splits = b.split(' ');
         match (splits.next(), splits.next()) {
             (Some(bytes), Some(unit)) => write!(
