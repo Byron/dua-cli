@@ -45,6 +45,7 @@ impl From<WalkOptions> for DisplayOptions {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum FocussedPane {
     Main,
     Help,
@@ -122,17 +123,13 @@ impl TerminalApp {
         for key in keys.filter_map(Result::ok) {
             self.update_message();
             match key {
-                Char('?') => {
-                    self.state.focussed = match self.state.focussed {
-                        Main => {
-                            self.state.help_pane = Some(HelpPaneState);
-                            Help
-                        }
-                        Help => {
-                            self.state.help_pane = None;
-                            Main
-                        }
-                    }
+                Char('?') => self.toggle_help_pane(),
+                Char('\t') => {
+                    self.state.focussed = match (self.state.focussed, self.state.help_pane) {
+                        (Main, Some(_)) => Help,
+                        (Help, _) => Main,
+                        _ => Main,
+                    };
                 }
                 Ctrl('c') => break,
                 Char('q') => match self.state.focussed {
@@ -166,6 +163,20 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
+    }
+
+    fn toggle_help_pane(&mut self) {
+        use FocussedPane::*;
+        self.state.focussed = match self.state.focussed {
+            Main => {
+                self.state.help_pane = Some(HelpPaneState);
+                Help
+            }
+            Help => {
+                self.state.help_pane = None;
+                Main
+            }
+        }
     }
 
     fn update_message(&mut self) {

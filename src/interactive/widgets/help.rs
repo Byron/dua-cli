@@ -58,6 +58,7 @@ impl Widget for HelpPane {
                     )
                     .iter(),
                 )
+                .chain(hotkey("<tab>", "Cycle between all open panes").iter())
                 .chain(hotkey("?", "Show the help pane").iter())
                 .chain(spacer().iter())
                 .chain(
