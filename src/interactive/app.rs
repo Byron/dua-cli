@@ -144,6 +144,10 @@ impl TerminalApp {
 
             match self.state.focussed {
                 FocussedPane::Help => match key {
+                    Ctrl('u') => self.scroll_help(CursorDirection::PageUp),
+                    Char('k') => self.scroll_help(CursorDirection::Up),
+                    Char('j') => self.scroll_help(CursorDirection::Down),
+                    Ctrl('d') => self.scroll_help(CursorDirection::PageDown),
                     _ => {}
                 },
                 FocussedPane::Main => match key {
@@ -169,7 +173,7 @@ impl TerminalApp {
         use FocussedPane::*;
         self.state.focussed = match self.state.focussed {
             Main => {
-                self.state.help_pane = Some(HelpPaneState);
+                self.state.help_pane = Some(HelpPaneState::default());
                 Help
             }
             Help => {
@@ -220,6 +224,18 @@ impl TerminalApp {
                 }
                 None => self.state.message = Some("Entry is a file or an empty directory".into()),
             }
+        }
+    }
+
+    fn scroll_help(&mut self, direction: CursorDirection) {
+        use CursorDirection::*;
+        if let Some(HelpPaneState { ref mut scroll }) = self.state.help_pane {
+            *scroll = match direction {
+                Down => scroll.saturating_add(1),
+                Up => scroll.saturating_sub(1),
+                PageDown => scroll.saturating_add(10),
+                PageUp => scroll.saturating_sub(10),
+            };
         }
     }
 

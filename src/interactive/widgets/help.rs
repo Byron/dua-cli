@@ -6,8 +6,10 @@ use tui::{
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
 
-#[derive(Copy, Clone)]
-pub struct HelpPaneState;
+#[derive(Default, Copy, Clone)]
+pub struct HelpPaneState {
+    pub scroll: u16,
+}
 
 pub struct HelpPane {
     pub state: HelpPaneState,
@@ -96,6 +98,7 @@ impl Widget for HelpPane {
                         .chain(spacer().iter()),
                 ),
         )
+        .scroll(self.state.scroll)
         .draw(area, buf);
     }
 }
