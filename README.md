@@ -56,6 +56,10 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
+* One cannot abort the filesystem traversal
+ * as we are in raw terminal mode, signals will not be sent to us. As as we are single-threaded in
+   the GUI, we can not listen to input events while traversing the filesystem. This can be solved,
+   of course, and I would love the solution to use async :).
 * In interactive mode, you will need about 60MB of memory for 1 million entries in the graph.
 * In interactive mode, the maximum amount of files is limited to 2^32 - 1 (`u32::max_value() - 1`) entries.
   * One node is used as to 'virtual' root
