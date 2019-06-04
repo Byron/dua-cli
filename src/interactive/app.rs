@@ -152,6 +152,7 @@ impl TerminalApp {
     where
         B: Backend,
     {
+        terminal.hide_cursor()?;
         let display_options: DisplayOptions = options.clone().into();
         let traversal = Traversal::from_walk(options, input, move |traversal| {
             terminal.draw(|mut f| {
