@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use tui::style::Color;
 use tui::{
     buffer::Buffer,
@@ -18,10 +19,14 @@ pub struct HelpPane {
 
 impl Widget for HelpPane {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        fn spacer() -> [Text<'static>; 1] {
+        let lines = Cell::new(0u16);
+        let count = |n| lines.set(lines.get() + n);
+        let spacer = || {
+            count(2);
             [Text::Raw("\n\n".into())]
         };
-        fn title(name: &str) -> [Text<'static>; 1] {
+        let title = |name| {
+            count(2);
             [Text::Styled(
                 format!("{}\n\n", name).into(),
                 Style {
@@ -30,7 +35,8 @@ impl Widget for HelpPane {
                 },
             )]
         };
-        fn hotkey(keys: &str, description: &str) -> [Text<'static>; 2] {
+        let hotkey = |keys, description| {
+            count(1);
             [
                 Text::Styled(
                     format!("{:>10}", keys).into(),
@@ -48,8 +54,9 @@ impl Widget for HelpPane {
             .border_style(self.border_style)
             .borders(Borders::ALL);
         block.draw(area, buf);
-        let area = block.inner(area).inner(1);
 
+        let area = block.inner(area).inner(1);
+        self.state.scroll = self.state.scroll.min(lines.get());
         Paragraph::new(
             title("Keys for pane control")
                 .iter()
