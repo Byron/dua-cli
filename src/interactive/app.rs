@@ -1,7 +1,7 @@
 use crate::{
-    interactive::widgets::{DisplayState, MainWindow},
+    interactive::widgets::MainWindow,
     path_of, sorted_entries,
-    traverse::Traversal,
+    traverse::{Traversal, TreeIndex},
     ByteFormat, WalkOptions, WalkResult,
 };
 use failure::Error;
@@ -10,6 +10,28 @@ use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::{backend::Backend, widgets::Widget, Terminal};
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
+pub enum SortMode {
+    SizeDescending,
+    SizeAscending,
+}
+
+impl SortMode {
+    pub fn toggle_size(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            SizeAscending => SizeDescending,
+            SizeDescending => SizeAscending,
+        }
+    }
+}
+
+impl Default for SortMode {
+    fn default() -> Self {
+        SortMode::SizeDescending
+    }
+}
 
 /// Options to configure how we display things
 #[derive(Clone, Copy)]
@@ -23,11 +45,19 @@ impl From<WalkOptions> for DisplayOptions {
     }
 }
 
+pub struct AppState {
+    pub root: TreeIndex,
+    pub selected: Option<TreeIndex>,
+    pub entries_list_start: usize,
+    pub sorting: SortMode,
+    pub message: Option<String>,
+}
+
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
-    pub state: DisplayState,
+    pub state: AppState,
 }
 
 enum CursorDirection {
@@ -160,7 +190,7 @@ impl TerminalApp {
         let traversal = Traversal::from_walk(options, input, move |traversal| {
             terminal.draw(|mut f| {
                 let full_screen = f.size();
-                let state = DisplayState {
+                let state = AppState {
                     root: traversal.root_index,
                     sorting: Default::default(),
                     message: Some("-> scanning <-".into()),
@@ -183,7 +213,7 @@ impl TerminalApp {
             .get(0)
             .map(|(idx, _)| *idx);
         Ok(TerminalApp {
-            state: DisplayState {
+            state: AppState {
                 root,
                 sorting,
                 message: None,

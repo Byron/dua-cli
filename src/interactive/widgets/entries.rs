@@ -1,5 +1,5 @@
 use crate::{
-    interactive::{widgets::SortMode, DisplayOptions},
+    interactive::{DisplayOptions, SortMode},
     sorted_entries,
     traverse::{Tree, TreeIndex},
 };

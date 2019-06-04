@@ -1,9 +1,9 @@
 use crate::{
     interactive::{
         widgets::{Entries, Footer},
-        DisplayOptions,
+        AppState, DisplayOptions,
     },
-    traverse::{Traversal, TreeIndex},
+    traverse::Traversal,
 };
 use tui::{
     buffer::Buffer,
@@ -11,40 +11,10 @@ use tui::{
     widgets::Widget,
 };
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
-pub enum SortMode {
-    SizeDescending,
-    SizeAscending,
-}
-
-impl SortMode {
-    pub fn toggle_size(&mut self) {
-        use SortMode::*;
-        *self = match self {
-            SizeAscending => SizeDescending,
-            SizeDescending => SizeAscending,
-        }
-    }
-}
-
-impl Default for SortMode {
-    fn default() -> Self {
-        SortMode::SizeDescending
-    }
-}
-
-pub struct DisplayState {
-    pub root: TreeIndex,
-    pub selected: Option<TreeIndex>,
-    pub entries_list_start: usize,
-    pub sorting: SortMode,
-    pub message: Option<String>,
-}
-
 pub struct MainWindow<'a, 'b> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
-    pub state: &'b DisplayState,
+    pub state: &'b AppState,
 }
 
 impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {

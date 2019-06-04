@@ -1,5 +1,5 @@
 use crate::{
-    interactive::widgets::SortMode,
+    interactive::SortMode,
     traverse::{EntryData, Tree, TreeIndex},
 };
 use itertools::Itertools;
