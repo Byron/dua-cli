@@ -62,6 +62,13 @@ pub enum ByteFormat {
 }
 
 impl ByteFormat {
+    pub fn width(&self) -> usize {
+        use ByteFormat::*;
+        match self {
+            Metric | Binary => 10,
+            Bytes => 12,
+        }
+    }
     pub fn display(&self, bytes: u64) -> ByteFormatDisplay {
         ByteFormatDisplay {
             format: *self,
@@ -81,7 +88,7 @@ impl fmt::Display for ByteFormatDisplay {
         use ByteFormat::*;
 
         let binary = match self.format {
-            Bytes => return write!(f, "{:>10} b", self.bytes),
+            Bytes => return write!(f, "{} b", self.bytes),
             Binary => true,
             Metric => false,
         };
@@ -92,7 +99,7 @@ impl fmt::Display for ByteFormatDisplay {
         match (splits.next(), splits.next()) {
             (Some(bytes), Some(unit)) => write!(
                 f,
-                "{:>8} {:>unit_width$}",
+                "{} {:>unit_width$}",
                 bytes,
                 unit,
                 unit_width = match self.format {

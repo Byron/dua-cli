@@ -25,7 +25,7 @@ impl Widget for Footer {
                 format!(
                     " Total disk usage: {}  Entries: {}   ",
                     match self.total_bytes {
-                        Some(b) => format!("{}", self.format.display(b)).trim().to_owned(),
+                        Some(b) => format!("{}", self.format.display(b)).to_owned(),
                         None => "-".to_owned(),
                     },
                     self.entries_traversed,

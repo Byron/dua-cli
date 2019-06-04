@@ -112,8 +112,8 @@ fn write_path<C: fmt::Display>(
 ) -> Result<(), io::Error> {
     writeln!(
         out,
-        "{byte_color}{:>10}{byte_color_reset}\t{path_color}{}{path_color_reset}{}",
-        options.byte_format.display(num_bytes),
+        "{byte_color}{:>byte_column_width$}{byte_color_reset} {path_color}{}{path_color_reset}{}",
+        options.byte_format.display(num_bytes).to_string(), // needed for formatting to work (unless we implement it ourselves
         path.as_ref().display(),
         if num_errors == 0 {
             Cow::Borrowed("")
@@ -124,6 +124,7 @@ fn write_path<C: fmt::Display>(
         byte_color_reset = options.color.display(color::Fg(color::Reset)),
         path_color = options.color.display(path_color),
         path_color_reset = options.color.display(color::Fg(color::Reset)),
+        byte_column_width = options.byte_format.width()
     )
 }
 

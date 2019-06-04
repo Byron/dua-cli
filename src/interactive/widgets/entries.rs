@@ -81,14 +81,15 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             Text::Styled(
                 fill_background_to_right(
                     format!(
-                        "{} | {:>5.02}% | {}{}",
-                        display.byte_format.display(w.size),
+                        "{:>byte_column_width$} | {:>5.02}% | {}{}",
+                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
                         (w.size as f64 / total as f64) * 100.0,
                         match path_of(*node_idx) {
                             ref p if p.is_dir() && !is_top(*root) => "/",
                             _ => " ",
                         },
                         w.name.to_string_lossy(),
+                        byte_column_width = display.byte_format.width()
                     ),
                     area.width,
                 )

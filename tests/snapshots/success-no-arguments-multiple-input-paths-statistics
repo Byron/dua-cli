@@ -1,7 +1,7 @@
-  256.00 KB	./dir/sub
-    1.26 MB	dir
-    1.26 MB	./dir/
-    1.26 MB	.
-    1.26 MB	.
-    5.29 MB	total
+ 256.00 KB ./dir/sub
+   1.26 MB dir
+   1.26 MB ./dir/
+   1.26 MB .
+   1.26 MB .
+   5.29 MB total
 Statistics { entries_traversed: 46, smallest_file_in_bytes: 0, largest_file_in_bytes: 1000000 }
