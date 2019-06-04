@@ -1,6 +1,6 @@
 use crate::{
     interactive::{
-        widgets::{Entries, Footer, HelpPane, ListState},
+        widgets::{Entries, Footer, Header, HelpPane, ListState},
         AppState, DisplayOptions, FocussedPane,
     },
     traverse::Traversal,
@@ -44,9 +44,16 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
         } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Max(256), Constraint::Length(1)].as_ref())
+            .constraints(
+                [
+                    Constraint::Length(1),
+                    Constraint::Max(256),
+                    Constraint::Length(1),
+                ]
+                .as_ref(),
+            )
             .split(area);
-        let (entries_area, footer_area) = (regions[0], regions[1]);
+        let (header_area, entries_area, footer_area) = (regions[0], regions[1], regions[2]);
         let (entries_area, help_area_state) = match state.help_pane {
             Some(state) => {
                 let regions = Layout::default()
@@ -70,6 +77,8 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             FocussedPane::Main => (white, grey),
             FocussedPane::Help => (grey, white),
         };
+
+        Header.draw(header_area, buf);
         Entries {
             tree: &tree,
             root: state.root,

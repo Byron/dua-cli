@@ -59,7 +59,7 @@ impl Widget for HelpPane {
                     "close the current pain. Closes the application if no pane is open.",
                 );
                 hotkey("<tab>", "Cycle between all open panes");
-                hotkey("?", "Show the help pane");
+                hotkey("?", "Show or hide the help pane");
                 spacer();
             }
             title("Keys for Navigation");
