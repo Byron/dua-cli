@@ -57,9 +57,9 @@ impl ByteVisualization {
         use ByteVisualization::*;
         *self = match self {
             Bar => LongBar,
-            LongBar => Percentage,
-            Percentage => PercentageAndBar,
-            PercentageAndBar => Bar,
+            LongBar => PercentageAndBar,
+            PercentageAndBar => Percentage,
+            Percentage => Bar,
         }
     }
     pub fn display(&self, percentage: f32) -> DisplayByteVisualization {
