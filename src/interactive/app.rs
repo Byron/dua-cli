@@ -105,6 +105,7 @@ impl TerminalApp {
 
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
+            self.update_message();
             match key {
                 Char('O') => self.open_that(),
                 Char('u') => self.exit_node(),
@@ -124,22 +125,29 @@ impl TerminalApp {
         })
     }
 
-    fn exit_node(&mut self) -> () {
-        if let Some(parent_idx) = self
+    fn update_message(&mut self) {
+        self.state.message = None;
+    }
+
+    fn exit_node(&mut self) {
+        match self
             .traversal
             .tree
             .neighbors_directed(self.state.root, Direction::Incoming)
             .next()
         {
-            self.state.root = parent_idx;
-            self.state.selected =
-                sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
-                    .get(0)
-                    .map(|(idx, _)| *idx);
+            Some(parent_idx) => {
+                self.state.root = parent_idx;
+                self.state.selected =
+                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
+                        .get(0)
+                        .map(|(idx, _)| *idx);
+            }
+            None => self.state.message = Some("Top level reached".into()),
         }
     }
 
-    fn open_that(&mut self) -> () {
+    fn open_that(&mut self) {
         match self.state.selected {
             Some(ref idx) => {
                 open::that(path_of(&self.traversal.tree, *idx)).ok();
@@ -148,17 +156,20 @@ impl TerminalApp {
         }
     }
 
-    fn enter_node(&mut self) -> () {
-        if let Some(idx) = self.state.selected {
-            let entries = sorted_entries(&self.traversal.tree, idx, self.state.sorting);
-            if let Some((next_selection, _)) = entries.get(0) {
-                self.state.root = idx;
-                self.state.selected = Some(*next_selection);
+    fn enter_node(&mut self) {
+        if let Some(new_root) = self.state.selected {
+            let entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
+            match entries.get(0) {
+                Some((next_selection, _)) => {
+                    self.state.root = new_root;
+                    self.state.selected = Some(*next_selection);
+                }
+                None => self.state.message = Some("Entry is a file or an empty directory".into()),
             }
         }
     }
 
-    fn change_vertical_index(&mut self, direction: CursorDirection) -> () {
+    fn change_vertical_index(&mut self, direction: CursorDirection) {
         let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
         let next_selected_pos = match self.state.selected {
             Some(ref selected) => entries
