@@ -36,6 +36,7 @@ impl Default for SortMode {
 #[derive(Clone, Copy)]
 pub enum ByteVisualization {
     Percentage,
+    Bars,
 }
 
 pub struct DisplayByteVisualization {
@@ -46,7 +47,7 @@ pub struct DisplayByteVisualization {
 
 impl Default for ByteVisualization {
     fn default() -> Self {
-        ByteVisualization::Percentage
+        ByteVisualization::Bars
     }
 }
 
@@ -70,7 +71,22 @@ impl fmt::Display for DisplayByteVisualization {
         } = self;
 
         match format {
-            Percentage => write!(f, "{:>width$.02}%", percentage * 100.0, width = length - 1),
+            Percentage => write!(
+                f,
+                " {:>width$.02}% ",
+                percentage * 100.0,
+                width = length - 1 - 2
+            ),
+            Bars => {
+                let block_length = (*length as f64 * percentage).round() as usize;
+                for _ in 0..block_length {
+                    f.write_str(tui::symbols::block::FULL)?
+                }
+                for _ in 0..length - block_length {
+                    f.write_str(" ")?
+                }
+                Ok(())
+            }
         }
     }
 }

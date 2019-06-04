@@ -117,8 +117,8 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                 );
                 let percentage = Text::Styled(
                     format!(
-                        " | {} | ",
-                        display.byte_vis.display(w.size as f64 / total as f64, 6)
+                        " |{}| ",
+                        display.byte_vis.display(w.size as f64 / total as f64, 10)
                     )
                     .into(),
                     style,
