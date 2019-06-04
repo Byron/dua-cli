@@ -36,7 +36,8 @@ impl Default for SortMode {
 #[derive(Clone, Copy)]
 pub enum ByteVisualization {
     Percentage,
-    Bars,
+    Bar,
+    LongBar,
 }
 
 pub struct DisplayByteVisualization {
@@ -46,7 +47,7 @@ pub struct DisplayByteVisualization {
 
 impl Default for ByteVisualization {
     fn default() -> Self {
-        ByteVisualization::Bars
+        ByteVisualization::Bar
     }
 }
 
@@ -54,8 +55,9 @@ impl ByteVisualization {
     pub fn cycle(&mut self) {
         use ByteVisualization::*;
         *self = match self {
-            Bars => Percentage,
-            Percentage => Bars,
+            Bar => LongBar,
+            LongBar => Percentage,
+            Percentage => Bar,
         }
     }
     pub fn display(&self, percentage: f32) -> DisplayByteVisualization {
@@ -73,17 +75,8 @@ impl fmt::Display for DisplayByteVisualization {
 
         match format {
             Percentage => write!(f, " {:>5.02}% ", percentage * 100.0),
-            Bars => {
-                const LENGTH: usize = 10;
-                let block_length = (LENGTH as f32 * percentage).round() as usize;
-                for _ in 0..block_length {
-                    f.write_str(tui::symbols::block::FULL)?
-                }
-                for _ in 0..LENGTH - block_length {
-                    f.write_str(" ")?
-                }
-                Ok(())
-            }
+            Bar => Self::make_bar(f, percentage, 10),
+            LongBar => Self::make_bar(f, percentage, 20),
         }
     }
 }
@@ -371,5 +364,18 @@ impl TerminalApp {
             traversal,
             draw_state: Default::default(),
         })
+    }
+}
+
+impl DisplayByteVisualization {
+    fn make_bar(f: &mut fmt::Formatter, percentage: &f32, length: usize) -> Result<(), fmt::Error> {
+        let block_length = (length as f32 * percentage).round() as usize;
+        for _ in 0..block_length {
+            f.write_str(tui::symbols::block::FULL)?;
+        }
+        for _ in 0..length - block_length {
+            f.write_str(" ")?;
+        }
+        Ok(())
     }
 }
