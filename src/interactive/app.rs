@@ -41,8 +41,7 @@ pub enum ByteVisualization {
 
 pub struct DisplayByteVisualization {
     format: ByteVisualization,
-    percentage: f64,
-    length: usize,
+    percentage: f32,
 }
 
 impl Default for ByteVisualization {
@@ -59,11 +58,10 @@ impl ByteVisualization {
             Percentage => Bars,
         }
     }
-    pub fn display(&self, percentage: f64, length: usize) -> DisplayByteVisualization {
+    pub fn display(&self, percentage: f32) -> DisplayByteVisualization {
         DisplayByteVisualization {
             format: *self,
             percentage,
-            length,
         }
     }
 }
@@ -71,25 +69,17 @@ impl ByteVisualization {
 impl fmt::Display for DisplayByteVisualization {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         use ByteVisualization::*;
-        let Self {
-            format,
-            percentage,
-            length,
-        } = self;
+        let Self { format, percentage } = self;
 
         match format {
-            Percentage => write!(
-                f,
-                " {:>width$.02}% ",
-                percentage * 100.0,
-                width = length - 1 - 2
-            ),
+            Percentage => write!(f, " {:>5.02}% ", percentage * 100.0),
             Bars => {
-                let block_length = (*length as f64 * percentage).round() as usize;
+                const LENGTH: usize = 10;
+                let block_length = (LENGTH as f32 * percentage).round() as usize;
                 for _ in 0..block_length {
                     f.write_str(tui::symbols::block::FULL)?
                 }
-                for _ in 0..length - block_length {
+                for _ in 0..LENGTH - block_length {
                     f.write_str(" ")?
                 }
                 Ok(())

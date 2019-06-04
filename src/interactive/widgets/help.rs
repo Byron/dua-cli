@@ -75,7 +75,7 @@ impl Widget for HelpPane {
             title("Keys for display");
             {
                 hotkey("s", "toggle sort by size ascending/descending");
-                hotkey("g", "cycle through percentage display options");
+                hotkey("g", "cycle through percentage display and bar options");
                 spacer();
             }
             title("Keys for entry operations");
