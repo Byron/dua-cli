@@ -52,6 +52,13 @@ impl Default for ByteVisualization {
 }
 
 impl ByteVisualization {
+    pub fn cycle(&mut self) {
+        use ByteVisualization::*;
+        *self = match self {
+            Bars => Percentage,
+            Percentage => Bars,
+        }
+    }
     pub fn display(&self, percentage: f64, length: usize) -> DisplayByteVisualization {
         DisplayByteVisualization {
             format: *self,
@@ -187,11 +194,7 @@ impl TerminalApp {
             match key {
                 Char('?') => self.toggle_help_pane(),
                 Char('\t') => {
-                    self.state.focussed = match (self.state.focussed, self.state.help_pane) {
-                        (Main, Some(_)) => Help,
-                        (Help, _) => Main,
-                        _ => Main,
-                    };
+                    self.cycle_focus();
                 }
                 Ctrl('c') => break,
                 Char('q') => match self.state.focussed {
@@ -221,6 +224,7 @@ impl TerminalApp {
                     Char('j') => self.change_entry_selection(CursorDirection::Down),
                     Ctrl('d') => self.change_entry_selection(CursorDirection::PageDown),
                     Char('s') => self.state.sorting.toggle_size(),
+                    Char('g') => self.display.byte_vis.cycle(),
                     _ => {}
                 },
             };
@@ -229,6 +233,15 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
+    }
+
+    fn cycle_focus(&mut self) {
+        use FocussedPane::*;
+        self.state.focussed = match (self.state.focussed, self.state.help_pane) {
+            (Main, Some(_)) => Help,
+            (Help, _) => Main,
+            _ => Main,
+        };
     }
 
     fn toggle_help_pane(&mut self) {

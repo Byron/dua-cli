@@ -72,9 +72,10 @@ impl Widget for HelpPane {
                 hotkey("Ctrl + u", "move up 10 entries at once");
                 spacer();
             }
-            title("Keys for sorting");
+            title("Keys for display");
             {
                 hotkey("s", "toggle sort by size ascending/descending");
+                hotkey("g", "cycle through percentage display options");
                 spacer();
             }
             title("Keys for entry operations");
