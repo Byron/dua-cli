@@ -68,36 +68,74 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
         List {
             block: Some(block),
             items: entries.iter().skip(offset).map(|(node_idx, w)| {
-                let style = match selected {
-                    Some(idx) if *idx == *node_idx => Style {
-                        fg: Color::Black,
-                        bg: Color::White,
-                        ..Default::default()
-                    },
-                    _ => Style {
-                        fg: Color::White,
-                        bg: Color::Reset,
-                        ..Default::default()
-                    },
+                let (is_selected, style) = match selected {
+                    Some(idx) if *idx == *node_idx => (
+                        true,
+                        Style {
+                            fg: Color::Black,
+                            bg: Color::White,
+                            ..Default::default()
+                        },
+                    ),
+                    _ => (
+                        false,
+                        Style {
+                            fg: Color::White,
+                            bg: Color::Reset,
+                            ..Default::default()
+                        },
+                    ),
                 };
-                let segments = vec![Text::Styled(
-                    fill_background_to_right(
+                let path = path_of(*node_idx);
+                let segments = vec![
+                    Text::Styled(
                         format!(
-                            "{:>byte_column_width$} | {:>5.02}% | {}{}",
+                            "{:>byte_column_width$}",
                             display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
-                            (w.size as f64 / total as f64) * 100.0,
-                            match path_of(*node_idx) {
-                                ref p if p.is_dir() && !is_top(*root) => "/",
-                                _ => " ",
-                            },
-                            w.name.to_string_lossy(),
                             byte_column_width = display.byte_format.width()
-                        ),
-                        area.width,
-                    )
-                    .into(),
-                    style,
-                )];
+                        )
+                        .into(),
+                        Style {
+                            fg: if is_selected {
+                                Color::DarkGray
+                            } else {
+                                Color::Green
+                            },
+                            ..style
+                        },
+                    ),
+                    Text::Styled(
+                        format!(" | {:>5.02}% | ", (w.size as f64 / total as f64) * 100.0,).into(),
+                        style,
+                    ),
+                    Text::Styled(
+                        fill_background_to_right(
+                            format!(
+                                "{prefix}{}",
+                                w.name.to_string_lossy(),
+                                prefix = if path.is_dir() && !is_top(*root) {
+                                    "/"
+                                } else {
+                                    " "
+                                }
+                            ),
+                            area.width,
+                        )
+                        .into(),
+                        Style {
+                            fg: if path.is_dir() {
+                                style.fg
+                            } else {
+                                if is_selected {
+                                    style.fg
+                                } else {
+                                    Color::DarkGray
+                                }
+                            },
+                            ..style
+                        },
+                    ),
+                ];
                 segments
             }),
         }
