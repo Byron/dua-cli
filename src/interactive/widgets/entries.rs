@@ -87,56 +87,56 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     ),
                 };
                 let path = path_of(*node_idx);
-                let segments = vec![
-                    Text::Styled(
-                        format!(
-                            "{:>byte_column_width$}",
-                            display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
-                            byte_column_width = display.byte_format.width()
-                        )
-                        .into(),
-                        Style {
-                            fg: if is_selected {
-                                Color::DarkGray
-                            } else {
-                                Color::Green
-                            },
-                            ..style
+
+                let bytes = Text::Styled(
+                    format!(
+                        "{:>byte_column_width$}",
+                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+                        byte_column_width = display.byte_format.width()
+                    )
+                    .into(),
+                    Style {
+                        fg: if is_selected {
+                            Color::DarkGray
+                        } else {
+                            Color::Green
                         },
-                    ),
-                    Text::Styled(
-                        format!(" | {:>5.02}% | ", (w.size as f64 / total as f64) * 100.0,).into(),
-                        style,
-                    ),
-                    Text::Styled(
-                        fill_background_to_right(
-                            format!(
-                                "{prefix}{}",
-                                w.name.to_string_lossy(),
-                                prefix = if path.is_dir() && !is_top(*root) {
-                                    "/"
-                                } else {
-                                    " "
-                                }
-                            ),
-                            area.width,
-                        )
-                        .into(),
-                        Style {
-                            fg: if path.is_dir() {
+                        ..style
+                    },
+                );
+                let percentage = Text::Styled(
+                    format!(" | {:>5.02}% | ", (w.size as f64 / total as f64) * 100.0,).into(),
+                    style,
+                );
+                let name = Text::Styled(
+                    fill_background_to_right(
+                        format!(
+                            "{prefix}{}",
+                            w.name.to_string_lossy(),
+                            prefix = if path.is_dir() && !is_top(*root) {
+                                "/"
+                            } else {
+                                " "
+                            }
+                        ),
+                        area.width,
+                    )
+                    .into(),
+                    Style {
+                        fg: if path.is_dir() {
+                            style.fg
+                        } else {
+                            if is_selected {
                                 style.fg
                             } else {
-                                if is_selected {
-                                    style.fg
-                                } else {
-                                    Color::DarkGray
-                                }
-                            },
-                            ..style
+                                Color::DarkGray
+                            }
                         },
-                    ),
-                ];
-                segments
+                        ..style
+                    },
+                );
+                let column_segments = vec![bytes, percentage, name];
+                column_segments
             }),
         }
         .draw(area, buf);
