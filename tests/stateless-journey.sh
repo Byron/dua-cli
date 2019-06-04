@@ -85,7 +85,7 @@ WITH_FAILURE=1
       (with "human-binary"
         it "produces a human-readable aggregate of the current directory, without total" && {
           WITH_SNAPSHOT="$snapshot/success-bytes-binary" \
-          expect_run ${SUCCESSFULLY} "$exe" --format humanbinary
+          expect_run ${SUCCESSFULLY} "$exe" --format binary
         }
       )
       (with "bytes"

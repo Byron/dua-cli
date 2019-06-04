@@ -5,8 +5,8 @@ use structopt::{clap::arg_enum, StructOpt};
 arg_enum! {
     #[derive(PartialEq, Debug)]
     pub enum ByteFormat {
-        HumanMetric,
-        HumanBinary,
+        Metric,
+        Binary,
         Bytes
     }
 }
@@ -14,8 +14,8 @@ arg_enum! {
 impl From<ByteFormat> for LibraryByteFormat {
     fn from(input: ByteFormat) -> Self {
         match input {
-            ByteFormat::HumanMetric => LibraryByteFormat::Metric,
-            ByteFormat::HumanBinary => LibraryByteFormat::Binary,
+            ByteFormat::Metric => LibraryByteFormat::Metric,
+            ByteFormat::Binary => LibraryByteFormat::Binary,
             ByteFormat::Bytes => LibraryByteFormat::Bytes,
         }
     }
@@ -34,8 +34,8 @@ pub struct Args {
     pub threads: Option<usize>,
 
     /// The format with which to print byte counts.
-    /// HumanMetric - uses 1000 as base (default)
-    /// HumanBinary - uses 1024 as base
+    /// Metric - uses 1000 as base (default)
+    /// Binary - uses 1024 as base
     /// Bytes - plain bytes without any formatting
     #[structopt(short = "f", long = "format")]
     pub format: Option<ByteFormat>,
