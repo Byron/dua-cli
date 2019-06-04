@@ -35,20 +35,12 @@ pub fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
     }
 }
 
-pub struct List<'b, 't, I, T>
-where
-    I: Iterator<Item = Paragraph<'b, 't, T>>,
-    T: Iterator<Item = &'t Text<'t>>,
-{
+pub struct List<'b, 't> {
     pub block: Option<Block<'b>>,
-    pub items: I,
+    pub items: Vec<Vec<Text<'t>>>,
 }
 
-impl<'b, 't, I, T> Widget for List<'b, 't, I, T>
-where
-    I: Iterator<Item = Paragraph<'b, 't, T>>,
-    T: Iterator<Item = &'t Text<'t>>,
-{
+impl<'b, 't> Widget for List<'b, 't> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let list_area = match self.block {
             Some(ref mut b) => {
@@ -62,14 +54,14 @@ where
             return;
         }
 
-        for (i, mut paragraph) in self
+        for (i, text_iterator) in self
             .items
-            .by_ref()
+            .iter()
             .enumerate()
             .take(list_area.height as usize)
         {
             let (x, y) = (list_area.left(), list_area.top() + i as u16);
-            paragraph.draw(
+            Paragraph::new(text_iterator.iter()).draw(
                 Rect {
                     x,
                     y,

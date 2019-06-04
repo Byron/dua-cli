@@ -1,6 +1,6 @@
 use crate::{
     interactive::{
-        widgets::{fill_background_to_right, ListState},
+        widgets::{fill_background_to_right, List, ListState},
         DisplayOptions, SortMode,
     },
     sorted_entries,
@@ -10,9 +10,9 @@ use itertools::Itertools;
 use std::path::Path;
 use tui::{
     buffer::Buffer,
-    layout::{Corner, Rect},
+    layout::Rect,
     style::{Color, Style},
-    widgets::{Block, Borders, List, Text, Widget},
+    widgets::{Block, Borders, Text, Widget},
 };
 
 pub struct Entries<'a, 'b> {
@@ -65,40 +65,46 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             )
             .start_index;
 
-        List::new(entries.iter().skip(offset).map(|(node_idx, w)| {
-            let style = match selected {
-                Some(idx) if *idx == *node_idx => Style {
-                    fg: Color::Black,
-                    bg: Color::White,
-                    ..Default::default()
-                },
-                _ => Style {
-                    fg: Color::White,
-                    bg: Color::Reset,
-                    ..Default::default()
-                },
-            };
-            Text::Styled(
-                fill_background_to_right(
-                    format!(
-                        "{:>byte_column_width$} | {:>5.02}% | {}{}",
-                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
-                        (w.size as f64 / total as f64) * 100.0,
-                        match path_of(*node_idx) {
-                            ref p if p.is_dir() && !is_top(*root) => "/",
-                            _ => " ",
+        List {
+            block: Some(block),
+            items: entries
+                .iter()
+                .skip(offset)
+                .map(|(node_idx, w)| {
+                    let style = match selected {
+                        Some(idx) if *idx == *node_idx => Style {
+                            fg: Color::Black,
+                            bg: Color::White,
+                            ..Default::default()
                         },
-                        w.name.to_string_lossy(),
-                        byte_column_width = display.byte_format.width()
-                    ),
-                    area.width,
-                )
-                .into(),
-                style,
-            )
-        }))
-        .block(block)
-        .start_corner(Corner::TopLeft)
+                        _ => Style {
+                            fg: Color::White,
+                            bg: Color::Reset,
+                            ..Default::default()
+                        },
+                    };
+                    let segments = vec![Text::Styled(
+                        fill_background_to_right(
+                            format!(
+                                "{:>byte_column_width$} | {:>5.02}% | {}{}",
+                                display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+                                (w.size as f64 / total as f64) * 100.0,
+                                match path_of(*node_idx) {
+                                    ref p if p.is_dir() && !is_top(*root) => "/",
+                                    _ => " ",
+                                },
+                                w.name.to_string_lossy(),
+                                byte_column_width = display.byte_format.width()
+                            ),
+                            area.width,
+                        )
+                        .into(),
+                        style,
+                    )];
+                    segments
+                })
+                .collect(),
+        }
         .draw(area, buf);
     }
 }
