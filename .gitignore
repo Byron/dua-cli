@@ -14,3 +14,5 @@ Cargo.lock
 /.idea/
 
 /callgrind.profile
+
+.DS_Store
