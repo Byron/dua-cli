@@ -6,8 +6,9 @@ help:
 	$(info lint                         | run lints with clippy)
 	$(info benchmark                    | just for fun, really)
 	$(info profile                      | only on linux - run callgrind and annotate it)
-	$(info unit-tests                   | run all unit test)
-	$(info continuous-unit-tests        | run all unit test whenever something changes)
+	$(info tests                        | run all tests)
+	$(info unit-tests                   | run all unit tests)
+	$(info continuous-unit-tests        | run all unit tests whenever something changes)
 	$(info journey-tests                | run all stateless journey test)
 	$(info continuous-journey-tests     | run all stateless journey test whenever something changes)
 	$(info -- Use docker for all dependencies - run make interactively from there ----------------)
@@ -34,6 +35,8 @@ profile: target/release/dua
 
 benchmark: target/release/dua
 	hyperfine '$<'
+
+tests: unit-tests journey-tests
 
 unit-tests:
 	cargo test --test interactive

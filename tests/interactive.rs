@@ -1,6 +1,6 @@
 mod app {
     use dua::{
-        interactive::{widgets::SortMode, TerminalApp},
+        interactive::{SortMode, TerminalApp},
         traverse::{EntryData, Tree, TreeIndex},
         ByteFormat, Color, TraversalSorting, WalkOptions,
     };
