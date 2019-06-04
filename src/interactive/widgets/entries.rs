@@ -1,10 +1,12 @@
 use crate::{
-    interactive::{DisplayOptions, SortMode},
+    interactive::{
+        widgets::{fill_background_to_right, ListState},
+        DisplayOptions, SortMode,
+    },
     sorted_entries,
     traverse::{Tree, TreeIndex},
 };
 use itertools::Itertools;
-use std::iter::repeat;
 use std::path::Path;
 use tui::{
     buffer::Buffer,
@@ -12,36 +14,6 @@ use tui::{
     style::{Color, Style},
     widgets::{Block, Borders, List, Text, Widget},
 };
-
-#[derive(Default)]
-pub struct ListState {
-    /// The index at which the list last started. Used for scrolling
-    pub start_index: usize,
-}
-
-impl ListState {
-    pub fn update(&mut self, selected: Option<usize>, height: usize) -> &mut Self {
-        self.start_index = match selected {
-            Some(pos) => match height as usize {
-                h if self.start_index + h - 1 < pos => pos - h + 1,
-                _ if self.start_index > pos => pos,
-                _ => self.start_index,
-            },
-            None => 0,
-        };
-        self
-    }
-}
-
-fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
-    match (s.len(), entire_width as usize) {
-        (x, y) if x >= y => s,
-        (x, y) => {
-            s.extend(repeat(' ').take(y - x));
-            s
-        }
-    }
-}
 
 pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
