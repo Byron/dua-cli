@@ -1,12 +1,15 @@
-use super::widgets::{DisplayState, MainWindow};
-use crate::{path_of, sorted_entries, traverse::Traversal, ByteFormat, WalkOptions, WalkResult};
+use crate::{
+    interactive::widgets::{DisplayState, MainWindow},
+    path_of, sorted_entries,
+    traverse::Traversal,
+    ByteFormat, WalkOptions, WalkResult,
+};
 use failure::Error;
 use itertools::Itertools;
 use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
-use tui::widgets::Widget;
-use tui::{backend::Backend, Terminal};
+use tui::{backend::Backend, widgets::Widget, Terminal};
 
 /// Options to configure how we display things
 #[derive(Clone, Copy)]
@@ -159,9 +162,10 @@ impl TerminalApp {
                 let full_screen = f.size();
                 let state = DisplayState {
                     root: traversal.root_index,
-                    selected: None,
                     sorting: Default::default(),
                     message: Some("-> scanning <-".into()),
+                    selected: None,
+                    entries_list_start: 0,
                 };
                 MainWindow {
                     traversal,
@@ -181,9 +185,10 @@ impl TerminalApp {
         Ok(TerminalApp {
             state: DisplayState {
                 root,
-                selected,
                 sorting,
                 message: None,
+                selected,
+                entries_list_start: 0,
             },
             display: display_options,
             traversal,

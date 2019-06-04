@@ -36,6 +36,7 @@ impl Default for SortMode {
 pub struct DisplayState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
+    pub entries_list_start: usize,
     pub sorting: SortMode,
     pub message: Option<String>,
 }
@@ -70,6 +71,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
+            list_start: state.entries_list_start,
         }
         .draw(entries, buf);
 

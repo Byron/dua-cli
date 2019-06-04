@@ -18,6 +18,7 @@ pub struct Entries<'a> {
     pub display: DisplayOptions,
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
+    pub list_start: usize,
 }
 
 impl<'a> Widget for Entries<'a> {
@@ -28,6 +29,7 @@ impl<'a> Widget for Entries<'a> {
             display,
             sorting,
             selected,
+            list_start: _,
         } = self;
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)
