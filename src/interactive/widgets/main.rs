@@ -1,6 +1,6 @@
 use crate::{
     interactive::{
-        widgets::{Entries, Footer},
+        widgets::{Entries, Footer, ListState},
         AppState, DisplayOptions,
     },
     traverse::Traversal,
@@ -11,7 +11,10 @@ use tui::{
     widgets::Widget,
 };
 
-pub struct DrawState;
+#[derive(Default)]
+pub struct DrawState {
+    entries_list: ListState,
+}
 
 pub struct MainWindow<'a, 'b, 'c> {
     pub traversal: &'a Traversal,
@@ -32,7 +35,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
                 },
             display,
             state,
-            widgets: _,
+            ref mut widgets,
         } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)
@@ -45,7 +48,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
-            state: &DrawState,
+            list: &mut widgets.entries_list,
         }
         .draw(entries, buf);
 

@@ -173,10 +173,11 @@ impl TerminalApp {
                 .unwrap_or(0),
             None => 0,
         };
-        self.state.selected = match entries.get(next_selected_pos) {
-            Some((idx, _)) => Some(*idx),
-            None => self.state.selected,
-        };
+        self.state.selected = entries
+            .get(next_selected_pos)
+            .or(entries.last())
+            .map(|(idx, _)| *idx)
+            .or(self.state.selected)
     }
 
     pub fn initialize<B>(
@@ -202,7 +203,7 @@ impl TerminalApp {
                     traversal,
                     display: display_options,
                     state: &state,
-                    widgets: &mut DrawState,
+                    widgets: &mut Default::default(),
                 }
                 .render(&mut f, full_screen)
             })?;
@@ -223,7 +224,7 @@ impl TerminalApp {
             },
             display: display_options,
             traversal,
-            widgets: DrawState,
+            widgets: Default::default(),
         })
     }
 }

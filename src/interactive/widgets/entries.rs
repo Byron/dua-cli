@@ -1,5 +1,5 @@
 use crate::{
-    interactive::{widgets::DrawState, DisplayOptions, SortMode},
+    interactive::{DisplayOptions, SortMode},
     sorted_entries,
     traverse::{Tree, TreeIndex},
 };
@@ -12,13 +12,19 @@ use tui::{
     widgets::{Block, Borders, List, Text, Widget},
 };
 
+#[derive(Default)]
+pub struct ListState {
+    /// The index at which the list last started. Used for scrolling
+    pub start_index: usize,
+}
+
 pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
-    pub state: &'b DrawState,
+    pub list: &'b mut ListState,
 }
 
 impl<'a, 'b> Widget for Entries<'a, 'b> {
@@ -29,7 +35,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             display,
             sorting,
             selected,
-            state: _,
+            list,
         } = self;
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)
@@ -57,12 +63,15 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     .map(|(idx, _)| idx)
                     .unwrap_or(0);
                 match block.inner(area).height as usize {
-                    h if pos >= h => pos - h + 1,
-                    _ => 0,
+                    h if list.start_index + h - 1 < pos => pos - h + 1,
+                    _ if list.start_index > pos => pos,
+                    _ => list.start_index,
                 }
             }
             None => 0,
         };
+        list.start_index = offset;
+
         List::new(entries.iter().skip(offset).map(|(node_idx, w)| {
             let style = match selected {
                 Some(idx) if *idx == *node_idx => Style {
