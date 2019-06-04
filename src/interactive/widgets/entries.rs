@@ -22,6 +22,7 @@ pub struct Entries<'a, 'b> {
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
     pub list: &'b mut ListState,
+    pub borders: Borders,
 }
 
 impl<'a, 'b> Widget for Entries<'a, 'b> {
@@ -32,6 +33,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             display,
             sorting,
             selected,
+            borders,
             list,
         } = self;
         let is_top = |node_idx| {
@@ -51,7 +53,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             p => p,
         };
         let title = format!(" {} ", title);
-        let block = Block::default().borders(Borders::ALL).title(&title);
+        let block = Block::default().borders(*borders).title(&title);
         let offset = list
             .update(
                 selected.map(|selected| {

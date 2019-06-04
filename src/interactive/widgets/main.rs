@@ -1,15 +1,14 @@
 use crate::{
     interactive::{
-        widgets::{Entries, Footer, ListState},
-        AppState, DisplayOptions,
+        widgets::{Entries, Footer, HelpPane, ListState},
+        AppState, DisplayOptions, FocussedPane,
     },
     traverse::Traversal,
 };
-use tui::widgets::Block;
 use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::Widget,
+    widgets::{Borders, Widget},
 };
 
 /// The state that can be mutated while drawing
@@ -46,8 +45,18 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             .split(area);
         let (entries_area, footer_area) = (regions[0], regions[1]);
         let (entries_area, help_area_state) = match state.help_pane {
-            Some(state) => (entries_area, Some((entries_area, state))),
+            Some(state) => {
+                let regions = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                    .split(entries_area);
+                (regions[0], Some((regions[1], state)))
+            }
             None => (entries_area, None),
+        };
+        let (entries_borders, help_borders) = match state.focussed {
+            FocussedPane::Main => (Borders::ALL, Borders::NONE),
+            FocussedPane::Help => (Borders::NONE, Borders::ALL),
         };
         Entries {
             tree: &tree,
@@ -55,16 +64,17 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
+            borders: entries_borders,
             list: &mut draw_state.entries_list,
         }
         .draw(entries_area, buf);
 
-        if let Some((help_area, _)) = help_area_state {
-            use tui::widgets::Borders;
-            Block::default()
-                .title("Help")
-                .borders(Borders::ALL)
-                .draw(help_area, buf);
+        if let Some((help_area, state)) = help_area_state {
+            HelpPane {
+                state,
+                borders: help_borders,
+            }
+            .draw(help_area, buf);
         }
 
         Footer {

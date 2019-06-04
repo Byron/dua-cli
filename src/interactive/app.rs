@@ -1,5 +1,5 @@
 use crate::{
-    interactive::widgets::{DrawState, MainWindow},
+    interactive::widgets::{DrawState, HelpPaneState, MainWindow},
     path_of, sorted_entries,
     traverse::{Traversal, TreeIndex},
     ByteFormat, WalkOptions, WalkResult,
@@ -55,9 +55,6 @@ impl Default for FocussedPane {
         FocussedPane::Main
     }
 }
-
-#[derive(Copy, Clone)]
-pub struct HelpPaneState;
 
 #[derive(Default)]
 pub struct AppState {
