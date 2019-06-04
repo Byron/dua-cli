@@ -81,7 +81,7 @@ impl fmt::Display for ByteFormatDisplay {
         use ByteFormat::*;
 
         let binary = match self.format {
-            Bytes => return write!(f, "{} b", self.bytes),
+            Bytes => return write!(f, "{:>10} b", self.bytes),
             Binary => true,
             Metric => false,
         };
