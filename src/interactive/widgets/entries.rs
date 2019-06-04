@@ -4,6 +4,7 @@ use crate::{
     traverse::{Tree, TreeIndex},
 };
 use itertools::Itertools;
+use std::iter::repeat;
 use std::path::Path;
 use tui::{
     buffer::Buffer,
@@ -29,6 +30,16 @@ impl ListState {
             None => 0,
         };
         self
+    }
+}
+
+fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
+    match (s.len(), entire_width as usize) {
+        (x, y) if x >= y => s,
+        (x, y) => {
+            s.extend(repeat(' ').take(y - x));
+            s
+        }
     }
 }
 
@@ -96,15 +107,18 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                 },
             };
             Text::Styled(
-                format!(
-                    "{} | {:>5.02}% | {}{}",
-                    display.byte_format.display(w.size),
-                    (w.size as f64 / total as f64) * 100.0,
-                    match path_of(*node_idx) {
-                        ref p if p.is_dir() && !is_top(*root) => "/",
-                        _ => " ",
-                    },
-                    w.name.to_string_lossy(),
+                fill_background_to_right(
+                    format!(
+                        "{} | {:>5.02}% | {}{}",
+                        display.byte_format.display(w.size),
+                        (w.size as f64 / total as f64) * 100.0,
+                        match path_of(*node_idx) {
+                            ref p if p.is_dir() && !is_top(*root) => "/",
+                            _ => " ",
+                        },
+                        w.name.to_string_lossy(),
+                    ),
+                    area.width,
                 )
                 .into(),
                 style,
