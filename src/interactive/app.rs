@@ -85,8 +85,8 @@ impl TerminalApp {
                 traversal,
                 display: *display,
                 state: &state,
-                widgets: &widgets,
             }
+            .update(widgets)
             .render(&mut f, full_screen)
         })?;
 
@@ -198,13 +198,12 @@ impl TerminalApp {
                     message: Some("-> scanning <-".into()),
                     selected: None,
                 };
-                let state_mut = WidgetState;
                 MainWindow {
                     traversal,
                     display: display_options,
                     state: &state,
-                    widgets: &state_mut,
                 }
+                .update(&mut WidgetState)
                 .render(&mut f, full_screen)
             })?;
             Ok(())

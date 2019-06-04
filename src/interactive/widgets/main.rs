@@ -13,25 +13,44 @@ use tui::{
 
 pub struct WidgetState;
 
-pub struct MainWindow<'a, 'b, 'c> {
+pub struct MainWindow<'a, 'b> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'b AppState,
-    pub widgets: &'c WidgetState,
 }
 
-impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
+pub struct StatefulMainWindow<'a, 'b, 'c, 'd> {
+    parent: &'c MainWindow<'a, 'b>,
+    widgets: &'d WidgetState,
+}
+
+impl<'a, 'b> MainWindow<'a, 'b> {
+    pub fn update<'c, 'd>(
+        &'c self,
+        state: &'d mut WidgetState,
+    ) -> StatefulMainWindow<'a, 'b, 'c, 'd> {
+        StatefulMainWindow {
+            parent: self,
+            widgets: state,
+        }
+    }
+}
+
+impl<'a, 'b, 'c, 'd> Widget for StatefulMainWindow<'a, 'b, 'c, 'd> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
-            traversal:
-                Traversal {
-                    tree,
-                    entries_traversed,
-                    total_bytes,
-                    ..
+            parent:
+                MainWindow {
+                    traversal:
+                        Traversal {
+                            tree,
+                            entries_traversed,
+                            total_bytes,
+                            ..
+                        },
+                    display,
+                    state,
                 },
-            display,
-            state,
             widgets,
         } = self;
         let regions = Layout::default()
@@ -45,7 +64,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
-            state: widgets,
+            state: &WidgetState,
         }
         .draw(entries, buf);
 
