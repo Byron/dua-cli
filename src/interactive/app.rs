@@ -48,7 +48,7 @@ pub struct DisplayByteVisualization {
 
 impl Default for ByteVisualization {
     fn default() -> Self {
-        ByteVisualization::Bar
+        ByteVisualization::PercentageAndBar
     }
 }
 
@@ -351,7 +351,8 @@ impl TerminalApp {
         B: Backend,
     {
         terminal.hide_cursor()?;
-        let display_options: DisplayOptions = options.clone().into();
+        let mut display_options: DisplayOptions = options.clone().into();
+        display_options.byte_vis = ByteVisualization::Bar;
         let traversal = Traversal::from_walk(options, input, move |traversal| {
             terminal.draw(|mut f| {
                 let full_screen = f.size();
@@ -377,6 +378,7 @@ impl TerminalApp {
         let selected = sorted_entries(&traversal.tree, root, sorting)
             .get(0)
             .map(|(idx, _)| *idx);
+        display_options.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
             state: AppState {
                 root,
