@@ -48,7 +48,6 @@ impl From<WalkOptions> for DisplayOptions {
 pub struct AppState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
-    pub entries_list_start: usize,
     pub sorting: SortMode,
     pub message: Option<String>,
 }
@@ -58,6 +57,7 @@ pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
     pub state: AppState,
+    pub widgets: WidgetState,
 }
 
 enum CursorDirection {
@@ -76,16 +76,16 @@ impl TerminalApp {
             traversal,
             display,
             state,
+            widgets,
         } = self;
 
         terminal.draw(|mut f| {
             let full_screen = f.size();
-            let mut state_mut = WidgetState;
             MainWindow {
                 traversal,
                 display: *display,
                 state: &state,
-                state_mut: &mut state_mut,
+                widgets: &widgets,
             }
             .render(&mut f, full_screen)
         })?;
@@ -197,14 +197,13 @@ impl TerminalApp {
                     sorting: Default::default(),
                     message: Some("-> scanning <-".into()),
                     selected: None,
-                    entries_list_start: 0,
                 };
-                let mut state_mut = WidgetState;
+                let state_mut = WidgetState;
                 MainWindow {
                     traversal,
                     display: display_options,
                     state: &state,
-                    state_mut: &mut state_mut,
+                    widgets: &state_mut,
                 }
                 .render(&mut f, full_screen)
             })?;
@@ -222,10 +221,10 @@ impl TerminalApp {
                 sorting,
                 message: None,
                 selected,
-                entries_list_start: 0,
             },
             display: display_options,
             traversal,
+            widgets: WidgetState,
         })
     }
 }

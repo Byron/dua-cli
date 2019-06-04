@@ -17,8 +17,7 @@ pub struct MainWindow<'a, 'b, 'c> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'b AppState,
-    /// State that can change during drawing, for convenience
-    pub state_mut: &'c mut WidgetState,
+    pub widgets: &'c WidgetState,
 }
 
 impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
@@ -33,7 +32,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
                 },
             display,
             state,
-            state_mut,
+            widgets,
         } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)
@@ -46,8 +45,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
-            list_start: state.entries_list_start,
-            state_mut,
+            state: widgets,
         }
         .draw(entries, buf);
 
