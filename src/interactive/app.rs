@@ -1,5 +1,5 @@
 use crate::{
-    interactive::widgets::MainWindow,
+    interactive::widgets::{MainWindow, WidgetState},
     path_of, sorted_entries,
     traverse::{Traversal, TreeIndex},
     ByteFormat, WalkOptions, WalkResult,
@@ -80,10 +80,12 @@ impl TerminalApp {
 
         terminal.draw(|mut f| {
             let full_screen = f.size();
+            let mut state_mut = WidgetState;
             MainWindow {
                 traversal,
                 display: *display,
                 state: &state,
+                state_mut: &mut state_mut,
             }
             .render(&mut f, full_screen)
         })?;
@@ -197,10 +199,12 @@ impl TerminalApp {
                     selected: None,
                     entries_list_start: 0,
                 };
+                let mut state_mut = WidgetState;
                 MainWindow {
                     traversal,
                     display: display_options,
                     state: &state,
+                    state_mut: &mut state_mut,
                 }
                 .render(&mut f, full_screen)
             })?;

@@ -1,5 +1,5 @@
 use crate::{
-    interactive::{DisplayOptions, SortMode},
+    interactive::{widgets::WidgetState, DisplayOptions, SortMode},
     sorted_entries,
     traverse::{Tree, TreeIndex},
 };
@@ -12,16 +12,17 @@ use tui::{
     widgets::{Block, Borders, List, Text, Widget},
 };
 
-pub struct Entries<'a> {
+pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
     pub list_start: usize,
+    pub state_mut: &'b mut WidgetState,
 }
 
-impl<'a> Widget for Entries<'a> {
+impl<'a, 'b> Widget for Entries<'a, 'b> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             tree,
@@ -30,6 +31,7 @@ impl<'a> Widget for Entries<'a> {
             sorting,
             selected,
             list_start: _,
+            state_mut,
         } = self;
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)

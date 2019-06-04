@@ -11,13 +11,17 @@ use tui::{
     widgets::Widget,
 };
 
-pub struct MainWindow<'a, 'b> {
+pub struct WidgetState;
+
+pub struct MainWindow<'a, 'b, 'c> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'b AppState,
+    /// State that can change during drawing, for convenience
+    pub state_mut: &'c mut WidgetState,
 }
 
-impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {
+impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             traversal:
@@ -29,6 +33,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {
                 },
             display,
             state,
+            state_mut,
         } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)
@@ -42,6 +47,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b> {
             sorting: state.sorting,
             selected: state.selected,
             list_start: state.entries_list_start,
+            state_mut,
         }
         .draw(entries, buf);
 
