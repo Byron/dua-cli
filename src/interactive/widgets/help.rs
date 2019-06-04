@@ -1,3 +1,4 @@
+use tui::style::Color;
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -19,18 +20,22 @@ impl Widget for HelpPane {
             Text::Styled(
                 format!("{}\n\n", name).into(),
                 Style {
-                    modifier: Modifier::BOLD,
+                    modifier: Modifier::BOLD | Modifier::UNDERLINED,
                     ..Default::default()
                 },
             )
         };
-        fn hotkey(keys: &str, description: &str) -> Text<'static> {
-            Text::Styled(
-                format!("{} => {}\n", keys, description).into(),
-                Style {
-                    ..Default::default()
-                },
-            )
+        fn hotkey(keys: &str, description: &str) -> [Text<'static>; 2] {
+            [
+                Text::Styled(
+                    format!("{:>10}", keys).into(),
+                    Style {
+                        fg: Color::Green,
+                        ..Default::default()
+                    },
+                ),
+                Text::Styled(format!(" => {}\n", description).into(), Style::default()),
+            ]
         };
 
         let mut block = Block::default()
@@ -40,6 +45,16 @@ impl Widget for HelpPane {
         block.draw(area, buf);
         let area = block.inner(area).inner(1);
 
-        Paragraph::new([title("Hotkeys"), hotkey("j", "move down")].iter()).draw(area, buf);
+        Paragraph::new(
+            [title("Keys for Navigation")]
+                .iter()
+                .chain(hotkey("j", "move down an entry").iter())
+                .chain(hotkey("k", "move up an entry").iter())
+                .chain(hotkey("o", "descent into the selected directory").iter())
+                .chain(hotkey("u", "move up one level into the parent directory").iter())
+                .chain(hotkey("Ctrl + d", "move down 10 entries at once").iter())
+                .chain(hotkey("Ctrl + u", "move up 10 entries at once").iter()),
+        )
+        .draw(area, buf);
     }
 }
