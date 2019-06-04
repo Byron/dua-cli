@@ -38,6 +38,7 @@ pub enum ByteVisualization {
     Percentage,
     Bar,
     LongBar,
+    PercentageAndBar,
 }
 
 pub struct DisplayByteVisualization {
@@ -57,7 +58,8 @@ impl ByteVisualization {
         *self = match self {
             Bar => LongBar,
             LongBar => Percentage,
-            Percentage => Bar,
+            Percentage => PercentageAndBar,
+            PercentageAndBar => Bar,
         }
     }
     pub fn display(&self, percentage: f32) -> DisplayByteVisualization {
@@ -73,11 +75,33 @@ impl fmt::Display for DisplayByteVisualization {
         use ByteVisualization::*;
         let Self { format, percentage } = self;
 
+        const BAR_SIZE: usize = 10;
         match format {
-            Percentage => write!(f, " {:>5.02}% ", percentage * 100.0),
-            Bar => Self::make_bar(f, percentage, 10),
+            Percentage => Self::make_percentage(f, percentage),
+            PercentageAndBar => {
+                Self::make_percentage(f, percentage)?;
+                f.write_str(" ")?;
+                Self::make_bar(f, percentage, BAR_SIZE)
+            }
+            Bar => Self::make_bar(f, percentage, BAR_SIZE),
             LongBar => Self::make_bar(f, percentage, 20),
         }
+    }
+}
+
+impl DisplayByteVisualization {
+    fn make_bar(f: &mut fmt::Formatter, percentage: &f32, length: usize) -> Result<(), fmt::Error> {
+        let block_length = (length as f32 * percentage).round() as usize;
+        for _ in 0..block_length {
+            f.write_str(tui::symbols::block::FULL)?;
+        }
+        for _ in 0..length - block_length {
+            f.write_str(" ")?;
+        }
+        Ok(())
+    }
+    fn make_percentage(f: &mut fmt::Formatter, percentage: &f32) -> Result<(), fmt::Error> {
+        write!(f, " {:>5.02}% ", percentage * 100.0)
     }
 }
 
@@ -364,18 +388,5 @@ impl TerminalApp {
             traversal,
             draw_state: Default::default(),
         })
-    }
-}
-
-impl DisplayByteVisualization {
-    fn make_bar(f: &mut fmt::Formatter, percentage: &f32, length: usize) -> Result<(), fmt::Error> {
-        let block_length = (length as f32 * percentage).round() as usize;
-        for _ in 0..block_length {
-            f.write_str(tui::symbols::block::FULL)?;
-        }
-        for _ in 0..length - block_length {
-            f.write_str(" ")?;
-        }
-        Ok(())
     }
 }
