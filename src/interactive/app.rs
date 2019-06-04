@@ -134,16 +134,25 @@ impl TerminalApp {
                         }
                     }
                 }
-                Char('O') => self.open_that(),
-                Char('u') => self.exit_node(),
-                Char('o') => self.enter_node(),
-                Ctrl('u') => self.change_vertical_index(CursorDirection::PageUp),
-                Char('k') => self.change_vertical_index(CursorDirection::Up),
-                Char('j') => self.change_vertical_index(CursorDirection::Down),
-                Ctrl('d') => self.change_vertical_index(CursorDirection::PageDown),
-                Char('s') => self.state.sorting.toggle_size(),
                 Ctrl('c') | Char('q') => break,
                 _ => {}
+            }
+
+            match self.state.focussed {
+                FocussedPane::Help => match key {
+                    _ => {}
+                },
+                FocussedPane::Main => match key {
+                    Char('O') => self.open_that(),
+                    Char('u') => self.exit_node(),
+                    Char('o') => self.enter_node(),
+                    Ctrl('u') => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('k') => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') => self.change_entry_selection(CursorDirection::Down),
+                    Ctrl('d') => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('s') => self.state.sorting.toggle_size(),
+                    _ => {}
+                },
             };
             self.draw(terminal)?;
         }
@@ -196,7 +205,7 @@ impl TerminalApp {
         }
     }
 
-    fn change_vertical_index(&mut self, direction: CursorDirection) {
+    fn change_entry_selection(&mut self, direction: CursorDirection) {
         let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
         let next_selected_pos = match self.state.selected {
             Some(ref selected) => entries
