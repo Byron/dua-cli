@@ -7,7 +7,7 @@ use crate::{
 use failure::Error;
 use itertools::Itertools;
 use petgraph::Direction;
-use std::{io, path::PathBuf};
+use std::{fmt, io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::{backend::Backend, widgets::Widget, Terminal};
 
@@ -33,15 +33,61 @@ impl Default for SortMode {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum ByteVisualization {
+    Percentage,
+}
+
+pub struct DisplayByteVisualization {
+    format: ByteVisualization,
+    percentage: f64,
+    length: usize,
+}
+
+impl Default for ByteVisualization {
+    fn default() -> Self {
+        ByteVisualization::Percentage
+    }
+}
+
+impl ByteVisualization {
+    pub fn display(&self, percentage: f64, length: usize) -> DisplayByteVisualization {
+        DisplayByteVisualization {
+            format: *self,
+            percentage,
+            length,
+        }
+    }
+}
+
+impl fmt::Display for DisplayByteVisualization {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use ByteVisualization::*;
+        let Self {
+            format,
+            percentage,
+            length,
+        } = self;
+
+        match format {
+            Percentage => write!(f, "{:>width$.02}%", percentage * 100.0, width = length - 1),
+        }
+    }
+}
+
 /// Options to configure how we display things
 #[derive(Clone, Copy)]
 pub struct DisplayOptions {
     pub byte_format: ByteFormat,
+    pub byte_vis: ByteVisualization,
 }
 
 impl From<WalkOptions> for DisplayOptions {
     fn from(WalkOptions { byte_format, .. }: WalkOptions) -> Self {
-        DisplayOptions { byte_format }
+        DisplayOptions {
+            byte_format,
+            byte_vis: ByteVisualization::default(),
+        }
     }
 }
 

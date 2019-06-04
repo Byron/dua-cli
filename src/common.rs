@@ -76,7 +76,7 @@ impl ByteFormat {
         match self {
             Metric | Binary => 10,
             Bytes => 12,
-            MiB|MB => 12,
+            MiB | MB => 12,
             _ => 10,
         }
     }

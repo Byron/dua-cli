@@ -116,7 +116,11 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     },
                 );
                 let percentage = Text::Styled(
-                    format!(" | {:>5.02}% | ", (w.size as f64 / total as f64) * 100.0,).into(),
+                    format!(
+                        " | {} | ",
+                        display.byte_vis.display(w.size as f64 / total as f64, 6)
+                    )
+                    .into(),
                     style,
                 );
                 let name = Text::Styled(

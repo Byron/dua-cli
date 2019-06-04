@@ -36,7 +36,7 @@ impl Widget for Footer {
                 Text::Styled(
                     m.into(),
                     Style {
-                        fg: Color::Blue,
+                        fg: Color::Red,
                         bg: bg_color,
                         modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
                     },
