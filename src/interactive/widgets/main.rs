@@ -56,18 +56,18 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             }
             None => (entries_area, None),
         };
-        let grey = || Style {
+        let grey = Style {
             fg: Color::DarkGray,
             bg: Color::Reset,
             modifier: Modifier::empty(),
         };
-        let white = || Style {
+        let white = Style {
             fg: Color::White,
-            ..grey()
+            ..grey
         };
         let (entries_style, help_style) = match state.focussed {
-            FocussedPane::Main => (white(), grey()),
-            FocussedPane::Help => (grey(), white()),
+            FocussedPane::Main => (white, grey),
+            FocussedPane::Help => (grey, white),
         };
         Entries {
             tree: &tree,
