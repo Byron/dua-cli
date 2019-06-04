@@ -45,11 +45,28 @@ impl From<WalkOptions> for DisplayOptions {
     }
 }
 
+pub enum FocussedPane {
+    Main,
+    Help,
+}
+
+impl Default for FocussedPane {
+    fn default() -> Self {
+        FocussedPane::Main
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct HelpPaneState;
+
+#[derive(Default)]
 pub struct AppState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
     pub sorting: SortMode,
     pub message: Option<String>,
+    pub help_pane: Option<HelpPaneState>,
+    pub focussed: FocussedPane,
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal
@@ -57,7 +74,7 @@ pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
     pub state: AppState,
-    pub widgets: DrawState,
+    pub draw_state: DrawState,
 }
 
 enum CursorDirection {
@@ -76,7 +93,7 @@ impl TerminalApp {
             traversal,
             display,
             state,
-            ref mut widgets,
+            ref mut draw_state,
         } = self;
 
         terminal.draw(|mut f| {
@@ -85,7 +102,7 @@ impl TerminalApp {
                 traversal,
                 display: *display,
                 state: &state,
-                widgets,
+                draw_state,
             }
             .render(&mut f, full_screen)
         })?;
@@ -107,6 +124,19 @@ impl TerminalApp {
         for key in keys.filter_map(Result::ok) {
             self.update_message();
             match key {
+                Char('?') => {
+                    use FocussedPane::*;
+                    self.state.focussed = match self.state.focussed {
+                        Main => {
+                            self.state.help_pane = Some(HelpPaneState);
+                            Help
+                        }
+                        Help => {
+                            self.state.help_pane = None;
+                            Main
+                        }
+                    }
+                }
                 Char('O') => self.open_that(),
                 Char('u') => self.exit_node(),
                 Char('o') => self.enter_node(),
@@ -208,13 +238,13 @@ impl TerminalApp {
                     root: traversal.root_index,
                     sorting: Default::default(),
                     message: Some("-> scanning <-".into()),
-                    selected: None,
+                    ..Default::default()
                 };
                 MainWindow {
                     traversal,
                     display: display_options,
                     state: &state,
-                    widgets: &mut Default::default(),
+                    draw_state: &mut Default::default(),
                 }
                 .render(&mut f, full_screen)
             })?;
@@ -230,12 +260,12 @@ impl TerminalApp {
             state: AppState {
                 root,
                 sorting,
-                message: None,
                 selected,
+                ..Default::default()
             },
             display: display_options,
             traversal,
-            widgets: Default::default(),
+            draw_state: Default::default(),
         })
     }
 }
