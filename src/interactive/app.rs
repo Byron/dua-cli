@@ -1,5 +1,5 @@
 use crate::{
-    interactive::widgets::{MainWindow, WidgetState},
+    interactive::widgets::{DrawState, MainWindow},
     path_of, sorted_entries,
     traverse::{Traversal, TreeIndex},
     ByteFormat, WalkOptions, WalkResult,
@@ -57,7 +57,7 @@ pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
     pub state: AppState,
-    pub widgets: WidgetState,
+    pub widgets: DrawState,
 }
 
 enum CursorDirection {
@@ -87,7 +87,6 @@ impl TerminalApp {
                 state: &state,
                 widgets,
             }
-            .update()
             .render(&mut f, full_screen)
         })?;
 
@@ -203,7 +202,7 @@ impl TerminalApp {
                     traversal,
                     display: display_options,
                     state: &state,
-                    widgets: &mut WidgetState,
+                    widgets: &mut DrawState,
                 }
                 .render(&mut f, full_screen)
             })?;
@@ -224,7 +223,7 @@ impl TerminalApp {
             },
             display: display_options,
             traversal,
-            widgets: WidgetState,
+            widgets: DrawState,
         })
     }
 }

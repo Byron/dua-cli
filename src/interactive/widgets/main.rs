@@ -11,19 +11,13 @@ use tui::{
     widgets::Widget,
 };
 
-pub struct WidgetState;
+pub struct DrawState;
 
 pub struct MainWindow<'a, 'b, 'c> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'b AppState,
-    pub widgets: &'c mut WidgetState,
-}
-
-impl<'a, 'b, 'c> MainWindow<'a, 'b, 'c> {
-    pub fn update(&mut self) -> &mut Self {
-        self
-    }
+    pub widgets: &'c mut DrawState,
 }
 
 impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
@@ -51,7 +45,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
-            state: &WidgetState,
+            state: &DrawState,
         }
         .draw(entries, buf);
 

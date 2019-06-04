@@ -1,5 +1,5 @@
 use crate::{
-    interactive::{widgets::WidgetState, DisplayOptions, SortMode},
+    interactive::{widgets::DrawState, DisplayOptions, SortMode},
     sorted_entries,
     traverse::{Tree, TreeIndex},
 };
@@ -18,7 +18,7 @@ pub struct Entries<'a, 'b> {
     pub display: DisplayOptions,
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
-    pub state: &'b WidgetState,
+    pub state: &'b DrawState,
 }
 
 impl<'a, 'b> Widget for Entries<'a, 'b> {
