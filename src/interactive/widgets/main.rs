@@ -5,10 +5,12 @@ use crate::{
     },
     traverse::Traversal,
 };
+use tui::style::{Color, Style};
 use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Borders, Widget},
+    style::Modifier,
+    widgets::Widget,
 };
 
 /// The state that can be mutated while drawing
@@ -54,9 +56,18 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             }
             None => (entries_area, None),
         };
-        let (entries_borders, help_borders) = match state.focussed {
-            FocussedPane::Main => (Borders::ALL, Borders::NONE),
-            FocussedPane::Help => (Borders::NONE, Borders::ALL),
+        let grey = || Style {
+            fg: Color::DarkGray,
+            bg: Color::Reset,
+            modifier: Modifier::empty(),
+        };
+        let white = || Style {
+            fg: Color::White,
+            ..grey()
+        };
+        let (entries_style, help_style) = match state.focussed {
+            FocussedPane::Main => (white(), grey()),
+            FocussedPane::Help => (grey(), white()),
         };
         Entries {
             tree: &tree,
@@ -64,15 +75,20 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             display: *display,
             sorting: state.sorting,
             selected: state.selected,
-            borders: entries_borders,
+            border_style: entries_style,
             list: &mut draw_state.entries_list,
+            is_focussed: if let FocussedPane::Main = state.focussed {
+                true
+            } else {
+                false
+            },
         }
         .draw(entries_area, buf);
 
         if let Some((help_area, state)) = help_area_state {
             HelpPane {
                 state,
-                borders: help_borders,
+                border_style: help_style,
             }
             .draw(help_area, buf);
         }

@@ -22,7 +22,8 @@ pub struct Entries<'a, 'b> {
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
     pub list: &'b mut ListState,
-    pub borders: Borders,
+    pub border_style: Style,
+    pub is_focussed: bool,
 }
 
 impl<'a, 'b> Widget for Entries<'a, 'b> {
@@ -33,8 +34,9 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             display,
             sorting,
             selected,
-            borders,
+            border_style,
             list,
+            is_focussed,
         } = self;
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)
@@ -53,7 +55,10 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             p => p,
         };
         let title = format!(" {} ", title);
-        let block = Block::default().borders(*borders).title(&title);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(*border_style)
+            .title(&title);
         let offset = list
             .update(
                 selected.map(|selected| {
@@ -75,7 +80,11 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                         true,
                         Style {
                             fg: Color::Black,
-                            bg: Color::White,
+                            bg: if *is_focussed {
+                                Color::White
+                            } else {
+                                Color::DarkGray
+                            },
                             ..Default::default()
                         },
                     ),
@@ -98,10 +107,10 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     )
                     .into(),
                     Style {
-                        fg: if is_selected {
-                            Color::DarkGray
-                        } else {
-                            Color::Green
+                        fg: match (is_selected, *is_focussed) {
+                            (true, true) => Color::DarkGray,
+                            (true, false) => Color::Black,
+                            _ => Color::Green,
                         },
                         ..style
                     },
