@@ -16,14 +16,17 @@ pub struct HelpPane {
 
 impl Widget for HelpPane {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        fn title(name: &str) -> Text {
-            Text::Styled(
+        fn spacer() -> [Text<'static>; 1] {
+            [Text::Raw("\n\n".into())]
+        };
+        fn title(name: &str) -> [Text<'static>; 1] {
+            [Text::Styled(
                 format!("{}\n\n", name).into(),
                 Style {
                     modifier: Modifier::BOLD | Modifier::UNDERLINED,
                     ..Default::default()
                 },
-            )
+            )]
         };
         fn hotkey(keys: &str, description: &str) -> [Text<'static>; 2] {
             [
@@ -46,14 +49,35 @@ impl Widget for HelpPane {
         let area = block.inner(area).inner(1);
 
         Paragraph::new(
-            [title("Keys for Navigation")]
+            title("Keys for Navigation")
                 .iter()
                 .chain(hotkey("j", "move down an entry").iter())
                 .chain(hotkey("k", "move up an entry").iter())
                 .chain(hotkey("o", "descent into the selected directory").iter())
                 .chain(hotkey("u", "move up one level into the parent directory").iter())
                 .chain(hotkey("Ctrl + d", "move down 10 entries at once").iter())
-                .chain(hotkey("Ctrl + u", "move up 10 entries at once").iter()),
+                .chain(hotkey("Ctrl + u", "move up 10 entries at once").iter())
+                .chain(spacer().iter())
+                .chain(
+                    title("Keys for sorting")
+                        .iter()
+                        .chain(hotkey("s", "toggle sort by size ascending/descending").iter())
+                        .chain(spacer().iter())
+                )
+                .chain(
+                    title("Keys for entry operations")
+                        .iter()
+                        .chain(hotkey("Shift + o", "Open the entry with the associated program").iter())
+                        .chain(spacer().iter())
+                )
+                .chain(
+                    title("Keys for application control")
+                        .iter()
+                        .chain(hotkey("q", "close the current pain. Closes the application if no pane is open.").iter())
+                        .chain(hotkey("Ctrl + c", "close the application. No questions asked!").iter())
+                        .chain(hotkey("?", "Show this help pane").iter())
+                        .chain(spacer().iter())
+                )
         )
         .draw(area, buf);
     }
