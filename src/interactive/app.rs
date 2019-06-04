@@ -116,13 +116,13 @@ impl TerminalApp {
         R: io::Read + TermReadEventsAndRaw,
     {
         use termion::event::Key::{Char, Ctrl};
+        use FocussedPane::*;
 
         self.draw(terminal)?;
         for key in keys.filter_map(Result::ok) {
             self.update_message();
             match key {
                 Char('?') => {
-                    use FocussedPane::*;
                     self.state.focussed = match self.state.focussed {
                         Main => {
                             self.state.help_pane = Some(HelpPaneState);
@@ -134,7 +134,14 @@ impl TerminalApp {
                         }
                     }
                 }
-                Ctrl('c') | Char('q') => break,
+                Ctrl('c') => break,
+                Char('q') => match self.state.focussed {
+                    Main => break,
+                    Help => {
+                        self.state.focussed = Main;
+                        self.state.help_pane = None
+                    }
+                },
                 _ => {}
             }
 
