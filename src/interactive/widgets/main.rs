@@ -18,6 +18,7 @@ use tui::{
 #[derive(Default)]
 pub struct DrawState {
     entries_list: ListState,
+    pub help_scroll: u16,
 }
 
 pub struct MainWindow<'a, 'b, 'c> {
@@ -86,11 +87,13 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
         .draw(entries_area, buf);
 
         if let Some((help_area, state)) = help_area_state {
-            HelpPane {
+            let mut pane = HelpPane {
+                scroll: draw_state.help_scroll,
                 state,
                 border_style: help_style,
-            }
-            .draw(help_area, buf);
+            };
+            pane.draw(help_area, buf);
+            draw_state.help_scroll = pane.scroll;
         }
 
         Footer {

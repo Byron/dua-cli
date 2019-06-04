@@ -229,14 +229,13 @@ impl TerminalApp {
 
     fn scroll_help(&mut self, direction: CursorDirection) {
         use CursorDirection::*;
-        if let Some(HelpPaneState { ref mut scroll }) = self.state.help_pane {
-            *scroll = match direction {
-                Down => scroll.saturating_add(1),
-                Up => scroll.saturating_sub(1),
-                PageDown => scroll.saturating_add(10),
-                PageUp => scroll.saturating_sub(10),
-            };
-        }
+        let scroll = self.draw_state.help_scroll;
+        self.draw_state.help_scroll = match direction {
+            Down => scroll.saturating_add(1),
+            Up => scroll.saturating_sub(1),
+            PageDown => scroll.saturating_add(10),
+            PageUp => scroll.saturating_sub(10),
+        };
     }
 
     fn change_entry_selection(&mut self, direction: CursorDirection) {
