@@ -18,6 +18,20 @@ pub struct ListState {
     pub start_index: usize,
 }
 
+impl ListState {
+    pub fn update(&mut self, selected: Option<usize>, height: usize) -> &mut Self {
+        self.start_index = match selected {
+            Some(pos) => match height as usize {
+                h if self.start_index + h - 1 < pos => pos - h + 1,
+                _ if self.start_index > pos => pos,
+                _ => self.start_index,
+            },
+            None => 0,
+        };
+        self
+    }
+}
+
 pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
@@ -55,22 +69,18 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
         };
         let title = format!(" {} ", title);
         let block = Block::default().borders(Borders::ALL).title(&title);
-        let offset = match selected {
-            Some(selected) => {
-                let pos = entries
-                    .iter()
-                    .find_position(|(idx, _)| *idx == *selected)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0);
-                match block.inner(area).height as usize {
-                    h if list.start_index + h - 1 < pos => pos - h + 1,
-                    _ if list.start_index > pos => pos,
-                    _ => list.start_index,
-                }
-            }
-            None => 0,
-        };
-        list.start_index = offset;
+        let offset = list
+            .update(
+                selected.map(|selected| {
+                    entries
+                        .iter()
+                        .find_position(|(idx, _)| *idx == selected)
+                        .map(|(idx, _)| idx)
+                        .unwrap_or(0)
+                }),
+                block.inner(area).height as usize,
+            )
+            .start_index;
 
         List::new(entries.iter().skip(offset).map(|(node_idx, w)| {
             let style = match selected {
