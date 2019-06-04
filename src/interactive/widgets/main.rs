@@ -13,45 +13,32 @@ use tui::{
 
 pub struct WidgetState;
 
-pub struct MainWindow<'a, 'b> {
+pub struct MainWindow<'a, 'b, 'c> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'b AppState,
+    pub widgets: &'c mut WidgetState,
 }
 
-pub struct StatefulMainWindow<'a, 'b, 'c, 'd> {
-    parent: &'c MainWindow<'a, 'b>,
-    widgets: &'d WidgetState,
-}
-
-impl<'a, 'b> MainWindow<'a, 'b> {
-    pub fn update<'c, 'd>(
-        &'c self,
-        state: &'d mut WidgetState,
-    ) -> StatefulMainWindow<'a, 'b, 'c, 'd> {
-        StatefulMainWindow {
-            parent: self,
-            widgets: state,
-        }
+impl<'a, 'b, 'c> MainWindow<'a, 'b, 'c> {
+    pub fn update(&mut self) -> &mut Self {
+        self
     }
 }
 
-impl<'a, 'b, 'c, 'd> Widget for StatefulMainWindow<'a, 'b, 'c, 'd> {
+impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
-            parent:
-                MainWindow {
-                    traversal:
-                        Traversal {
-                            tree,
-                            entries_traversed,
-                            total_bytes,
-                            ..
-                        },
-                    display,
-                    state,
+            traversal:
+                Traversal {
+                    tree,
+                    entries_traversed,
+                    total_bytes,
+                    ..
                 },
-            widgets,
+            display,
+            state,
+            widgets: _,
         } = self;
         let regions = Layout::default()
             .direction(Direction::Vertical)

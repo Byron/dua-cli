@@ -68,7 +68,7 @@ enum CursorDirection {
 }
 
 impl TerminalApp {
-    fn draw<B>(&self, terminal: &mut Terminal<B>) -> Result<(), Error>
+    fn draw<B>(&mut self, terminal: &mut Terminal<B>, do_update: bool) -> Result<(), Error>
     where
         B: Backend,
     {
@@ -76,18 +76,21 @@ impl TerminalApp {
             traversal,
             display,
             state,
-            widgets,
+            ref mut widgets,
         } = self;
 
         terminal.draw(|mut f| {
             let full_screen = f.size();
-            MainWindow {
+            let mut window = MainWindow {
                 traversal,
                 display: *display,
                 state: &state,
+                widgets,
+            };
+            if do_update {
+                window.update();
             }
-            .update(widgets)
-            .render(&mut f, full_screen)
+            window.render(&mut f, full_screen)
         })?;
 
         Ok(())
@@ -103,7 +106,7 @@ impl TerminalApp {
     {
         use termion::event::Key::{Char, Ctrl};
 
-        self.draw(terminal)?;
+        self.draw(terminal, false)?;
         for key in keys.filter_map(Result::ok) {
             match key {
                 Char('O') => self.open_that(),
@@ -117,7 +120,7 @@ impl TerminalApp {
                 Ctrl('c') | Char('q') => break,
                 _ => {}
             };
-            self.draw(terminal)?;
+            self.draw(terminal, true)?;
         }
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
@@ -202,8 +205,8 @@ impl TerminalApp {
                     traversal,
                     display: display_options,
                     state: &state,
+                    widgets: &mut WidgetState,
                 }
-                .update(&mut WidgetState)
                 .render(&mut f, full_screen)
             })?;
             Ok(())
