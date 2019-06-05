@@ -1,5 +1,4 @@
 use crate::interactive::{
-    react::Terminal,
     sorted_entries,
     widgets::{ReactHelpPane, ReactMainWindow},
     ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
@@ -15,6 +14,7 @@ use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::backend::Backend;
+use tui_react::Terminal;
 
 #[derive(Copy, Clone)]
 pub enum FocussedPane {

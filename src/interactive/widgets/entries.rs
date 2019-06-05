@@ -1,7 +1,4 @@
-use crate::interactive::{
-    react::{fill_background_to_right, BlockProps, ReactList, ReactListProps},
-    DisplayOptions, EntryDataBundle,
-};
+use crate::interactive::{DisplayOptions, EntryDataBundle};
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::path::Path;
@@ -11,6 +8,7 @@ use tui::{
     style::{Color, Style},
     widgets::{Borders, Text, Widget},
 };
+use tui_react::{fill_background_to_right, BlockProps, ReactList, ReactListProps};
 
 pub struct Entries<'a> {
     pub tree: &'a Tree,

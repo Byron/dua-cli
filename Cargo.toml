@@ -22,6 +22,7 @@ petgraph = "0.4.13"
 itertools = "0.8.0"
 open = "1.2.2"
 log = "0.4.6"
+tui-react = { path = "./tui-react" }
 
 [[bin]]
 name="dua"
@@ -38,3 +39,6 @@ lto = true
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
+
+[workspace]
+members = ["tui-react"]

@@ -1,4 +1,3 @@
-use crate::interactive::react::ToplevelComponent;
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use tui::style::Color;
@@ -8,6 +7,7 @@ use tui::{
     style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
+use tui_react::ToplevelComponent;
 
 #[derive(Default, Clone)]
 pub struct ReactHelpPane {

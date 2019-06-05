@@ -1,4 +1,4 @@
-use crate::{interactive::react::ToplevelComponent, ByteFormat};
+use crate::ByteFormat;
 use std::borrow::Borrow;
 use tui::widgets::{Paragraph, Text};
 use tui::{
@@ -8,6 +8,7 @@ use tui::{
     style::{Color, Style},
     widgets::Widget,
 };
+use tui_react::ToplevelComponent;
 
 pub struct ReactFooter;
 

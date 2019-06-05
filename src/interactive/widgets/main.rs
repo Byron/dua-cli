@@ -1,5 +1,4 @@
 use crate::interactive::{
-    react::{ReactList, ToplevelComponent},
     widgets::{Entries, Header, ReactFooter, ReactFooterProps, ReactHelpPane, ReactHelpPaneProps},
     FocussedPane, TerminalApp,
 };
@@ -12,6 +11,7 @@ use tui::{
     style::Modifier,
     widgets::Widget,
 };
+use tui_react::{ReactList, ToplevelComponent};
 
 #[derive(Default, Clone)] // TODO: remove clone derive
 pub struct ReactMainWindow {

@@ -1,0 +1,12 @@
+[package]
+name = "tui-react"
+version = "0.1.0"
+authors = ["Sebastian Thiel <sthiel@thoughtworks.com>"]
+edition = "2018"
+repository = "https://github.com/Byron/dua-cli"
+description = "TUI widgets using a react-like paradigm, allowing mutable component state and render properties."
+license = "MIT"
+
+[dependencies]
+tui = "0.6.0"
+log = "0.4.6"
