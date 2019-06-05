@@ -26,14 +26,14 @@ impl Default for SortMode {
     }
 }
 
-pub fn sorted_entries(
-    tree: &Tree,
-    node_idx: TreeIndex,
-    sorting: SortMode,
-) -> Vec<(TreeIndex, &EntryData, PathBuf)> {
+pub type EntryDataBundle = (TreeIndex, EntryData, PathBuf);
+pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
     use SortMode::*;
     tree.neighbors_directed(node_idx, Direction::Outgoing)
-        .filter_map(|idx| tree.node_weight(idx).map(|w| (idx, w, path_of(tree, idx))))
+        .filter_map(|idx| {
+            tree.node_weight(idx)
+                .map(|w| (idx, w.clone(), path_of(tree, idx)))
+        })
         .sorted_by(|(_, l, _), (_, r, _)| match sorting {
             SizeDescending => r.size.cmp(&l.size),
             SizeAscending => l.size.cmp(&r.size),

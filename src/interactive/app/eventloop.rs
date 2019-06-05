@@ -1,7 +1,7 @@
 use crate::interactive::{
     sorted_entries,
     widgets::{DrawState, HelpPaneState, MainWindow},
-    ByteVisualization, DisplayOptions, SortMode,
+    ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
     path_of,
@@ -31,6 +31,7 @@ impl Default for FocussedPane {
 pub struct AppState {
     pub root: TreeIndex,
     pub selected: Option<TreeIndex>,
+    pub entries: Vec<EntryDataBundle>,
     pub sorting: SortMode,
     pub message: Option<String>,
     pub help_pane: Option<HelpPaneState>,
@@ -163,24 +164,6 @@ impl TerminalApp {
         self.state.message = None;
     }
 
-    fn exit_node(&mut self) {
-        match self
-            .traversal
-            .tree
-            .neighbors_directed(self.state.root, Direction::Incoming)
-            .next()
-        {
-            Some(parent_idx) => {
-                self.state.root = parent_idx;
-                self.state.selected =
-                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
-                        .get(0)
-                        .map(|(idx, _, _)| *idx);
-            }
-            None => self.state.message = Some("Top level reached".into()),
-        }
-    }
-
     fn open_that(&mut self) {
         match self.state.selected {
             Some(ref idx) => {
@@ -190,10 +173,27 @@ impl TerminalApp {
         }
     }
 
+    fn exit_node(&mut self) {
+        match self
+            .traversal
+            .tree
+            .neighbors_directed(self.state.root, Direction::Incoming)
+            .next()
+        {
+            Some(parent_idx) => {
+                self.state.root = parent_idx;
+                self.state.entries =
+                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting);
+                self.state.selected = self.state.entries.get(0).map(|(idx, _, _)| *idx);
+            }
+            None => self.state.message = Some("Top level reached".into()),
+        }
+    }
+
     fn enter_node(&mut self) {
         if let Some(new_root) = self.state.selected {
-            let entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
-            match entries.get(0) {
+            self.state.entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
+            match self.state.entries.get(0) {
                 Some((next_selection, _, _)) => {
                     self.state.root = new_root;
                     self.state.selected = Some(*next_selection);
@@ -269,15 +269,15 @@ impl TerminalApp {
 
         let sorting = Default::default();
         let root = traversal.root_index;
-        let selected = sorted_entries(&traversal.tree, root, sorting)
-            .get(0)
-            .map(|(idx, _, _)| *idx);
+        let entries = sorted_entries(&traversal.tree, root, sorting);
+        let selected = entries.get(0).map(|(idx, _, _)| *idx);
         display_options.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
             state: AppState {
                 root,
                 sorting,
                 selected,
+                entries,
                 ..Default::default()
             },
             display: display_options,

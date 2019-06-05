@@ -7,7 +7,7 @@ use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
 pub type TreeIndex = NodeIndex;
 pub type Tree = Graph<EntryData, (), Directed>;
 
-#[derive(Eq, PartialEq, Debug, Default)]
+#[derive(Eq, PartialEq, Debug, Default, Clone)]
 pub struct EntryData {
     pub name: OsString,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
