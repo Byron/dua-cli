@@ -39,7 +39,7 @@ benchmark: target/release/dua
 tests: unit-tests journey-tests
 
 unit-tests:
-	cargo test --test interactive
+	cargo test --bin dua
 
 continuous-unit-tests:
 	watchexec $(MAKE) unit-tests
