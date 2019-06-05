@@ -21,6 +21,7 @@ tui = "0.6.0"
 petgraph = "0.4.13"
 itertools = "0.8.0"
 open = "1.2.2"
+log = "0.4.6"
 
 [[bin]]
 name="dua"
