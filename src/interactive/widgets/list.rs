@@ -1,7 +1,6 @@
 use crate::interactive::react::Component;
 use std::borrow::Borrow;
 use std::iter::repeat;
-use std::marker::PhantomData;
 use tui::{
     buffer::Buffer,
     layout::Rect,

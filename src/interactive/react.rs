@@ -274,6 +274,11 @@ mod block {
             inner
         }
     }
+    impl<'a> BlockProps<'a> {
+        pub fn render(&self, area: Rect, buf: &mut Buffer) {
+            Block::<()>::default().render(self, (), area, buf);
+        }
+    }
 
     impl<'a, T> Component for Block<'a, T> {
         type Props = BlockProps<'a>;
@@ -452,7 +457,7 @@ mod list {
 
             let list_area = match block {
                 Some(b) => {
-                    //                                Block::default().render(b, (), area, buf);
+                    b.render(area, buf);
                     b.inner(area)
                 }
                 None => area,
