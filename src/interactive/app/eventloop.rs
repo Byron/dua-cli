@@ -1,7 +1,7 @@
 use crate::interactive::{
     react::Terminal,
     sorted_entries,
-    widgets::{HelpPaneState, ReactMainWindow},
+    widgets::{ReactHelpPane, ReactMainWindow},
     ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
@@ -35,7 +35,6 @@ pub struct AppState {
     pub entries: Vec<EntryDataBundle>,
     pub sorting: SortMode,
     pub message: Option<String>,
-    pub help_pane: Option<HelpPaneState>,
     pub focussed: FocussedPane,
 }
 
@@ -89,7 +88,7 @@ impl TerminalApp {
                     Main => break,
                     Help => {
                         self.state.focussed = Main;
-                        self.state.help_pane = None
+                        self.window.help_pane = None
                     }
                 },
                 _ => {}
@@ -125,7 +124,7 @@ impl TerminalApp {
 
     fn cycle_focus(&mut self) {
         use FocussedPane::*;
-        self.state.focussed = match (self.state.focussed, self.state.help_pane) {
+        self.state.focussed = match (self.state.focussed, &self.window.help_pane) {
             (Main, Some(_)) => Help,
             (Help, _) => Main,
             _ => Main,
@@ -136,11 +135,11 @@ impl TerminalApp {
         use FocussedPane::*;
         self.state.focussed = match self.state.focussed {
             Main => {
-                self.state.help_pane = Some(HelpPaneState::default());
+                self.window.help_pane = Some(ReactHelpPane::default());
                 Help
             }
             Help => {
-                self.state.help_pane = None;
+                self.window.help_pane = None;
                 Main
             }
         }
@@ -191,13 +190,14 @@ impl TerminalApp {
 
     fn scroll_help(&mut self, direction: CursorDirection) {
         use CursorDirection::*;
-        let scroll = self.window.draw_state.help_scroll; // TODO: don't do this - make it private when ready
-        self.window.draw_state.help_scroll = match direction {
-            Down => scroll.saturating_add(1),
-            Up => scroll.saturating_sub(1),
-            PageDown => scroll.saturating_add(10),
-            PageUp => scroll.saturating_sub(10),
-        };
+        if let Some(ref mut pane) = self.window.help_pane {
+            pane.scroll = match direction {
+                Down => pane.scroll.saturating_add(1),
+                Up => pane.scroll.saturating_sub(1),
+                PageDown => pane.scroll.saturating_add(10),
+                PageUp => pane.scroll.saturating_sub(10),
+            };
+        }
     }
 
     fn change_entry_selection(&mut self, direction: CursorDirection) {

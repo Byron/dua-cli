@@ -1,3 +1,5 @@
+use crate::interactive::react::Component;
+use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use tui::style::Color;
 use tui::{
@@ -7,17 +9,19 @@ use tui::{
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
 
-#[derive(Default, Copy, Clone)]
-pub struct HelpPaneState;
-
-pub struct HelpPane {
-    pub state: HelpPaneState,
+#[derive(Default, Clone)]
+pub struct ReactHelpPane {
     pub scroll: u16,
+}
+
+pub struct ReactHelpPaneProps {
     pub border_style: Style,
 }
 
-impl Widget for HelpPane {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+impl Component for ReactHelpPane {
+    type Props = ReactHelpPaneProps;
+
+    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
         let (texts, num_lines) = {
             let num_lines = Cell::new(0u16);
             let count = |n| num_lines.set(num_lines.get() + n);
@@ -91,9 +95,11 @@ impl Widget for HelpPane {
             (lines.into_inner(), num_lines.get())
         };
 
+        let ReactHelpPaneProps { border_style } = props.borrow();
+
         let mut block = Block::default()
             .title("Help")
-            .border_style(self.border_style)
+            .border_style(*border_style)
             .borders(Borders::ALL);
         block.draw(area, buf);
 

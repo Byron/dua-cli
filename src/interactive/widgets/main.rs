@@ -1,6 +1,6 @@
 use crate::interactive::{
     react::Component,
-    widgets::{Entries, Footer, Header, HelpPane, ListState},
+    widgets::{Entries, Footer, Header, ListState, ReactHelpPane, ReactHelpPaneProps},
     FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
@@ -18,12 +18,12 @@ use tui::{
 #[derive(Default, Clone)] // TODO: remove Clone derive
 pub struct DrawState {
     entries_list: ListState,
-    pub help_scroll: u16,
 }
 
 #[derive(Default, Clone)] // TODO: remove clone derive
 pub struct ReactMainWindow {
     pub draw_state: DrawState,
+    pub help_pane: Option<ReactHelpPane>,
 }
 
 impl<'a, 'b> Component for ReactMainWindow {
@@ -56,13 +56,13 @@ impl<'a, 'b> Component for ReactMainWindow {
             )
             .split(area);
         let (header_area, entries_area, footer_area) = (regions[0], regions[1], regions[2]);
-        let (entries_area, help_area_state) = match state.help_pane {
-            Some(state) => {
+        let (entries_area, help_pane) = match self.help_pane {
+            Some(ref mut pane) => {
                 let regions = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                     .split(entries_area);
-                (regions[0], Some((regions[1], state)))
+                (regions[0], Some((regions[1], pane)))
             }
             None => (entries_area, None),
         };
@@ -97,14 +97,11 @@ impl<'a, 'b> Component for ReactMainWindow {
         }
         .draw(entries_area, buf);
 
-        if let Some((help_area, state)) = help_area_state {
-            let mut pane = HelpPane {
-                scroll: draw_state.help_scroll,
-                state,
+        if let Some((help_area, pane)) = help_pane {
+            let props = ReactHelpPaneProps {
                 border_style: help_style,
             };
-            pane.draw(help_area, buf);
-            draw_state.help_scroll = pane.scroll;
+            pane.render(props, help_area, buf);
         }
 
         Footer {
