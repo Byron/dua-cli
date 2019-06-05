@@ -255,6 +255,7 @@ impl TerminalApp {
                 root: traversal.root_index,
                 sorting: Default::default(),
                 message: Some("-> scanning <-".into()),
+                entries: sorted_entries(&traversal.tree, traversal.root_index, Default::default()),
                 ..Default::default()
             };
             let props = ReactMainWindowProps {
