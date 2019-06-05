@@ -1,5 +1,5 @@
 use crate::interactive::{
-    react::Component,
+    react::{Component, ReactList},
     widgets::{
         Entries, Header, ListState, ReactFooter, ReactFooterProps, ReactHelpPane,
         ReactHelpPaneProps,
@@ -104,6 +104,7 @@ impl<'a, 'b> Component for ReactMainWindow {
             } else {
                 false
             },
+            list: ReactList::default(),
         }
         .draw(entries_area, buf);
 

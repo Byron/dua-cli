@@ -3,12 +3,7 @@ use super::Component;
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use tui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Color,
-    style::Style,
-    symbols::line,
-    widgets::{Borders, Widget},
+    buffer::Buffer, layout::Rect, style::Color, style::Style, symbols::line, widgets::Borders,
 };
 
 pub fn fill_background(area: Rect, buf: &mut Buffer, color: Color) {
@@ -24,15 +19,15 @@ pub struct Block<'a, T>(PhantomData<&'a T>);
 
 pub struct BlockProps<'a> {
     /// Optional title place on the upper left of the block
-    title: Option<&'a str>,
+    pub title: Option<&'a str>,
     /// Title style
-    title_style: Style,
+    pub title_style: Style,
     /// Visible borders
-    borders: Borders,
+    pub borders: Borders,
     /// Border style
-    border_style: Style,
+    pub border_style: Style,
     /// Widget style
-    style: Style,
+    pub style: Style,
 }
 
 impl<'a> Default for BlockProps<'a> {
@@ -70,9 +65,7 @@ impl<'a> BlockProps<'a> {
         }
         inner
     }
-}
 
-impl<'a> BlockProps<'a> {
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         Block::<()>::default().render(self, (), area, buf);
     }

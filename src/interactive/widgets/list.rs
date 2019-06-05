@@ -1,5 +1,3 @@
-use crate::interactive::react::Component;
-use std::borrow::Borrow;
 use std::iter::repeat;
 use tui::{
     buffer::Buffer,

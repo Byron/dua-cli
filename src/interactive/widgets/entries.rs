@@ -1,6 +1,10 @@
-use crate::interactive::{
-    widgets::{fill_background_to_right, List, ListState},
-    DisplayOptions, EntryDataBundle,
+use crate::{
+    interactive::react::Component,
+    interactive::{
+        react::{BlockProps, ReactList, ReactListProps, ReactListPropsMut},
+        widgets::{fill_background_to_right, ListState},
+        DisplayOptions, EntryDataBundle,
+    },
 };
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
@@ -9,10 +13,13 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, Borders, Text, Widget},
+    widgets::{Borders, Text, Widget},
 };
 
-pub struct Entries<'a, 'b> {
+pub struct Entries<'a, 'b, T>
+where
+    T: Iterator<Item = Vec<Text<'a>>>,
+{
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
@@ -21,9 +28,14 @@ pub struct Entries<'a, 'b> {
     pub entries: &'a [EntryDataBundle],
     pub border_style: Style,
     pub is_focussed: bool,
+
+    pub list: ReactList<'a, 'b, T>,
 }
 
-impl<'a, 'b> Widget for Entries<'a, 'b> {
+impl<'a, 'b, T> Widget for Entries<'a, 'b, T>
+where
+    T: Iterator<Item = Vec<Text<'a>>>,
+{
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             tree,
@@ -34,6 +46,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             border_style,
             list_state,
             is_focussed,
+            list,
         } = self;
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)
@@ -50,10 +63,13 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             p => p,
         };
         let title = format!(" {} ", title);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(*border_style)
-            .title(&title);
+        let block = BlockProps {
+            borders: Borders::ALL,
+            border_style: *border_style,
+            title: Some(&title),
+            ..Default::default()
+        };
+
         let offset = list_state
             .update(
                 selected.map(|selected| {
@@ -67,8 +83,8 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             )
             .start_index;
 
-        List {
-            block: Some(block),
+        let props = ReactListProps { block: Some(block) };
+        let mut props_mut = ReactListPropsMut {
             items: entries.iter().skip(offset).map(
                 |EntryDataBundle {
                      index: node_idx,
@@ -147,7 +163,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     column_segments
                 },
             ),
-        }
-        .draw(area, buf);
+        };
+        list.render(props, props_mut, area, buf);
     }
 }

@@ -1,4 +1,4 @@
-use super::{Block, BlockProps, Component};
+use super::{BlockProps, Component};
 use std::borrow::{Borrow, BorrowMut};
 use std::iter::repeat;
 use std::marker::PhantomData;
