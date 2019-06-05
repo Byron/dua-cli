@@ -90,7 +90,7 @@ mod terminal {
 
         pub fn render<C>(
             &mut self,
-            mut component: impl BorrowMut<C>,
+            mut component: &mut C,
             props: impl Borrow<C::Props>,
         ) -> io::Result<()>
         where
@@ -100,9 +100,7 @@ mod terminal {
             // and the terminal (if growing), which may OOB.
             self.autoresize()?;
 
-            component
-                .borrow_mut()
-                .render(props, self.known_size, self.current_buffer_mut());
+            component.render(props, self.known_size, self.current_buffer_mut());
 
             self.reconcile_and_flush()?;
 
@@ -142,10 +140,19 @@ mod terminal {
         use super::*;
         use tui::backend::TestBackend;
 
+        #[derive(Default, Clone)]
+        struct ComplexProps {
+            x: usize,
+            y: String,
+        }
+
         #[derive(Default)]
         struct StatefulComponent {
             x: usize,
         }
+
+        #[derive(Default)]
+        struct StatelessComponent;
 
         impl Component for StatefulComponent {
             type Props = usize;
@@ -155,13 +162,23 @@ mod terminal {
             }
         }
 
+        impl Component for StatelessComponent {
+            type Props = ComplexProps;
+            fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+                // does not matter - we want to see it compiles essentially
+            }
+        }
+
         #[test]
-        fn it_does_render() {
+        fn it_does_render_with_simple_and_complex_props() {
             let mut term = Terminal::new(TestBackend::new(20, 20)).unwrap();
             let mut c = StatefulComponent::default();
 
             term.render(&mut c, 3usize);
-            //            assert_eq!(c.x, 3);
+            assert_eq!(c.x, 3);
+
+            let mut c = StatelessComponent::default();
+            term.render(&mut c, ComplexProps::default());
         }
     }
 }
