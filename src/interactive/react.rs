@@ -5,6 +5,14 @@ mod terminal {
 
     use tui::{backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget};
 
+    pub trait Component {
+        type Props;
+
+        fn render<P>(&mut self, props: P, area: Rect, buf: &mut Buffer)
+        where
+            P: AsRef<Self::Props>;
+    }
+
     #[derive(Debug)]
     pub struct Terminal<B>
     where
@@ -58,7 +66,7 @@ mod terminal {
             &mut self.backend
         }
 
-        pub fn flush(&mut self) -> io::Result<()> {
+        pub fn reconcile_and_flush(&mut self) -> io::Result<()> {
             let previous_buffer = &self.buffers[1 - self.current];
             let current_buffer = &self.buffers[self.current];
             let updates = previous_buffer.diff(current_buffer);
@@ -81,17 +89,23 @@ mod terminal {
             Ok(())
         }
 
-        pub fn draw<F>(&mut self, f: F) -> io::Result<()>
+        pub fn render<C>(
+            &mut self,
+            mut component: impl AsMut<C>,
+            props: impl AsRef<C::Props>,
+        ) -> io::Result<()>
         where
-            F: FnOnce(),
+            C: Component,
         {
             // Autoresize - otherwise we get glitches if shrinking or potential desync between widgets
             // and the terminal (if growing), which may OOB.
             self.autoresize()?;
 
-            f();
+            component
+                .as_mut()
+                .render(props, self.known_size, self.current_buffer_mut());
 
-            self.flush()?;
+            self.reconcile_and_flush()?;
 
             self.buffers[1 - self.current].reset();
             self.current = 1 - self.current;
