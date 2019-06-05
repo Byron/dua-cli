@@ -84,7 +84,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             sorting: state.sorting,
             selected: state.selected,
             border_style: entries_style,
-            list: &mut draw_state.entries_list,
+            list_state: &mut draw_state.entries_list,
             is_focussed: if let FocussedPane::Main = state.focussed {
                 true
             } else {

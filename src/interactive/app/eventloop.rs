@@ -175,7 +175,7 @@ impl TerminalApp {
                 self.state.selected =
                     sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting)
                         .get(0)
-                        .map(|(idx, _)| *idx);
+                        .map(|(idx, _, _)| *idx);
             }
             None => self.state.message = Some("Top level reached".into()),
         }
@@ -194,7 +194,7 @@ impl TerminalApp {
         if let Some(new_root) = self.state.selected {
             let entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
             match entries.get(0) {
-                Some((next_selection, _)) => {
+                Some((next_selection, _, _)) => {
                     self.state.root = new_root;
                     self.state.selected = Some(*next_selection);
                 }
@@ -219,7 +219,7 @@ impl TerminalApp {
         let next_selected_pos = match self.state.selected {
             Some(ref selected) => entries
                 .iter()
-                .find_position(|(idx, _)| *idx == *selected)
+                .find_position(|(idx, _, _)| *idx == *selected)
                 .map(|(idx, _)| match direction {
                     CursorDirection::PageDown => idx.saturating_add(10),
                     CursorDirection::Down => idx.saturating_add(1),
@@ -232,7 +232,7 @@ impl TerminalApp {
         self.state.selected = entries
             .get(next_selected_pos)
             .or(entries.last())
-            .map(|(idx, _)| *idx)
+            .map(|(idx, _, _)| *idx)
             .or(self.state.selected)
     }
 
@@ -271,7 +271,7 @@ impl TerminalApp {
         let root = traversal.root_index;
         let selected = sorted_entries(&traversal.tree, root, sorting)
             .get(0)
-            .map(|(idx, _)| *idx);
+            .map(|(idx, _, _)| *idx);
         display_options.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
             state: AppState {

@@ -19,7 +19,7 @@ pub struct Entries<'a, 'b> {
     pub display: DisplayOptions,
     pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
-    pub list: &'b mut ListState,
+    pub list_state: &'b mut ListState,
     pub border_style: Style,
     pub is_focussed: bool,
 }
@@ -33,7 +33,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             sorting,
             selected,
             border_style,
-            list,
+            list_state,
             is_focussed,
         } = self;
         let is_top = |node_idx| {
@@ -44,7 +44,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
         let path_of = |node_idx| dua::path_of(tree, node_idx);
 
         let entries = sorted_entries(tree, *root, *sorting);
-        let total: u64 = entries.iter().map(|(_, w)| w.size).sum();
+        let total: u64 = entries.iter().map(|(_, w, _)| w.size).sum();
         let title = match path_of(*root).to_string_lossy().to_string() {
             ref p if p.is_empty() => Path::new(".")
                 .canonicalize()
@@ -57,12 +57,12 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             .borders(Borders::ALL)
             .border_style(*border_style)
             .title(&title);
-        let offset = list
+        let offset = list_state
             .update(
                 selected.map(|selected| {
                     entries
                         .iter()
-                        .find_position(|(idx, _)| *idx == selected)
+                        .find_position(|(idx, _, _)| *idx == selected)
                         .map(|(idx, _)| idx)
                         .unwrap_or(0)
                 }),
@@ -72,7 +72,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
 
         List {
             block: Some(block),
-            items: entries.iter().skip(offset).map(|(node_idx, w)| {
+            items: entries.iter().skip(offset).map(|(node_idx, w, path)| {
                 let (is_selected, style) = match selected {
                     Some(idx) if *idx == *node_idx => (
                         true,
@@ -95,7 +95,6 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                         },
                     ),
                 };
-                let path = path_of(*node_idx);
 
                 let bytes = Text::Styled(
                     format!(
