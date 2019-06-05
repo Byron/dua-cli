@@ -1,5 +1,5 @@
 use crate::interactive::react::Component;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::cell::{Cell, RefCell};
 use tui::style::Color;
 use tui::{
@@ -20,8 +20,15 @@ pub struct ReactHelpPaneProps {
 
 impl Component for ReactHelpPane {
     type Props = ReactHelpPaneProps;
+    type PropsMut = ();
 
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+    fn render(
+        &mut self,
+        props: impl Borrow<Self::Props>,
+        _props_mut: impl BorrowMut<Self::PropsMut>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         let (texts, num_lines) = {
             let num_lines = Cell::new(0u16);
             let count = |n| num_lines.set(num_lines.get() + n);

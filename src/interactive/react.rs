@@ -1,13 +1,22 @@
 mod terminal {
+    //! Derived from TUI-rs, license: MIT, Copyright (c) 2016 Florian Dehau
     use log::error;
     use std::{borrow::Borrow, io};
 
+    use std::borrow::BorrowMut;
     use tui::{backend::Backend, buffer::Buffer, layout::Rect};
 
     pub trait Component {
         type Props;
+        type PropsMut;
 
-        fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer);
+        fn render(
+            &mut self,
+            props: impl Borrow<Self::Props>,
+            props_mut: impl BorrowMut<Self::PropsMut>,
+            area: Rect,
+            buf: &mut Buffer,
+        );
     }
 
     #[derive(Debug)]
@@ -82,6 +91,7 @@ mod terminal {
             &mut self,
             component: &mut C,
             props: impl Borrow<C::Props>,
+            props_mut: impl BorrowMut<C::PropsMut>,
         ) -> io::Result<()>
         where
             C: Component,
@@ -90,7 +100,7 @@ mod terminal {
             // and the terminal (if growing), which may OOB.
             self.autoresize()?;
 
-            component.render(props, self.known_size, self.current_buffer_mut());
+            component.render(props, props_mut, self.known_size, self.current_buffer_mut());
 
             self.reconcile_and_flush()?;
 
@@ -149,15 +159,29 @@ mod terminal {
 
         impl Component for StatefulComponent {
             type Props = usize;
+            type PropsMut = ();
 
-            fn render(&mut self, props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
+            fn render(
+                &mut self,
+                props: impl Borrow<Self::Props>,
+                _props_mut: impl BorrowMut<Self::PropsMut>,
+                _area: Rect,
+                _buf: &mut Buffer,
+            ) {
                 self.x += *props.borrow();
             }
         }
 
         impl Component for StatelessComponent {
             type Props = ComplexProps;
-            fn render(&mut self, _props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
+            type PropsMut = ();
+            fn render(
+                &mut self,
+                props: impl Borrow<Self::Props>,
+                _props_mut: impl BorrowMut<Self::PropsMut>,
+                area: Rect,
+                _buf: &mut Buffer,
+            ) {
                 // does not matter - we want to see it compiles essentially
             }
         }
@@ -167,11 +191,11 @@ mod terminal {
             let mut term = Terminal::new(TestBackend::new(20, 20)).unwrap();
             let mut c = StatefulComponent::default();
 
-            term.render(&mut c, 3usize).ok();
+            term.render(&mut c, 3usize, ()).ok();
             assert_eq!(c.x, 3);
 
             let mut c = StatelessComponent::default();
-            term.render(&mut c, ComplexProps::default()).ok();
+            term.render(&mut c, ComplexProps::default(), ()).ok();
         }
     }
 }

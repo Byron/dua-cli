@@ -1,5 +1,5 @@
 use crate::{interactive::react::Component, ByteFormat};
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use tui::widgets::{Paragraph, Text};
 use tui::{
     buffer::Buffer,
@@ -20,8 +20,15 @@ pub struct ReactFooterProps {
 
 impl Component for ReactFooter {
     type Props = ReactFooterProps;
+    type PropsMut = ();
 
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+    fn render(
+        &mut self,
+        props: impl Borrow<Self::Props>,
+        props_mut: impl BorrowMut<Self::PropsMut>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         let ReactFooterProps {
             total_bytes,
             entries_traversed,
