@@ -1,16 +1,13 @@
 use crate::interactive::{
     sorted_entries,
-    widgets::{ReactHelpPane, ReactMainWindow, ReactMainWindowProps},
-    ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
+    widgets::{ReactMainWindow, ReactMainWindowProps},
+    ByteVisualization, CursorDirection, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
-    path_of,
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use itertools::Itertools;
-use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::backend::Backend;
@@ -46,15 +43,8 @@ pub struct TerminalApp {
     pub window: ReactMainWindow,
 }
 
-enum CursorDirection {
-    PageDown,
-    Down,
-    Up,
-    PageUp,
-}
-
 impl TerminalApp {
-    fn draw_window<B>(
+    pub fn draw_window<B>(
         window: &mut ReactMainWindow,
         props: ReactMainWindowProps,
         terminal: &mut Terminal<B>,
@@ -135,106 +125,6 @@ impl TerminalApp {
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
         })
-    }
-
-    fn cycle_focus(&mut self) {
-        use FocussedPane::*;
-        self.state.focussed = match (self.state.focussed, &self.window.help_pane) {
-            (Main, Some(_)) => Help,
-            (Help, _) => Main,
-            _ => Main,
-        };
-    }
-
-    fn toggle_help_pane(&mut self) {
-        use FocussedPane::*;
-        self.state.focussed = match self.state.focussed {
-            Main => {
-                self.window.help_pane = Some(ReactHelpPane::default());
-                Help
-            }
-            Help => {
-                self.window.help_pane = None;
-                Main
-            }
-        }
-    }
-
-    fn update_message(&mut self) {
-        self.state.message = None;
-    }
-
-    fn open_that(&mut self) {
-        match self.state.selected {
-            Some(ref idx) => {
-                open::that(path_of(&self.traversal.tree, *idx)).ok();
-            }
-            None => {}
-        }
-    }
-
-    fn exit_node(&mut self) {
-        match self
-            .traversal
-            .tree
-            .neighbors_directed(self.state.root, Direction::Incoming)
-            .next()
-        {
-            Some(parent_idx) => {
-                self.state.root = parent_idx;
-                self.state.entries =
-                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting);
-                self.state.selected = self.state.entries.get(0).map(|b| b.index);
-            }
-            None => self.state.message = Some("Top level reached".into()),
-        }
-    }
-
-    fn enter_node(&mut self) {
-        if let Some(new_root) = self.state.selected {
-            self.state.entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
-            match self.state.entries.get(0) {
-                Some(b) => {
-                    self.state.root = new_root;
-                    self.state.selected = Some(b.index);
-                }
-                None => self.state.message = Some("Entry is a file or an empty directory".into()),
-            }
-        }
-    }
-
-    fn scroll_help(&mut self, direction: CursorDirection) {
-        use CursorDirection::*;
-        if let Some(ref mut pane) = self.window.help_pane {
-            pane.scroll = match direction {
-                Down => pane.scroll.saturating_add(1),
-                Up => pane.scroll.saturating_sub(1),
-                PageDown => pane.scroll.saturating_add(10),
-                PageUp => pane.scroll.saturating_sub(10),
-            };
-        }
-    }
-
-    fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
-        let next_selected_pos = match self.state.selected {
-            Some(ref selected) => entries
-                .iter()
-                .find_position(|b| b.index == *selected)
-                .map(|(idx, _)| match direction {
-                    CursorDirection::PageDown => idx.saturating_add(10),
-                    CursorDirection::Down => idx.saturating_add(1),
-                    CursorDirection::Up => idx.saturating_sub(1),
-                    CursorDirection::PageUp => idx.saturating_sub(10),
-                })
-                .unwrap_or(0),
-            None => 0,
-        };
-        self.state.selected = entries
-            .get(next_selected_pos)
-            .or(entries.last())
-            .map(|b| b.index)
-            .or(self.state.selected)
     }
 
     pub fn initialize<B>(
