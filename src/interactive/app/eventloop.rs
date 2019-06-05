@@ -77,7 +77,7 @@ impl TerminalApp {
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        use termion::event::Key::{Char, Ctrl, Down, Esc, PageDown, PageUp, Up};
+        use termion::event::Key::{Backspace, Char, Ctrl, Down, Esc, PageDown, PageUp, Up};
         use FocussedPane::*;
 
         self.draw(terminal)?;
@@ -109,8 +109,8 @@ impl TerminalApp {
                 },
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(),
-                    Char('u') => self.exit_node(),
-                    Char('o') => self.enter_node(),
+                    Char('u') | Backspace => self.exit_node(),
+                    Char('o') | Char('\n') => self.enter_node(),
                     Ctrl('u') => self.change_entry_selection(CursorDirection::PageUp),
                     Char('k') => self.change_entry_selection(CursorDirection::Up),
                     Char('j') => self.change_entry_selection(CursorDirection::Down),

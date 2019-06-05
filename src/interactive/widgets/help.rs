@@ -70,8 +70,9 @@ impl ToplevelComponent for ReactHelpPane {
             {
                 hotkey("j/<down>", "move down an entry");
                 hotkey("k/<up>", "move up an entry");
-                hotkey("o", "descent into the selected directory");
+                hotkey("o/<enter>", "descent into the selected directory");
                 hotkey("u", "ascent one level into the parent directory");
+                hotkey("<backspace>", "^");
                 hotkey("Ctrl + d", "move down 10 entries at once");
                 hotkey("<Page Down>", "^");
                 hotkey("Ctrl + u", "move up 10 entries at once");
