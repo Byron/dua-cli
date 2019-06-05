@@ -1,7 +1,6 @@
 use crate::interactive::{
-    sorted_entries,
     widgets::{fill_background_to_right, List, ListState},
-    DisplayOptions, EntryDataBundle, SortMode,
+    DisplayOptions, EntryDataBundle,
 };
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
@@ -17,9 +16,9 @@ pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
-    pub sorting: SortMode,
     pub selected: Option<TreeIndex>,
     pub list_state: &'b mut ListState,
+    pub entries: &'a [EntryDataBundle],
     pub border_style: Style,
     pub is_focussed: bool,
 }
@@ -30,7 +29,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
             tree,
             root,
             display,
-            sorting,
+            entries,
             selected,
             border_style,
             list_state,
@@ -41,11 +40,9 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                 .next()
                 .is_none()
         };
-        let path_of = |node_idx| dua::path_of(tree, node_idx);
 
-        let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|b| b.data.size).sum();
-        let title = match path_of(*root).to_string_lossy().to_string() {
+        let title = match dua::path_of(tree, *root).to_string_lossy().to_string() {
             ref p if p.is_empty() => Path::new(".")
                 .canonicalize()
                 .map(|p| p.to_string_lossy().to_string())

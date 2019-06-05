@@ -81,7 +81,7 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
             tree: &tree,
             root: state.root,
             display: *display,
-            sorting: state.sorting,
+            entries: &state.entries,
             selected: state.selected,
             border_style: entries_style,
             list_state: &mut draw_state.entries_list,
