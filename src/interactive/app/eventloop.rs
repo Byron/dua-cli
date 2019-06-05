@@ -136,6 +136,7 @@ impl TerminalApp {
         B: Backend,
     {
         terminal.hide_cursor()?;
+        terminal.clear()?;
         let mut display_options: DisplayOptions = options.clone().into();
         display_options.byte_vis = ByteVisualization::Bar;
         let mut window = ReactMainWindow::default();
