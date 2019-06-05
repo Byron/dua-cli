@@ -1,10 +1,11 @@
-use crate::{
-    interactive::{
-        widgets::{fill_background_to_right, List, ListState},
-        DisplayOptions, SortMode,
-    },
+use crate::interactive::{
+    widgets::{fill_background_to_right, List, ListState},
+    DisplayOptions,
+};
+use dua::{
     sorted_entries,
     traverse::{Tree, TreeIndex},
+    SortMode,
 };
 use itertools::Itertools;
 use std::path::Path;
@@ -43,7 +44,7 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                 .next()
                 .is_none()
         };
-        let path_of = |node_idx| crate::common::path_of(tree, node_idx);
+        let path_of = |node_idx| dua::path_of(tree, node_idx);
 
         let entries = sorted_entries(tree, *root, *sorting);
         let total: u64 = entries.iter().map(|(_, w)| w.size).sum();

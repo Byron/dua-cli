@@ -1,10 +1,8 @@
-use crate::{
-    interactive::{
-        widgets::{Entries, Footer, Header, HelpPane, ListState},
-        AppState, DisplayOptions, FocussedPane,
-    },
-    traverse::Traversal,
+use crate::interactive::{
+    widgets::{Entries, Footer, Header, HelpPane, ListState},
+    AppState, DisplayOptions, FocussedPane,
 };
+use dua::traverse::Traversal;
 use tui::style::{Color, Style};
 use tui::{
     buffer::Buffer,

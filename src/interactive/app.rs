@@ -1,8 +1,11 @@
 use crate::{
     interactive::widgets::{DrawState, HelpPaneState, MainWindow},
+    ByteFormat,
+};
+use dua::{
     path_of, sorted_entries,
     traverse::{Traversal, TreeIndex},
-    ByteFormat, WalkOptions, WalkResult,
+    SortMode, WalkOptions, WalkResult,
 };
 use failure::Error;
 use itertools::Itertools;
@@ -10,28 +13,6 @@ use petgraph::Direction;
 use std::{fmt, io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::{backend::Backend, widgets::Widget, Terminal};
-
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
-pub enum SortMode {
-    SizeDescending,
-    SizeAscending,
-}
-
-impl SortMode {
-    pub fn toggle_size(&mut self) {
-        use SortMode::*;
-        *self = match self {
-            SizeAscending => SizeDescending,
-            SizeDescending => SizeAscending,
-        }
-    }
-}
-
-impl Default for SortMode {
-    fn default() -> Self {
-        SortMode::SizeDescending
-    }
-}
 
 #[derive(Clone, Copy)]
 pub enum ByteVisualization {

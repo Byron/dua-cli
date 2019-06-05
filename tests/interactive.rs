@@ -1,8 +1,8 @@
 mod app {
     use dua::{
-        interactive::{SortMode, TerminalApp},
+        interactive::TerminalApp,
         traverse::{EntryData, Tree, TreeIndex},
-        ByteFormat, Color, TraversalSorting, WalkOptions,
+        ByteFormat, Color, SortMode, TraversalSorting, WalkOptions,
     };
     use failure::Error;
     use petgraph::prelude::NodeIndex;

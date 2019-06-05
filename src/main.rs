@@ -2,16 +2,16 @@ extern crate failure;
 extern crate failure_tools;
 extern crate structopt;
 
-use structopt::StructOpt;
-
+use crate::interactive::TerminalApp;
 use dua::{ByteFormat, Color, TraversalSorting};
 use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
-use termion::input::TermRead;
-use termion::{raw::IntoRawMode, screen::AlternateScreen};
+use structopt::StructOpt;
+use termion::{input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{backend::TermionBackend, Terminal};
 
+mod interactive;
 mod options;
 
 fn run() -> Result<(), Error> {
@@ -39,11 +39,7 @@ fn run() -> Result<(), Error> {
                 Terminal::new(backend)
                     .with_context(|_| "Interactive mode requires a connected terminal")?
             };
-            let mut app = dua::interactive::TerminalApp::initialize(
-                &mut terminal,
-                walk_options,
-                paths_from(input)?,
-            )?;
+            let mut app = TerminalApp::initialize(&mut terminal, walk_options, paths_from(input)?)?;
             app.process_events(&mut terminal, io::stdin().keys())?
         }
         Some(Aggregate {

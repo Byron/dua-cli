@@ -1,14 +1,33 @@
-use crate::{
-    interactive::SortMode,
-    traverse::{EntryData, Tree, TreeIndex},
-};
+use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
 use itertools::Itertools;
 use jwalk::WalkDir;
 use petgraph::Direction;
 use std::{fmt, path::Path, path::PathBuf};
 
-pub(crate) fn path_of(tree: &Tree, mut node_idx: TreeIndex) -> PathBuf {
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
+pub enum SortMode {
+    SizeDescending,
+    SizeAscending,
+}
+
+impl SortMode {
+    pub fn toggle_size(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            SizeAscending => SizeDescending,
+            SizeDescending => SizeAscending,
+        }
+    }
+}
+
+impl Default for SortMode {
+    fn default() -> Self {
+        SortMode::SizeDescending
+    }
+}
+
+pub fn path_of(tree: &Tree, mut node_idx: TreeIndex) -> PathBuf {
     const THE_ROOT: usize = 1;
     let mut entries = Vec::new();
 
@@ -36,7 +55,7 @@ pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
     get_entry_or_panic(tree, node_idx).size
 }
 
-pub(crate) fn sorted_entries(
+pub fn sorted_entries(
     tree: &Tree,
     node_idx: TreeIndex,
     sorting: SortMode,
