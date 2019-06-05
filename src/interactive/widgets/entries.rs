@@ -6,9 +6,9 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
-    widgets::{Borders, Text},
+    widgets::{Block, Borders, Text},
 };
-use tui_react::{fill_background_to_right, BlockProps, ReactList, ReactListProps};
+use tui_react::{fill_background_to_right, ReactList, ReactListProps};
 
 pub struct ReactEntriesProps<'a> {
     pub tree: &'a Tree,
@@ -58,12 +58,10 @@ impl ReactEntries {
             p => p,
         };
         let title = format!(" {} ", title);
-        let block = BlockProps {
-            borders: Borders::ALL,
-            border_style: *border_style,
-            title: Some(&title),
-            ..Default::default()
-        };
+        let block = Block::default()
+            .title(&title)
+            .border_style(*border_style)
+            .borders(Borders::ALL);
         let entry_in_view = selected.map(|selected| {
             entries
                 .iter()

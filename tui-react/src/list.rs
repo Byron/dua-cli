@@ -1,10 +1,8 @@
-use super::BlockProps;
-use std::borrow::Borrow;
 use std::iter::repeat;
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Paragraph, Text, Widget},
+    widgets::{Block, Paragraph, Text, Widget},
 };
 
 pub fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
@@ -38,14 +36,14 @@ impl ReactList {
 
 #[derive(Default)]
 pub struct ReactListProps<'b> {
-    pub block: Option<BlockProps<'b>>,
+    pub block: Option<Block<'b>>,
     pub entry_in_view: Option<usize>,
 }
 
 impl ReactList {
     pub fn render<'a, 't>(
         &mut self,
-        props: impl Borrow<ReactListProps<'a>>,
+        props: ReactListProps<'a>,
         items: impl IntoIterator<Item = Vec<Text<'t>>>,
         area: Rect,
         buf: &mut Buffer,
@@ -53,16 +51,16 @@ impl ReactList {
         let ReactListProps {
             block,
             entry_in_view,
-        } = props.borrow();
+        } = props;
 
         let list_area = match block {
-            Some(b) => {
-                b.render(area, buf);
+            Some(mut b) => {
+                b.draw(area, buf);
                 b.inner(area)
             }
             None => area,
         };
-        self.offset = self.list_offset_for(*entry_in_view, list_area.height as usize);
+        self.offset = self.list_offset_for(entry_in_view, list_area.height as usize);
 
         if list_area.width < 1 || list_area.height < 1 {
             return;
