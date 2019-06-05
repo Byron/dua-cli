@@ -25,7 +25,7 @@ impl Component for ReactHelpPane {
     fn render(
         &mut self,
         props: impl Borrow<Self::Props>,
-        _props_mut: &mut Self::PropsMut,
+        _props_mut: impl BorrowMut<Self::PropsMut>,
         area: Rect,
         buf: &mut Buffer,
     ) {

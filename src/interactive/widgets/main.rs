@@ -36,7 +36,7 @@ impl<'a, 'b> Component for ReactMainWindow {
     fn render(
         &mut self,
         props: impl Borrow<TerminalApp>,
-        _props_mut: &mut Self::PropsMut,
+        _props_mut: impl BorrowMut<Self::PropsMut>,
         area: Rect,
         buf: &mut Buffer,
     ) {
@@ -112,7 +112,7 @@ impl<'a, 'b> Component for ReactMainWindow {
             let props = ReactHelpPaneProps {
                 border_style: help_style,
             };
-            pane.render(props, &mut (), help_area, buf);
+            pane.render(props, (), help_area, buf);
         }
 
         ReactFooter.render(
@@ -122,7 +122,7 @@ impl<'a, 'b> Component for ReactMainWindow {
                 format: display.byte_format,
                 message: state.message.clone(),
             },
-            &mut (),
+            (),
             footer_area,
             buf,
         );

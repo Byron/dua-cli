@@ -25,7 +25,7 @@ impl Component for ReactFooter {
     fn render(
         &mut self,
         props: impl Borrow<Self::Props>,
-        props_mut: &mut Self::PropsMut,
+        props_mut: impl BorrowMut<Self::PropsMut>,
         area: Rect,
         buf: &mut Buffer,
     ) {
