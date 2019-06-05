@@ -1,16 +1,15 @@
 #[allow(unused)]
 mod terminal {
     use log::error;
-    use std::io;
+    use std::{borrow::Borrow, io};
 
+    use std::borrow::BorrowMut;
     use tui::{backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget};
 
     pub trait Component {
         type Props;
 
-        fn render<P>(&mut self, props: P, area: Rect, buf: &mut Buffer)
-        where
-            P: AsRef<Self::Props>;
+        fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer);
     }
 
     #[derive(Debug)]
@@ -91,8 +90,8 @@ mod terminal {
 
         pub fn render<C>(
             &mut self,
-            mut component: impl AsMut<C>,
-            props: impl AsRef<C::Props>,
+            mut component: impl BorrowMut<C>,
+            props: impl Borrow<C::Props>,
         ) -> io::Result<()>
         where
             C: Component,
@@ -102,7 +101,7 @@ mod terminal {
             self.autoresize()?;
 
             component
-                .as_mut()
+                .borrow_mut()
                 .render(props, self.known_size, self.current_buffer_mut());
 
             self.reconcile_and_flush()?;
@@ -135,6 +134,34 @@ mod terminal {
         }
         pub fn size(&self) -> io::Result<Rect> {
             self.backend.size()
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use tui::backend::TestBackend;
+
+        #[derive(Default)]
+        struct StatefulComponent {
+            x: usize,
+        }
+
+        impl Component for StatefulComponent {
+            type Props = usize;
+
+            fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+                self.x += *props.borrow();
+            }
+        }
+
+        #[test]
+        fn it_does_render() {
+            let mut term = Terminal::new(TestBackend::new(20, 20)).unwrap();
+            let mut c = StatefulComponent::default();
+
+            term.render(&mut c, 3usize);
+            //            assert_eq!(c.x, 3);
         }
     }
 }
