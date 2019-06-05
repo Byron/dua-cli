@@ -1,4 +1,4 @@
-use crate::interactive::{SortMode, TerminalApp};
+use crate::interactive::{react::Terminal, SortMode, TerminalApp};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, Color, TraversalSorting, WalkOptions,
@@ -8,7 +8,7 @@ use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
 use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
 use termion::input::TermRead;
-use tui::{backend::TestBackend, Terminal};
+use tui::backend::TestBackend;
 
 const FIXTURE_PATH: &'static str = "tests/fixtures";
 

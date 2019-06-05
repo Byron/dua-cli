@@ -1,8 +1,10 @@
 use crate::interactive::{
+    react::Component,
     widgets::{Entries, Footer, Header, HelpPane, ListState},
-    AppState, DisplayOptions, FocussedPane,
+    FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
+use std::borrow::Borrow;
 use tui::style::{Color, Style};
 use tui::{
     buffer::Buffer,
@@ -13,22 +15,22 @@ use tui::{
 
 /// The state that can be mutated while drawing
 /// This is easiest compared to alternatives, but at least it's restricted to a subset of the state
-#[derive(Default)]
+#[derive(Default, Clone)] // TODO: remove Clone derive
 pub struct DrawState {
     entries_list: ListState,
     pub help_scroll: u16,
 }
 
-pub struct MainWindow<'a, 'b, 'c> {
-    pub traversal: &'a Traversal,
-    pub display: DisplayOptions,
-    pub state: &'b AppState,
-    pub draw_state: &'c mut DrawState,
+#[derive(Default, Clone)] // TODO: remove clone derive
+pub struct ReactMainWindow {
+    pub draw_state: DrawState,
 }
 
-impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        let Self {
+impl<'a, 'b> Component for ReactMainWindow {
+    type Props = TerminalApp;
+
+    fn render(&mut self, props: impl Borrow<TerminalApp>, area: Rect, buf: &mut Buffer) {
+        let TerminalApp {
             traversal:
                 Traversal {
                     tree,
@@ -38,8 +40,10 @@ impl<'a, 'b, 'c> Widget for MainWindow<'a, 'b, 'c> {
                 },
             display,
             state,
-            ref mut draw_state,
-        } = self;
+            ..
+        } = props.borrow();
+        let draw_state = &mut self.draw_state;
+
         let regions = Layout::default()
             .direction(Direction::Vertical)
             .constraints(

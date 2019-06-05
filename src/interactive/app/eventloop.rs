@@ -1,6 +1,7 @@
 use crate::interactive::{
+    react::Terminal,
     sorted_entries,
-    widgets::{DrawState, HelpPaneState, MainWindow},
+    widgets::{HelpPaneState, ReactMainWindow},
     ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
@@ -13,7 +14,7 @@ use itertools::Itertools;
 use petgraph::Direction;
 use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
-use tui::{backend::Backend, widgets::Widget, Terminal};
+use tui::backend::Backend;
 
 #[derive(Copy, Clone)]
 pub enum FocussedPane {
@@ -43,7 +44,7 @@ pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
     pub state: AppState,
-    pub draw_state: DrawState,
+    pub window: ReactMainWindow,
 }
 
 enum CursorDirection {
@@ -58,24 +59,9 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        let Self {
-            traversal,
-            display,
-            state,
-            ref mut draw_state,
-        } = self;
-
-        terminal.draw(|mut f| {
-            let full_screen = f.size();
-            MainWindow {
-                traversal,
-                display: *display,
-                state: &state,
-                draw_state,
-            }
-            .render(&mut f, full_screen)
-        })?;
-
+        let mut window = self.window.clone(); // TODO: fix this - we shouldn't have to pass ourselves as props!
+        terminal.render(&mut window, &*self)?;
+        self.window = window;
         Ok(())
     }
     pub fn process_events<B, R>(
@@ -205,8 +191,8 @@ impl TerminalApp {
 
     fn scroll_help(&mut self, direction: CursorDirection) {
         use CursorDirection::*;
-        let scroll = self.draw_state.help_scroll;
-        self.draw_state.help_scroll = match direction {
+        let scroll = self.window.draw_state.help_scroll; // TODO: don't do this - make it private when ready
+        self.window.draw_state.help_scroll = match direction {
             Down => scroll.saturating_add(1),
             Up => scroll.saturating_sub(1),
             PageDown => scroll.saturating_add(10),
@@ -247,24 +233,22 @@ impl TerminalApp {
         terminal.hide_cursor()?;
         let mut display_options: DisplayOptions = options.clone().into();
         display_options.byte_vis = ByteVisualization::Bar;
+        let mut window = ReactMainWindow::default();
+
         let traversal = Traversal::from_walk(options, input, move |traversal| {
-            terminal.draw(|mut f| {
-                let full_screen = f.size();
-                let state = AppState {
-                    root: traversal.root_index,
-                    sorting: Default::default(),
-                    message: Some("-> scanning <-".into()),
-                    ..Default::default()
-                };
-                MainWindow {
-                    traversal,
-                    display: display_options,
-                    state: &state,
-                    draw_state: &mut Default::default(),
-                }
-                .render(&mut f, full_screen)
-            })?;
-            Ok(())
+            let state = AppState {
+                root: traversal.root_index,
+                sorting: Default::default(),
+                message: Some("-> scanning <-".into()),
+                ..Default::default()
+            };
+            let app = TerminalApp {
+                traversal: traversal.clone(), // TODO absolutely fix this! We should not rely on this anymore when done
+                display: display_options,
+                state,
+                window: Default::default(),
+            };
+            terminal.render(&mut window, &app).map_err(Into::into)
         })?;
 
         let sorting = Default::default();
@@ -282,7 +266,7 @@ impl TerminalApp {
             },
             display: display_options,
             traversal,
-            draw_state: Default::default(),
+            window: Default::default(),
         })
     }
 }

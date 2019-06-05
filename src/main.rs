@@ -2,14 +2,14 @@ extern crate failure;
 extern crate failure_tools;
 extern crate structopt;
 
-use crate::interactive::TerminalApp;
+use crate::interactive::{react::Terminal, TerminalApp};
 use dua::{ByteFormat, Color, TraversalSorting};
 use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
 use termion::{input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
-use tui::{backend::TermionBackend, Terminal};
+use tui::backend::TermionBackend;
 
 mod interactive;
 mod options;

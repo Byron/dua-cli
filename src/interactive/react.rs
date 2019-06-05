@@ -1,10 +1,8 @@
-#[allow(unused)]
 mod terminal {
     use log::error;
     use std::{borrow::Borrow, io};
 
-    use std::borrow::BorrowMut;
-    use tui::{backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget};
+    use tui::{backend::Backend, buffer::Buffer, layout::Rect};
 
     pub trait Component {
         type Props;
@@ -17,7 +15,7 @@ mod terminal {
     where
         B: Backend,
     {
-        backend: B,
+        pub backend: B,
         buffers: [Buffer; 2],
         current: usize,
         hidden_cursor: bool,
@@ -57,14 +55,6 @@ mod terminal {
             &mut self.buffers[self.current]
         }
 
-        pub fn backend(&self) -> &B {
-            &self.backend
-        }
-
-        pub fn backend_mut(&mut self) -> &mut B {
-            &mut self.backend
-        }
-
         pub fn reconcile_and_flush(&mut self) -> io::Result<()> {
             let previous_buffer = &self.buffers[1 - self.current];
             let current_buffer = &self.buffers[self.current];
@@ -90,7 +80,7 @@ mod terminal {
 
         pub fn render<C>(
             &mut self,
-            mut component: &mut C,
+            component: &mut C,
             props: impl Borrow<C::Props>,
         ) -> io::Result<()>
         where
@@ -121,12 +111,15 @@ mod terminal {
             self.hidden_cursor = false;
             Ok(())
         }
+        #[allow(unused)]
         pub fn get_cursor(&mut self) -> io::Result<(u16, u16)> {
             self.backend.get_cursor()
         }
+        #[allow(unused)]
         pub fn set_cursor(&mut self, x: u16, y: u16) -> io::Result<()> {
             self.backend.set_cursor(x, y)
         }
+        #[allow(unused)]
         pub fn clear(&mut self) -> io::Result<()> {
             self.backend.clear()
         }
@@ -157,14 +150,14 @@ mod terminal {
         impl Component for StatefulComponent {
             type Props = usize;
 
-            fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+            fn render(&mut self, props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
                 self.x += *props.borrow();
             }
         }
 
         impl Component for StatelessComponent {
             type Props = ComplexProps;
-            fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+            fn render(&mut self, _props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
                 // does not matter - we want to see it compiles essentially
             }
         }
@@ -174,11 +167,11 @@ mod terminal {
             let mut term = Terminal::new(TestBackend::new(20, 20)).unwrap();
             let mut c = StatefulComponent::default();
 
-            term.render(&mut c, 3usize);
+            term.render(&mut c, 3usize).ok();
             assert_eq!(c.x, 3);
 
             let mut c = StatelessComponent::default();
-            term.render(&mut c, ComplexProps::default());
+            term.render(&mut c, ComplexProps::default()).ok();
         }
     }
 }

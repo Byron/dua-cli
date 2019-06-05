@@ -5,7 +5,7 @@ use tui::{
     widgets::{Block, Paragraph, Text, Widget},
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)] // TODO: remove Clone derive
 pub struct ListState {
     /// The index at which the list last started. Used for scrolling
     pub start_index: usize,
