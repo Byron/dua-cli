@@ -1,4 +1,5 @@
-use crate::ByteFormat;
+use crate::{interactive::react::Component, ByteFormat};
+use std::borrow::Borrow;
 use tui::widgets::{Paragraph, Text};
 use tui::{
     buffer::Buffer,
@@ -8,31 +9,41 @@ use tui::{
     widgets::Widget,
 };
 
-pub struct Footer {
+pub struct ReactFooter;
+
+pub struct ReactFooterProps {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
     pub message: Option<String>,
 }
 
-impl Widget for Footer {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        assert_eq!(area.height, 1, "The footer must be a line");
+impl Component for ReactFooter {
+    type Props = ReactFooterProps;
+
+    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+        let ReactFooterProps {
+            total_bytes,
+            entries_traversed,
+            format,
+            message,
+        } = props.borrow();
+
         let bg_color = Color::White;
         let text_color = Color::Black;
         let lines = [
             Some(Text::Raw(
                 format!(
                     " Total disk usage: {}  Entries: {}   ",
-                    match self.total_bytes {
-                        Some(b) => format!("{}", self.format.display(b)).to_owned(),
+                    match total_bytes {
+                        Some(b) => format!("{}", format.display(*b)).to_owned(),
                         None => "-".to_owned(),
                     },
-                    self.entries_traversed,
+                    entries_traversed,
                 )
                 .into(),
             )),
-            self.message.as_ref().map(|m| {
+            message.as_ref().map(|m| {
                 Text::Styled(
                     m.into(),
                     Style {

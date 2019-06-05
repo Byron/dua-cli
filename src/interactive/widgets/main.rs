@@ -1,6 +1,9 @@
 use crate::interactive::{
     react::Component,
-    widgets::{Entries, Footer, Header, ListState, ReactHelpPane, ReactHelpPaneProps},
+    widgets::{
+        Entries, Header, ListState, ReactFooter, ReactFooterProps, ReactHelpPane,
+        ReactHelpPaneProps,
+    },
     FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
@@ -104,12 +107,15 @@ impl<'a, 'b> Component for ReactMainWindow {
             pane.render(props, help_area, buf);
         }
 
-        Footer {
-            total_bytes: *total_bytes,
-            entries_traversed: *entries_traversed,
-            format: display.byte_format,
-            message: state.message.clone(),
-        }
-        .draw(footer_area, buf);
+        ReactFooter.render(
+            ReactFooterProps {
+                total_bytes: *total_bytes,
+                entries_traversed: *entries_traversed,
+                format: display.byte_format,
+                message: state.message.clone(),
+            },
+            footer_area,
+            buf,
+        );
     }
 }
