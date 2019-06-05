@@ -59,7 +59,7 @@ impl TerminalApp {
         B: Backend,
     {
         let mut window = self.window.clone(); // TODO: fix this - we shouldn't have to pass ourselves as props!
-        terminal.render(&mut window, &*self, ())?;
+        terminal.render(&mut window, &*self)?;
         self.window = window;
         Ok(())
     }
@@ -248,7 +248,7 @@ impl TerminalApp {
                 state,
                 window: Default::default(),
             };
-            terminal.render(&mut window, &app, ()).map_err(Into::into)
+            terminal.render(&mut window, &app).map_err(Into::into)
         })?;
 
         let sorting = Default::default();

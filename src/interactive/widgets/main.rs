@@ -7,7 +7,7 @@ use crate::interactive::{
     FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use tui::style::{Color, Style};
 use tui::{
     buffer::Buffer,
@@ -31,15 +31,8 @@ pub struct ReactMainWindow {
 
 impl<'a, 'b> Component for ReactMainWindow {
     type Props = TerminalApp;
-    type PropsMut = ();
 
-    fn render(
-        &mut self,
-        props: impl Borrow<TerminalApp>,
-        _props_mut: impl BorrowMut<Self::PropsMut>,
-        area: Rect,
-        buf: &mut Buffer,
-    ) {
+    fn render(&mut self, props: impl Borrow<TerminalApp>, area: Rect, buf: &mut Buffer) {
         let TerminalApp {
             traversal:
                 Traversal {
@@ -104,7 +97,7 @@ impl<'a, 'b> Component for ReactMainWindow {
             } else {
                 false
             },
-            list: ReactList::default(),
+            list: ReactList::<()>::default(),
         }
         .draw(entries_area, buf);
 
@@ -112,7 +105,7 @@ impl<'a, 'b> Component for ReactMainWindow {
             let props = ReactHelpPaneProps {
                 border_style: help_style,
             };
-            pane.render(props, (), help_area, buf);
+            pane.render(props, help_area, buf);
         }
 
         ReactFooter.render(
@@ -122,7 +115,6 @@ impl<'a, 'b> Component for ReactMainWindow {
                 format: display.byte_format,
                 message: state.message.clone(),
             },
-            (),
             footer_area,
             buf,
         );

@@ -1,5 +1,5 @@
 use super::{BlockProps, Component};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::iter::repeat;
 use std::marker::PhantomData;
 use tui::{
@@ -40,33 +40,16 @@ impl<'a, 'b, T> ReactList<'a, 'b, T> {
     }
 }
 
-pub struct ReactListProps<'b> {
+pub struct ReactListProps<'b, 't> {
     pub block: Option<BlockProps<'b>>,
+    pub items: Vec<Vec<Text<'t>>>,
 }
 
-pub struct ReactListPropsMut<'t, I>
-where
-    I: Iterator<Item = Vec<Text<'t>>>,
-{
-    pub items: I,
-}
+impl<'b, 't, T> Component for ReactList<'b, 't, T> {
+    type Props = ReactListProps<'b, 't>;
 
-impl<'b, 't, I> Component for ReactList<'b, 't, I>
-where
-    I: Iterator<Item = Vec<Text<'t>>>,
-{
-    type Props = ReactListProps<'b>;
-    type PropsMut = ReactListPropsMut<'t, I>;
-
-    fn render(
-        &mut self,
-        props: impl Borrow<Self::Props>,
-        mut props_mut: impl BorrowMut<Self::PropsMut>,
-        area: Rect,
-        buf: &mut Buffer,
-    ) {
-        let ReactListProps { block } = props.borrow();
-        let ReactListPropsMut { ref mut items } = props_mut.borrow_mut();
+    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+        let ReactListProps { block, items } = props.borrow();
 
         let list_area = match block {
             Some(b) => {
@@ -80,7 +63,7 @@ where
             return;
         }
 
-        for (i, text_iterator) in items.by_ref().enumerate().take(list_area.height as usize) {
+        for (i, text_iterator) in items.iter().enumerate().take(list_area.height as usize) {
             let (x, y) = (list_area.left(), list_area.top() + i as u16);
             Paragraph::new(text_iterator.iter()).draw(
                 Rect {

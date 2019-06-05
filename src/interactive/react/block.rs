@@ -1,6 +1,6 @@
 //! Derived from TUI-rs, license: MIT, Copyright (c) 2016 Florian Dehau
 use super::Component;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tui::{
     buffer::Buffer, layout::Rect, style::Color, style::Style, symbols::line, widgets::Borders,
@@ -67,21 +67,14 @@ impl<'a> BlockProps<'a> {
     }
 
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        Block::<()>::default().render(self, (), area, buf);
+        Block::<()>::default().render(self, area, buf);
     }
 }
 
 impl<'a, T> Component for Block<'a, T> {
     type Props = BlockProps<'a>;
-    type PropsMut = ();
 
-    fn render(
-        &mut self,
-        props: impl Borrow<Self::Props>,
-        _: impl BorrowMut<Self::PropsMut>,
-        area: Rect,
-        buf: &mut Buffer,
-    ) {
+    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
         if area.width < 2 || area.height < 2 {
             return;
         }
