@@ -1,9 +1,6 @@
 use crate::interactive::{
     react::{Component, ReactList},
-    widgets::{
-        Entries, Header, ListState, ReactFooter, ReactFooterProps, ReactHelpPane,
-        ReactHelpPaneProps,
-    },
+    widgets::{Entries, Header, ReactFooter, ReactFooterProps, ReactHelpPane, ReactHelpPaneProps},
     FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
@@ -16,16 +13,8 @@ use tui::{
     widgets::Widget,
 };
 
-/// The state that can be mutated while drawing
-/// This is easiest compared to alternatives, but at least it's restricted to a subset of the state
-#[derive(Default, Clone)] // TODO: remove Clone derive
-pub struct DrawState {
-    entries_list: ListState,
-}
-
 #[derive(Default, Clone)] // TODO: remove clone derive
 pub struct ReactMainWindow {
-    pub draw_state: DrawState,
     pub help_pane: Option<ReactHelpPane>,
 }
 
@@ -45,8 +34,6 @@ impl<'a, 'b> Component for ReactMainWindow {
             state,
             ..
         } = props.borrow();
-        let draw_state = &mut self.draw_state;
-
         let regions = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -91,7 +78,6 @@ impl<'a, 'b> Component for ReactMainWindow {
             entries: &state.entries,
             selected: state.selected,
             border_style: entries_style,
-            list_state: &mut draw_state.entries_list,
             is_focussed: if let FocussedPane::Main = state.focussed {
                 true
             } else {
