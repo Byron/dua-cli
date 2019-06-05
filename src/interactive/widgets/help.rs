@@ -1,4 +1,4 @@
-use crate::interactive::react::Component;
+use crate::interactive::react::ToplevelComponent;
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use tui::style::Color;
@@ -18,7 +18,7 @@ pub struct ReactHelpPaneProps {
     pub border_style: Style,
 }
 
-impl Component for ReactHelpPane {
+impl ToplevelComponent for ReactHelpPane {
     type Props = ReactHelpPaneProps;
 
     fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {

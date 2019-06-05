@@ -4,7 +4,11 @@ use std::{borrow::Borrow, io};
 
 use tui::{backend::Backend, buffer::Buffer, layout::Rect};
 
-pub trait Component {
+/// A component meant to be rendered by `Terminal::render(...)`.
+/// All other components don't have to implement this trait, and instead
+/// provide a render method by convention, tuned towards their needs using whichever
+/// generic types or lifetimes they need.
+pub trait ToplevelComponent {
     type Props;
 
     fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer);
@@ -80,7 +84,7 @@ where
 
     pub fn render<C>(&mut self, component: &mut C, props: impl Borrow<C::Props>) -> io::Result<()>
     where
-        C: Component,
+        C: ToplevelComponent,
     {
         // Autoresize - otherwise we get glitches if shrinking or potential desync between widgets
         // and the terminal (if growing), which may OOB.
@@ -143,7 +147,7 @@ mod tests {
     #[derive(Default)]
     struct StatelessComponent;
 
-    impl Component for StatefulComponent {
+    impl ToplevelComponent for StatefulComponent {
         type Props = usize;
 
         fn render(&mut self, props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
@@ -151,7 +155,7 @@ mod tests {
         }
     }
 
-    impl Component for StatelessComponent {
+    impl ToplevelComponent for StatelessComponent {
         type Props = ComplexProps;
         fn render(&mut self, _props: impl Borrow<Self::Props>, _area: Rect, _buf: &mut Buffer) {
             // does not matter - we want to see it compiles essentially

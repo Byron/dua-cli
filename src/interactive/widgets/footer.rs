@@ -1,4 +1,4 @@
-use crate::{interactive::react::Component, ByteFormat};
+use crate::{interactive::react::ToplevelComponent, ByteFormat};
 use std::borrow::Borrow;
 use tui::widgets::{Paragraph, Text};
 use tui::{
@@ -18,7 +18,7 @@ pub struct ReactFooterProps {
     pub message: Option<String>,
 }
 
-impl Component for ReactFooter {
+impl ToplevelComponent for ReactFooter {
     type Props = ReactFooterProps;
 
     fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {

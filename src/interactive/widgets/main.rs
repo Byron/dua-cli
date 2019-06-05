@@ -1,5 +1,5 @@
 use crate::interactive::{
-    react::{Component, ReactList},
+    react::{ReactList, ToplevelComponent},
     widgets::{Entries, Header, ReactFooter, ReactFooterProps, ReactHelpPane, ReactHelpPaneProps},
     FocussedPane, TerminalApp,
 };
@@ -18,7 +18,7 @@ pub struct ReactMainWindow {
     pub help_pane: Option<ReactHelpPane>,
 }
 
-impl<'a, 'b> Component for ReactMainWindow {
+impl<'a, 'b> ToplevelComponent for ReactMainWindow {
     type Props = TerminalApp;
 
     fn render(&mut self, props: impl Borrow<TerminalApp>, area: Rect, buf: &mut Buffer) {
