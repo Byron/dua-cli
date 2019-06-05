@@ -164,6 +164,6 @@ where
                 },
             ),
         };
-        list.render(props, props_mut, area, buf);
+        list.render(props, &mut props_mut, area, buf);
     }
 }

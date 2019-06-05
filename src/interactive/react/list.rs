@@ -61,7 +61,7 @@ where
     fn render(
         &mut self,
         props: impl Borrow<Self::Props>,
-        mut props_mut: impl BorrowMut<Self::PropsMut>,
+        mut props_mut: &mut Self::PropsMut,
         area: Rect,
         buf: &mut Buffer,
     ) {

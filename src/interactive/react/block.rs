@@ -67,7 +67,7 @@ impl<'a> BlockProps<'a> {
     }
 
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        Block::<()>::default().render(self, (), area, buf);
+        Block::<()>::default().render(self, &mut (), area, buf);
     }
 }
 
@@ -78,7 +78,7 @@ impl<'a, T> Component for Block<'a, T> {
     fn render(
         &mut self,
         props: impl Borrow<Self::Props>,
-        _: impl BorrowMut<Self::PropsMut>,
+        _: &mut Self::PropsMut,
         area: Rect,
         buf: &mut Buffer,
     ) {

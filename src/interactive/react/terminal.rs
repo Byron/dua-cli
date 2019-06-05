@@ -12,7 +12,7 @@ pub trait Component {
     fn render(
         &mut self,
         props: impl Borrow<Self::Props>,
-        props_mut: impl BorrowMut<Self::PropsMut>,
+        props_mut: &mut Self::PropsMut,
         area: Rect,
         buf: &mut Buffer,
     );
@@ -90,7 +90,7 @@ where
         &mut self,
         component: &mut C,
         props: impl Borrow<C::Props>,
-        props_mut: impl BorrowMut<C::PropsMut>,
+        mut props_mut: impl BorrowMut<C::PropsMut>,
     ) -> io::Result<()>
     where
         C: Component,
@@ -99,7 +99,12 @@ where
         // and the terminal (if growing), which may OOB.
         self.autoresize()?;
 
-        component.render(props, props_mut, self.known_size, self.current_buffer_mut());
+        component.render(
+            props,
+            props_mut.borrow_mut(),
+            self.known_size,
+            self.current_buffer_mut(),
+        );
 
         self.reconcile_and_flush()?;
 
@@ -163,7 +168,7 @@ mod tests {
         fn render(
             &mut self,
             props: impl Borrow<Self::Props>,
-            _props_mut: impl BorrowMut<Self::PropsMut>,
+            _props_mut: &mut Self::PropsMut,
             _area: Rect,
             _buf: &mut Buffer,
         ) {
@@ -177,7 +182,7 @@ mod tests {
         fn render(
             &mut self,
             props: impl Borrow<Self::Props>,
-            _props_mut: impl BorrowMut<Self::PropsMut>,
+            _props_mut: &mut Self::PropsMut,
             area: Rect,
             _buf: &mut Buffer,
         ) {
