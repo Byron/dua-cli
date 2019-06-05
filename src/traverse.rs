@@ -19,7 +19,7 @@ pub struct EntryData {
 const REFRESH_RATE: Duration = Duration::from_millis(100);
 
 /// The result of the previous filesystem traversal
-#[derive(Default, Debug, Clone)] // TODO remove clone bound
+#[derive(Default, Debug)]
 pub struct Traversal {
     /// A tree representing the entire filestem traversal
     pub tree: Tree,

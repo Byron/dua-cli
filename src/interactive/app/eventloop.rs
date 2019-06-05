@@ -1,6 +1,6 @@
 use crate::interactive::{
     sorted_entries,
-    widgets::{ReactHelpPane, ReactMainWindow},
+    widgets::{ReactHelpPane, ReactMainWindow, ReactMainWindowProps},
     ByteVisualization, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
@@ -54,14 +54,29 @@ enum CursorDirection {
 }
 
 impl TerminalApp {
+    fn draw_window<B>(
+        window: &mut ReactMainWindow,
+        props: ReactMainWindowProps,
+        terminal: &mut Terminal<B>,
+    ) -> Result<(), Error>
+    where
+        B: Backend,
+    {
+        let area = terminal.pre_render()?;
+        window.render(props, area, terminal.current_buffer_mut());
+        terminal.post_render()?;
+        Ok(())
+    }
     fn draw<B>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Error>
     where
         B: Backend,
     {
-        let mut window = self.window.clone(); // TODO: fix this - we shouldn't have to pass ourselves as props!
-        terminal.render(&mut window, &*self)?;
-        self.window = window;
-        Ok(())
+        let props = ReactMainWindowProps {
+            traversal: &self.traversal,
+            display: self.display,
+            state: &self.state,
+        };
+        Self::draw_window(&mut self.window, props, terminal)
     }
     pub fn process_events<B, R>(
         &mut self,
@@ -242,13 +257,12 @@ impl TerminalApp {
                 message: Some("-> scanning <-".into()),
                 ..Default::default()
             };
-            let app = TerminalApp {
-                traversal: traversal.clone(), // TODO absolutely fix this! We should not rely on this anymore when done
+            let props = ReactMainWindowProps {
+                traversal,
                 display: display_options,
-                state,
-                window: Default::default(),
+                state: &state,
             };
-            terminal.render(&mut window, &app).map_err(Into::into)
+            Self::draw_window(&mut window, props, terminal)
         })?;
 
         let sorting = Default::default();

@@ -3,7 +3,7 @@ use crate::interactive::{
         Header, ReactEntries, ReactEntriesProps, ReactFooter, ReactFooterProps, ReactHelpPane,
         ReactHelpPaneProps,
     },
-    FocussedPane, TerminalApp,
+    AppState, DisplayOptions, FocussedPane,
 };
 use dua::traverse::Traversal;
 use std::borrow::Borrow;
@@ -16,17 +16,26 @@ use tui::{
 };
 use tui_react::ToplevelComponent;
 
-#[derive(Default, Clone)] // TODO: remove clone derive
+pub struct ReactMainWindowProps<'a> {
+    pub traversal: &'a Traversal,
+    pub display: DisplayOptions,
+    pub state: &'a AppState,
+}
+
+#[derive(Default)]
 pub struct ReactMainWindow {
     pub help_pane: Option<ReactHelpPane>,
     pub entries_pane: ReactEntries,
 }
 
-impl<'a, 'b> ToplevelComponent for ReactMainWindow {
-    type Props = TerminalApp;
-
-    fn render(&mut self, props: impl Borrow<TerminalApp>, area: Rect, buf: &mut Buffer) {
-        let TerminalApp {
+impl ReactMainWindow {
+    pub fn render<'a>(
+        &mut self,
+        props: impl Borrow<ReactMainWindowProps<'a>>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
+        let ReactMainWindowProps {
             traversal:
                 Traversal {
                     tree,
@@ -36,7 +45,6 @@ impl<'a, 'b> ToplevelComponent for ReactMainWindow {
                 },
             display,
             state,
-            ..
         } = props.borrow();
         let regions = Layout::default()
             .direction(Direction::Vertical)

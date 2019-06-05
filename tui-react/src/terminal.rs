@@ -82,16 +82,15 @@ where
         Ok(())
     }
 
-    pub fn render<C>(&mut self, component: &mut C, props: impl Borrow<C::Props>) -> io::Result<()>
-    where
-        C: ToplevelComponent,
-    {
+    /// Get ready for rendering and return the maximum display size as `Rect`
+    pub fn pre_render(&mut self) -> io::Result<Rect> {
         // Autoresize - otherwise we get glitches if shrinking or potential desync between widgets
         // and the terminal (if growing), which may OOB.
         self.autoresize()?;
+        Ok(self.known_size.clone())
+    }
 
-        component.render(props, self.known_size, self.current_buffer_mut());
-
+    pub fn post_render(&mut self) -> io::Result<()> {
         self.reconcile_and_flush()?;
 
         self.buffers[1 - self.current].reset();
@@ -99,6 +98,15 @@ where
 
         self.backend.flush()?;
         Ok(())
+    }
+
+    pub fn render<C>(&mut self, component: &mut C, props: impl Borrow<C::Props>) -> io::Result<()>
+    where
+        C: ToplevelComponent,
+    {
+        self.pre_render()?;
+        component.render(props, self.known_size, self.current_buffer_mut());
+        self.post_render()
     }
 
     pub fn hide_cursor(&mut self) -> io::Result<()> {

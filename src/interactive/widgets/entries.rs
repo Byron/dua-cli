@@ -20,7 +20,7 @@ pub struct ReactEntriesProps<'a> {
     pub is_focussed: bool,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct ReactEntries {
     pub list: ReactList,
 }
