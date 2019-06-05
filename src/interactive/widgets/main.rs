@@ -97,7 +97,7 @@ impl<'a, 'b> Component for ReactMainWindow {
             } else {
                 false
             },
-            list: ReactList::<()>::default(),
+            list: ReactList::default(),
         }
         .draw(entries_area, buf);
 

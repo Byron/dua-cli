@@ -1,7 +1,6 @@
 use super::{BlockProps, Component};
 use std::borrow::Borrow;
 use std::iter::repeat;
-use std::marker::PhantomData;
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -19,14 +18,12 @@ pub fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
 }
 
 #[derive(Default)] // TODO: remove Clone derive
-pub struct ReactList<'a, 'b, T> {
+pub struct ReactList {
     /// The index at which the list last started. Used for scrolling
     start_index: usize,
-    _a: PhantomData<&'a T>,
-    _b: PhantomData<&'b T>,
 }
 
-impl<'a, 'b, T> ReactList<'a, 'b, T> {
+impl ReactList {
     fn update_start_index(&mut self, selected: Option<usize>, height: usize) -> &mut Self {
         self.start_index = match selected {
             Some(pos) => match height as usize {
@@ -45,10 +42,13 @@ pub struct ReactListProps<'b, 't> {
     pub items: Vec<Vec<Text<'t>>>,
 }
 
-impl<'b, 't, T> Component for ReactList<'b, 't, T> {
-    type Props = ReactListProps<'b, 't>;
-
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+impl ReactList {
+    pub fn render<'a, 'b>(
+        &mut self,
+        props: impl Borrow<ReactListProps<'a, 'b>>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         let ReactListProps { block, items } = props.borrow();
 
         let list_area = match block {

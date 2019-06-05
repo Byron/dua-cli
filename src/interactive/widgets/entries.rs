@@ -16,7 +16,7 @@ use tui::{
     widgets::{Borders, Text, Widget},
 };
 
-pub struct Entries<'a, 'b, T> {
+pub struct Entries<'a, 'b> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
@@ -26,10 +26,10 @@ pub struct Entries<'a, 'b, T> {
     pub border_style: Style,
     pub is_focussed: bool,
 
-    pub list: ReactList<'a, 'b, T>,
+    pub list: ReactList,
 }
 
-impl<'a, 'b, T> Widget for Entries<'a, 'b, T> {
+impl<'a, 'b> Widget for Entries<'a, 'b> {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let Self {
             tree,
