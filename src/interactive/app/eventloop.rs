@@ -1,11 +1,15 @@
 use crate::{
-    interactive::widgets::{DrawState, HelpPaneState, MainWindow},
+    interactive::{
+        sorted_entries,
+        widgets::{DrawState, HelpPaneState, MainWindow},
+        SortMode,
+    },
     ByteFormat,
 };
 use dua::{
-    path_of, sorted_entries,
+    path_of,
     traverse::{Traversal, TreeIndex},
-    SortMode, WalkOptions, WalkResult,
+    WalkOptions, WalkResult,
 };
 use failure::Error;
 use itertools::Itertools;

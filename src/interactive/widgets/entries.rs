@@ -1,12 +1,9 @@
 use crate::interactive::{
-    widgets::{fill_background_to_right, List, ListState},
-    DisplayOptions,
-};
-use dua::{
     sorted_entries,
-    traverse::{Tree, TreeIndex},
-    SortMode,
+    widgets::{fill_background_to_right, List, ListState},
+    DisplayOptions, SortMode,
 };
+use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::path::Path;
 use tui::{
