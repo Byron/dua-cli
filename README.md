@@ -69,6 +69,11 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 * Dedication to `termion`
   * we use [`termion`][termion] exlusively, and even though [`tui`][tui] supports multiple backends, we only support its termion backend. _Reason_: `tui` is only used for parts of the program, and in all other parts `termion` is used for coloring the output. Thus we wouldn't support changing to a different backend anyway unless everything is done with TUI, which is really not what it is made for.
 
+### Painpoints tui-react
+
+* Widgets with references (like strings) need phantom data to implement their trait. This usually
+  means they can't be instantiated without type hints. Like `List::()::default()`.
+
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
