@@ -1,16 +1,16 @@
 use crate::interactive::{DisplayOptions, EntryDataBundle};
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
-use std::path::Path;
+use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
-    widgets::{Borders, Text, Widget},
+    widgets::{Borders, Text},
 };
 use tui_react::{fill_background_to_right, BlockProps, ReactList, ReactListProps};
 
-pub struct Entries<'a> {
+pub struct ReactEntriesProps<'a> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
@@ -18,13 +18,21 @@ pub struct Entries<'a> {
     pub entries: &'a [EntryDataBundle],
     pub border_style: Style,
     pub is_focussed: bool,
+}
 
+#[derive(Default, Clone)]
+pub struct ReactEntries {
     pub list: ReactList,
 }
 
-impl<'a, 'b> Widget for Entries<'a> {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        let Self {
+impl ReactEntries {
+    pub fn render<'a>(
+        &mut self,
+        props: impl Borrow<ReactEntriesProps<'a>>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
+        let ReactEntriesProps {
             tree,
             root,
             display,
@@ -32,8 +40,9 @@ impl<'a, 'b> Widget for Entries<'a> {
             selected,
             border_style,
             is_focussed,
-            list,
-        } = self;
+        } = props.borrow();
+        let list = &mut self.list;
+
         let is_top = |node_idx| {
             tree.neighbors_directed(node_idx, petgraph::Incoming)
                 .next()

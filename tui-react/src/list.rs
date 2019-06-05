@@ -17,7 +17,7 @@ pub fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
     }
 }
 
-#[derive(Default)] // TODO: remove Clone derive
+#[derive(Default, Clone)] // TODO: remove Clone derive
 pub struct ReactList {
     /// The index at which the list last started. Used for scrolling
     offset: usize,

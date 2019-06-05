@@ -1,5 +1,8 @@
 use crate::interactive::{
-    widgets::{Entries, Header, ReactFooter, ReactFooterProps, ReactHelpPane, ReactHelpPaneProps},
+    widgets::{
+        Header, ReactEntries, ReactEntriesProps, ReactFooter, ReactFooterProps, ReactHelpPane,
+        ReactHelpPaneProps,
+    },
     FocussedPane, TerminalApp,
 };
 use dua::traverse::Traversal;
@@ -11,11 +14,12 @@ use tui::{
     style::Modifier,
     widgets::Widget,
 };
-use tui_react::{ReactList, ToplevelComponent};
+use tui_react::ToplevelComponent;
 
 #[derive(Default, Clone)] // TODO: remove clone derive
 pub struct ReactMainWindow {
     pub help_pane: Option<ReactHelpPane>,
+    pub entries_pane: ReactEntries,
 }
 
 impl<'a, 'b> ToplevelComponent for ReactMainWindow {
@@ -71,7 +75,7 @@ impl<'a, 'b> ToplevelComponent for ReactMainWindow {
         };
 
         Header.draw(header_area, buf);
-        Entries {
+        let props = ReactEntriesProps {
             tree: &tree,
             root: state.root,
             display: *display,
@@ -83,9 +87,8 @@ impl<'a, 'b> ToplevelComponent for ReactMainWindow {
             } else {
                 false
             },
-            list: ReactList::default(),
-        }
-        .draw(entries_area, buf);
+        };
+        self.entries_pane.render(props, entries_area, buf);
 
         if let Some((help_area, pane)) = help_pane {
             let props = ReactHelpPaneProps {

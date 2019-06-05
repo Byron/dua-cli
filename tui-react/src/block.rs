@@ -1,5 +1,4 @@
 //! Derived from TUI-rs, license: MIT, Copyright (c) 2016 Florian Dehau
-use super::ToplevelComponent;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tui::{
@@ -71,10 +70,8 @@ impl<'a> BlockProps<'a> {
     }
 }
 
-impl<'a, T> ToplevelComponent for Block<'a, T> {
-    type Props = BlockProps<'a>;
-
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+impl<'a, T> Block<'a, T> {
+    fn render(&self, props: impl Borrow<BlockProps<'a>>, area: Rect, buf: &mut Buffer) {
         if area.width < 2 || area.height < 2 {
             return;
         }
