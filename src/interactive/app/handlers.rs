@@ -114,4 +114,10 @@ impl TerminalApp {
             .map(|b| b.index)
             .or(self.state.selected)
     }
+
+    pub fn cycle_sorting(&mut self) {
+        self.state.sorting.toggle_size();
+        self.state.entries =
+            sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+    }
 }

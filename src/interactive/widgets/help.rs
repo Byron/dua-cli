@@ -44,7 +44,7 @@ impl ToplevelComponent for ReactHelpPane {
             let hotkey = |keys, description| {
                 count(1);
                 lines.borrow_mut().push(Text::Styled(
-                    format!("{:>10}", keys).into(),
+                    format!("{:>11}", keys).into(),
                     Style {
                         fg: Color::Green,
                         ..Default::default()
@@ -59,7 +59,7 @@ impl ToplevelComponent for ReactHelpPane {
             title("Keys for pane control");
             {
                 hotkey(
-                    "q",
+                    "q/<ESC>",
                     "close the current pane. Closes the application if no pane is open.",
                 );
                 hotkey("<tab>", "Cycle between all open panes");
@@ -68,12 +68,14 @@ impl ToplevelComponent for ReactHelpPane {
             }
             title("Keys for Navigation");
             {
-                hotkey("j", "move down an entry");
-                hotkey("k", "move up an entry");
+                hotkey("j/<down>", "move down an entry");
+                hotkey("k/<up>", "move up an entry");
                 hotkey("o", "descent into the selected directory");
                 hotkey("u", "ascent one level into the parent directory");
                 hotkey("Ctrl + d", "move down 10 entries at once");
+                hotkey("<Page Down>", "^");
                 hotkey("Ctrl + u", "move up 10 entries at once");
+                hotkey("<Page Up>", "^");
                 spacer();
             }
             title("Keys for display");

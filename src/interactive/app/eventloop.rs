@@ -77,7 +77,7 @@ impl TerminalApp {
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        use termion::event::Key::{Char, Ctrl};
+        use termion::event::Key::{Char, Ctrl, Down, Esc, PageDown, PageUp, Up};
         use FocussedPane::*;
 
         self.draw(terminal)?;
@@ -89,7 +89,7 @@ impl TerminalApp {
                     self.cycle_focus();
                 }
                 Ctrl('c') => break,
-                Char('q') => match self.state.focussed {
+                Char('q') | Esc => match self.state.focussed {
                     Main => break,
                     Help => {
                         self.state.focussed = Main;
@@ -101,10 +101,10 @@ impl TerminalApp {
 
             match self.state.focussed {
                 FocussedPane::Help => match key {
-                    Ctrl('u') => self.scroll_help(CursorDirection::PageUp),
-                    Char('k') => self.scroll_help(CursorDirection::Up),
-                    Char('j') => self.scroll_help(CursorDirection::Down),
-                    Ctrl('d') => self.scroll_help(CursorDirection::PageDown),
+                    Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
+                    Char('k') | Up => self.scroll_help(CursorDirection::Up),
+                    Char('j') | Down => self.scroll_help(CursorDirection::Down),
+                    Ctrl('d') | PageDown => self.scroll_help(CursorDirection::PageDown),
                     _ => {}
                 },
                 FocussedPane::Main => match key {
@@ -115,7 +115,7 @@ impl TerminalApp {
                     Char('k') => self.change_entry_selection(CursorDirection::Up),
                     Char('j') => self.change_entry_selection(CursorDirection::Down),
                     Ctrl('d') => self.change_entry_selection(CursorDirection::PageDown),
-                    Char('s') => self.state.sorting.toggle_size(),
+                    Char('s') => self.cycle_sorting(),
                     Char('g') => self.display.byte_vis.cycle(),
                     _ => {}
                 },
