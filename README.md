@@ -32,6 +32,11 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
  * [x] Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅v1.2 (_released_) - - the first usable, read-only interactive terminal user interface
+
+That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
+application and GUI state.
+
 #### ✅v1.0 (_released_) - aggregate directories, fast
 
 Simple CLI to list top-level directories similar to sn-sort, but faster and more tailored to getting an idea of where most space is used.
