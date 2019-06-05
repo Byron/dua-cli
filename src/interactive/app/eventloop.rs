@@ -184,7 +184,7 @@ impl TerminalApp {
                 self.state.root = parent_idx;
                 self.state.entries =
                     sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting);
-                self.state.selected = self.state.entries.get(0).map(|(idx, _, _)| *idx);
+                self.state.selected = self.state.entries.get(0).map(|b| b.index);
             }
             None => self.state.message = Some("Top level reached".into()),
         }
@@ -194,9 +194,9 @@ impl TerminalApp {
         if let Some(new_root) = self.state.selected {
             self.state.entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
             match self.state.entries.get(0) {
-                Some((next_selection, _, _)) => {
+                Some(b) => {
                     self.state.root = new_root;
-                    self.state.selected = Some(*next_selection);
+                    self.state.selected = Some(b.index);
                 }
                 None => self.state.message = Some("Entry is a file or an empty directory".into()),
             }
@@ -219,7 +219,7 @@ impl TerminalApp {
         let next_selected_pos = match self.state.selected {
             Some(ref selected) => entries
                 .iter()
-                .find_position(|(idx, _, _)| *idx == *selected)
+                .find_position(|b| b.index == *selected)
                 .map(|(idx, _)| match direction {
                     CursorDirection::PageDown => idx.saturating_add(10),
                     CursorDirection::Down => idx.saturating_add(1),
@@ -232,7 +232,7 @@ impl TerminalApp {
         self.state.selected = entries
             .get(next_selected_pos)
             .or(entries.last())
-            .map(|(idx, _, _)| *idx)
+            .map(|b| b.index)
             .or(self.state.selected)
     }
 
@@ -270,7 +270,7 @@ impl TerminalApp {
         let sorting = Default::default();
         let root = traversal.root_index;
         let entries = sorted_entries(&traversal.tree, root, sorting);
-        let selected = entries.get(0).map(|(idx, _, _)| *idx);
+        let selected = entries.get(0).map(|b| b.index);
         display_options.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
             state: AppState {

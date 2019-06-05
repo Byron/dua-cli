@@ -1,7 +1,7 @@
-use crate::interactive::TerminalApp;
+use crate::interactive::{SortMode, TerminalApp};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
-    ByteFormat, Color, SortMode, TraversalSorting, WalkOptions,
+    ByteFormat, Color, TraversalSorting, WalkOptions,
 };
 use failure::Error;
 use petgraph::prelude::NodeIndex;

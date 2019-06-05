@@ -2,7 +2,6 @@ use dua::path_of;
 use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;
-use std::path::PathBuf;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum SortMode {
@@ -26,17 +25,30 @@ impl Default for SortMode {
     }
 }
 
-pub type EntryDataBundle = (TreeIndex, EntryData, PathBuf);
+pub struct EntryDataBundle {
+    pub index: TreeIndex,
+    pub data: EntryData,
+    pub is_dir: bool,
+    pub exists: bool,
+}
+
 pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
     use SortMode::*;
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
-            tree.node_weight(idx)
-                .map(|w| (idx, w.clone(), path_of(tree, idx)))
+            tree.node_weight(idx).map(|w| {
+                let p = path_of(tree, idx);
+                EntryDataBundle {
+                    index: idx,
+                    data: w.clone(),
+                    is_dir: p.is_dir(),
+                    exists: p.exists(),
+                }
+            })
         })
-        .sorted_by(|(_, l, _), (_, r, _)| match sorting {
-            SizeDescending => r.size.cmp(&l.size),
-            SizeAscending => l.size.cmp(&r.size),
+        .sorted_by(|l, r| match sorting {
+            SizeDescending => r.data.size.cmp(&l.data.size),
+            SizeAscending => l.data.size.cmp(&r.data.size),
         })
         .collect()
 }
