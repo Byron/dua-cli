@@ -136,14 +136,11 @@ impl<'a, 'b> Widget for Entries<'a, 'b> {
                     )
                     .into(),
                     Style {
-                        fg: if path.is_dir() {
-                            style.fg
-                        } else {
-                            if is_selected {
-                                style.fg
-                            } else {
-                                Color::DarkGray
-                            }
+                        fg: match (path.is_dir(), path.exists()) {
+                            (true, true) if !is_selected => Color::DarkGray,
+                            (true, true) => style.fg,
+                            (_, false) => Color::Red,
+                            (false, true) => style.fg,
                         },
                         ..style
                     },
