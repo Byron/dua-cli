@@ -29,17 +29,24 @@ impl CursorDirection {
 impl TerminalApp {
     pub fn cycle_focus(&mut self) {
         use FocussedPane::*;
+        self.window.mark_pane.as_mut().map(|p| p.set_focus(false));
         self.state.focussed = match (
             self.state.focussed,
             &self.window.help_pane,
-            &self.window.mark_pane,
+            &mut self.window.mark_pane,
         ) {
             (Main, Some(_), _) => Help,
-            (Help, _, Some(_)) => Mark,
+            (Help, _, Some(ref mut pane)) => {
+                pane.set_focus(true);
+                Mark
+            }
             (Help, _, None) => Main,
             (Mark, _, _) => Main,
             (Main, None, None) => Main,
-            (Main, None, Some(_)) => Mark,
+            (Main, None, Some(ref mut pane)) => {
+                pane.set_focus(true);
+                Mark
+            }
         };
     }
 

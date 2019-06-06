@@ -18,6 +18,7 @@ pub struct MarkPane {
     selected: Option<usize>,
     marked: EntryMarkMap,
     list: List,
+    has_focus: bool,
 }
 
 pub struct MarkPaneProps {
@@ -25,7 +26,16 @@ pub struct MarkPaneProps {
 }
 
 impl MarkPane {
+    pub fn set_focus(&mut self, has_focus: bool) {
+        self.has_focus = has_focus;
+        if has_focus {
+            self.selected = Some(self.marked.len().saturating_sub(1));
+        } else {
+            self.selected = None
+        }
+    }
     pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree) -> Option<Self> {
+        // TODO: use HashMapEntry (Vacant/Occupied)
         if self.marked.get(&index).is_some() {
             self.marked.remove(&index);
         } else {
