@@ -294,6 +294,33 @@ fn simple_user_journey() -> Result<(), Error> {
         }
     }
 
+    // Marking
+    {
+        // select something
+        app.process_events(&mut terminal, b" j ".keys())?;
+        assert_eq!(
+            Some(false),
+            app.window.mark_pane.as_ref().map(|p| p.has_focus()),
+            "the marker pane starts out without focus",
+        );
+
+        assert_eq!(
+            Some(2),
+            app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+            "it has two items marked",
+        );
+
+        // when advancing the selection to the marker pane
+        app.process_events(&mut terminal, b"\t".keys())?;
+        {
+            assert_eq!(
+                Some(true),
+                app.window.mark_pane.as_ref().map(|p| p.has_focus()),
+                "after tabbing into it, it has focus",
+            );
+        }
+    }
+
     Ok(())
 }
 
