@@ -63,12 +63,7 @@ fn index_by_name_and_size(
         .node_indices()
         .map(|idx| (idx, node_by_index(app, idx)))
         .filter_map(|(idx, e)| {
-            if e.name == name
-                && match size {
-                    Some(s) => s == e.size,
-                    None => true,
-                }
-            {
+            if e.name == name && size.map(|s| s == e.size).unwrap_or(true) {
                 Some(idx)
             } else {
                 None
@@ -129,12 +124,22 @@ fn simple_user_journey() -> Result<(), Error> {
             SortMode::SizeAscending,
             "it sets the sort mode to ascending by size"
         );
+        assert_eq!(
+            node_by_index(&app, app.state.entries[0].index),
+            node_by_name(&app, fixture_str(long_root)),
+            "it recomputes the cached entries"
+        );
         // when hitting the S key again
         app.process_events(&mut terminal, b"s".keys())?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
             "it sets the sort mode to descending by size"
+        );
+        assert_eq!(
+            node_by_index(&app, app.state.entries[0].index),
+            node_by_name(&app, fixture_str(short_root)),
+            "it recomputes the cached entries"
         );
     }
 
@@ -208,6 +213,73 @@ fn simple_user_journey() -> Result<(), Error> {
                 node_by_name(&app, fixture_str(long_root)),
                 node_by_index(&app, *app.state.selected.as_ref().unwrap()),
                 "keeps the previous selection"
+            );
+        }
+    }
+
+    // Deletion
+    {
+        // when hitting the 'd' key (also move cursor back to start)
+        app.process_events(&mut terminal, b"k".keys())?;
+        let previously_selected_index = *app.state.selected.as_ref().unwrap();
+        app.process_events(&mut terminal, b"d".keys())?;
+        {
+            assert_eq!(1, app.state.marked.len(), "it marks only a single node",);
+            assert_eq!(
+                node_by_index(&app, previously_selected_index),
+                node_by_index(&app, app.state.marked[0].index),
+                "it marks the selected node"
+            );
+            assert_eq!(
+                app.state.selected.as_ref().unwrap().index(),
+                app.state.entries[1].index.index(),
+                "moves the cursor down one level to facilitate many markings in a row"
+            );
+        }
+
+        // when hitting the 'd' key again
+        {
+            app.process_events(&mut terminal, b"d".keys())?;
+
+            assert_eq!(
+                2,
+                app.state.marked.len(),
+                "it marks the currently selected, second node",
+            );
+
+            assert_eq!(
+                app.state.selected.as_ref().unwrap().index(),
+                app.state.entries[1].index.index(),
+                "it could not advance the cursor, thus the newly marked item is still selected"
+            );
+        }
+
+        // when hitting the 'd' key once again
+        {
+            app.process_events(&mut terminal, b"d".keys())?;
+
+            assert_eq!(
+                1,
+                app.state.marked.len(),
+                "it toggled the previous selected entry off",
+            );
+
+            assert_eq!(
+                node_by_index(&app, previously_selected_index),
+                node_by_index(&app, app.state.marked[0].index),
+                "it leaves the first selected entry marked"
+            );
+        }
+        // when hitting the spacebar (after moving up to the first entry)
+        {
+            app.process_events(&mut terminal, b"k ".keys())?;
+
+            assert_eq!(0, app.state.marked.len(), "it toggles the item off",);
+
+            assert_eq!(
+                node_by_index(&app, previously_selected_index),
+                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                "it does not advance the selection"
             );
         }
     }

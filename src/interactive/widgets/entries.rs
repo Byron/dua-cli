@@ -1,4 +1,4 @@
-use crate::interactive::{DisplayOptions, EntryDataBundle};
+use crate::interactive::{DisplayOptions, EntryDataBundle, EntryMark};
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::{borrow::Borrow, path::Path};
@@ -16,6 +16,7 @@ pub struct EntriesProps<'a> {
     pub display: DisplayOptions,
     pub selected: Option<TreeIndex>,
     pub entries: &'a [EntryDataBundle],
+    pub marked: &'a [EntryMark],
     pub border_style: Style,
     pub is_focussed: bool,
 }
@@ -38,6 +39,7 @@ impl Entries {
             display,
             entries,
             selected,
+            marked: _,
             border_style,
             is_focussed,
         } = props.borrow();
@@ -128,6 +130,7 @@ impl Entries {
                     .into(),
                     style,
                 );
+
                 let name = Text::Styled(
                     fill_background_to_right(
                         format!(

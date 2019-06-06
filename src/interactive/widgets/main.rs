@@ -78,12 +78,13 @@ impl MainWindow {
             FocussedPane::Help => (grey, white),
         };
 
-        Header.render(header_area, buf);
+        Header.render(!state.marked.is_empty(), header_area, buf);
         let props = EntriesProps {
             tree: &tree,
             root: state.root,
             display: *display,
             entries: &state.entries,
+            marked: &state.marked,
             selected: state.selected,
             border_style: entries_style,
             is_focussed: if let FocussedPane::Main = state.focussed {

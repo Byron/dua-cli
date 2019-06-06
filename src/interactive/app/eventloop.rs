@@ -25,6 +25,10 @@ impl Default for FocussedPane {
     }
 }
 
+pub struct EntryMark {
+    pub index: TreeIndex,
+}
+
 #[derive(Default)]
 pub struct AppState {
     pub root: TreeIndex,
@@ -33,6 +37,7 @@ pub struct AppState {
     pub sorting: SortMode,
     pub message: Option<String>,
     pub focussed: FocussedPane,
+    pub marked: Vec<EntryMark>,
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal
@@ -109,6 +114,8 @@ impl TerminalApp {
                 },
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(),
+                    Char(' ') => self.mark_entry(false),
+                    Char('d') => self.mark_entry(true),
                     Char('u') | Backspace => self.exit_node(),
                     Char('o') | Char('\n') => self.enter_node(),
                     Ctrl('u') => self.change_entry_selection(CursorDirection::PageUp),

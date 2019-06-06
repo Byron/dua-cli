@@ -6,8 +6,12 @@ use tui::widgets::{Paragraph, Text, Widget};
 pub struct Header;
 
 impl Header {
-    pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        let bg_color = Color::LightYellow;
+    pub fn render(&self, has_marked_entries: bool, area: Rect, buf: &mut Buffer) {
+        let bg_color = if has_marked_entries {
+            Color::LightYellow
+        } else {
+            Color::White
+        };
         let text_color = Color::Black;
         let standard = Style {
             fg: text_color,

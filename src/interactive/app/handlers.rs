@@ -1,5 +1,5 @@
 use crate::interactive::{
-    app::{FocussedPane, TerminalApp},
+    app::{EntryMark, FocussedPane, TerminalApp},
     sorted_entries,
     widgets::HelpPane,
 };
@@ -119,5 +119,20 @@ impl TerminalApp {
         self.state.sorting.toggle_size();
         self.state.entries =
             sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+    }
+
+    pub fn mark_entry(&mut self, advance_cursor: bool) {
+        if let Some(index) = self.state.selected {
+            if let Some((existing, _)) =
+                self.state.marked.iter().find_position(|e| e.index == index)
+            {
+                self.state.marked.remove(existing);
+            } else {
+                self.state.marked.push(EntryMark { index });
+            }
+            if advance_cursor {
+                self.change_entry_selection(CursorDirection::Down)
+            }
+        }
     }
 }
