@@ -46,7 +46,7 @@ Simple CLI to list top-level directories similar to sn-sort, but faster and more
 #### Run tests
 
 ```bash
-make journey-tests
+make tests
 ```
 
 #### Learn about other targets

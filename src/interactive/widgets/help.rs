@@ -41,10 +41,17 @@ impl ToplevelComponent for HelpPane {
                     },
                 ));
             };
-            let hotkey = |keys, description| {
-                count(1);
+            let hotkey = |keys, description, other_line: Option<&str>| {
+                let separator_size = 3;
+                let column_size = 11 + separator_size;
+                count(1 + other_line.iter().count() as u16);
                 lines.borrow_mut().push(Text::Styled(
-                    format!("{:>11}", keys).into(),
+                    format!(
+                        "{:>column_size$}",
+                        keys,
+                        column_size = column_size - separator_size
+                    )
+                    .into(),
                     Style {
                         fg: Color::Green,
                         ..Default::default()
@@ -54,47 +61,76 @@ impl ToplevelComponent for HelpPane {
                     format!(" => {}\n", description).into(),
                     Style::default(),
                 ));
+                if let Some(second_line) = other_line {
+                    lines.borrow_mut().push(Text::Styled(
+                        format!(
+                            "{:>column_size$}{}\n",
+                            "",
+                            second_line,
+                            column_size = column_size + 1
+                        )
+                        .into(),
+                        Style::default(),
+                    ));
+                }
             };
 
             title("Keys for pane control");
             {
                 hotkey(
                     "q/<ESC>",
-                    "close the current pane. Closes the application if no pane is open.",
+                    "Close the current pane. Closes the program if no",
+                    Some("pane is open. Prompts if items are marked"),
                 );
-                hotkey("<tab>", "Cycle between all open panes");
-                hotkey("?", "Show or hide the help pane");
+                hotkey("<tab>", "Cycle between all open panes", None);
+                hotkey("?", "Show or hide the help pane", None);
                 spacer();
             }
             title("Keys for Navigation");
             {
-                hotkey("j/<down>", "move down an entry");
-                hotkey("k/<up>", "move up an entry");
-                hotkey("o/<enter>", "descent into the selected directory");
-                hotkey("u", "ascent one level into the parent directory");
-                hotkey("<backspace>", "^");
-                hotkey("Ctrl + d", "move down 10 entries at once");
-                hotkey("<Page Down>", "^");
-                hotkey("Ctrl + u", "move up 10 entries at once");
-                hotkey("<Page Up>", "^");
+                hotkey("j/<down>", "move down an entry", None);
+                hotkey("k/<up>", "move up an entry", None);
+                hotkey("o/<enter>", "descent into the selected directory", None);
+                hotkey("u", "ascent one level into the parent directory", None);
+                hotkey("<backspace>", "^", None);
+                hotkey("Ctrl + d", "move down 10 entries at once", None);
+                hotkey("<Page Down>", "^", None);
+                hotkey("Ctrl + u", "move up 10 entries at once", None);
+                hotkey("<Page Up>", "^", None);
                 spacer();
             }
             title("Keys for display");
             {
-                hotkey("s", "toggle sort by size ascending/descending");
-                hotkey("g", "cycle through percentage display and bar options");
+                hotkey("s", "toggle sort by size ascending/descending", None);
+                hotkey(
+                    "g",
+                    "cycle through percentage display and bar options",
+                    None,
+                );
                 spacer();
             }
             title("Keys for entry operations");
             {
-                hotkey("Shift + o", "Open the entry with the associated program");
-                hotkey("d", "Toggle the currently selected entry and move down");
-                hotkey("<space bar>", "Toggle the currently selected entry");
+                hotkey(
+                    "Shift + o",
+                    "Open the entry with the associated program",
+                    None,
+                );
+                hotkey(
+                    "d",
+                    "Toggle the currently selected entry and move down",
+                    None,
+                );
+                hotkey("<space bar>", "Toggle the currently selected entry", None);
                 spacer();
             }
             title("Keys for application control");
             {
-                hotkey("Ctrl + c", "close the application. No questions asked!");
+                hotkey(
+                    "Ctrl + c",
+                    "close the application. No questions asked!",
+                    None,
+                );
                 spacer();
             }
             (lines.into_inner(), num_lines.get())
