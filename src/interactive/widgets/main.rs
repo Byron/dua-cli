@@ -48,11 +48,37 @@ impl MainWindow {
             state,
         } = props.borrow();
 
+        let (entries_style, help_style, mark_style) = {
+            let grey = Style {
+                fg: Color::DarkGray,
+                bg: Color::Reset,
+                modifier: Modifier::empty(),
+            };
+            let white = Style {
+                fg: Color::White,
+                ..grey
+            };
+            match state.focussed {
+                Main => (white, grey, grey),
+                Help => (grey, white, grey),
+                Mark => (grey, grey, white),
+            }
+        };
+
         let regions = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Length(1), Max(256), Length(1)].as_ref())
             .split(area);
         let (header_area, entries_area, footer_area) = (regions[0], regions[1], regions[2]);
+        {
+            let marked = self.mark_pane.as_ref().map(|p| p.marked());
+            let bg_color = match (marked.map_or(true, |m| m.is_empty()), state.focussed) {
+                (false, FocussedPane::Mark) => Color::LightRed,
+                (false, _) => COLOR_MARKED_LIGHT,
+                (_, _) => Color::White,
+            };
+            Header.render(bg_color, header_area, buf);
+        }
         let (entries_area, help_pane, mark_pane) = {
             let regions = Layout::default()
                 .direction(Direction::Horizontal)
@@ -77,48 +103,11 @@ impl MainWindow {
             }
         };
 
-        let grey = Style {
-            fg: Color::DarkGray,
-            bg: Color::Reset,
-            modifier: Modifier::empty(),
-        };
-        let white = Style {
-            fg: Color::White,
-            ..grey
-        };
-        let (entries_style, help_style, mark_style) = match state.focussed {
-            Main => (white, grey, grey),
-            Help => (grey, white, grey),
-            Mark => (grey, grey, white),
-        };
-
-        let bg_color = {
-            let marked = mark_pane.as_ref().map(|(_, p)| p.marked());
-            match (marked.map_or(true, |m| m.is_empty()), state.focussed) {
-                (false, FocussedPane::Mark) => Color::LightRed,
-                (false, _) => COLOR_MARKED_LIGHT,
-                (_, _) => Color::White,
-            }
-        };
-        Header.render(bg_color, header_area, buf);
-
-        {
-            let marked = mark_pane.as_ref().map(|(_, p)| p.marked());
-            let props = EntriesProps {
-                tree: &tree,
-                root: state.root,
-                display: *display,
-                entries: &state.entries,
-                marked,
-                selected: state.selected,
-                border_style: entries_style,
-                is_focussed: if let Main = state.focussed {
-                    true
-                } else {
-                    false
-                },
+        if let Some((mark_area, pane)) = mark_pane {
+            let props = MarkPaneProps {
+                border_style: mark_style,
             };
-            self.entries_pane.render(props, entries_area, buf);
+            pane.render(props, mark_area, buf);
         }
 
         if let Some((help_area, pane)) = help_pane {
@@ -127,12 +116,23 @@ impl MainWindow {
             };
             pane.render(props, help_area, buf);
         }
-        if let Some((mark_area, pane)) = mark_pane {
-            let props = MarkPaneProps {
-                border_style: mark_style,
-            };
-            pane.render(props, mark_area, buf);
-        }
+
+        let marked = self.mark_pane.as_ref().map(|p| p.marked());
+        let props = EntriesProps {
+            tree: &tree,
+            root: state.root,
+            display: *display,
+            entries: &state.entries,
+            marked,
+            selected: state.selected,
+            border_style: entries_style,
+            is_focussed: if let Main = state.focussed {
+                true
+            } else {
+                false
+            },
+        };
+        self.entries_pane.render(props, entries_area, buf);
 
         Footer.render(
             FooterProps {
