@@ -14,6 +14,18 @@ pub enum CursorDirection {
     PageUp,
 }
 
+impl CursorDirection {
+    pub fn move_cursor(&self, n: usize) -> usize {
+        use CursorDirection::*;
+        match self {
+            Down => n.saturating_add(1),
+            Up => n.saturating_sub(1),
+            PageDown => n.saturating_add(10),
+            PageUp => n.saturating_sub(10),
+        }
+    }
+}
+
 impl TerminalApp {
     pub fn cycle_focus(&mut self) {
         use FocussedPane::*;
@@ -90,14 +102,8 @@ impl TerminalApp {
     }
 
     pub fn scroll_help(&mut self, direction: CursorDirection) {
-        use CursorDirection::*;
         if let Some(ref mut pane) = self.window.help_pane {
-            pane.scroll = match direction {
-                Down => pane.scroll.saturating_add(1),
-                Up => pane.scroll.saturating_sub(1),
-                PageDown => pane.scroll.saturating_add(10),
-                PageUp => pane.scroll.saturating_sub(10),
-            };
+            pane.scroll = direction.move_cursor(pane.scroll as usize) as u16;
         }
     }
 
@@ -107,12 +113,7 @@ impl TerminalApp {
             Some(ref selected) => entries
                 .iter()
                 .find_position(|b| b.index == *selected)
-                .map(|(idx, _)| match direction {
-                    CursorDirection::PageDown => idx.saturating_add(10),
-                    CursorDirection::Down => idx.saturating_add(1),
-                    CursorDirection::Up => idx.saturating_sub(1),
-                    CursorDirection::PageUp => idx.saturating_sub(10),
-                })
+                .map(|(idx, _)| direction.move_cursor(idx))
                 .unwrap_or(0),
             None => 0,
         };

@@ -124,7 +124,6 @@ impl MainWindow {
         if let Some((mark_area, pane)) = mark_pane {
             let props = MarkPaneProps {
                 border_style: mark_style,
-                selected: None,
                 marked: &state.marked,
             };
             pane.render(props, mark_area, buf);

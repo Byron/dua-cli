@@ -11,11 +11,11 @@ use tui_react::{List, ListProps};
 #[derive(Default)]
 pub struct MarkPane {
     pub list: List,
+    pub selected: Option<TreeIndex>,
 }
 
 pub struct MarkPaneProps<'a> {
     pub border_style: Style,
-    pub selected: Option<TreeIndex>,
     pub marked: &'a EntryMarkMap,
 }
 
@@ -28,7 +28,6 @@ impl MarkPane {
     ) {
         let MarkPaneProps {
             border_style,
-            selected,
             marked,
         } = props.borrow();
 
@@ -36,7 +35,7 @@ impl MarkPane {
             .title("Marked Entries")
             .border_style(*border_style)
             .borders(Borders::ALL);
-        let entry_in_view = selected.and_then(|idx| {
+        let entry_in_view = self.selected.and_then(|idx| {
             marked
                 .iter()
                 .enumerate()
