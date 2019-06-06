@@ -1,7 +1,6 @@
 use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMark, EntryMarkMap};
 use dua::path_of;
 use dua::traverse::{Tree, TreeIndex};
-use itertools::Itertools;
 use std::borrow::Borrow;
 use termion::{event::Key, event::Key::*};
 use tui::{
@@ -16,7 +15,7 @@ use tui_react::{List, ListProps};
 
 #[derive(Default)]
 pub struct MarkPane {
-    selected: Option<TreeIndex>,
+    selected: Option<usize>,
     marked: EntryMarkMap,
     list: List,
 }
@@ -71,18 +70,12 @@ impl MarkPane {
             .borders(Borders::ALL);
         let entry_in_view = self
             .selected
-            .and_then(|selected| {
-                marked
-                    .keys()
-                    .find_position(|&&index| index == selected)
-                    .map(|(pos, _)| pos)
-            })
-            .or_else(|| marked.keys().enumerate().last().map(|(pos, _)| pos));
-
-        let selected = self.selected.clone();
-        let entries = marked.iter().map(|(idx, v)| {
+            .map(|selected| selected)
+            .or(Some(marked.len().saturating_sub(1)));
+        let selected = self.selected;
+        let entries = marked.values().enumerate().map(|(idx, v)| {
             let modifier = match selected {
-                Some(selected) if *idx == selected => Modifier::BOLD,
+                Some(selected) if idx == selected => Modifier::BOLD,
                 _ => Modifier::empty(),
             };
             let name = Text::Styled(
