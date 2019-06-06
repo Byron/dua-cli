@@ -1,8 +1,5 @@
 use crate::interactive::{
-    widgets::{
-        Header, ReactEntries, ReactEntriesProps, ReactFooter, ReactFooterProps, ReactHelpPane,
-        ReactHelpPaneProps,
-    },
+    widgets::{Entries, EntriesProps, Footer, FooterProps, Header, HelpPane, HelpPaneProps},
     AppState, DisplayOptions, FocussedPane,
 };
 use dua::traverse::Traversal;
@@ -16,26 +13,26 @@ use tui::{
 };
 use tui_react::ToplevelComponent;
 
-pub struct ReactMainWindowProps<'a> {
+pub struct MainWindowProps<'a> {
     pub traversal: &'a Traversal,
     pub display: DisplayOptions,
     pub state: &'a AppState,
 }
 
 #[derive(Default)]
-pub struct ReactMainWindow {
-    pub help_pane: Option<ReactHelpPane>,
-    pub entries_pane: ReactEntries,
+pub struct MainWindow {
+    pub help_pane: Option<HelpPane>,
+    pub entries_pane: Entries,
 }
 
-impl ReactMainWindow {
+impl MainWindow {
     pub fn render<'a>(
         &mut self,
-        props: impl Borrow<ReactMainWindowProps<'a>>,
+        props: impl Borrow<MainWindowProps<'a>>,
         area: Rect,
         buf: &mut Buffer,
     ) {
-        let ReactMainWindowProps {
+        let MainWindowProps {
             traversal:
                 Traversal {
                     tree,
@@ -83,7 +80,7 @@ impl ReactMainWindow {
         };
 
         Header.draw(header_area, buf);
-        let props = ReactEntriesProps {
+        let props = EntriesProps {
             tree: &tree,
             root: state.root,
             display: *display,
@@ -99,14 +96,14 @@ impl ReactMainWindow {
         self.entries_pane.render(props, entries_area, buf);
 
         if let Some((help_area, pane)) = help_pane {
-            let props = ReactHelpPaneProps {
+            let props = HelpPaneProps {
                 border_style: help_style,
             };
             pane.render(props, help_area, buf);
         }
 
-        ReactFooter.render(
-            ReactFooterProps {
+        Footer.render(
+            FooterProps {
                 total_bytes: *total_bytes,
                 entries_traversed: *entries_traversed,
                 format: display.byte_format,

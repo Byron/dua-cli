@@ -1,7 +1,7 @@
 use crate::interactive::{
     app::{FocussedPane, TerminalApp},
     sorted_entries,
-    widgets::ReactHelpPane,
+    widgets::HelpPane,
 };
 use dua::path_of;
 use itertools::Itertools;
@@ -28,7 +28,7 @@ impl TerminalApp {
         use FocussedPane::*;
         self.state.focussed = match self.state.focussed {
             Main => {
-                self.window.help_pane = Some(ReactHelpPane::default());
+                self.window.help_pane = Some(HelpPane::default());
                 Help
             }
             Help => {

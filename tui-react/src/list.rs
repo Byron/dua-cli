@@ -1,27 +1,16 @@
-use std::iter::repeat;
 use tui::{
     buffer::Buffer,
     layout::Rect,
     widgets::{Block, Paragraph, Text, Widget},
 };
 
-pub fn fill_background_to_right(mut s: String, entire_width: u16) -> String {
-    match (s.len(), entire_width as usize) {
-        (x, y) if x >= y => s,
-        (x, y) => {
-            s.extend(repeat(' ').take(y - x));
-            s
-        }
-    }
-}
-
 #[derive(Default)]
-pub struct ReactList {
+pub struct List {
     /// The index at which the list last started. Used for scrolling
     offset: usize,
 }
 
-impl ReactList {
+impl List {
     fn list_offset_for(&self, entry_in_view: Option<usize>, height: usize) -> usize {
         match entry_in_view {
             Some(pos) => match height as usize {
@@ -35,20 +24,20 @@ impl ReactList {
 }
 
 #[derive(Default)]
-pub struct ReactListProps<'b> {
+pub struct ListProps<'b> {
     pub block: Option<Block<'b>>,
     pub entry_in_view: Option<usize>,
 }
 
-impl ReactList {
+impl List {
     pub fn render<'a, 't>(
         &mut self,
-        props: ReactListProps<'a>,
+        props: ListProps<'a>,
         items: impl IntoIterator<Item = Vec<Text<'t>>>,
         area: Rect,
         buf: &mut Buffer,
     ) {
-        let ReactListProps {
+        let ListProps {
             block,
             entry_in_view,
         } = props;

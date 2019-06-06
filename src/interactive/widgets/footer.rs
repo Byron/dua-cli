@@ -10,20 +10,20 @@ use tui::{
 };
 use tui_react::ToplevelComponent;
 
-pub struct ReactFooter;
+pub struct Footer;
 
-pub struct ReactFooterProps {
+pub struct FooterProps {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
     pub message: Option<String>,
 }
 
-impl ToplevelComponent for ReactFooter {
-    type Props = ReactFooterProps;
+impl ToplevelComponent for Footer {
+    type Props = FooterProps;
 
     fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
-        let ReactFooterProps {
+        let FooterProps {
             total_bytes,
             entries_traversed,
             format,

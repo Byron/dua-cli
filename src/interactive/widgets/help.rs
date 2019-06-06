@@ -10,16 +10,16 @@ use tui::{
 use tui_react::ToplevelComponent;
 
 #[derive(Default, Clone)]
-pub struct ReactHelpPane {
+pub struct HelpPane {
     pub scroll: u16,
 }
 
-pub struct ReactHelpPaneProps {
+pub struct HelpPaneProps {
     pub border_style: Style,
 }
 
-impl ToplevelComponent for ReactHelpPane {
-    type Props = ReactHelpPaneProps;
+impl ToplevelComponent for HelpPane {
+    type Props = HelpPaneProps;
 
     fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
         let (texts, num_lines) = {
@@ -98,7 +98,7 @@ impl ToplevelComponent for ReactHelpPane {
             (lines.into_inner(), num_lines.get())
         };
 
-        let ReactHelpPaneProps { border_style } = props.borrow();
+        let HelpPaneProps { border_style } = props.borrow();
 
         let mut block = Block::default()
             .title("Help")

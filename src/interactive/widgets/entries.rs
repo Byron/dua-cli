@@ -8,9 +8,9 @@ use tui::{
     style::{Color, Style},
     widgets::{Block, Borders, Text},
 };
-use tui_react::{fill_background_to_right, ReactList, ReactListProps};
+use tui_react::{fill_background_to_right, List, ListProps};
 
-pub struct ReactEntriesProps<'a> {
+pub struct EntriesProps<'a> {
     pub tree: &'a Tree,
     pub root: TreeIndex,
     pub display: DisplayOptions,
@@ -21,18 +21,18 @@ pub struct ReactEntriesProps<'a> {
 }
 
 #[derive(Default)]
-pub struct ReactEntries {
-    pub list: ReactList,
+pub struct Entries {
+    pub list: List,
 }
 
-impl ReactEntries {
+impl Entries {
     pub fn render<'a>(
         &mut self,
-        props: impl Borrow<ReactEntriesProps<'a>>,
+        props: impl Borrow<EntriesProps<'a>>,
         area: Rect,
         buf: &mut Buffer,
     ) {
-        let ReactEntriesProps {
+        let EntriesProps {
             tree,
             root,
             display,
@@ -70,7 +70,7 @@ impl ReactEntries {
                 .unwrap_or(0)
         });
 
-        let props = ReactListProps {
+        let props = ListProps {
             block: Some(block),
             entry_in_view,
         };

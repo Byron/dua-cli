@@ -1,6 +1,6 @@
 use crate::interactive::{
     sorted_entries,
-    widgets::{ReactMainWindow, ReactMainWindowProps},
+    widgets::{MainWindow, MainWindowProps},
     ByteVisualization, CursorDirection, DisplayOptions, EntryDataBundle, SortMode,
 };
 use dua::{
@@ -40,13 +40,13 @@ pub struct TerminalApp {
     pub traversal: Traversal,
     pub display: DisplayOptions,
     pub state: AppState,
-    pub window: ReactMainWindow,
+    pub window: MainWindow,
 }
 
 impl TerminalApp {
     pub fn draw_window<B>(
-        window: &mut ReactMainWindow,
-        props: ReactMainWindowProps,
+        window: &mut MainWindow,
+        props: MainWindowProps,
         terminal: &mut Terminal<B>,
     ) -> Result<(), Error>
     where
@@ -61,7 +61,7 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        let props = ReactMainWindowProps {
+        let props = MainWindowProps {
             traversal: &self.traversal,
             display: self.display,
             state: &self.state,
@@ -139,7 +139,7 @@ impl TerminalApp {
         terminal.clear()?;
         let mut display_options: DisplayOptions = options.clone().into();
         display_options.byte_vis = ByteVisualization::Bar;
-        let mut window = ReactMainWindow::default();
+        let mut window = MainWindow::default();
 
         let traversal = Traversal::from_walk(options, input, move |traversal| {
             let state = AppState {
@@ -149,7 +149,7 @@ impl TerminalApp {
                 entries: sorted_entries(&traversal.tree, traversal.root_index, Default::default()),
                 ..Default::default()
             };
-            let props = ReactMainWindowProps {
+            let props = MainWindowProps {
                 traversal,
                 display: display_options,
                 state: &state,
