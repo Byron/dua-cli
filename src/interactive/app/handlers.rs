@@ -136,9 +136,13 @@ impl TerminalApp {
                 self.state.marked.remove(&index);
             } else {
                 if let Some(e) = self.state.entries.iter().find(|e| e.index == index) {
-                    self.state
-                        .marked
-                        .insert(index, EntryMark { size: e.data.size });
+                    self.state.marked.insert(
+                        index,
+                        EntryMark {
+                            size: e.data.size,
+                            path: path_of(&self.traversal.tree, index),
+                        },
+                    );
                 }
             }
             if self.state.marked.is_empty() {

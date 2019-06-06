@@ -2,7 +2,10 @@ use crate::interactive::EntryMarkMap;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::Borrow;
-use tui::{buffer::Buffer, layout::Rect, style::Style, widgets::Block, widgets::Borders};
+use tui::{
+    buffer::Buffer, layout::Rect, style::Color, style::Style, widgets::Block, widgets::Borders,
+    widgets::Text,
+};
 use tui_react::{List, ListProps};
 
 #[derive(Default)]
@@ -41,10 +44,21 @@ impl MarkPane {
                 .map(|(pos, _)| pos)
         });
 
+        let entries = marked.iter().map(|(_, v)| {
+            let name = Text::Styled(
+                v.path.to_string_lossy(),
+                Style {
+                    fg: Color::LightRed,
+                    ..Style::default()
+                },
+            );
+            vec![name]
+        });
+
         let props = ListProps {
             block: Some(block),
             entry_in_view,
         };
-        self.list.render(props, vec![], area, buf)
+        self.list.render(props, entries, area, buf)
     }
 }

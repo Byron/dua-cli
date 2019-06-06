@@ -166,8 +166,7 @@ impl Entries {
                         ..style
                     },
                 );
-                let column_segments = vec![bytes, percentage, name];
-                column_segments
+                vec![bytes, percentage, name]
             },
         );
 
