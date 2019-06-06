@@ -1,7 +1,7 @@
 use crate::interactive::{
     widgets::{
         Entries, EntriesProps, Footer, FooterProps, Header, HelpPane, HelpPaneProps, MarkPane,
-        MarkPaneProps,
+        MarkPaneProps, COLOR_MARKED_LIGHT,
     },
     AppState, DisplayOptions, FocussedPane,
 };
@@ -47,6 +47,7 @@ impl MainWindow {
             display,
             state,
         } = props.borrow();
+
         let regions = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Length(1), Max(256), Length(1)].as_ref())
@@ -75,6 +76,7 @@ impl MainWindow {
                 (None, None) => (entries_area, None, None),
             }
         };
+
         let grey = Style {
             fg: Color::DarkGray,
             bg: Color::Reset,
@@ -90,7 +92,13 @@ impl MainWindow {
             Mark => (grey, grey, white),
         };
 
-        Header.render(!state.marked.is_empty(), header_area, buf);
+        let bg_color = match (state.marked.is_empty(), state.focussed) {
+            (false, FocussedPane::Mark) => Color::LightRed,
+            (false, _) => COLOR_MARKED_LIGHT,
+            (true, _) => Color::White,
+        };
+        Header.render(bg_color, header_area, buf);
+
         let props = EntriesProps {
             tree: &tree,
             root: state.root,

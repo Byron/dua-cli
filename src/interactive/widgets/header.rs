@@ -1,4 +1,3 @@
-use crate::interactive::widgets::COLOR_MARKED_LIGHT;
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -9,12 +8,7 @@ use tui::{
 pub struct Header;
 
 impl Header {
-    pub fn render(&self, has_marked_entries: bool, area: Rect, buf: &mut Buffer) {
-        let bg_color = if has_marked_entries {
-            COLOR_MARKED_LIGHT
-        } else {
-            Color::White
-        };
+    pub fn render(&self, bg_color: Color, area: Rect, buf: &mut Buffer) {
         let text_color = Color::Black;
         let standard = Style {
             fg: text_color,
