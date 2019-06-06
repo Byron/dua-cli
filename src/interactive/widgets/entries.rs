@@ -19,7 +19,7 @@ pub struct EntriesProps<'a> {
     pub display: DisplayOptions,
     pub selected: Option<TreeIndex>,
     pub entries: &'a [EntryDataBundle],
-    pub marked: &'a EntryMarkMap,
+    pub marked: Option<&'a EntryMarkMap>,
     pub border_style: Style,
     pub is_focussed: bool,
 }
@@ -152,7 +152,11 @@ impl Entries {
                     )
                     .into(),
                     Style {
-                        fg: match (!is_dir, exists, marked.contains_key(node_idx)) {
+                        fg: match (
+                            !is_dir,
+                            exists,
+                            marked.map(|m| m.contains_key(node_idx)).unwrap_or(false),
+                        ) {
                             (true, true, false) if !is_selected => Color::DarkGray,
                             (true, true, false) => style.fg,
                             (false, true, false) => style.fg,

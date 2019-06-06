@@ -92,28 +92,34 @@ impl MainWindow {
             Mark => (grey, grey, white),
         };
 
-        let bg_color = match (state.marked.is_empty(), state.focussed) {
-            (false, FocussedPane::Mark) => Color::LightRed,
-            (false, _) => COLOR_MARKED_LIGHT,
-            (true, _) => Color::White,
+        let bg_color = {
+            let marked = mark_pane.as_ref().map(|(_, p)| p.marked());
+            match (marked.map(|m| m.is_empty()), state.focussed) {
+                (Some(false), FocussedPane::Mark) => Color::LightRed,
+                (Some(false), _) | (None, _) => COLOR_MARKED_LIGHT,
+                (_, _) => Color::White,
+            }
         };
         Header.render(bg_color, header_area, buf);
 
-        let props = EntriesProps {
-            tree: &tree,
-            root: state.root,
-            display: *display,
-            entries: &state.entries,
-            marked: &state.marked,
-            selected: state.selected,
-            border_style: entries_style,
-            is_focussed: if let Main = state.focussed {
-                true
-            } else {
-                false
-            },
-        };
-        self.entries_pane.render(props, entries_area, buf);
+        {
+            let marked = mark_pane.as_ref().map(|(_, p)| p.marked());
+            let props = EntriesProps {
+                tree: &tree,
+                root: state.root,
+                display: *display,
+                entries: &state.entries,
+                marked,
+                selected: state.selected,
+                border_style: entries_style,
+                is_focussed: if let Main = state.focussed {
+                    true
+                } else {
+                    false
+                },
+            };
+            self.entries_pane.render(props, entries_area, buf);
+        }
 
         if let Some((help_area, pane)) = help_pane {
             let props = HelpPaneProps {
@@ -124,7 +130,6 @@ impl MainWindow {
         if let Some((mark_area, pane)) = mark_pane {
             let props = MarkPaneProps {
                 border_style: mark_style,
-                marked: &state.marked,
             };
             pane.render(props, mark_area, buf);
         }
@@ -133,7 +138,7 @@ impl MainWindow {
             FooterProps {
                 total_bytes: *total_bytes,
                 entries_traversed: *entries_traversed,
-                marked: &state.marked,
+                marked: self.mark_pane.as_ref().map(|p| p.marked()),
                 format: display.byte_format,
                 message: state.message.clone(),
             },

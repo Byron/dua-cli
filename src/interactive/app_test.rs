@@ -224,9 +224,15 @@ fn simple_user_journey() -> Result<(), Error> {
         let previously_selected_index = *app.state.selected.as_ref().unwrap();
         app.process_events(&mut terminal, b"d".keys())?;
         {
-            assert_eq!(1, app.state.marked.len(), "it marks only a single node",);
+            assert_eq!(
+                Some(1),
+                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                "it marks only a single node",
+            );
             assert!(
-                app.state.marked.contains_key(&previously_selected_index),
+                app.window.mark_pane.as_ref().map_or(false, |p| p
+                    .marked()
+                    .contains_key(&previously_selected_index)),
                 "it marks the selected node"
             );
             assert_eq!(
@@ -241,8 +247,8 @@ fn simple_user_journey() -> Result<(), Error> {
             app.process_events(&mut terminal, b"d".keys())?;
 
             assert_eq!(
-                2,
-                app.state.marked.len(),
+                Some(2),
+                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
                 "it marks the currently selected, second node",
             );
 
@@ -258,13 +264,15 @@ fn simple_user_journey() -> Result<(), Error> {
             app.process_events(&mut terminal, b"d".keys())?;
 
             assert_eq!(
-                1,
-                app.state.marked.len(),
+                Some(1),
+                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
                 "it toggled the previous selected entry off",
             );
 
             assert!(
-                app.state.marked.contains_key(&previously_selected_index),
+                app.window.mark_pane.as_ref().map_or(false, |p| p
+                    .marked()
+                    .contains_key(&previously_selected_index)),
                 "it leaves the first selected entry marked"
             );
         }
@@ -272,7 +280,11 @@ fn simple_user_journey() -> Result<(), Error> {
         {
             app.process_events(&mut terminal, b"k ".keys())?;
 
-            assert_eq!(0, app.state.marked.len(), "it toggles the item off",);
+            assert_eq!(
+                Some(0),
+                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                "it toggles the item off",
+            );
 
             assert_eq!(
                 node_by_index(&app, previously_selected_index),

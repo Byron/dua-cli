@@ -40,7 +40,6 @@ pub struct AppState {
     pub sorting: SortMode,
     pub message: Option<String>,
     pub focussed: FocussedPane,
-    pub marked: EntryMarkMap,
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal
@@ -110,12 +109,7 @@ impl TerminalApp {
             }
 
             match self.state.focussed {
-                FocussedPane::Mark => self
-                    .window
-                    .mark_pane
-                    .as_mut()
-                    .expect("mark pane")
-                    .key(key, &self.state.marked),
+                FocussedPane::Mark => self.window.mark_pane.as_mut().expect("mark pane").key(key),
                 FocussedPane::Help => {
                     self.window.help_pane.as_mut().expect("help pane").key(key);
                 }

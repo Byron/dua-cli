@@ -1,5 +1,5 @@
 use crate::interactive::{
-    app::{EntryMark, FocussedPane, TerminalApp},
+    app::{FocussedPane, TerminalApp},
     sorted_entries,
     widgets::{HelpPane, MarkPane},
 };
@@ -125,29 +125,18 @@ impl TerminalApp {
     }
 
     pub fn mark_entry(&mut self, advance_cursor: bool) {
-        if let Some(index) = self.state.selected {
-            // TODO: consider using the Entry::Occupied/Vacant API to remove things
-            if self.state.marked.get(&index).is_some() {
-                self.state.marked.remove(&index);
-            } else {
-                if let Some(e) = self.state.entries.iter().find(|e| e.index == index) {
-                    self.state.marked.insert(
-                        index,
-                        EntryMark {
-                            size: e.data.size,
-                            path: path_of(&self.traversal.tree, index),
-                        },
-                    );
-                }
+        match (self.state.selected, self.window.mark_pane.take()) {
+            (Some(index), Some(pane)) => {
+                self.window.mark_pane = pane.toggle_index(index, &self.traversal.tree);
             }
-            if self.state.marked.is_empty() {
-                self.window.mark_pane = None;
-            } else {
-                self.window.mark_pane = Some(MarkPane::new(&self.state.marked));
+            (Some(index), None) => {
+                self.window.mark_pane =
+                    MarkPane::default().toggle_index(index, &self.traversal.tree)
             }
-            if advance_cursor {
-                self.change_entry_selection(CursorDirection::Down)
-            }
+            _ => {}
+        };
+        if advance_cursor {
+            self.change_entry_selection(CursorDirection::Down)
         }
     }
 }

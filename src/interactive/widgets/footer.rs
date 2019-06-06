@@ -17,7 +17,7 @@ pub struct FooterProps<'a> {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
-    pub marked: &'a EntryMarkMap,
+    pub marked: Option<&'a EntryMarkMap>,
     pub message: Option<String>,
 }
 
@@ -45,7 +45,7 @@ impl Footer {
                 )
                 .into(),
             )),
-            match marked.is_empty() {
+            marked.and_then(|marked| match marked.is_empty() {
                 true => None,
                 false => Some(Text::Styled(
                     format!(
@@ -60,7 +60,7 @@ impl Footer {
                         modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
                     },
                 )),
-            },
+            }),
             message.as_ref().map(|m| {
                 Text::Styled(
                     m.into(),

@@ -1,5 +1,6 @@
-use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMarkMap};
-use dua::traverse::TreeIndex;
+use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMark, EntryMarkMap};
+use dua::path_of;
+use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::borrow::Borrow;
 use termion::{event::Key, event::Key::*};
@@ -13,47 +14,57 @@ use tui::{
 };
 use tui_react::{List, ListProps};
 
+#[derive(Default)]
 pub struct MarkPane {
-    list: List,
     selected: Option<TreeIndex>,
+    marked: EntryMarkMap,
+    list: List,
 }
 
-pub struct MarkPaneProps<'a> {
+pub struct MarkPaneProps {
     pub border_style: Style,
-    pub marked: &'a EntryMarkMap,
 }
 
 impl MarkPane {
-    pub fn new(_marked: &EntryMarkMap) -> MarkPane {
-        MarkPane {
-            list: Default::default(),
-            selected: None,
+    pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree) -> Option<Self> {
+        if self.marked.get(&index).is_some() {
+            self.marked.remove(&index);
+        } else {
+            if let Some(e) = tree.node_weight(index) {
+                self.marked.insert(
+                    index,
+                    EntryMark {
+                        size: e.size,
+                        path: path_of(tree, index),
+                    },
+                );
+            }
+        }
+        if self.marked.is_empty() {
+            None
+        } else {
+            Some(self)
         }
     }
-
-    pub fn key(&mut self, key: Key, marked: &EntryMarkMap) {
+    pub fn marked(&self) -> &EntryMarkMap {
+        &self.marked
+    }
+    pub fn key(&mut self, key: Key) {
         match key {
-            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp, marked),
-            Char('k') | Up => self.change_selection(CursorDirection::Up, marked),
-            Char('j') | Down => self.change_selection(CursorDirection::Down, marked),
-            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown, marked),
+            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
+            Char('k') | Up => self.change_selection(CursorDirection::Up),
+            Char('j') | Down => self.change_selection(CursorDirection::Down),
+            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
             _ => {}
         };
     }
 
-    fn change_selection(&mut self, _direction: CursorDirection, _marked: &EntryMarkMap) {}
+    fn change_selection(&mut self, _direction: CursorDirection) {}
 
-    pub fn render<'a>(
-        &mut self,
-        props: impl Borrow<MarkPaneProps<'a>>,
-        area: Rect,
-        buf: &mut Buffer,
-    ) {
-        let MarkPaneProps {
-            border_style,
-            marked,
-        } = props.borrow();
+    pub fn render(&mut self, props: impl Borrow<MarkPaneProps>, area: Rect, buf: &mut Buffer) {
+        let MarkPaneProps { border_style } = props.borrow();
 
+        let marked: &_ = &self.marked;
         let block = Block::default()
             .title("Marked Entries")
             .border_style(*border_style)
