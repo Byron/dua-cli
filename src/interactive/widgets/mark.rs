@@ -68,7 +68,13 @@ impl MarkPane {
         };
     }
 
-    fn change_selection(&mut self, _direction: CursorDirection) {}
+    fn change_selection(&mut self, direction: CursorDirection) {
+        self.selected = self.selected.map(|selected| {
+            direction
+                .move_cursor(selected)
+                .min(self.marked.len().saturating_sub(1))
+        });
+    }
 
     pub fn render(&mut self, props: impl Borrow<MarkPaneProps>, area: Rect, buf: &mut Buffer) {
         let MarkPaneProps { border_style } = props.borrow();
