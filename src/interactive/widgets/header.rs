@@ -5,8 +5,8 @@ use tui::widgets::{Paragraph, Text, Widget};
 
 pub struct Header;
 
-impl Widget for Header {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+impl Header {
+    pub fn render(&self, area: Rect, buf: &mut Buffer) {
         let bg_color = Color::LightYellow;
         let text_color = Color::Black;
         let standard = Style {

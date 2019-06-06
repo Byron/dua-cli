@@ -9,7 +9,6 @@ use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
-    widgets::Widget,
 };
 use tui_react::ToplevelComponent;
 
@@ -79,7 +78,7 @@ impl MainWindow {
             FocussedPane::Help => (grey, white),
         };
 
-        Header.draw(header_area, buf);
+        Header.render(header_area, buf);
         let props = EntriesProps {
             tree: &tree,
             root: state.root,
