@@ -94,9 +94,9 @@ impl MainWindow {
 
         let bg_color = {
             let marked = mark_pane.as_ref().map(|(_, p)| p.marked());
-            match (marked.map(|m| m.is_empty()), state.focussed) {
-                (Some(false), FocussedPane::Mark) => Color::LightRed,
-                (Some(false), _) | (None, _) => COLOR_MARKED_LIGHT,
+            match (marked.map_or(true, |m| m.is_empty()), state.focussed) {
+                (false, FocussedPane::Mark) => Color::LightRed,
+                (false, _) => COLOR_MARKED_LIGHT,
                 (_, _) => Color::White,
             }
         };
