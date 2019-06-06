@@ -80,7 +80,7 @@ impl ToplevelComponent for HelpPane {
                 hotkey(
                     "q/<ESC>",
                     "Close the current pane. Closes the program if no",
-                    Some("pane is open. Prompts if items are marked"),
+                    Some("pane is open"),
                 );
                 hotkey("<tab>", "Cycle between all open panes", None);
                 hotkey("?", "Show or hide the help pane", None);
