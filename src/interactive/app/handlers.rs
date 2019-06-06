@@ -70,11 +70,12 @@ impl TerminalApp {
 
     pub fn enter_node(&mut self) {
         if let Some(new_root) = self.state.selected {
-            self.state.entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
-            match self.state.entries.get(0) {
+            let new_entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
+            match new_entries.get(0) {
                 Some(b) => {
                     self.state.root = new_root;
                     self.state.selected = Some(b.index);
+                    self.state.entries = new_entries;
                 }
                 None => self.state.message = Some("Entry is a file or an empty directory".into()),
             }
