@@ -1,5 +1,8 @@
 use crate::interactive::{
-    widgets::{Entries, EntriesProps, Footer, FooterProps, Header, HelpPane, HelpPaneProps},
+    widgets::{
+        Entries, EntriesProps, Footer, FooterProps, Header, HelpPane, HelpPaneProps, MarkPane,
+        MarkPaneProps,
+    },
     AppState, DisplayOptions, FocussedPane,
 };
 use dua::traverse::Traversal;
@@ -10,7 +13,8 @@ use tui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
 };
-use tui_react::ToplevelComponent;
+use Constraint::*;
+use FocussedPane::*;
 
 pub struct MainWindowProps<'a> {
     pub traversal: &'a Traversal,
@@ -22,6 +26,7 @@ pub struct MainWindowProps<'a> {
 pub struct MainWindow {
     pub help_pane: Option<HelpPane>,
     pub entries_pane: Entries,
+    pub mark_pane: Option<MarkPane>,
 }
 
 impl MainWindow {
@@ -44,25 +49,31 @@ impl MainWindow {
         } = props.borrow();
         let regions = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                [
-                    Constraint::Length(1),
-                    Constraint::Max(256),
-                    Constraint::Length(1),
-                ]
-                .as_ref(),
-            )
+            .constraints([Length(1), Max(256), Length(1)].as_ref())
             .split(area);
         let (header_area, entries_area, footer_area) = (regions[0], regions[1], regions[2]);
-        let (entries_area, help_pane) = match self.help_pane {
-            Some(ref mut pane) => {
-                let regions = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                    .split(entries_area);
-                (regions[0], Some((regions[1], pane)))
+        let (entries_area, help_pane, mark_pane) = {
+            let regions = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Percentage(50), Percentage(50)].as_ref())
+                .split(entries_area);
+            let (left_pane, right_pane) = (regions[0], regions[1]);
+            match (&mut self.help_pane, &mut self.mark_pane) {
+                (Some(ref mut pane), None) => (left_pane, Some((right_pane, pane)), None),
+                (None, Some(ref mut pane)) => (left_pane, None, Some((right_pane, pane))),
+                (Some(ref mut help), Some(ref mut mark)) => {
+                    let regions = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Percentage(50), Percentage(50)].as_ref())
+                        .split(right_pane);
+                    (
+                        left_pane,
+                        Some((regions[0], help)),
+                        Some((regions[1], mark)),
+                    )
+                }
+                (None, None) => (entries_area, None, None),
             }
-            None => (entries_area, None),
         };
         let grey = Style {
             fg: Color::DarkGray,
@@ -73,9 +84,10 @@ impl MainWindow {
             fg: Color::White,
             ..grey
         };
-        let (entries_style, help_style) = match state.focussed {
-            FocussedPane::Main => (white, grey),
-            FocussedPane::Help => (grey, white),
+        let (entries_style, help_style, mark_style) = match state.focussed {
+            Main => (white, grey, grey),
+            Help => (grey, white, grey),
+            Mark => (grey, grey, white),
         };
 
         Header.render(!state.marked.is_empty(), header_area, buf);
@@ -87,7 +99,7 @@ impl MainWindow {
             marked: &state.marked,
             selected: state.selected,
             border_style: entries_style,
-            is_focussed: if let FocussedPane::Main = state.focussed {
+            is_focussed: if let Main = state.focussed {
                 true
             } else {
                 false
@@ -100,6 +112,14 @@ impl MainWindow {
                 border_style: help_style,
             };
             pane.render(props, help_area, buf);
+        }
+        if let Some((mark_area, pane)) = mark_pane {
+            let props = MarkPaneProps {
+                border_style: mark_style,
+                selected: None,
+                marked: &state.marked,
+            };
+            pane.render(props, mark_area, buf);
         }
 
         Footer.render(

@@ -1,7 +1,7 @@
 use crate::interactive::{
     app::{EntryMark, FocussedPane, TerminalApp},
     sorted_entries,
-    widgets::HelpPane,
+    widgets::{HelpPane, MarkPane},
 };
 use dua::path_of;
 use itertools::Itertools;
@@ -17,17 +17,24 @@ pub enum CursorDirection {
 impl TerminalApp {
     pub fn cycle_focus(&mut self) {
         use FocussedPane::*;
-        self.state.focussed = match (self.state.focussed, &self.window.help_pane) {
-            (Main, Some(_)) => Help,
-            (Help, _) => Main,
-            _ => Main,
+        self.state.focussed = match (
+            self.state.focussed,
+            &self.window.help_pane,
+            &self.window.mark_pane,
+        ) {
+            (Main, Some(_), _) => Help,
+            (Help, _, Some(_)) => Mark,
+            (Help, _, None) => Main,
+            (Mark, _, _) => Main,
+            (Main, None, None) => Main,
+            (Main, None, Some(_)) => Mark,
         };
     }
 
     pub fn toggle_help_pane(&mut self) {
         use FocussedPane::*;
         self.state.focussed = match self.state.focussed {
-            Main => {
+            Main | Mark => {
                 self.window.help_pane = Some(HelpPane::default());
                 Help
             }
@@ -133,6 +140,11 @@ impl TerminalApp {
                         .marked
                         .insert(index, EntryMark { size: e.data.size });
                 }
+            }
+            if self.state.marked.is_empty() {
+                self.window.mark_pane = None;
+            } else {
+                self.window.mark_pane = Some(MarkPane::default());
             }
             if advance_cursor {
                 self.change_entry_selection(CursorDirection::Down)

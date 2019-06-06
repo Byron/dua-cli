@@ -17,6 +17,7 @@ use tui_react::Terminal;
 pub enum FocussedPane {
     Main,
     Help,
+    Mark,
 }
 
 impl Default for FocussedPane {
@@ -97,6 +98,7 @@ impl TerminalApp {
                 Ctrl('c') => break,
                 Char('q') | Esc => match self.state.focussed {
                     Main => break,
+                    Mark => self.state.focussed = Main,
                     Help => {
                         self.state.focussed = Main;
                         self.window.help_pane = None
@@ -106,6 +108,7 @@ impl TerminalApp {
             }
 
             match self.state.focussed {
+                FocussedPane::Mark => {}
                 FocussedPane::Help => match key {
                     Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
                     Char('k') | Up => self.scroll_help(CursorDirection::Up),

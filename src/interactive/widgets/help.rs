@@ -7,7 +7,6 @@ use tui::{
     style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
-use tui_react::ToplevelComponent;
 
 #[derive(Default, Clone)]
 pub struct HelpPane {
@@ -18,10 +17,8 @@ pub struct HelpPaneProps {
     pub border_style: Style,
 }
 
-impl ToplevelComponent for HelpPane {
-    type Props = HelpPaneProps;
-
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+impl HelpPane {
+    pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let (texts, num_lines) = {
             let num_lines = Cell::new(0u16);
             let count = |n| num_lines.set(num_lines.get() + n);
