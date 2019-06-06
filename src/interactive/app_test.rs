@@ -281,7 +281,7 @@ fn simple_user_journey() -> Result<(), Error> {
             app.process_events(&mut terminal, b"k ".keys())?;
 
             assert_eq!(
-                Some(0),
+                None,
                 app.window.mark_pane.as_ref().map(|p| p.marked().len()),
                 "it toggles the item off",
             );
