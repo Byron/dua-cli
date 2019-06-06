@@ -30,6 +30,7 @@ pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
 pub struct EntryMark {
     pub size: u64,
     pub path: PathBuf,
+    pub index: usize,
 }
 
 #[derive(Default)]

@@ -45,11 +45,19 @@ impl MarkPane {
             self.marked.remove(&index);
         } else {
             if let Some(e) = tree.node_weight(index) {
+                let sorting_index = self
+                    .marked
+                    .values()
+                    .map(|v| v.index)
+                    .max()
+                    .unwrap_or(0)
+                    .wrapping_add(1);
                 self.marked.insert(
                     index,
                     EntryMark {
                         size: e.size,
                         path: path_of(tree, index),
+                        index: sorting_index,
                     },
                 );
             }
@@ -85,8 +93,9 @@ impl MarkPane {
         let MarkPaneProps { border_style } = props.borrow();
 
         let marked: &_ = &self.marked;
+        let title = format!("Marked Entries: {}", marked.len());
         let block = Block::default()
-            .title("Marked Entries")
+            .title(&title)
             .border_style(*border_style)
             .borders(Borders::ALL);
         let entry_in_view = self
@@ -96,7 +105,7 @@ impl MarkPane {
         let selected = self.selected;
         let entries = marked
             .values()
-            .sorted_by_key(|v| &v.path)
+            .sorted_by_key(|v| &v.index)
             .enumerate()
             .map(|(idx, v)| {
                 let modifier = match selected {
