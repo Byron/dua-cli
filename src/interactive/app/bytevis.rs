@@ -43,6 +43,11 @@ impl fmt::Display for DisplayByteVisualization {
         use ByteVisualization::*;
         let Self { format, percentage } = self;
 
+        let percentage = if percentage.is_nan() {
+            0.0
+        } else {
+            *percentage
+        };
         const BAR_SIZE: usize = 10;
         match format {
             Percentage => Self::make_percentage(f, percentage),
@@ -58,7 +63,7 @@ impl fmt::Display for DisplayByteVisualization {
 }
 
 impl DisplayByteVisualization {
-    fn make_bar(f: &mut fmt::Formatter, percentage: &f32, length: usize) -> Result<(), fmt::Error> {
+    fn make_bar(f: &mut fmt::Formatter, percentage: f32, length: usize) -> Result<(), fmt::Error> {
         let block_length = (length as f32 * percentage).round() as usize;
         for _ in 0..block_length {
             f.write_str(tui::symbols::block::FULL)?;
@@ -68,7 +73,7 @@ impl DisplayByteVisualization {
         }
         Ok(())
     }
-    fn make_percentage(f: &mut fmt::Formatter, percentage: &f32) -> Result<(), fmt::Error> {
+    fn make_percentage(f: &mut fmt::Formatter, percentage: f32) -> Result<(), fmt::Error> {
         write!(f, " {:>5.02}% ", percentage * 100.0)
     }
 }
