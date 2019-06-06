@@ -1,6 +1,7 @@
 use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMark, EntryMarkMap};
 use dua::path_of;
 use dua::traverse::{Tree, TreeIndex};
+use itertools::Itertools;
 use std::borrow::Borrow;
 use termion::{event::Key, event::Key::*};
 use tui::{
@@ -26,6 +27,7 @@ pub struct MarkPaneProps {
 }
 
 impl MarkPane {
+    #[cfg(test)]
     pub fn has_focus(&self) -> bool {
         self.has_focus
     }
@@ -92,21 +94,25 @@ impl MarkPane {
             .map(|selected| selected)
             .or(Some(marked.len().saturating_sub(1)));
         let selected = self.selected;
-        let entries = marked.values().enumerate().map(|(idx, v)| {
-            let modifier = match selected {
-                Some(selected) if idx == selected => Modifier::BOLD,
-                _ => Modifier::empty(),
-            };
-            let name = Text::Styled(
-                v.path.to_string_lossy(),
-                Style {
-                    fg: COLOR_MARKED_LIGHT,
-                    modifier,
-                    ..Style::default()
-                },
-            );
-            vec![name]
-        });
+        let entries = marked
+            .values()
+            .sorted_by_key(|v| &v.path)
+            .enumerate()
+            .map(|(idx, v)| {
+                let modifier = match selected {
+                    Some(selected) if idx == selected => Modifier::BOLD,
+                    _ => Modifier::empty(),
+                };
+                let name = Text::Styled(
+                    v.path.to_string_lossy(),
+                    Style {
+                        fg: COLOR_MARKED_LIGHT,
+                        modifier,
+                        ..Style::default()
+                    },
+                );
+                vec![name]
+            });
 
         let props = ListProps {
             block: Some(block),
