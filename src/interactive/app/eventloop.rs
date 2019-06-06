@@ -109,13 +109,9 @@ impl TerminalApp {
             }
 
             match self.state.focussed {
-                FocussedPane::Mark => {}
+                FocussedPane::Mark => self.window.mark_pane.as_mut().expect("mark pane").key(key),
                 FocussedPane::Help => {
-                    self.window
-                        .help_pane
-                        .as_mut()
-                        .expect("help window")
-                        .key(key);
+                    self.window.help_pane.as_mut().expect("help pane").key(key);
                 }
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(),

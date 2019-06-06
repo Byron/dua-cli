@@ -1,7 +1,8 @@
-use crate::interactive::{widgets::COLOR_MARKED_LIGHT, EntryMarkMap};
+use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMarkMap, Handle};
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::Borrow;
+use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer, layout::Rect, style::Style, widgets::Block, widgets::Borders, widgets::Text,
 };
@@ -18,7 +19,20 @@ pub struct MarkPaneProps<'a> {
     pub marked: &'a EntryMarkMap,
 }
 
+impl Handle for MarkPane {
+    fn key(&mut self, key: Key) {
+        match key {
+            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
+            Char('k') | Up => self.change_selection(CursorDirection::Up),
+            Char('j') | Down => self.change_selection(CursorDirection::Down),
+            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
+            _ => {}
+        };
+    }
+}
+
 impl MarkPane {
+    fn change_selection(&mut self, _direction: CursorDirection) {}
     pub fn render<'a>(
         &mut self,
         props: impl Borrow<MarkPaneProps<'a>>,
