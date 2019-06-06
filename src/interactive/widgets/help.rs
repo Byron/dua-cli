@@ -1,4 +1,4 @@
-use crate::interactive::{CursorDirection, Handle};
+use crate::interactive::CursorDirection;
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use termion::event::Key;
@@ -20,8 +20,8 @@ pub struct HelpPaneProps {
     pub border_style: Style,
 }
 
-impl Handle for HelpPane {
-    fn key(&mut self, key: Key) {
+impl HelpPane {
+    pub fn key(&mut self, key: Key) {
         match key {
             Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
             Char('k') | Up => self.scroll_help(CursorDirection::Up),
@@ -30,9 +30,6 @@ impl Handle for HelpPane {
             _ => {}
         };
     }
-}
-
-impl HelpPane {
     fn scroll_help(&mut self, direction: CursorDirection) {
         self.scroll = direction.move_cursor(self.scroll as usize) as u16;
     }

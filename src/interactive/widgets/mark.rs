@@ -1,17 +1,21 @@
-use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMarkMap, Handle};
+use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMarkMap};
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::Borrow;
 use termion::{event::Key, event::Key::*};
 use tui::{
-    buffer::Buffer, layout::Rect, style::Style, widgets::Block, widgets::Borders, widgets::Text,
+    buffer::Buffer,
+    layout::Rect,
+    style::{Modifier, Style},
+    widgets::Block,
+    widgets::Borders,
+    widgets::Text,
 };
 use tui_react::{List, ListProps};
 
-#[derive(Default)]
 pub struct MarkPane {
-    pub list: List,
-    pub selected: Option<TreeIndex>,
+    list: List,
+    selected: Option<TreeIndex>,
 }
 
 pub struct MarkPaneProps<'a> {
@@ -19,20 +23,26 @@ pub struct MarkPaneProps<'a> {
     pub marked: &'a EntryMarkMap,
 }
 
-impl Handle for MarkPane {
-    fn key(&mut self, key: Key) {
+impl MarkPane {
+    pub fn new(_marked: &EntryMarkMap) -> MarkPane {
+        MarkPane {
+            list: Default::default(),
+            selected: None,
+        }
+    }
+
+    pub fn key(&mut self, key: Key, marked: &EntryMarkMap) {
         match key {
-            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
-            Char('k') | Up => self.change_selection(CursorDirection::Up),
-            Char('j') | Down => self.change_selection(CursorDirection::Down),
-            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
+            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp, marked),
+            Char('k') | Up => self.change_selection(CursorDirection::Up, marked),
+            Char('j') | Down => self.change_selection(CursorDirection::Down, marked),
+            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown, marked),
             _ => {}
         };
     }
-}
 
-impl MarkPane {
-    fn change_selection(&mut self, _direction: CursorDirection) {}
+    fn change_selection(&mut self, _direction: CursorDirection, _marked: &EntryMarkMap) {}
+
     pub fn render<'a>(
         &mut self,
         props: impl Borrow<MarkPaneProps<'a>>,
@@ -48,19 +58,27 @@ impl MarkPane {
             .title("Marked Entries")
             .border_style(*border_style)
             .borders(Borders::ALL);
-        let entry_in_view = self.selected.and_then(|idx| {
-            marked
-                .iter()
-                .enumerate()
-                .find_position(|(_pos, (&node_index, _))| node_index == idx)
-                .map(|(pos, _)| pos)
-        });
+        let entry_in_view = self
+            .selected
+            .and_then(|selected| {
+                marked
+                    .keys()
+                    .find_position(|&&index| index == selected)
+                    .map(|(pos, _)| pos)
+            })
+            .or_else(|| marked.keys().enumerate().last().map(|(pos, _)| pos));
 
-        let entries = marked.iter().map(|(_, v)| {
+        let selected = self.selected.clone();
+        let entries = marked.iter().map(|(idx, v)| {
+            let modifier = match selected {
+                Some(selected) if *idx == selected => Modifier::BOLD,
+                _ => Modifier::empty(),
+            };
             let name = Text::Styled(
                 v.path.to_string_lossy(),
                 Style {
                     fg: COLOR_MARKED_LIGHT,
+                    modifier,
                     ..Style::default()
                 },
             );

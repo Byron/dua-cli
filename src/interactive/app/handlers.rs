@@ -143,7 +143,7 @@ impl TerminalApp {
             if self.state.marked.is_empty() {
                 self.window.mark_pane = None;
             } else {
-                self.window.mark_pane = Some(MarkPane::default());
+                self.window.mark_pane = Some(MarkPane::new(&self.state.marked));
             }
             if advance_cursor {
                 self.change_entry_selection(CursorDirection::Down)
