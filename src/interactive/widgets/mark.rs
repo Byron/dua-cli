@@ -1,10 +1,9 @@
-use crate::interactive::EntryMarkMap;
+use crate::interactive::{widgets::COLOR_MARKED_LIGHT, EntryMarkMap};
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::Borrow;
 use tui::{
-    buffer::Buffer, layout::Rect, style::Color, style::Style, widgets::Block, widgets::Borders,
-    widgets::Text,
+    buffer::Buffer, layout::Rect, style::Style, widgets::Block, widgets::Borders, widgets::Text,
 };
 use tui_react::{List, ListProps};
 
@@ -47,7 +46,7 @@ impl MarkPane {
             let name = Text::Styled(
                 v.path.to_string_lossy(),
                 Style {
-                    fg: Color::LightRed,
+                    fg: COLOR_MARKED_LIGHT,
                     ..Style::default()
                 },
             );

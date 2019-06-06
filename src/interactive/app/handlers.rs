@@ -100,13 +100,6 @@ impl TerminalApp {
             }
         }
     }
-
-    pub fn scroll_help(&mut self, direction: CursorDirection) {
-        if let Some(ref mut pane) = self.window.help_pane {
-            pane.scroll = direction.move_cursor(pane.scroll as usize) as u16;
-        }
-    }
-
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
         let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
         let next_selected_pos = match self.state.selected {

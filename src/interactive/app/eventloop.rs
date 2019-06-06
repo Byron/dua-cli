@@ -1,7 +1,7 @@
 use crate::interactive::{
     sorted_entries,
     widgets::{MainWindow, MainWindowProps},
-    ByteVisualization, CursorDirection, DisplayOptions, EntryDataBundle, SortMode,
+    ByteVisualization, CursorDirection, DisplayOptions, EntryDataBundle, Handle, SortMode,
 };
 use dua::{
     traverse::{Traversal, TreeIndex},
@@ -85,7 +85,7 @@ impl TerminalApp {
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        use termion::event::Key::{Backspace, Char, Ctrl, Down, Esc, PageDown, PageUp, Up};
+        use termion::event::Key::{Backspace, Char, Ctrl, Esc};
         use FocussedPane::*;
 
         self.draw(terminal)?;
@@ -110,13 +110,13 @@ impl TerminalApp {
 
             match self.state.focussed {
                 FocussedPane::Mark => {}
-                FocussedPane::Help => match key {
-                    Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
-                    Char('k') | Up => self.scroll_help(CursorDirection::Up),
-                    Char('j') | Down => self.scroll_help(CursorDirection::Down),
-                    Ctrl('d') | PageDown => self.scroll_help(CursorDirection::PageDown),
-                    _ => {}
-                },
+                FocussedPane::Help => {
+                    self.window
+                        .help_pane
+                        .as_mut()
+                        .expect("help window")
+                        .key(key);
+                }
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(),
                     Char(' ') => self.mark_entry(false),

@@ -1,9 +1,12 @@
+use crate::interactive::{CursorDirection, Handle};
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
-use tui::style::Color;
+use termion::event::Key;
+use termion::event::Key::*;
 use tui::{
     buffer::Buffer,
     layout::Rect,
+    style::Color,
     style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
@@ -17,7 +20,23 @@ pub struct HelpPaneProps {
     pub border_style: Style,
 }
 
+impl Handle for HelpPane {
+    fn key(&mut self, key: Key) {
+        match key {
+            Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
+            Char('k') | Up => self.scroll_help(CursorDirection::Up),
+            Char('j') | Down => self.scroll_help(CursorDirection::Down),
+            Ctrl('d') | PageDown => self.scroll_help(CursorDirection::PageDown),
+            _ => {}
+        };
+    }
+}
+
 impl HelpPane {
+    fn scroll_help(&mut self, direction: CursorDirection) {
+        self.scroll = direction.move_cursor(self.scroll as usize) as u16;
+    }
+
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let (texts, num_lines) = {
             let num_lines = Cell::new(0u16);
