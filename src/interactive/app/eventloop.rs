@@ -8,7 +8,7 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::{io, path::PathBuf};
+use std::{collections::BTreeMap, io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -25,9 +25,8 @@ impl Default for FocussedPane {
     }
 }
 
-pub struct EntryMark {
-    pub index: TreeIndex,
-}
+pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
+pub struct EntryMark {}
 
 #[derive(Default)]
 pub struct AppState {
@@ -37,7 +36,7 @@ pub struct AppState {
     pub sorting: SortMode,
     pub message: Option<String>,
     pub focussed: FocussedPane,
-    pub marked: Vec<EntryMark>,
+    pub marked: EntryMarkMap,
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal

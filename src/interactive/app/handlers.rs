@@ -123,12 +123,11 @@ impl TerminalApp {
 
     pub fn mark_entry(&mut self, advance_cursor: bool) {
         if let Some(index) = self.state.selected {
-            if let Some((existing, _)) =
-                self.state.marked.iter().find_position(|e| e.index == index)
-            {
-                self.state.marked.remove(existing);
+            // TODO: consider using the Entry::Occupied/Vacant API to remove things
+            if self.state.marked.get(&index).is_some() {
+                self.state.marked.remove(&index);
             } else {
-                self.state.marked.push(EntryMark { index });
+                self.state.marked.insert(index, EntryMark {});
             }
             if advance_cursor {
                 self.change_entry_selection(CursorDirection::Down)

@@ -1,4 +1,4 @@
-use crate::interactive::{DisplayOptions, EntryDataBundle, EntryMark};
+use crate::interactive::{DisplayOptions, EntryDataBundle, EntryMarkMap};
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::{borrow::Borrow, path::Path};
@@ -16,7 +16,7 @@ pub struct EntriesProps<'a> {
     pub display: DisplayOptions,
     pub selected: Option<TreeIndex>,
     pub entries: &'a [EntryDataBundle],
-    pub marked: &'a [EntryMark],
+    pub marked: &'a EntryMarkMap,
     pub border_style: Style,
     pub is_focussed: bool,
 }
@@ -39,7 +39,7 @@ impl Entries {
             display,
             entries,
             selected,
-            marked: _,
+            marked,
             border_style,
             is_focussed,
         } = props.borrow();
@@ -131,6 +131,7 @@ impl Entries {
                     style,
                 );
 
+                let dark_yellow = Color::Rgb(176, 126, 0);
                 let name = Text::Styled(
                     fill_background_to_right(
                         format!(
@@ -142,11 +143,16 @@ impl Entries {
                     )
                     .into(),
                     Style {
-                        fg: match (!is_dir, exists) {
-                            (true, true) if !is_selected => Color::DarkGray,
-                            (true, true) => style.fg,
-                            (_, false) => Color::Red,
-                            (false, true) => style.fg,
+                        fg: match (!is_dir, exists, marked.contains_key(node_idx)) {
+                            (true, true, false) if !is_selected => Color::DarkGray,
+                            (true, true, false) => style.fg,
+                            (false, true, false) => style.fg,
+
+                            (true, true, true) => dark_yellow,
+                            (false, true, true) => Color::Yellow,
+
+                            // non-existing - always red!
+                            (_, false, _) => Color::Red,
                         },
                         ..style
                     },

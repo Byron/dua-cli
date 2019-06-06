@@ -225,9 +225,8 @@ fn simple_user_journey() -> Result<(), Error> {
         app.process_events(&mut terminal, b"d".keys())?;
         {
             assert_eq!(1, app.state.marked.len(), "it marks only a single node",);
-            assert_eq!(
-                node_by_index(&app, previously_selected_index),
-                node_by_index(&app, app.state.marked[0].index),
+            assert!(
+                app.state.marked.contains_key(&previously_selected_index),
                 "it marks the selected node"
             );
             assert_eq!(
@@ -264,9 +263,8 @@ fn simple_user_journey() -> Result<(), Error> {
                 "it toggled the previous selected entry off",
             );
 
-            assert_eq!(
-                node_by_index(&app, previously_selected_index),
-                node_by_index(&app, app.state.marked[0].index),
+            assert!(
+                app.state.marked.contains_key(&previously_selected_index),
                 "it leaves the first selected entry marked"
             );
         }

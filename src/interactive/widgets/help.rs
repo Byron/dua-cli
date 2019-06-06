@@ -88,6 +88,8 @@ impl ToplevelComponent for HelpPane {
             title("Keys for entry operations");
             {
                 hotkey("Shift + o", "Open the entry with the associated program");
+                hotkey("d", "Toggle the currently selected entry and move down");
+                hotkey("<space bar>", "Toggle the currently selected entry");
                 spacer();
             }
             title("Keys for application control");
