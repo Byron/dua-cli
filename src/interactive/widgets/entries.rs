@@ -1,5 +1,5 @@
 use crate::interactive::{
-    widgets::{COLOR_MARKED, COLOR_MARKED_DARK},
+    widgets::{COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER},
     DisplayOptions, EntryDataBundle, EntryMarkMap,
 };
 use dua::traverse::{Tree, TreeIndex};
@@ -131,7 +131,14 @@ impl Entries {
                         display.byte_vis.display(w.size as f32 / total as f32)
                     )
                     .into(),
-                    style,
+                    Style {
+                        fg: match (is_selected, *is_focussed) {
+                            (true, true) => COLOR_MARKED_DARK,
+                            (true, false) => COLOR_MARKED_DARKER,
+                            _ => style.fg,
+                        },
+                        ..style
+                    },
                 );
 
                 let name = Text::Styled(
