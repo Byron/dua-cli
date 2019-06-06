@@ -1,4 +1,7 @@
-use crate::interactive::{DisplayOptions, EntryDataBundle, EntryMarkMap};
+use crate::interactive::{
+    widgets::{COLOR_MARKED, COLOR_MARKED_DARK},
+    DisplayOptions, EntryDataBundle, EntryMarkMap,
+};
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::{borrow::Borrow, path::Path};
@@ -131,7 +134,6 @@ impl Entries {
                     style,
                 );
 
-                let dark_yellow = Color::Rgb(176, 126, 0);
                 let name = Text::Styled(
                     fill_background_to_right(
                         format!(
@@ -148,8 +150,8 @@ impl Entries {
                             (true, true, false) => style.fg,
                             (false, true, false) => style.fg,
 
-                            (true, true, true) => dark_yellow,
-                            (false, true, true) => Color::Yellow,
+                            (true, true, true) => COLOR_MARKED_DARK,
+                            (false, true, true) => COLOR_MARKED,
 
                             // non-existing - always red!
                             (_, false, _) => Color::Red,

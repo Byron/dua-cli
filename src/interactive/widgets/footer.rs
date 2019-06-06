@@ -1,32 +1,33 @@
-use crate::ByteFormat;
+use crate::{
+    interactive::{widgets::COLOR_MARKED_DARK, EntryMarkMap},
+    ByteFormat,
+};
 use std::borrow::Borrow;
-use tui::widgets::{Paragraph, Text};
 use tui::{
     buffer::Buffer,
     layout::Rect,
     style::Modifier,
     style::{Color, Style},
     widgets::Widget,
+    widgets::{Paragraph, Text},
 };
-use tui_react::ToplevelComponent;
-
 pub struct Footer;
 
-pub struct FooterProps {
+pub struct FooterProps<'a> {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
+    pub marked: &'a EntryMarkMap,
     pub message: Option<String>,
 }
 
-impl ToplevelComponent for Footer {
-    type Props = FooterProps;
-
-    fn render(&mut self, props: impl Borrow<Self::Props>, area: Rect, buf: &mut Buffer) {
+impl Footer {
+    pub fn render<'a>(&self, props: impl Borrow<FooterProps<'a>>, area: Rect, buf: &mut Buffer) {
         let FooterProps {
             total_bytes,
             entries_traversed,
             format,
+            marked,
             message,
         } = props.borrow();
 
@@ -44,6 +45,22 @@ impl ToplevelComponent for Footer {
                 )
                 .into(),
             )),
+            match marked.is_empty() {
+                true => None,
+                false => Some(Text::Styled(
+                    format!(
+                        "Marked {} items ({}) ",
+                        marked.len(),
+                        format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
+                    )
+                    .into(),
+                    Style {
+                        fg: COLOR_MARKED_DARK,
+                        bg: bg_color,
+                        modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
+                    },
+                )),
+            },
             message.as_ref().map(|m| {
                 Text::Styled(
                     m.into(),

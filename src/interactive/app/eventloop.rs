@@ -26,7 +26,9 @@ impl Default for FocussedPane {
 }
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
-pub struct EntryMark {}
+pub struct EntryMark {
+    pub size: u64,
+}
 
 #[derive(Default)]
 pub struct AppState {

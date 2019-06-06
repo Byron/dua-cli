@@ -127,7 +127,11 @@ impl TerminalApp {
             if self.state.marked.get(&index).is_some() {
                 self.state.marked.remove(&index);
             } else {
-                self.state.marked.insert(index, EntryMark {});
+                if let Some(e) = self.state.entries.iter().find(|e| e.index == index) {
+                    self.state
+                        .marked
+                        .insert(index, EntryMark { size: e.data.size });
+                }
             }
             if advance_cursor {
                 self.change_entry_selection(CursorDirection::Down)

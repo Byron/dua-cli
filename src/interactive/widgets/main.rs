@@ -106,6 +106,7 @@ impl MainWindow {
             FooterProps {
                 total_bytes: *total_bytes,
                 entries_traversed: *entries_traversed,
+                marked: &state.marked,
                 format: display.byte_format,
                 message: state.message.clone(),
             },

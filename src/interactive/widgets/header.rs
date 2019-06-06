@@ -1,14 +1,17 @@
-use tui::buffer::Buffer;
-use tui::layout::Rect;
-use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Paragraph, Text, Widget};
+use crate::interactive::widgets::COLOR_MARKED_LIGHT;
+use tui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    widgets::{Paragraph, Text, Widget},
+};
 
 pub struct Header;
 
 impl Header {
     pub fn render(&self, has_marked_entries: bool, area: Rect, buf: &mut Buffer) {
         let bg_color = if has_marked_entries {
-            Color::LightYellow
+            COLOR_MARKED_LIGHT
         } else {
             Color::White
         };
