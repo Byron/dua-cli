@@ -80,7 +80,7 @@ fn run() -> Result<(), Error> {
 }
 
 fn paths_from(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
-    if paths.len() == 0 {
+    if paths.is_empty() {
         cwd_dirlist()
     } else {
         Ok(paths)
