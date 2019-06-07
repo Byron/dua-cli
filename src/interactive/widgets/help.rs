@@ -103,11 +103,8 @@ impl HelpPane {
             {
                 hotkey("j/<down>", "move down an entry", None);
                 hotkey("k/<up>", "move up an entry", None);
-                hotkey(
-                    "o/<enter>/<right>",
-                    "descent into the selected directory",
-                    None,
-                );
+                hotkey("o/<enter>", "descent into the selected directory", None);
+                hotkey("<right>", "^", None);
                 hotkey(
                     "u/<left>",
                     "ascent one level into the parent directory",
@@ -147,10 +144,11 @@ impl HelpPane {
             }
             title("Keys in the Mark pane");
             {
+                hotkey("d/<space>", "remove the selected entry from the list", None);
                 hotkey(
-                    "Ctrl + Shift + r",
+                    "Ctrl + R",
                     "Permanently delete all marked entries without prompt!",
-                    None,
+                    Some("This operation cannot be undone!"),
                 );
                 spacer();
             }
