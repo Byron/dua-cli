@@ -230,11 +230,24 @@ impl MarkPane {
 
         let list_area = if self.has_focus {
             let (help_line_area, list_area) = {
+                let help_at_bottom =
+                    selected.unwrap_or(0) >= inner_area.height.saturating_sub(1) as usize / 2;
+                let constraints = {
+                    let mut c = vec![Constraint::Length(1), Constraint::Max(256)];
+                    if help_at_bottom {
+                        c.reverse();
+                    }
+                    c
+                };
                 let regions = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(1), Constraint::Max(256)].as_ref())
+                    .constraints(constraints)
                     .split(inner_area);
-                (regions[0], regions[1])
+
+                match help_at_bottom {
+                    true => (regions[1], regions[0]),
+                    false => (regions[0], regions[1]),
+                }
             };
 
             let default_style = Style {
