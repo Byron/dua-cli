@@ -82,18 +82,19 @@ impl MarkPane {
     pub fn marked(&self) -> &EntryMarkMap {
         &self.marked
     }
-    pub fn key(&mut self, key: Key) {
+    pub fn key(mut self, key: Key) -> Option<Self> {
         match key {
-            Char('d') | Char(' ') => self.remove_selected_and_move_down(),
+            Char('d') | Char(' ') => return self.remove_selected_and_move_down(),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
             Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
             _ => {}
         };
+        Some(self)
     }
 
-    fn remove_selected_and_move_down(&mut self) {
+    fn remove_selected_and_move_down(mut self) -> Option<Self> {
         if let Some(selected) = self.selected {
             let (idx, se_len) = {
                 let sorted_entries: Vec<_> = self
@@ -108,10 +109,14 @@ impl MarkPane {
             };
             if let Some(idx) = idx {
                 self.marked.remove(&idx);
-                if selected == se_len.saturating_sub(1) {
-                    self.selected = selected.checked_sub(1);
+                if se_len.saturating_sub(1) == 0 {
+                    return None;
                 }
+                self.selected = selected.checked_sub(1);
             }
+            Some(self)
+        } else {
+            Some(self)
         }
     }
 
@@ -208,7 +213,7 @@ impl MarkPane {
         let inner_area = block.inner(area);
         block.draw(area, buf);
 
-        let list_area = if self.has_focus && !self.marked.is_empty() {
+        let list_area = if self.has_focus {
             let (help_line_area, list_area) = {
                 let regions = Layout::default()
                     .direction(Direction::Vertical)

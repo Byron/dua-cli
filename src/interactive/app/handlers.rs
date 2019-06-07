@@ -1,11 +1,12 @@
 use crate::interactive::{
-    app::{FocussedPane, TerminalApp},
+    app::{FocussedPane::*, TerminalApp},
     sorted_entries,
     widgets::{HelpPane, MarkPane},
 };
 use dua::path_of;
 use itertools::Itertools;
 use petgraph::Direction;
+use termion::event::Key;
 
 pub enum CursorDirection {
     PageDown,
@@ -28,7 +29,6 @@ impl CursorDirection {
 
 impl TerminalApp {
     pub fn cycle_focus(&mut self) {
-        use FocussedPane::*;
         if let Some(p) = self.window.mark_pane.as_mut() {
             p.set_focus(false)
         };
@@ -53,7 +53,6 @@ impl TerminalApp {
     }
 
     pub fn toggle_help_pane(&mut self) {
-        use FocussedPane::*;
         self.state.focussed = match self.state.focussed {
             Main | Mark => {
                 self.window.help_pane = Some(HelpPane::default());
@@ -143,6 +142,13 @@ impl TerminalApp {
         };
         if advance_cursor {
             self.change_entry_selection(CursorDirection::Down)
+        }
+    }
+
+    pub fn dispatch_to_mark_pane(&mut self, key: Key) -> () {
+        self.window.mark_pane = self.window.mark_pane.take().and_then(|p| p.key(key));
+        if self.window.mark_pane.is_none() {
+            self.state.focussed = Main;
         }
     }
 }
