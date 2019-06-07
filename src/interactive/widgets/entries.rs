@@ -1,6 +1,6 @@
 use crate::interactive::{
-    widgets::{COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER},
-    DisplayOptions, EntryDataBundle, EntryMarkMap,
+    widgets::{EntryMarkMap, COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER},
+    DisplayOptions, EntryDataBundle,
 };
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;

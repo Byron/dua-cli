@@ -1,8 +1,8 @@
-use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMark, EntryMarkMap};
+use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection};
 use dua::traverse::{Tree, TreeIndex};
 use dua::{path_of, ByteFormat};
 use itertools::Itertools;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf};
 use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
@@ -13,6 +13,13 @@ use tui::{
     widgets::Text,
 };
 use tui_react::{List, ListProps};
+
+pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
+pub struct EntryMark {
+    pub size: u64,
+    pub path: PathBuf,
+    pub index: usize,
+}
 
 #[derive(Default)]
 pub struct MarkPane {

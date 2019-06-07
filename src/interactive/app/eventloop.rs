@@ -8,7 +8,7 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::{collections::BTreeMap, io, path::PathBuf};
+use std::{io, path::PathBuf};
 use termion::input::{Keys, TermReadEventsAndRaw};
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -24,13 +24,6 @@ impl Default for FocussedPane {
     fn default() -> Self {
         FocussedPane::Main
     }
-}
-
-pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
-pub struct EntryMark {
-    pub size: u64,
-    pub path: PathBuf,
-    pub index: usize,
 }
 
 #[derive(Default)]
