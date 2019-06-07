@@ -87,7 +87,7 @@ where
         // Autoresize - otherwise we get glitches if shrinking or potential desync between widgets
         // and the terminal (if growing), which may OOB.
         self.autoresize()?;
-        Ok(self.known_size.clone())
+        Ok(self.known_size)
     }
 
     pub fn post_render(&mut self) -> io::Result<()> {
