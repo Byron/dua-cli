@@ -60,6 +60,18 @@ impl ByteFormat {
             _ => 10,
         }
     }
+    pub fn total_width(&self) -> usize {
+        use ByteFormat::*;
+        const THE_SPACE_BETWEEN_UNIT_AND_NUMBER: usize = 1;
+
+        self.width()
+            + match self {
+                Binary | MiB | GiB => 3,
+                Metric | MB | GB => 2,
+                Bytes => 1,
+            }
+            + THE_SPACE_BETWEEN_UNIT_AND_NUMBER
+    }
     pub fn display(self, bytes: u64) -> ByteFormatDisplay {
         ByteFormatDisplay {
             format: self,

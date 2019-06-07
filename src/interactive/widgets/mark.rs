@@ -5,6 +5,7 @@ use itertools::Itertools;
 use std::collections::btree_map::Entry;
 use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf};
 use termion::{event::Key, event::Key::*};
+use tui::style::Color;
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -126,15 +127,39 @@ impl MarkPane {
                     Some(selected) if idx == selected => Modifier::BOLD,
                     _ => Modifier::empty(),
                 };
-                let name = Text::Styled(
-                    v.path.to_string_lossy(),
+                let path = format!(" {}", v.path.display());
+                let path_len = path.len();
+                let path = Text::Styled(
+                    path.into(),
                     Style {
                         fg: COLOR_MARKED_LIGHT,
                         modifier,
                         ..Style::default()
                     },
                 );
-                vec![name]
+                let bytes = Text::Styled(
+                    format!(
+                        "{:>byte_column_width$}",
+                        format.display(v.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+                        byte_column_width = format.width()
+                    )
+                    .into(),
+                    Style {
+                        fg: Color::Green,
+                        ..Default::default()
+                    },
+                );
+                let spacer = Text::Raw(
+                    format!(
+                        "{:-space$}",
+                        "",
+                        space = (area.width as usize)
+                            .saturating_sub(path_len)
+                            .saturating_sub(format.total_width())
+                    )
+                    .into(),
+                );
+                vec![path, spacer, bytes]
             });
 
         let props = ListProps {
