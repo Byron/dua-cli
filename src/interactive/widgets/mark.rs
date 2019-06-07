@@ -95,13 +95,22 @@ impl MarkPane {
 
     fn remove_selected_and_move_down(&mut self) {
         if let Some(selected) = self.selected {
-            let sorted_entries: Vec<_> = self
-                .marked
-                .iter()
-                .sorted_by_key(|(_, v)| &v.index)
-                .collect();
-            if let Some(idx) = sorted_entries.get(selected).map(|(k, _)| *k.to_owned()) {
+            let (idx, se_len) = {
+                let sorted_entries: Vec<_> = self
+                    .marked
+                    .iter()
+                    .sorted_by_key(|(_, v)| &v.index)
+                    .collect();
+                (
+                    sorted_entries.get(selected).map(|(k, _)| *k.to_owned()),
+                    sorted_entries.len(),
+                )
+            };
+            if let Some(idx) = idx {
                 self.marked.remove(&idx);
+                if selected == se_len.saturating_sub(1) {
+                    self.selected = selected.checked_sub(1);
+                }
             }
         }
     }
