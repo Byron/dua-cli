@@ -208,7 +208,7 @@ impl MarkPane {
         let inner_area = block.inner(area);
         block.draw(area, buf);
 
-        let list_area = if self.has_focus {
+        let list_area = if self.has_focus && !self.marked.is_empty() {
             let (help_line_area, list_area) = {
                 let regions = Layout::default()
                     .direction(Direction::Vertical)
@@ -234,7 +234,7 @@ impl MarkPane {
                         },
                     ),
                     Text::Styled(
-                        " permanently deletes list without prompt".into(),
+                        " deletes listed entries from disk without prompt".into(),
                         default_style,
                     ),
                 ]
