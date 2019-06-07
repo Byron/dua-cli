@@ -41,7 +41,7 @@ fn run() -> Result<(), Error> {
                     .with_context(|_| "Interactive mode requires a connected terminal")?
             };
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, paths_from(input)?)?;
-            app.process_events(&mut terminal, io::stdin().keys())?
+            app.process_events(&mut terminal, termion::async_stdin().keys())?
         }
         Some(Aggregate {
             input,
