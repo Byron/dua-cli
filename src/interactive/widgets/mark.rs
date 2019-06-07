@@ -84,6 +84,7 @@ impl MarkPane {
     }
     pub fn key(&mut self, key: Key) {
         match key {
+            Char('d') => self.remove_selected_and_move_down(),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
@@ -92,6 +93,24 @@ impl MarkPane {
         };
     }
 
+    fn remove_selected_and_move_down(&mut self) {
+        if let Some(selected) = self.selected {
+            let idx = {
+                self.marked
+                    .iter()
+                    .sorted_by_key(|(_, v)| &v.index)
+                    .skip(selected)
+                    .map(|(k, _)| k)
+                    .next()
+                    .cloned()
+            };
+            if let Some(idx) = idx {
+                self.marked.remove(&idx);
+                self.change_selection(CursorDirection::Down);
+            }
+        }
+    }
+    
     fn change_selection(&mut self, direction: CursorDirection) {
         self.selected = self.selected.map(|selected| {
             direction
