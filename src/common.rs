@@ -60,7 +60,7 @@ impl ByteFormat {
             _ => 10,
         }
     }
-    pub fn total_width(&self) -> usize {
+    pub fn total_width(self) -> usize {
         use ByteFormat::*;
         const THE_SPACE_BETWEEN_UNIT_AND_NUMBER: usize = 1;
 

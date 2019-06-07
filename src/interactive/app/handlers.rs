@@ -29,7 +29,9 @@ impl CursorDirection {
 impl TerminalApp {
     pub fn cycle_focus(&mut self) {
         use FocussedPane::*;
-        self.window.mark_pane.as_mut().map(|p| p.set_focus(false));
+        if let Some(p) = self.window.mark_pane.as_mut() {
+            p.set_focus(false)
+        };
         self.state.focussed = match (
             self.state.focussed,
             &self.window.help_pane,
@@ -70,7 +72,7 @@ impl TerminalApp {
 
     pub fn open_that(&mut self) {
         if let Some(ref idx) = self.state.selected {
-                open::that(path_of(&self.traversal.tree, *idx)).ok();
+            open::that(path_of(&self.traversal.tree, *idx)).ok();
         }
     }
 
