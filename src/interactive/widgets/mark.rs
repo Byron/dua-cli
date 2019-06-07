@@ -2,6 +2,7 @@ use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection};
 use dua::traverse::{Tree, TreeIndex};
 use dua::{path_of, ByteFormat};
 use itertools::Itertools;
+use std::collections::btree_map::Entry;
 use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf};
 use termion::{event::Key, event::Key::*};
 use tui::{
@@ -27,6 +28,7 @@ pub struct MarkPane {
     marked: EntryMarkMap,
     list: List,
     has_focus: bool,
+    last_sorting_index: usize,
 }
 
 pub struct MarkPaneProps {
@@ -48,28 +50,22 @@ impl MarkPane {
         }
     }
     pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree) -> Option<Self> {
-        // TODO: use HashMapEntry (Vacant/Occupied)
-        if self.marked.get(&index).is_some() {
-            self.marked.remove(&index);
-        } else {
-            if let Some(e) = tree.node_weight(index) {
-                let sorting_index = self
-                    .marked
-                    .values()
-                    .map(|v| v.index)
-                    .max()
-                    .unwrap_or(0)
-                    .wrapping_add(1);
-                self.marked.insert(
-                    index,
-                    EntryMark {
+        match self.marked.entry(index) {
+            Entry::Vacant(entry) => {
+                if let Some(e) = tree.node_weight(index) {
+                    let sorting_index = self.last_sorting_index + 1;
+                    self.last_sorting_index = sorting_index;
+                    entry.insert(EntryMark {
                         size: e.size,
                         path: path_of(tree, index),
                         index: sorting_index,
-                    },
-                );
+                    });
+                }
             }
-        }
+            Entry::Occupied(entry) => {
+                entry.remove();
+            }
+        };
         if self.marked.is_empty() {
             None
         } else {
