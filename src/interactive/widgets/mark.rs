@@ -95,22 +95,17 @@ impl MarkPane {
 
     fn remove_selected_and_move_down(&mut self) {
         if let Some(selected) = self.selected {
-            let idx = {
-                self.marked
-                    .iter()
-                    .sorted_by_key(|(_, v)| &v.index)
-                    .skip(selected)
-                    .map(|(k, _)| k)
-                    .next()
-                    .cloned()
-            };
-            if let Some(idx) = idx {
+            let sorted_entries: Vec<_> = self
+                .marked
+                .iter()
+                .sorted_by_key(|(_, v)| &v.index)
+                .collect();
+            if let Some(idx) = sorted_entries.get(selected).map(|(k, _)| *k.to_owned()) {
                 self.marked.remove(&idx);
-                self.change_selection(CursorDirection::Down);
             }
         }
     }
-    
+
     fn change_selection(&mut self, direction: CursorDirection) {
         self.selected = self.selected.map(|selected| {
             direction

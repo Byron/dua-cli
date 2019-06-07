@@ -103,8 +103,16 @@ impl HelpPane {
             {
                 hotkey("j/<down>", "move down an entry", None);
                 hotkey("k/<up>", "move up an entry", None);
-                hotkey("o/<enter>/<right>", "descent into the selected directory", None);
-                hotkey("u/<left>", "ascent one level into the parent directory", None);
+                hotkey(
+                    "o/<enter>/<right>",
+                    "descent into the selected directory",
+                    None,
+                );
+                hotkey(
+                    "u/<left>",
+                    "ascent one level into the parent directory",
+                    None,
+                );
                 hotkey("<backspace>", "^", None);
                 hotkey("Ctrl + d", "move down 10 entries at once", None);
                 hotkey("<Page Down>", "^", None);
