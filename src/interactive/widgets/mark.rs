@@ -185,41 +185,48 @@ impl MarkPane {
         let inner_area = block.inner(area);
         block.draw(area, buf);
 
-        let (help_line_area, list_area) = {
-            let regions = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Max(256)].as_ref())
-                .split(inner_area);
-            (regions[0], regions[1])
+        let list_area = if self.has_focus {
+            let (help_line_area, list_area) = {
+                let regions = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(1), Constraint::Max(256)].as_ref())
+                    .split(inner_area);
+                (regions[0], regions[1])
+            };
+
+            let default_style = Style {
+                fg: Color::Black,
+                bg: Color::White,
+                modifier: Modifier::BOLD,
+                ..Default::default()
+            };
+            Paragraph::new(
+                [
+                    Text::Styled(
+                        " Ctrl + Shift + r".into(),
+                        Style {
+                            fg: Color::Red,
+                            modifier: default_style.modifier | Modifier::RAPID_BLINK,
+                            ..default_style
+                        },
+                    ),
+                    Text::Styled(
+                        " permanently deletes list without prompt".into(),
+                        default_style,
+                    ),
+                ]
+                .iter(),
+            )
+            .style(Style {
+                bg: Color::White,
+                ..Style::default()
+            })
+            .draw(help_line_area, buf);
+            list_area
+        } else {
+            inner_area
         };
 
-        let default_style = Style {
-            fg: Color::Black,
-            bg: Color::White,
-            modifier: Modifier::BOLD,
-            ..Default::default()
-        };
-        Paragraph::new(
-            [
-                Text::Styled(
-                    " Ctrl + Shift + r".into(),
-                    Style {
-                        fg: Color::Red,
-                        ..default_style
-                    },
-                ),
-                Text::Styled(
-                    " permanently deletes list without prompt".into(),
-                    default_style,
-                ),
-            ]
-            .iter(),
-        )
-        .style(Style {
-            bg: Color::White,
-            ..Style::default()
-        })
-        .draw(help_line_area, buf);
         let props = ListProps {
             block: None,
             entry_in_view,

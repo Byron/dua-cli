@@ -137,6 +137,15 @@ impl HelpPane {
                 hotkey("<space bar>", "Toggle the currently selected entry", None);
                 spacer();
             }
+            title("Keys in the Mark pane");
+            {
+                hotkey(
+                    "Ctrl + Shift + r",
+                    "Permanently delete all marked entries without prompt!",
+                    None,
+                );
+                spacer();
+            }
             title("Keys for application control");
             {
                 hotkey(
