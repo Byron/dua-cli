@@ -61,6 +61,12 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
+* There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
+  This can be due to graphemes not interpreted correctly. With Chinese characters for instance,
+  column sizes are not correctly computed, leading to certain columns not being shown.
+  In other cases, the terminal gets things wrong - I use alacritty, and with certain characaters it
+  performs worse than, say iTerm3.
+  See https://github.com/minimaxir/big-list-of-naughty-strings/blob/master/blns.txt for the source.
 * One cannot abort the filesystem traversal
  * as we are in raw terminal mode, signals will not be sent to us. As as we are single-threaded in
    the GUI, we can not listen to input events while traversing the filesystem. This can be solved,
