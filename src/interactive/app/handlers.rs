@@ -69,11 +69,8 @@ impl TerminalApp {
     }
 
     pub fn open_that(&mut self) {
-        match self.state.selected {
-            Some(ref idx) => {
+        if let Some(ref idx) = self.state.selected {
                 open::that(path_of(&self.traversal.tree, *idx)).ok();
-            }
-            None => {}
         }
     }
 
@@ -120,7 +117,7 @@ impl TerminalApp {
         };
         self.state.selected = entries
             .get(next_selected_pos)
-            .or(entries.last())
+            .or_else(|| entries.last())
             .map(|b| b.index)
             .or(self.state.selected)
     }

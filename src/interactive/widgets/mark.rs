@@ -112,7 +112,7 @@ impl MarkPane {
         let entry_in_view = self
             .selected
             .map(|selected| selected)
-            .or(Some(marked.len().saturating_sub(1)));
+            .or_else(|| Some(marked.len().saturating_sub(1)));
         let selected = self.selected;
         let entries = marked
             .values()

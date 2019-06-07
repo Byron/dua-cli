@@ -51,7 +51,7 @@ pub enum ByteFormat {
 }
 
 impl ByteFormat {
-    pub fn width(&self) -> usize {
+    pub fn width(self) -> usize {
         use ByteFormat::*;
         match self {
             Metric | Binary => 10,
@@ -60,9 +60,9 @@ impl ByteFormat {
             _ => 10,
         }
     }
-    pub fn display(&self, bytes: u64) -> ByteFormatDisplay {
+    pub fn display(self, bytes: u64) -> ByteFormatDisplay {
         ByteFormatDisplay {
-            format: *self,
+            format: self,
             bytes,
         }
     }
@@ -92,7 +92,7 @@ impl fmt::Display for ByteFormatDisplay {
             (_, Some((divisor, unit))) => Byte::from_unit(self.bytes as f64 / divisor as f64, unit)
                 .expect("byte count > 0")
                 .get_adjusted_unit(unit),
-            (binary, None) => Byte::from_bytes(self.bytes as u128).get_appropriate_unit(binary),
+            (binary, None) => Byte::from_bytes(u128::from(self.bytes)).get_appropriate_unit(binary),
         }
         .format(2);
         let mut splits = b.split(' ');
@@ -135,8 +135,8 @@ pub(crate) struct DisplayColor<C> {
 }
 
 impl Color {
-    pub(crate) fn display<C>(&self, color: C) -> DisplayColor<C> {
-        DisplayColor { kind: *self, color }
+    pub(crate) fn display<C>(self, color: C) -> DisplayColor<C> {
+        DisplayColor { kind: self, color }
     }
 }
 

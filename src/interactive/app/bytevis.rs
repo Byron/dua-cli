@@ -30,9 +30,9 @@ impl ByteVisualization {
             Percentage => Bar,
         }
     }
-    pub fn display(&self, percentage: f32) -> DisplayByteVisualization {
+    pub fn display(self, percentage: f32) -> DisplayByteVisualization {
         DisplayByteVisualization {
-            format: *self,
+            format: self,
             percentage,
         }
     }
