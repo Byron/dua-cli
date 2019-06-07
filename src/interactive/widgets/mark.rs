@@ -84,7 +84,7 @@ impl MarkPane {
     }
     pub fn key(&mut self, key: Key) {
         match key {
-            Char('d') => self.remove_selected_and_move_down(),
+            Char('d') | Char(' ') => self.remove_selected_and_move_down(),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
