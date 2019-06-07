@@ -109,10 +109,13 @@ impl MarkPane {
             .title(&title)
             .border_style(*border_style)
             .borders(Borders::ALL);
-        let entry_in_view = self
-            .selected
-            .map(|selected| selected)
-            .or_else(|| Some(marked.len().saturating_sub(1)));
+        let entry_in_view = match self.selected {
+            Some(s) => Some(s),
+            None => {
+                self.list.offset = 0;
+                Some(marked.len().saturating_sub(1))
+            }
+        };
         let selected = self.selected;
         let entries = marked
             .values()

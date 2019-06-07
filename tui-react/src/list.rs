@@ -7,7 +7,7 @@ use tui::{
 #[derive(Default)]
 pub struct List {
     /// The index at which the list last started. Used for scrolling
-    offset: usize,
+    pub offset: usize,
 }
 
 impl List {
