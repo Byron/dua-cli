@@ -65,11 +65,13 @@ impl MainWindow {
             }
         };
 
-        let regions = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Length(1), Max(256), Length(1)].as_ref())
-            .split(area);
-        let (header_area, entries_area, footer_area) = (regions[0], regions[1], regions[2]);
+        let (header_area, entries_area, footer_area) = {
+            let regions = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Length(1), Max(256), Length(1)].as_ref())
+                .split(area);
+            (regions[0], regions[1], regions[2])
+        };
         {
             let marked = self.mark_pane.as_ref().map(|p| p.marked());
             let bg_color = match (marked.map_or(true, |m| m.is_empty()), state.focussed) {

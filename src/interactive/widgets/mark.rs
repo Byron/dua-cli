@@ -12,11 +12,12 @@ use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    style::Color,
-    style::{Modifier, Style},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
     widgets::Block,
     widgets::Borders,
     widgets::Text,
+    widgets::{Paragraph, Widget},
 };
 use tui_react::{List, ListProps};
 use unicode_segmentation::UnicodeSegmentation;
@@ -111,17 +112,6 @@ impl MarkPane {
             marked.len(),
             format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
         );
-        let block = Block::default()
-            .title(&title)
-            .border_style(*border_style)
-            .borders(Borders::ALL);
-        let entry_in_view = match self.selected {
-            Some(s) => Some(s),
-            None => {
-                self.list.offset = 0;
-                Some(marked.len().saturating_sub(1))
-            }
-        };
         let selected = self.selected;
         let entries = marked
             .values()
@@ -180,10 +170,60 @@ impl MarkPane {
                 vec![path, spacer, bytes]
             });
 
+        let entry_in_view = match self.selected {
+            Some(s) => Some(s),
+            None => {
+                self.list.offset = 0;
+                Some(marked.len().saturating_sub(1))
+            }
+        };
+        let mut block = Block::default()
+            .title(&title)
+            .border_style(*border_style)
+            .borders(Borders::ALL);
+
+        let inner_area = block.inner(area);
+        block.draw(area, buf);
+
+        let (help_line_area, list_area) = {
+            let regions = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Max(256)].as_ref())
+                .split(inner_area);
+            (regions[0], regions[1])
+        };
+
+        let default_style = Style {
+            fg: Color::Black,
+            bg: Color::White,
+            modifier: Modifier::BOLD,
+            ..Default::default()
+        };
+        Paragraph::new(
+            [
+                Text::Styled(
+                    " Ctrl + Shift + r".into(),
+                    Style {
+                        fg: Color::Red,
+                        ..default_style
+                    },
+                ),
+                Text::Styled(
+                    " permanently deletes list without prompt".into(),
+                    default_style,
+                ),
+            ]
+            .iter(),
+        )
+        .style(Style {
+            bg: Color::White,
+            ..Style::default()
+        })
+        .draw(help_line_area, buf);
         let props = ListProps {
-            block: Some(block),
+            block: None,
             entry_in_view,
         };
-        self.list.render(props, entries, area, buf)
+        self.list.render(props, entries, list_area, buf)
     }
 }
