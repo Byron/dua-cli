@@ -113,7 +113,7 @@ impl MarkPane {
                 if se_len.saturating_sub(1) == 0 {
                     return None;
                 }
-                self.selected = selected.checked_sub(1);
+                self.selected = Some(selected.saturating_sub(1));
             }
             Some(self)
         } else {
