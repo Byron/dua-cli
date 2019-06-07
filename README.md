@@ -61,6 +61,7 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
+* _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
   This can be due to graphemes not interpreted correctly. With Chinese characters for instance,
   column sizes are not correctly computed, leading to certain columns not being shown.
