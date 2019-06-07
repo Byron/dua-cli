@@ -78,8 +78,7 @@ impl TerminalApp {
         B: Backend,
         R: io::Read + TermReadEventsAndRaw,
     {
-        use termion::event::Key::{Backspace, Char, Ctrl, Esc};
-        use CursorDirection::*;
+        use termion::event::Key::*;
         use FocussedPane::*;
 
         self.draw(terminal)?;
@@ -111,11 +110,11 @@ impl TerminalApp {
                     Char('O') => self.open_that(),
                     Char(' ') => self.mark_entry(false),
                     Char('d') => self.mark_entry(true),
-                    Char('u') | Backspace => self.exit_node(),
-                    Char('o') | Char('\n') => self.enter_node(),
-                    Ctrl('u') => self.change_entry_selection(CursorDirection::PageUp),
-                    Char('k') => self.change_entry_selection(Up),
-                    Char('j') => self.change_entry_selection(Down),
+                    Char('u') | Backspace | Left => self.exit_node(),
+                    Char('o') | Char('\n') | Right => self.enter_node(),
+                    Ctrl('u')  => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
                     Ctrl('d') => self.change_entry_selection(CursorDirection::PageDown),
                     Char('s') => self.cycle_sorting(),
                     Char('g') => self.display.byte_vis.cycle(),
