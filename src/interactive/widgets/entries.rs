@@ -1,5 +1,7 @@
 use crate::interactive::{
-    widgets::{EntryMarkMap, COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER},
+    widgets::{
+        EntryMarkMap, COLOR_BYTESIZE_SELECTED, COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER,
+    },
     DisplayOptions, EntryDataBundle,
 };
 use dua::traverse::{Tree, TreeIndex};
@@ -118,7 +120,7 @@ impl Entries {
                     .into(),
                     Style {
                         fg: match (is_selected, *is_focussed) {
-                            (true, true) => Color::DarkGray,
+                            (true, true) => COLOR_BYTESIZE_SELECTED,
                             (true, false) => Color::Black,
                             _ => Color::Green,
                         },

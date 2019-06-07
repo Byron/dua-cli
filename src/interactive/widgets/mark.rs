@@ -1,5 +1,6 @@
-use crate::interactive::{
-    fit_string_graphemes_with_ellipsis, widgets::COLOR_MARKED_LIGHT, CursorDirection,
+use crate::{
+    interactive::widgets::{COLOR_BYTESIZE_SELECTED, COLOR_MARKED_LIGHT},
+    interactive::{fit_string_graphemes_with_ellipsis, CursorDirection},
 };
 use dua::{
     path_of,
@@ -146,9 +147,15 @@ impl MarkPane {
             .sorted_by_key(|v| &v.index)
             .enumerate()
             .map(|(idx, v)| {
-                let modifier = match selected {
-                    Some(selected) if idx == selected => Modifier::BOLD,
-                    _ => Modifier::empty(),
+                let (default_style, is_selected) = match selected {
+                    Some(selected) if idx == selected => (
+                        Style {
+                            bg: Color::White,
+                            ..Default::default()
+                        },
+                        true,
+                    ),
+                    _ => (Style::default(), false),
                 };
                 let (path, path_len) = {
                     let path = format!(" {}  ", v.path.display());
@@ -168,9 +175,12 @@ impl MarkPane {
                 let path = Text::Styled(
                     path.into(),
                     Style {
-                        fg: COLOR_MARKED_LIGHT,
-                        modifier,
-                        ..Style::default()
+                        fg: if is_selected {
+                            Color::Black
+                        } else {
+                            COLOR_MARKED_LIGHT
+                        },
+                        ..default_style
                     },
                 );
                 let bytes = Text::Styled(
@@ -181,11 +191,15 @@ impl MarkPane {
                     )
                     .into(),
                     Style {
-                        fg: Color::Green,
-                        ..Default::default()
+                        fg: if is_selected {
+                            COLOR_BYTESIZE_SELECTED
+                        } else {
+                            Color::Green
+                        },
+                        ..default_style
                     },
                 );
-                let spacer = Text::Raw(
+                let spacer = Text::Styled(
                     format!(
                         "{:-space$}",
                         "",
@@ -194,6 +208,7 @@ impl MarkPane {
                             .saturating_sub(format.total_width())
                     )
                     .into(),
+                    default_style,
                 );
                 vec![path, spacer, bytes]
             });

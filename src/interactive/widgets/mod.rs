@@ -14,6 +14,7 @@ pub use mark::*;
 
 use tui::style::Color;
 
+pub const COLOR_BYTESIZE_SELECTED: Color = Color::DarkGray;
 pub const COLOR_MARKED: Color = Color::Yellow;
 pub const COLOR_MARKED_LIGHT: Color = Color::LightYellow;
 pub const COLOR_MARKED_DARK: Color = Color::Rgb(176, 126, 0);
