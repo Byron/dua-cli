@@ -1,20 +1,25 @@
-use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection};
-use dua::traverse::{Tree, TreeIndex};
-use dua::{path_of, ByteFormat};
+use crate::interactive::{
+    fit_string_graphemes_with_ellipsis, widgets::COLOR_MARKED_LIGHT, CursorDirection,
+};
+use dua::{
+    path_of,
+    traverse::{Tree, TreeIndex},
+    ByteFormat,
+};
 use itertools::Itertools;
-use std::collections::btree_map::Entry;
-use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf};
+use std::{borrow::Borrow, collections::btree_map::Entry, collections::BTreeMap, path::PathBuf};
 use termion::{event::Key, event::Key::*};
-use tui::style::Color;
 use tui::{
     buffer::Buffer,
     layout::Rect,
+    style::Color,
     style::{Modifier, Style},
     widgets::Block,
     widgets::Borders,
     widgets::Text,
 };
 use tui_react::{List, ListProps};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
 pub struct EntryMark {
@@ -127,8 +132,21 @@ impl MarkPane {
                     Some(selected) if idx == selected => Modifier::BOLD,
                     _ => Modifier::empty(),
                 };
-                let path = format!(" {}", v.path.display());
-                let path_len = path.len();
+                let (path, path_len) = {
+                    let path = format!(" {}  ", v.path.display());
+                    let num_path_graphemes = path.graphemes(true).count();
+                    match num_path_graphemes + format.total_width() {
+                        n if n > area.width as usize => {
+                            let desired_size = num_path_graphemes - (n - area.width as usize);
+                            fit_string_graphemes_with_ellipsis(
+                                path,
+                                num_path_graphemes,
+                                desired_size,
+                            )
+                        }
+                        _ => (path, num_path_graphemes),
+                    }
+                };
                 let path = Text::Styled(
                     path.into(),
                     Style {
