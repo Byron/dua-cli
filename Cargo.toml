@@ -23,6 +23,7 @@ itertools = "0.8.0"
 open = "1.2.2"
 log = "0.4.6"
 tui-react = { path = "./tui-react", version = "0.1" }
+num_cpus = "1.10.0"
 
 [[bin]]
 name="dua"

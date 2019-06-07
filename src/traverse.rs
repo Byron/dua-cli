@@ -35,7 +35,7 @@ pub struct Traversal {
 
 impl Traversal {
     pub fn from_walk(
-        options: WalkOptions,
+        mut walk_options: WalkOptions,
         input: Vec<PathBuf>,
         mut update: impl FnMut(&Traversal) -> Result<(), Error>,
     ) -> Result<Traversal, Error> {
@@ -73,10 +73,14 @@ impl Traversal {
         const INITIAL_CHECK_INTERVAL: usize = 500;
         let mut check_instant_every = INITIAL_CHECK_INTERVAL;
         let mut last_seen_eid;
-
+        if walk_options.threads == 0 {
+            // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
+            // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
+            walk_options.threads = num_cpus::get_physical();
+        }
         for path in input.into_iter() {
             last_seen_eid = 0;
-            for (eid, entry) in options
+            for (eid, entry) in walk_options
                 .iter_from_path(path.as_ref())
                 .into_iter()
                 .enumerate()
