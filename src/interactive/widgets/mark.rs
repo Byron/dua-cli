@@ -1,6 +1,6 @@
 use crate::interactive::{widgets::COLOR_MARKED_LIGHT, CursorDirection, EntryMark, EntryMarkMap};
-use dua::path_of;
 use dua::traverse::{Tree, TreeIndex};
+use dua::{path_of, ByteFormat};
 use itertools::Itertools;
 use std::borrow::Borrow;
 use termion::{event::Key, event::Key::*};
@@ -24,6 +24,7 @@ pub struct MarkPane {
 
 pub struct MarkPaneProps {
     pub border_style: Style,
+    pub format: ByteFormat,
 }
 
 impl MarkPane {
@@ -90,10 +91,17 @@ impl MarkPane {
     }
 
     pub fn render(&mut self, props: impl Borrow<MarkPaneProps>, area: Rect, buf: &mut Buffer) {
-        let MarkPaneProps { border_style } = props.borrow();
+        let MarkPaneProps {
+            border_style,
+            format,
+        } = props.borrow();
 
         let marked: &_ = &self.marked;
-        let title = format!("Marked Entries: {}", marked.len());
+        let title = format!(
+            "Marked {} items ({}) ",
+            marked.len(),
+            format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
+        );
         let block = Block::default()
             .title(&title)
             .border_style(*border_style)

@@ -106,6 +106,7 @@ impl MainWindow {
         if let Some((mark_area, pane)) = mark_pane {
             let props = MarkPaneProps {
                 border_style: mark_style,
+                format: display.byte_format,
             };
             pane.render(props, mark_area, buf);
         }
@@ -137,9 +138,8 @@ impl MainWindow {
         Footer.render(
             FooterProps {
                 total_bytes: *total_bytes,
-                entries_traversed: *entries_traversed,
-                marked: self.mark_pane.as_ref().map(|p| p.marked()),
                 format: display.byte_format,
+                entries_traversed: *entries_traversed,
                 message: state.message.clone(),
             },
             footer_area,

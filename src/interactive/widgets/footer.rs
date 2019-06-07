@@ -1,7 +1,4 @@
-use crate::{
-    interactive::{widgets::COLOR_MARKED_DARK, EntryMarkMap},
-    ByteFormat,
-};
+use crate::ByteFormat;
 use std::borrow::Borrow;
 use tui::{
     buffer::Buffer,
@@ -13,28 +10,26 @@ use tui::{
 };
 pub struct Footer;
 
-pub struct FooterProps<'a> {
+pub struct FooterProps {
     pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
-    pub marked: Option<&'a EntryMarkMap>,
     pub message: Option<String>,
 }
 
 impl Footer {
-    pub fn render<'a>(&self, props: impl Borrow<FooterProps<'a>>, area: Rect, buf: &mut Buffer) {
+    pub fn render(&self, props: impl Borrow<FooterProps>, area: Rect, buf: &mut Buffer) {
         let FooterProps {
             total_bytes,
             entries_traversed,
             format,
-            marked,
             message,
         } = props.borrow();
 
         let bg_color = Color::White;
         let text_color = Color::Black;
         let lines = [
-            Some(Text::Raw(
+            Text::Raw(
                 format!(
                     " Total disk usage: {}  Entries: {}   ",
                     match total_bytes {
@@ -44,23 +39,8 @@ impl Footer {
                     entries_traversed,
                 )
                 .into(),
-            )),
-            marked.and_then(|marked| match marked.is_empty() {
-                true => None,
-                false => Some(Text::Styled(
-                    format!(
-                        "Marked {} items ({}) ",
-                        marked.len(),
-                        format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
-                    )
-                    .into(),
-                    Style {
-                        fg: COLOR_MARKED_DARK,
-                        bg: bg_color,
-                        modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
-                    },
-                )),
-            }),
+            )
+            .into(),
             message.as_ref().map(|m| {
                 Text::Styled(
                     m.into(),
