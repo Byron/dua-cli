@@ -86,7 +86,7 @@ impl MarkPane {
     }
     pub fn key(mut self, key: Key) -> Option<Self> {
         match key {
-            Char('d') | Char(' ') => return self.remove_selected_and_move_down(),
+            Char('d') | Char(' ') => return self.remove_selected(),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
@@ -96,8 +96,8 @@ impl MarkPane {
         Some(self)
     }
 
-    fn remove_selected_and_move_down(mut self) -> Option<Self> {
-        if let Some(selected) = self.selected {
+    fn remove_selected(mut self) -> Option<Self> {
+        if let Some(mut selected) = self.selected {
             let (idx, se_len) = {
                 let sorted_entries: Vec<_> = self
                     .marked
@@ -111,10 +111,14 @@ impl MarkPane {
             };
             if let Some(idx) = idx {
                 self.marked.remove(&idx);
-                if se_len.saturating_sub(1) == 0 {
+                let new_len = se_len.saturating_sub(1);
+                if new_len == 0 {
                     return None;
                 }
-                self.selected = Some(selected.saturating_sub(1));
+                if new_len == selected {
+                    selected = selected.saturating_sub(1);
+                }
+                self.selected = Some(selected);
             }
             Some(self)
         } else {
