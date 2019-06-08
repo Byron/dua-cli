@@ -4,11 +4,12 @@ use dua::{
     ByteFormat, Color, TraversalSorting, WalkOptions,
 };
 use failure::Error;
-use jwalk::WalkDir;
+use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
 use std::env::temp_dir;
-use std::{ffi::OsStr, ffi::OsString, fmt, io, path::Path, path::PathBuf};
+use std::fs::{copy, create_dir, create_dir_all};
+use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
 use termion::input::TermRead;
 use tui::backend::TestBackend;
 use tui_react::Terminal;
@@ -346,8 +347,24 @@ fn delete_recursive(_path: impl AsRef<Path>) {
     unimplemented!();
 }
 
-fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), io::Error> {
-    WalkDir::new(src).num_threads(1).into_iter();
+fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
+    for entry in WalkDir::new(&src).num_threads(1).into_iter() {
+        let entry: DirEntry = entry?;
+        let entry_path = entry.path();
+        dbg!(&entry_path);
+        entry_path
+            .strip_prefix(&src)
+            .map_err(Error::from)
+            .and_then(|relative_entry_path| {
+                let dst = dst.as_ref().join(relative_entry_path);
+                dbg!(&dst);
+                if entry_path.is_dir() {
+                    create_dir(dst).map_err(Into::into)
+                } else {
+                    copy(&entry_path, dst).map(|_| ()).map_err(Into::into)
+                }
+            })?;
+    }
     unimplemented!();
 }
 
@@ -355,7 +372,9 @@ impl From<&'static str> for WritableFixture {
     fn from(fixture_name: &str) -> Self {
         const TEMP_TLD_DIRNAME: &'static str = "dua-unit";
         let src = fixture(fixture_name);
-        let dst = temp_dir().join(TEMP_TLD_DIRNAME).join(fixture_name);
+        let dst = temp_dir().join(TEMP_TLD_DIRNAME);
+        create_dir_all(&dst).unwrap();
+        let dst = dst.join(fixture_name);
         copy_recursive(src, &dst).unwrap();
         WritableFixture { root: dst }
     }
@@ -364,7 +383,8 @@ impl From<&'static str> for WritableFixture {
 #[test]
 fn basic_user_journey_with_deletion() -> Result<(), Error> {
     let fixture = WritableFixture::from("sample-02");
-    let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
+    let (mut _terminal, mut _app) =
+        initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
     Ok(())
 }
 
