@@ -7,10 +7,17 @@ use failure::Error;
 use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
-use std::env::temp_dir;
-use std::fs::{copy, create_dir_all, remove_dir, remove_file};
-use std::io::ErrorKind;
-use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
+use std::{
+    env::temp_dir,
+    ffi::OsStr,
+    ffi::OsString,
+    fmt,
+    fs::{copy, create_dir_all, remove_dir, remove_file},
+    io,
+    io::ErrorKind,
+    path::Path,
+    path::PathBuf,
+};
 use termion::input::TermRead;
 use tui::backend::TestBackend;
 use tui_react::Terminal;
@@ -340,11 +347,11 @@ struct WritableFixture {
 
 impl Drop for WritableFixture {
     fn drop(&mut self) {
-        delete_recursive(&self.root);
+        delete_recursive(&self.root).unwrap();
     }
 }
 
-fn delete_recursive(path: impl AsRef<Path>) {
+fn delete_recursive(path: impl AsRef<Path>) -> Result<(), io::Error> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
@@ -356,12 +363,12 @@ fn delete_recursive(path: impl AsRef<Path>) {
             false => files.push(p),
         }
     }
-    for fp in files {
-        remove_file(fp).ok();
-    }
-    for dp in dirs {
-        remove_dir(dp).ok();
-    }
+
+    files
+        .iter()
+        .map(|f| remove_file(f))
+        .chain(dirs.iter().map(|d| remove_dir(d)))
+        .collect::<Result<_, _>>()
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
