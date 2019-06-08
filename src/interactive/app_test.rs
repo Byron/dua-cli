@@ -8,7 +8,8 @@ use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
 use std::env::temp_dir;
-use std::fs::{copy, create_dir, create_dir_all};
+use std::fs::{copy, create_dir_all, remove_dir, remove_file};
+use std::io::ErrorKind;
 use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
 use termion::input::TermRead;
 use tui::backend::TestBackend;
@@ -343,37 +344,62 @@ impl Drop for WritableFixture {
     }
 }
 
-fn delete_recursive(_path: impl AsRef<Path>) {
-    unimplemented!();
+fn delete_recursive(path: impl AsRef<Path>) {
+    let mut files: Vec<_> = Vec::new();
+    let mut dirs: Vec<_> = Vec::new();
+
+    for entry in WalkDir::new(&path).num_threads(1).into_iter() {
+        let entry: DirEntry = entry.unwrap();
+        let p = entry.path();
+        match p.is_dir() {
+            true => dirs.push(p),
+            false => files.push(p),
+        }
+    }
+    for fp in files {
+        remove_file(fp).ok();
+    }
+    for dp in dirs {
+        remove_dir(dp).ok();
+    }
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
     for entry in WalkDir::new(&src).num_threads(1).into_iter() {
         let entry: DirEntry = entry?;
         let entry_path = entry.path();
-        dbg!(&entry_path);
         entry_path
             .strip_prefix(&src)
             .map_err(Error::from)
             .and_then(|relative_entry_path| {
                 let dst = dst.as_ref().join(relative_entry_path);
-                dbg!(&dst);
                 if entry_path.is_dir() {
-                    create_dir(dst).map_err(Into::into)
+                    create_dir_all(dst).map_err(Into::into)
                 } else {
-                    copy(&entry_path, dst).map(|_| ()).map_err(Into::into)
+                    copy(&entry_path, dst)
+                        .map(|_| ())
+                        .or_else(|e| {
+                            if let ErrorKind::AlreadyExists = e.kind() {
+                                Ok(())
+                            } else {
+                                Err(e)
+                            }
+                        })
+                        .map_err(Into::into)
                 }
             })?;
     }
-    unimplemented!();
+    Ok(())
 }
 
 impl From<&'static str> for WritableFixture {
     fn from(fixture_name: &str) -> Self {
         const TEMP_TLD_DIRNAME: &'static str = "dua-unit";
+
         let src = fixture(fixture_name);
         let dst = temp_dir().join(TEMP_TLD_DIRNAME);
         create_dir_all(&dst).unwrap();
+
         let dst = dst.join(fixture_name);
         copy_recursive(src, &dst).unwrap();
         WritableFixture { root: dst }
