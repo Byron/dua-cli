@@ -4,9 +4,11 @@ use dua::{
     ByteFormat, Color, TraversalSorting, WalkOptions,
 };
 use failure::Error;
+use jwalk::WalkDir;
 use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
-use std::{ffi::OsStr, ffi::OsString, fmt, path::Path, path::PathBuf};
+use std::env::temp_dir;
+use std::{ffi::OsStr, ffi::OsString, fmt, io, path::Path, path::PathBuf};
 use termion::input::TermRead;
 use tui::backend::TestBackend;
 use tui_react::Terminal;
@@ -19,7 +21,7 @@ fn debug(item: impl fmt::Debug) -> String {
 
 #[test]
 fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(), Error> {
-    let (_, app) = initialized_app_and_terminal(&["sample-01"])?;
+    let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
     let expected_tree = sample_01_tree();
 
     assert_eq!(
@@ -32,7 +34,7 @@ fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(
 
 #[test]
 fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<(), Error> {
-    let (_, app) = initialized_app_and_terminal(&["sample-02"])?;
+    let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-02"])?;
     let expected_tree = sample_02_tree();
 
     assert_eq!(
@@ -82,10 +84,11 @@ fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
 }
 
 #[test]
-fn simple_user_journey() -> Result<(), Error> {
+fn simple_user_journey_read_only() -> Result<(), Error> {
     let long_root = "sample-02/dir";
     let short_root = "sample-01";
-    let (mut terminal, mut app) = initialized_app_and_terminal(&[short_root, long_root])?;
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_fixture(&[short_root, long_root])?;
 
     // POST-INIT
     // after initialization, we expect that...
@@ -319,8 +322,49 @@ fn simple_user_journey() -> Result<(), Error> {
                 "after tabbing into it, it has focus",
             );
         }
+
+        // TODO: a bunch of additional tests are missing (handling of markers, deselecting them)
+        // Yes, caught me, no TDD for these things, just because in Rust it's not needed as things
+        // tend to just work when they compile, and while experimenting, tests can be in the way.
+        // However, if Dua should be more widely used, we need CI and these tests written.
     }
 
+    Ok(())
+}
+
+struct WritableFixture {
+    root: PathBuf,
+}
+
+impl Drop for WritableFixture {
+    fn drop(&mut self) {
+        delete_recursive(&self.root);
+    }
+}
+
+fn delete_recursive(_path: impl AsRef<Path>) {
+    unimplemented!();
+}
+
+fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), io::Error> {
+    WalkDir::new(src).num_threads(1).into_iter();
+    unimplemented!();
+}
+
+impl From<&'static str> for WritableFixture {
+    fn from(fixture_name: &str) -> Self {
+        const TEMP_TLD_DIRNAME: &'static str = "dua-unit";
+        let src = fixture(fixture_name);
+        let dst = temp_dir().join(TEMP_TLD_DIRNAME).join(fixture_name);
+        copy_recursive(src, &dst).unwrap();
+        WritableFixture { root: dst }
+    }
+}
+
+#[test]
+fn basic_user_journey_with_deletion() -> Result<(), Error> {
+    let fixture = WritableFixture::from("sample-02");
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
     Ok(())
 }
 
@@ -332,13 +376,14 @@ fn fixture_str(p: impl AsRef<Path>) -> String {
     fixture(p).to_str().unwrap().to_owned()
 }
 
-fn initialized_app_and_terminal(
-    fixture_paths: &[&str],
+fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
+    fixture_paths: &[P],
+    mut convert: impl FnMut(&Path) -> PathBuf,
 ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
     let mut terminal = Terminal::new(TestBackend::new(40, 20))?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
-    let input = fixture_paths.iter().map(fixture).collect();
+    let input = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
     let app = TerminalApp::initialize(
         &mut terminal,
         WalkOptions {
@@ -350,6 +395,19 @@ fn initialized_app_and_terminal(
         input,
     )?;
     Ok((terminal, app))
+}
+fn initialized_app_and_terminal_from_paths(
+    fixture_paths: &[PathBuf],
+) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+    fn to_path_buf(p: &Path) -> PathBuf {
+        p.to_path_buf()
+    }
+    initialized_app_and_terminal_with_closure(fixture_paths, to_path_buf)
+}
+fn initialized_app_and_terminal_from_fixture(
+    fixture_paths: &[&str],
+) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+    initialized_app_and_terminal_with_closure(fixture_paths, |p| fixture(p))
 }
 
 fn sample_01_tree() -> Tree {
