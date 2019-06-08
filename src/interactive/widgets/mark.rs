@@ -1,6 +1,7 @@
-use crate::{
-    interactive::widgets::{COLOR_BYTESIZE_SELECTED, COLOR_MARKED_LIGHT},
-    interactive::{fit_string_graphemes_with_ellipsis, CursorDirection},
+use crate::interactive::{
+    fit_string_graphemes_with_ellipsis,
+    widgets::{COLOR_BYTESIZE_SELECTED, COLOR_MARKED_LIGHT},
+    CursorDirection,
 };
 use dua::{
     path_of,
@@ -185,7 +186,7 @@ impl MarkPane {
                 );
                 let bytes = Text::Styled(
                     format!(
-                        "{:>byte_column_width$}",
+                        "{:>byte_column_width$} ",
                         format.display(v.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
                         byte_column_width = format.width()
                     )
@@ -252,7 +253,7 @@ impl MarkPane {
 
             let default_style = Style {
                 fg: Color::Black,
-                bg: Color::White,
+                bg: Color::Yellow,
                 modifier: Modifier::BOLD,
                 ..Default::default()
             };
@@ -261,7 +262,7 @@ impl MarkPane {
                     Text::Styled(
                         " Ctrl + Shift + r".into(),
                         Style {
-                            fg: Color::Red,
+                            fg: Color::LightRed,
                             modifier: default_style.modifier | Modifier::RAPID_BLINK,
                             ..default_style
                         },
@@ -273,10 +274,7 @@ impl MarkPane {
                 ]
                 .iter(),
             )
-            .style(Style {
-                bg: Color::White,
-                ..Style::default()
-            })
+            .style(default_style)
             .draw(help_line_area, buf);
             list_area
         } else {
