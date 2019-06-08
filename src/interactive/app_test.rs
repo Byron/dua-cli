@@ -3,7 +3,8 @@ use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, Color, TraversalSorting, WalkOptions,
 };
-use failure::Error;
+use failure::{Error, ResultExt};
+use itertools::Itertools;
 use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
 use pretty_assertions::assert_eq;
@@ -13,7 +14,6 @@ use std::{
     ffi::OsString,
     fmt,
     fs::{copy, create_dir_all, remove_dir, remove_file},
-    io,
     io::ErrorKind,
     path::Path,
     path::PathBuf,
@@ -351,7 +351,7 @@ impl Drop for WritableFixture {
     }
 }
 
-fn delete_recursive(path: impl AsRef<Path>) -> Result<(), io::Error> {
+fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
@@ -366,8 +366,17 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<(), io::Error> {
 
     files
         .iter()
-        .map(|f| remove_file(f))
-        .chain(dirs.iter().map(|d| remove_dir(d)))
+        .map(|f| remove_file(f).map_err(Error::from))
+        .chain(
+            dirs.iter()
+                .sorted_by_key(|p| p.components().count())
+                .rev()
+                .map(|d| {
+                    remove_dir(d)
+                        .with_context(|_| format!("Could not delete '{}'", d.display()))
+                        .map_err(Error::from)
+                }),
+        )
         .collect::<Result<_, _>>()
 }
 
@@ -385,12 +394,9 @@ fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Er
                 } else {
                     copy(&entry_path, dst)
                         .map(|_| ())
-                        .or_else(|e| {
-                            if let ErrorKind::AlreadyExists = e.kind() {
-                                Ok(())
-                            } else {
-                                Err(e)
-                            }
+                        .or_else(|e| match e.kind() {
+                            ErrorKind::AlreadyExists => Ok(()),
+                            _ => Err(e),
                         })
                         .map_err(Into::into)
                 }
