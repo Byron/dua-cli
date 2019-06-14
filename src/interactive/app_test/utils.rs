@@ -137,6 +137,12 @@ impl From<&'static str> for WritableFixture {
     }
 }
 
+impl AsRef<Path> for WritableFixture {
+    fn as_ref(&self) -> &Path {
+        &self.root
+    }
+}
+
 pub fn fixture(p: impl AsRef<Path>) -> PathBuf {
     Path::new(FIXTURE_PATH).join(p)
 }

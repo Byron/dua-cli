@@ -9,7 +9,7 @@ use dua::{
 };
 use failure::Error;
 use std::{io, path::PathBuf};
-use termion::input::{Keys, TermReadEventsAndRaw};
+use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
@@ -69,14 +69,13 @@ impl TerminalApp {
         };
         Self::draw_window(&mut self.window, props, terminal)
     }
-    pub fn process_events<B, R>(
+    pub fn process_events<B>(
         &mut self,
         terminal: &mut Terminal<B>,
-        keys: Keys<R>,
+        keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
         B: Backend,
-        R: io::Read + TermReadEventsAndRaw,
     {
         use termion::event::Key::*;
         use FocussedPane::*;
