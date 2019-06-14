@@ -1,3 +1,4 @@
+use crate::interactive::widgets::MarkMode;
 use crate::interactive::{
     app::{FocussedPane::*, TerminalApp},
     sorted_entries,
@@ -7,6 +8,8 @@ use dua::path_of;
 use itertools::Itertools;
 use petgraph::Direction;
 use termion::event::Key;
+use tui::backend::Backend;
+use tui_react::Terminal;
 
 pub enum CursorDirection {
     PageDown,
@@ -145,10 +148,29 @@ impl TerminalApp {
         }
     }
 
-    pub fn dispatch_to_mark_pane(&mut self, key: Key) -> () {
-        self.window.mark_pane = self.window.mark_pane.take().and_then(|p| p.key(key));
-        if self.window.mark_pane.is_none() {
-            self.state.focussed = Main;
-        }
+    pub fn dispatch_to_mark_pane<B>(&mut self, key: Key, terminal: &mut Terminal<B>) -> ()
+    where
+        B: Backend,
+    {
+        let res = self.window.mark_pane.take().and_then(|p| p.key(key));
+        self.window.mark_pane = match res {
+            Some((mut pane, mode)) => match mode {
+                Some(MarkMode::Delete) => {
+                    while let Some(entry_to_delete) = pane.next_entry_for_deletion() {
+                        self.draw(terminal).ok();
+                        match pane.delete_entry(entry_to_delete) {
+                            Some(p) => pane = p,
+                            None => break,
+                        }
+                    }
+                    None
+                }
+                None => Some(pane),
+            },
+            None => {
+                self.state.focussed = Main;
+                None
+            }
+        };
     }
 }

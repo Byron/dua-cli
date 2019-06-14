@@ -58,7 +58,7 @@ impl TerminalApp {
         terminal.post_render()?;
         Ok(())
     }
-    fn draw<B>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Error>
+    pub fn draw<B>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Error>
     where
         B: Backend,
     {
@@ -101,7 +101,7 @@ impl TerminalApp {
             }
 
             match self.state.focussed {
-                FocussedPane::Mark => self.dispatch_to_mark_pane(key),
+                FocussedPane::Mark => self.dispatch_to_mark_pane(key, terminal),
                 FocussedPane::Help => {
                     self.window.help_pane.as_mut().expect("help pane").key(key);
                 }

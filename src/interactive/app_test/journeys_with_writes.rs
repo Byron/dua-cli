@@ -41,14 +41,9 @@ fn basic_user_journey_with_deletion() -> Result<(), Error> {
         true,
         "the marker pane is gone as all entries have been removed"
     );
+    assert_eq!(app.state.selected, None, "nothing is left to be selected");
     assert_eq!(
-        app.state.selected,
-        None,
-        "nothing is left to be selected"
-    );
-    assert_eq!(
-        app.state.root,
-        app.traversal.root_index,
+        app.state.root, app.traversal.root_index,
         "the only root left is the top-level"
     );
     Ok(())

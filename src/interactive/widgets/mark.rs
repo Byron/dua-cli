@@ -24,6 +24,10 @@ use tui::{
 use tui_react::{List, ListProps};
 use unicode_segmentation::UnicodeSegmentation;
 
+pub enum MarkMode {
+    Delete,
+}
+
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
 pub struct EntryMark {
     pub size: u64,
@@ -84,18 +88,29 @@ impl MarkPane {
     pub fn marked(&self) -> &EntryMarkMap {
         &self.marked
     }
-    pub fn key(mut self, key: Key) -> Option<Self> {
+    pub fn key(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
+        let action = None;
         match key {
-            Char('d') | Char(' ') => return self.remove_selected(),
+            Ctrl('R') => return self.prepare_deletion(),
+            Char('d') | Char(' ') => return self.remove_selected().map(|s| (s, action)),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
             Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
             _ => {}
         };
-        Some(self)
+        Some((self, action))
     }
 
+    pub(crate) fn next_entry_for_deletion(&mut self) -> Option<usize> {
+        None
+    }
+    pub(crate) fn delete_entry(self, _index: usize) -> Option<Self> {
+        Some(self)
+    }
+    fn prepare_deletion(self) -> Option<(Self, Option<MarkMode>)> {
+        Some((self, Some(MarkMode::Delete)))
+    }
     fn remove_selected(mut self) -> Option<Self> {
         if let Some(mut selected) = self.selected {
             let (idx, se_len) = {
