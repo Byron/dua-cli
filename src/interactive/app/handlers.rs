@@ -6,8 +6,8 @@ use crate::interactive::{
 };
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
-use petgraph::visit::Bfs;
-use petgraph::Direction;
+use petgraph::{visit::Bfs, Direction};
+use std::{fs, io, path::PathBuf};
 use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -156,6 +156,8 @@ impl TerminalApp {
 
     pub fn delete_entry(&mut self, index: TreeIndex) -> Result<(), usize> {
         if let Some(_entry) = self.traversal.tree.node_weight(index) {
+            let path_to_delete = path_of(&self.traversal.tree, index);
+            delete_directory_recursively(path_to_delete)?;
             let parent_idx = self
                 .traversal
                 .tree
@@ -231,5 +233,61 @@ impl TerminalApp {
         if self.window.mark_pane.is_none() {
             self.state.focussed = Main;
         }
+    }
+}
+
+fn into_error_count(res: Result<(), io::Error>) -> usize {
+    match res.map_err(io_err_to_usize) {
+        Ok(_) => 0,
+        Err(c) => c,
+    }
+}
+
+fn io_err_to_usize(err: io::Error) -> usize {
+    if err.kind() == io::ErrorKind::NotFound {
+        0
+    } else {
+        1
+    }
+}
+
+fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
+    let mut files_or_dirs = vec![path];
+    let mut dirs = Vec::new();
+    let mut num_errors = 0;
+    while let Some(path) = files_or_dirs.pop() {
+        match fs::read_dir(&path) {
+            Ok(iterator) => {
+                dirs.push(path);
+                for entry in iterator {
+                    match entry.map_err(io_err_to_usize) {
+                        Ok(entry) => files_or_dirs.push(entry.path()),
+                        Err(c) => num_errors += c,
+                    }
+                }
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+                continue;
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::Other => {
+                // assume file, save IOps
+                num_errors += into_error_count(fs::remove_file(path));
+                continue;
+            }
+            Err(_) => {
+                num_errors += 1;
+                continue;
+            }
+        };
+    }
+
+    for dir in dirs.into_iter().rev() {
+        num_errors += into_error_count(fs::remove_dir(dir));
+    }
+
+    if num_errors == 0 {
+        Ok(())
+    } else {
+        Err(num_errors)
     }
 }

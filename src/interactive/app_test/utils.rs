@@ -65,7 +65,7 @@ pub struct WritableFixture {
 
 impl Drop for WritableFixture {
     fn drop(&mut self) {
-        delete_recursive(&self.root).unwrap();
+        delete_recursive(&self.root).ok();
     }
 }
 
@@ -74,7 +74,7 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
     let mut dirs: Vec<_> = Vec::new();
 
     for entry in WalkDir::new(&path).num_threads(1).into_iter() {
-        let entry: DirEntry = entry.unwrap();
+        let entry: DirEntry = entry?;
         let p = entry.path();
         match p.is_dir() {
             true => dirs.push(p),

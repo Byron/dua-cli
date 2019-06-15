@@ -29,13 +29,8 @@ fn basic_user_journey_with_deletion() -> Result<(), Error> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        vec![Ok(Key::Char('\t')), Ok(Key::Ctrl('R'))].into_iter(),
+        vec![Ok(Key::Char('\t')), Ok(Key::Ctrl('r'))].into_iter(),
     )?;
-    assert_eq!(
-        fixture.as_ref().is_dir(),
-        false,
-        "the directory should have been deleted"
-    );
     assert_eq!(
         app.window.mark_pane.is_none(),
         true,
@@ -45,6 +40,11 @@ fn basic_user_journey_with_deletion() -> Result<(), Error> {
     assert_eq!(
         app.state.root, app.traversal.root_index,
         "the only root left is the top-level"
+    );
+    assert_eq!(
+        fixture.as_ref().is_dir(),
+        false,
+        "the directory should have been deleted",
     );
     Ok(())
 }
