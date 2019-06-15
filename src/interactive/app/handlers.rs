@@ -1,10 +1,9 @@
 use crate::interactive::widgets::MarkMode;
 use crate::interactive::{
     app::{FocussedPane::*, TerminalApp},
-    sorted_entries,
+    path_of, sorted_entries,
     widgets::{HelpPane, MarkPane},
 };
-use dua::path_of;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use petgraph::Direction;

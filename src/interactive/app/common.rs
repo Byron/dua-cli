@@ -1,4 +1,4 @@
-use dua::path_of;
+use crate::interactive::path_of;
 use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;

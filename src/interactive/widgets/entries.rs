@@ -1,4 +1,5 @@
 use crate::interactive::{
+    path_of,
     widgets::{
         EntryMarkMap, COLOR_BYTESIZE_SELECTED, COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER,
     },
@@ -57,7 +58,7 @@ impl Entries {
         };
 
         let total: u64 = entries.iter().map(|b| b.data.size).sum();
-        let title = match dua::path_of(tree, *root).to_string_lossy().to_string() {
+        let title = match path_of(tree, *root).to_string_lossy().to_string() {
             ref p if p.is_empty() => Path::new(".")
                 .canonicalize()
                 .map(|p| p.to_string_lossy().to_string())

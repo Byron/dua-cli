@@ -1,10 +1,9 @@
 use crate::interactive::{
-    fit_string_graphemes_with_ellipsis,
+    fit_string_graphemes_with_ellipsis, path_of,
     widgets::{COLOR_BYTESIZE_SELECTED, COLOR_MARKED_LIGHT},
     CursorDirection,
 };
 use dua::{
-    path_of,
     traverse::{Tree, TreeIndex},
     ByteFormat,
 };
@@ -311,7 +310,6 @@ impl MarkPane {
                 fg: Color::Black,
                 bg: Color::Yellow,
                 modifier: Modifier::BOLD,
-                ..Default::default()
             };
             Paragraph::new(
                 [
