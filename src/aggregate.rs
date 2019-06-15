@@ -118,7 +118,11 @@ fn write_path<C: fmt::Display>(
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
-            Cow::Owned(format!("\t<{} IO Error(s)>", num_errors))
+            Cow::Owned(format!(
+                "  <{} IO Error{}>",
+                num_errors,
+                if num_errors > 1 { "s" } else { "" }
+            ))
         },
         byte_color = options.color.display(color::Fg(color::Green)),
         byte_color_reset = options.color.display(color::Fg(color::Reset)),
