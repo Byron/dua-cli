@@ -33,6 +33,7 @@ pub struct EntryMark {
     pub size: u64,
     pub path: PathBuf,
     pub index: usize,
+    pub num_errors_during_deletion: usize,
 }
 
 #[derive(Default)]
@@ -72,6 +73,7 @@ impl MarkPane {
                         size: e.size,
                         path: path_of(tree, index),
                         index: sorting_index,
+                        num_errors_during_deletion: 0,
                     });
                 }
             }
@@ -102,28 +104,39 @@ impl MarkPane {
         Some((self, action))
     }
 
-    pub(crate) fn next_entry_for_deletion(&mut self) -> Option<usize> {
+    pub fn next_entry_for_deletion(&mut self) -> Option<TreeIndex> {
+        while let Some((position, selected_index, data)) = self.selected.and_then(|selected| {
+            self.tree_index_by_list_position(selected)
+                .and_then(|idx| self.marked.get(&idx).map(|d| (selected, idx, d)))
+        }) {
+            if data.num_errors_during_deletion == 0 {
+                self.selected = Some(position);
+                return Some(selected_index);
+            } else {
+                self.selected = Some(position + 1);
+            }
+        }
         None
     }
-    pub(crate) fn delete_entry(self, _index: usize) -> Option<Self> {
-        Some(self)
+    pub fn delete_entry(self) -> Option<Self> {
+        self.remove_selected()
+    }
+    pub fn set_error_on_marked_item(&mut self, num_errors: usize) {
+        if let Some(d) = self
+            .selected
+            .and_then(|s| self.tree_index_by_list_position(s))
+            .and_then(|p| self.marked.get_mut(&p))
+        {
+            d.num_errors_during_deletion = num_errors;
+        }
     }
     fn prepare_deletion(self) -> Option<(Self, Option<MarkMode>)> {
         Some((self, Some(MarkMode::Delete)))
     }
     fn remove_selected(mut self) -> Option<Self> {
         if let Some(mut selected) = self.selected {
-            let (idx, se_len) = {
-                let sorted_entries: Vec<_> = self
-                    .marked
-                    .iter()
-                    .sorted_by_key(|(_, v)| &v.index)
-                    .collect();
-                (
-                    sorted_entries.get(selected).map(|(k, _)| *k.to_owned()),
-                    sorted_entries.len(),
-                )
-            };
+            let idx = self.tree_index_by_list_position(selected);
+            let se_len = self.marked.len();
             if let Some(idx) = idx {
                 self.marked.remove(&idx);
                 let new_len = se_len.saturating_sub(1);
@@ -139,6 +152,18 @@ impl MarkPane {
         } else {
             Some(self)
         }
+    }
+
+    fn tree_index_by_list_position(&mut self, selected: usize) -> Option<TreeIndex> {
+        let se = self.marked_sorted_by_index();
+        se.get(selected).map(|(k, _)| *k.to_owned())
+    }
+
+    fn marked_sorted_by_index(&self) -> Vec<(&TreeIndex, &EntryMark)> {
+        self.marked
+            .iter()
+            .sorted_by_key(|(_, v)| &v.index)
+            .collect()
     }
 
     fn change_selection(&mut self, direction: CursorDirection) {
@@ -162,11 +187,8 @@ impl MarkPane {
             format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
         );
         let selected = self.selected;
-        let entries = marked
-            .values()
-            .sorted_by_key(|v| &v.index)
-            .enumerate()
-            .map(|(idx, v)| {
+        let entries = marked.values().sorted_by_key(|v| &v.index).enumerate().map(
+            |(idx, v): (usize, &EntryMark)| {
                 let (default_style, is_selected) = match selected {
                     Some(selected) if idx == selected => (
                         Style {
@@ -178,7 +200,15 @@ impl MarkPane {
                     _ => (Style::default(), false),
                 };
                 let (path, path_len) = {
-                    let path = format!(" {}  ", v.path.display());
+                    let path = format!(
+                        " {}  {}",
+                        v.path.display(),
+                        if v.num_errors_during_deletion != 0 {
+                            format!("{} IO deletion errors", v.num_errors_during_deletion)
+                        } else {
+                            "".to_string()
+                        }
+                    );
                     let num_path_graphemes = path.graphemes(true).count();
                     match num_path_graphemes + format.total_width() {
                         n if n > area.width as usize => {
@@ -231,7 +261,8 @@ impl MarkPane {
                     default_style,
                 );
                 vec![path, spacer, bytes]
-            });
+            },
+        );
 
         let entry_in_view = match self.selected {
             Some(s) => Some(s),

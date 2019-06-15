@@ -5,6 +5,7 @@ use crate::interactive::{
     widgets::{HelpPane, MarkPane},
 };
 use dua::path_of;
+use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use petgraph::Direction;
 use termion::event::Key;
@@ -148,7 +149,11 @@ impl TerminalApp {
         }
     }
 
-    pub fn dispatch_to_mark_pane<B>(&mut self, key: Key, terminal: &mut Terminal<B>) -> ()
+    pub fn delete_entry(&mut self, _index: TreeIndex) -> Result<(), usize> {
+        Ok(())
+    }
+
+    pub fn dispatch_to_mark_pane<B>(&mut self, key: Key, terminal: &mut Terminal<B>)
     where
         B: Backend,
     {
@@ -158,9 +163,12 @@ impl TerminalApp {
                 Some(MarkMode::Delete) => {
                     while let Some(entry_to_delete) = pane.next_entry_for_deletion() {
                         self.draw(terminal).ok();
-                        match pane.delete_entry(entry_to_delete) {
-                            Some(p) => pane = p,
-                            None => break,
+                        match self.delete_entry(entry_to_delete) {
+                            Ok(_) => match pane.delete_entry() {
+                                Some(p) => pane = p,
+                                None => break,
+                            },
+                            Err(num_errors) => pane.set_error_on_marked_item(num_errors),
                         }
                     }
                     None
