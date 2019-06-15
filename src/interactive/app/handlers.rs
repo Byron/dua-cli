@@ -156,9 +156,16 @@ impl TerminalApp {
 
     pub fn delete_entry(&mut self, index: TreeIndex) -> Result<(), usize> {
         if let Some(_entry) = self.traversal.tree.node_weight(index) {
+            let parent_idx = self
+                .traversal
+                .tree
+                .neighbors_directed(index, Direction::Incoming)
+                .next()
+                .expect("us being unable to delete the root index");
             let mut bfs = Bfs::new(&self.traversal.tree, index);
             while let Some(nx) = bfs.next(&self.traversal.tree) {
                 self.traversal.tree.remove_node(nx);
+                self.traversal.entries_traversed -= 1;
             }
             self.state.entries =
                 sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
@@ -172,8 +179,38 @@ impl TerminalApp {
             {
                 self.state.selected = self.state.entries.get(0).map(|e| e.index);
             }
+            self.recompute_sizes_recursively(parent_idx);
         }
         Ok(())
+    }
+
+    fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
+        loop {
+            self.traversal
+                .tree
+                .node_weight_mut(index)
+                .expect("valid index")
+                .size = self
+                .traversal
+                .tree
+                .neighbors_directed(index, Direction::Outgoing)
+                .filter_map(|idx| self.traversal.tree.node_weight(idx).map(|w| w.size))
+                .sum();
+            match self
+                .traversal
+                .tree
+                .neighbors_directed(index, Direction::Incoming)
+                .next()
+            {
+                None => break,
+                Some(parent) => index = parent,
+            }
+        }
+        self.traversal.total_bytes = self
+            .traversal
+            .tree
+            .node_weight(self.traversal.root_index)
+            .map(|w| w.size);
     }
 
     pub fn dispatch_to_mark_pane<B>(&mut self, key: Key, terminal: &mut Terminal<B>)
