@@ -34,11 +34,12 @@ fn run() -> Result<(), Error> {
     let res = match opt.command {
         Some(Interactive { input }) => {
             let mut terminal = {
-                let stdout = io::stdout().into_raw_mode()?;
+                let stdout = io::stdout()
+                    .into_raw_mode()
+                    .with_context(|_| "Interactive mode requires a connected terminal")?;
                 let stdout = AlternateScreen::from(stdout);
                 let backend = TermionBackend::new(stdout);
-                Terminal::new(backend)
-                    .with_context(|_| "Interactive mode requires a connected terminal")?
+                Terminal::new(backend)?
             };
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, paths_from(input)?)?;
             app.process_events(&mut terminal, io::stdin().keys())?
