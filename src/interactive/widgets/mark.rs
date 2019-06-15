@@ -103,7 +103,25 @@ impl MarkPane {
         Some((self, action))
     }
 
-    pub fn next_entry_for_deletion(&mut self) -> Option<TreeIndex> {
+    pub fn iterate_deletable_items(
+        mut self,
+        mut delete_fn: impl FnMut(TreeIndex) -> Result<(), usize>,
+    ) -> Option<Self> {
+        loop {
+            match self.next_entry_for_deletion() {
+                Some(entry_to_delete) => match delete_fn(entry_to_delete) {
+                    Ok(_) => match self.delete_entry() {
+                        Some(p) => self = p,
+                        None => return None,
+                    },
+                    Err(num_errors) => self.set_error_on_marked_item(num_errors),
+                },
+                None => return Some(self),
+            }
+        }
+    }
+
+    fn next_entry_for_deletion(&mut self) -> Option<TreeIndex> {
         match self.selected.and_then(|selected| {
             self.tree_index_by_list_position(selected)
                 .and_then(|idx| self.marked.get(&idx).map(|d| (selected, idx, d)))
@@ -115,17 +133,16 @@ impl MarkPane {
                         p if p < self.marked.len() => Some(p),
                         _ => None,
                     };
-                    // we assume that each entry is either followed by `delete_entry()` or `set_error_on_marked_item`.
                     self.tree_index_by_list_position(position + 1)
                 }
             },
             None => None,
         }
     }
-    pub fn delete_entry(self) -> Option<Self> {
+    fn delete_entry(self) -> Option<Self> {
         self.remove_selected()
     }
-    pub fn set_error_on_marked_item(&mut self, num_errors: usize) {
+    fn set_error_on_marked_item(&mut self, num_errors: usize) {
         if let Some(d) = self
             .selected
             .and_then(|s| self.tree_index_by_list_position(s))

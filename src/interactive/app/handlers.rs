@@ -182,26 +182,17 @@ impl TerminalApp {
     {
         let res = self.window.mark_pane.take().and_then(|p| p.key(key));
         self.window.mark_pane = match res {
-            Some((mut pane, mode)) => match mode {
-                Some(MarkMode::Delete) => {
-                    while let Some(entry_to_delete) = pane.next_entry_for_deletion() {
-                        self.draw(terminal).ok();
-                        match self.delete_entry(entry_to_delete) {
-                            Ok(_) => match pane.delete_entry() {
-                                Some(p) => pane = p,
-                                None => break,
-                            },
-                            Err(num_errors) => pane.set_error_on_marked_item(num_errors),
-                        }
-                    }
-                    None
-                }
+            Some((pane, mode)) => match mode {
+                Some(MarkMode::Delete) => pane.iterate_deletable_items(|entry_to_delete| {
+                    self.draw(terminal).ok();
+                    self.delete_entry(entry_to_delete)
+                }),
                 None => Some(pane),
             },
-            None => {
-                self.state.focussed = Main;
-                None
-            }
+            None => None,
         };
+        if self.window.mark_pane.is_none() {
+            self.state.focussed = Main;
+        }
     }
 }
