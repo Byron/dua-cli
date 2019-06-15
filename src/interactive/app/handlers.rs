@@ -222,10 +222,17 @@ impl TerminalApp {
         let res = self.window.mark_pane.take().and_then(|p| p.key(key));
         self.window.mark_pane = match res {
             Some((pane, mode)) => match mode {
-                Some(MarkMode::Delete) => pane.iterate_deletable_items(|entry_to_delete| {
-                    self.draw(terminal).ok();
-                    self.delete_entry(entry_to_delete)
-                }),
+                Some(MarkMode::Delete) => {
+                    pane.iterate_deletable_items(|mut pane, entry_to_delete| {
+                        self.window.mark_pane = Some(pane);
+                        self.draw(terminal).ok();
+                        pane = self.window.mark_pane.take().expect("option to be filled");
+                        match self.delete_entry(entry_to_delete) {
+                            Ok(_) => Ok(pane),
+                            Err(c) => Err((pane, c)),
+                        }
+                    })
+                }
                 None => Some(pane),
             },
             None => None,

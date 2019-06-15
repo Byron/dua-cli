@@ -105,16 +105,22 @@ impl MarkPane {
 
     pub fn iterate_deletable_items(
         mut self,
-        mut delete_fn: impl FnMut(TreeIndex) -> Result<(), usize>,
+        mut delete_fn: impl FnMut(Self, TreeIndex) -> Result<Self, (Self, usize)>,
     ) -> Option<Self> {
         loop {
             match self.next_entry_for_deletion() {
-                Some(entry_to_delete) => match delete_fn(entry_to_delete) {
-                    Ok(_) => match self.delete_entry() {
-                        Some(p) => self = p,
-                        None => return None,
-                    },
-                    Err(num_errors) => self.set_error_on_marked_item(num_errors),
+                Some(entry_to_delete) => match delete_fn(self, entry_to_delete) {
+                    Ok(pane) => {
+                        self = pane;
+                        match self.delete_entry() {
+                            Some(p) => self = p,
+                            None => return None,
+                        }
+                    }
+                    Err((pane, num_errors)) => {
+                        self = pane;
+                        self.set_error_on_marked_item(num_errors)
+                    }
                 },
                 None => return Some(self),
             }
@@ -131,7 +137,7 @@ impl MarkPane {
                 _ => {
                     self.selected = match position + 1 {
                         p if p < self.marked.len() => Some(p),
-                        _ => None,
+                        _ => Some(self.marked.len().saturating_sub(1)),
                     };
                     self.tree_index_by_list_position(position + 1)
                 }
