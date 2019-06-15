@@ -1,11 +1,10 @@
 use crate::{get_size_or_panic, WalkOptions};
 use failure::Error;
-use petgraph::graph::NodeIndex;
-use petgraph::{Directed, Direction, Graph};
+use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
 
 pub type TreeIndex = NodeIndex;
-pub type Tree = Graph<EntryData, (), Directed>;
+pub type Tree = StableGraph<EntryData, (), Directed>;
 
 #[derive(Eq, PartialEq, Debug, Default, Clone)]
 pub struct EntryData {

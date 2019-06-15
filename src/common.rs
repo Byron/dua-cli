@@ -1,7 +1,7 @@
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
 use jwalk::WalkDir;
-use std::{fmt, path::Path, path::PathBuf};
+use std::{fmt, path::Path};
 
 pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
     tree.node_weight(node_idx)
