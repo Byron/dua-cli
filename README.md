@@ -43,9 +43,9 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
-#### 🚧v2.0 - interactive visualization of directory sizes with an option to queue their deletion
+#### ✅ v2.0.0 - interactive visualization of directory sizes with an option to queue their deletion
 
-A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all just using the keyboard.
+A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all using the keyboard exclusively.
 
 ##### Other Features
 
