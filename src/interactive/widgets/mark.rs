@@ -105,18 +105,23 @@ impl MarkPane {
     }
 
     pub fn next_entry_for_deletion(&mut self) -> Option<TreeIndex> {
-        while let Some((position, selected_index, data)) = self.selected.and_then(|selected| {
+        match self.selected.and_then(|selected| {
             self.tree_index_by_list_position(selected)
                 .and_then(|idx| self.marked.get(&idx).map(|d| (selected, idx, d)))
         }) {
-            if data.num_errors_during_deletion == 0 {
-                self.selected = Some(position);
-                return Some(selected_index);
-            } else {
-                self.selected = Some(position + 1);
-            }
+            Some((position, selected_index, data)) => match data.num_errors_during_deletion {
+                0 => Some(selected_index),
+                _ => {
+                    self.selected = match position + 1 {
+                        p if p < self.marked.len() => Some(p),
+                        _ => None,
+                    };
+                    // we assume that each entry is either followed by `delete_entry()` or `set_error_on_marked_item`.
+                    self.tree_index_by_list_position(position + 1)
+                }
+            },
+            None => None,
         }
-        None
     }
     pub fn delete_entry(self) -> Option<Self> {
         self.remove_selected()
@@ -155,8 +160,9 @@ impl MarkPane {
     }
 
     fn tree_index_by_list_position(&mut self, selected: usize) -> Option<TreeIndex> {
-        let se = self.marked_sorted_by_index();
-        se.get(selected).map(|(k, _)| *k.to_owned())
+        self.marked_sorted_by_index()
+            .get(selected)
+            .map(|(k, _)| *k.to_owned())
     }
 
     fn marked_sorted_by_index(&self) -> Vec<(&TreeIndex, &EntryMark)> {
