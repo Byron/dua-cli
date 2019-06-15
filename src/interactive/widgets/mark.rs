@@ -92,7 +92,7 @@ impl MarkPane {
     pub fn key(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         match key {
-            Ctrl('R') => return self.prepare_deletion(),
+            Ctrl('r') => return self.prepare_deletion(),
             Char('d') | Char(' ') => return self.remove_selected().map(|s| (s, action)),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
@@ -134,7 +134,11 @@ impl MarkPane {
             d.num_errors_during_deletion = num_errors;
         }
     }
-    fn prepare_deletion(self) -> Option<(Self, Option<MarkMode>)> {
+    fn prepare_deletion(mut self) -> Option<(Self, Option<MarkMode>)> {
+        for entry in self.marked.values_mut() {
+            entry.num_errors_during_deletion = 0;
+        }
+        self.selected = Some(0);
         Some((self, Some(MarkMode::Delete)))
     }
     fn remove_selected(mut self) -> Option<Self> {
@@ -314,7 +318,7 @@ impl MarkPane {
             Paragraph::new(
                 [
                     Text::Styled(
-                        " Ctrl + Shift + r".into(),
+                        " Ctrl + r".into(),
                         Style {
                             fg: Color::LightRed,
                             modifier: default_style.modifier | Modifier::RAPID_BLINK,

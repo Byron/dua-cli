@@ -6,6 +6,7 @@ use crate::interactive::{
 };
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
+use petgraph::visit::Bfs;
 use petgraph::Direction;
 use termion::event::Key;
 use tui::backend::Backend;
@@ -148,7 +149,30 @@ impl TerminalApp {
         }
     }
 
-    pub fn delete_entry(&mut self, _index: TreeIndex) -> Result<(), usize> {
+    fn set_root(&mut self, root: TreeIndex) {
+        self.state.root = root;
+        self.state.entries = sorted_entries(&self.traversal.tree, root, self.state.sorting);
+    }
+
+    pub fn delete_entry(&mut self, index: TreeIndex) -> Result<(), usize> {
+        if let Some(_entry) = self.traversal.tree.node_weight(index) {
+            let mut bfs = Bfs::new(&self.traversal.tree, index);
+            while let Some(nx) = bfs.next(&self.traversal.tree) {
+                self.traversal.tree.remove_node(nx);
+            }
+            self.state.entries =
+                sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+            if let None = self.traversal.tree.node_weight(self.state.root) {
+                self.set_root(self.traversal.root_index);
+            }
+            if let None = self
+                .state
+                .selected
+                .and_then(|selected| self.state.entries.iter().find(|e| e.index == selected))
+            {
+                self.state.selected = self.state.entries.get(0).map(|e| e.index);
+            }
+        }
         Ok(())
     }
 

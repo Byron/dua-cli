@@ -146,7 +146,7 @@ impl HelpPane {
             {
                 hotkey("d/<space>", "remove the selected entry from the list", None);
                 hotkey(
-                    "Ctrl + R",
+                    "Ctrl + r",
                     "Permanently delete all marked entries without prompt!",
                     Some("This operation cannot be undone!"),
                 );
