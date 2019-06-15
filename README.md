@@ -1,6 +1,6 @@
 **dua** (-> _Disk Usage Analyzer_) is a tool to conveniently learn about the usage of disk space of a given directory. It's parallel by default and will max out your SSD, providing relevant information as fast as possible.
 
-[![asciicast](https://asciinema.org/a/au3neIHDGtYYj4blyTXR8VkJz.svg)](https://asciinema.org/a/au3neIHDGtYYj4blyTXR8VkJz)
+[![asciicast](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX.svg)](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX)
 
 ### Installation
 
@@ -19,6 +19,20 @@ dua
 dua *
 # learn about additional functionality
 dua aggregate --help
+```
+
+### Interactive Mode
+
+Launch into interactive mode with the `i` or `interactive` subcommand. Get help on keyboard
+shortcuts with `?`.
+Use this mode to explore, and/or to delete files and directories to release disk space.
+
+Please note that great care has been taken to prevent accidential deletions due to a multi-stage
+process, which makes this mode viable for exploration.
+
+```bash
+dua i
+dua interactive
 ```
 
 ### Roadmap
