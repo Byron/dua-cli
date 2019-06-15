@@ -23,14 +23,19 @@ dua aggregate --help
 
 ### Roadmap
 
-#### 🚧v2.0 (_wip_) - interactive visualization of directory sizes with an option to queue their deletion
+#### 🚧v2.1  - Various features and fixes as they come up while people are using it
+
+##### Other Features
+
+ * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
+
+#### 🚧v2.0 - interactive visualization of directory sizes with an option to queue their deletion
 
 A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all just using the keyboard.
 
 ##### Other Features
 
  * [x] Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
- * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
 #### ✅v1.2 (_released_) - - the first usable, read-only interactive terminal user interface
 
