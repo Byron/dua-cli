@@ -34,7 +34,7 @@ impl Header {
             bold("U"),
             text("sage "),
             bold("A"),
-            text("alyzer v"),
+            text("nalyzer v"),
             text(env!("CARGO_PKG_VERSION")),
             text("    "),
             italic("(press "),
