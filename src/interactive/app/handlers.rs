@@ -274,6 +274,8 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+                // it could also be a broken symlink
+                num_errors += into_error_count(fs::remove_file(path));
                 continue;
             }
             Err(ref e) if e.kind() == io::ErrorKind::Other => {
@@ -289,7 +291,7 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
     }
 
     for dir in dirs.into_iter().rev() {
-        num_errors += into_error_count(fs::remove_dir(dir));
+        num_errors += into_error_count(fs::remove_dir(&dir).or_else(|_| fs::remove_file(dir)));
     }
 
     if num_errors == 0 {
