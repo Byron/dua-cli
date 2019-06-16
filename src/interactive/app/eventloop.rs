@@ -8,8 +8,7 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::collections::BTreeMap;
-use std::{io, path::PathBuf};
+use std::{collections::BTreeMap, io, path::PathBuf};
 use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;

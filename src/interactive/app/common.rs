@@ -39,11 +39,12 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
         .filter_map(|idx| {
             tree.node_weight(idx).map(|w| {
                 let p = path_of(tree, idx);
+                let pm = p.metadata();
                 EntryDataBundle {
                     index: idx,
                     data: w.clone(),
-                    is_dir: p.is_dir(),
-                    exists: p.exists(),
+                    exists: pm.is_ok(),
+                    is_dir: pm.ok().map_or(false, |m| m.is_dir()),
                 }
             })
         })

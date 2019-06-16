@@ -42,8 +42,13 @@ dua interactive
 ##### Other Features
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
+ 
+#### ✅ v2.1.2 bug fixes and improvements
 
-#### ✅ v2.1.01 bug fixes and improvements
+* Performance fix when showing folders with large amounts of files
+* Display of amount of entries per directory
+
+#### ✅ v2.1.1 bug fixes and improvements
 
 * Better information about deletion progress
 * removal of windows support
@@ -97,8 +102,6 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
-* When interactively displaying directories with a large number of entries, there may be a noticeable slowdown as we probe each entry's meta-data
-  once per draw request.
 * _logical filesize_ is used instead of computed or estimating actual size on disk.
 * _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.

@@ -134,7 +134,7 @@ impl TerminalApp {
     }
 
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let entries = sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+        let entries = &self.state.entries;
         let next_selected_pos = match self.state.selected {
             Some(ref selected) => entries
                 .iter()

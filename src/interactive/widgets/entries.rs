@@ -65,7 +65,15 @@ impl Entries {
                 .unwrap_or_else(|_| String::from(".")),
             p => p,
         };
-        let title = format!(" {} ", title);
+        let title = format!(
+            " {} ({} item{})",
+            title,
+            entries.len(),
+            match entries.len() {
+                1 => "",
+                _ => "s",
+            }
+        );
         let block = Block::default()
             .title(&title)
             .border_style(*border_style)
