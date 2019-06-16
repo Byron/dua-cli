@@ -180,7 +180,8 @@ impl TerminalApp {
         self.state.entries = sorted_entries(&self.traversal.tree, root, self.state.sorting);
     }
 
-    pub fn delete_entry(&mut self, index: TreeIndex) -> Result<(), usize> {
+    pub fn delete_entry(&mut self, index: TreeIndex) -> Result<usize, usize> {
+        let mut entries_deleted = 0;
         if let Some(_entry) = self.traversal.tree.node_weight(index) {
             let path_to_delete = path_of(&self.traversal.tree, index);
             delete_directory_recursively(path_to_delete)?;
@@ -194,6 +195,7 @@ impl TerminalApp {
             while let Some(nx) = bfs.next(&self.traversal.tree) {
                 self.traversal.tree.remove_node(nx);
                 self.traversal.entries_traversed -= 1;
+                entries_deleted += 1;
             }
             self.state.entries =
                 sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
@@ -209,7 +211,7 @@ impl TerminalApp {
             }
             self.recompute_sizes_recursively(parent_idx);
         }
-        Ok(())
+        Ok(entries_deleted)
     }
 
     fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
@@ -249,15 +251,24 @@ impl TerminalApp {
         self.window.mark_pane = match res {
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
-                    pane.iterate_deletable_items(|mut pane, entry_to_delete| {
+                    self.state.message = Some("Deleting entries...".to_string());
+                    let mut entries_deleted = 0;
+                    let res = pane.iterate_deletable_items(|mut pane, entry_to_delete| {
                         self.window.mark_pane = Some(pane);
                         self.draw(terminal).ok();
                         pane = self.window.mark_pane.take().expect("option to be filled");
                         match self.delete_entry(entry_to_delete) {
-                            Ok(_) => Ok(pane),
+                            Ok(ed) => {
+                                entries_deleted += ed;
+                                self.state.message =
+                                    Some(format!("Deleted {} entries...", entries_deleted));
+                                Ok(pane)
+                            }
                             Err(c) => Err((pane, c)),
                         }
-                    })
+                    });
+                    self.state.message = None;
+                    res
                 }
                 None => Some(pane),
             },

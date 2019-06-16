@@ -43,6 +43,10 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.01 bug fixes and improvements
+
+* Better information about deletion progress
+
 #### ✅ v2.1.0- bug fixes and improvements
 
 * windows support
