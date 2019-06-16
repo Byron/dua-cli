@@ -46,10 +46,12 @@ dua interactive
 #### ✅ v2.1.01 bug fixes and improvements
 
 * Better information about deletion progress
+* removal of windows support
 
 #### ✅ v2.1.0- bug fixes and improvements
 
-* windows support
+* windows support (never actually worked), usage of crossterm is difficult thanks to completely
+  different input handling.
 * additional key-bindings
 * auto-restore previous selection in each visited directory
 
@@ -95,6 +97,8 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
+* When interactively displaying directories with a large number of entries, there may be a noticeable slowdown as we probe each entry's meta-data
+  once per draw request.
 * _logical filesize_ is used instead of computed or estimating actual size on disk.
 * _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
