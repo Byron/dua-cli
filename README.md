@@ -37,13 +37,18 @@ dua interactive
 
 ### Roadmap
 
-#### 🚧v2.1  - Various features and fixes as they come up while people are using it
+#### 🚧v2.2  - Various features and fixes as they come up while people are using it
 
 ##### Other Features
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
-#### ✅ v2.0.01- bug fixes and improvements
+#### ✅ v2.1.0- bug fixes and improvements
+
+* windows support
+* additional key-bindings
+
+#### ✅ v2.0.1- bug fixes and improvements
 
 * fix typo in title 
 * better display of IO-Errors in aggregate mode
