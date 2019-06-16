@@ -90,18 +90,41 @@ impl TerminalApp {
                 self.state.root = parent_idx;
                 self.state.entries =
                     sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting);
-                self.state.selected = self.state.entries.get(0).map(|b| b.index);
+                self.state.selected = self
+                    .state
+                    .bookmarks
+                    .get(&parent_idx)
+                    .map(|v| *v)
+                    .or_else(|| self.state.entries.get(0).map(|b| b.index));
             }
             None => self.state.message = Some("Top level reached".into()),
         }
     }
 
     pub fn enter_node(&mut self) {
-        if let Some(new_root) = self.state.selected {
-            let new_entries = sorted_entries(&self.traversal.tree, new_root, self.state.sorting);
-            match new_entries.get(0) {
+        if let Some(previously_selected) = self.state.selected {
+            let new_entries = sorted_entries(
+                &self.traversal.tree,
+                previously_selected,
+                self.state.sorting,
+            );
+            match new_entries.get(
+                self.state
+                    .bookmarks
+                    .get(&previously_selected)
+                    .and_then(|selected| {
+                        new_entries
+                            .iter()
+                            .find_position(|b| b.index == *selected)
+                            .map(|(pos, _)| pos)
+                    })
+                    .unwrap_or(0),
+            ) {
                 Some(b) => {
-                    self.state.root = new_root;
+                    self.state
+                        .bookmarks
+                        .insert(self.state.root, previously_selected);
+                    self.state.root = previously_selected;
                     self.state.selected = Some(b.index);
                     self.state.entries = new_entries;
                 }
@@ -124,7 +147,10 @@ impl TerminalApp {
             .get(next_selected_pos)
             .or_else(|| entries.last())
             .map(|b| b.index)
-            .or(self.state.selected)
+            .or(self.state.selected);
+        if let Some(selected) = self.state.selected {
+            self.state.bookmarks.insert(self.state.root, selected);
+        }
     }
 
     pub fn cycle_sorting(&mut self) {

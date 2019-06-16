@@ -47,6 +47,7 @@ dua interactive
 
 * windows support
 * additional key-bindings
+* auto-restore previous selection in each visited directory
 
 #### ✅ v2.0.1- bug fixes and improvements
 

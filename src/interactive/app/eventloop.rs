@@ -8,6 +8,7 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
+use std::collections::BTreeMap;
 use std::{io, path::PathBuf};
 use termion::event::Key;
 use tui::backend::Backend;
@@ -34,6 +35,7 @@ pub struct AppState {
     pub sorting: SortMode,
     pub message: Option<String>,
     pub focussed: FocussedPane,
+    pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
 }
 
 /// State and methods representing the interactive disk usage analyser for the terminal
