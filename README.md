@@ -3,11 +3,17 @@
 [![asciicast](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX.svg)](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX)
 
 ### Installation
-
+#### Cargo
 Via `cargo`, which can be obtained using [rustup][rustup]
 
 ```
 cargo install dua-cli
+```
+#### VoidLinux
+Via `xbps` on your VoidLinux system.
+
+```
+xbps-install dua-cli
 ```
 
 ### Usage
