@@ -103,6 +103,9 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 ### Limitations
 
 * Interactive mode only looks good in dark terminals (see [this issue](https://github.com/Byron/dua-cli/issues/13))
+* _Hard links_ are not understood, thus hard-linked files will possibly be counted multiple times.
+* _Symlinks_ are followed and we obtain the logical size of the file they point to. Ideally, we only
+  count their actual size.
 * _logical filesize_ is used instead of computed or estimating actual size on disk.
 * _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
