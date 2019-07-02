@@ -49,6 +49,8 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
  
+#### ✅ v2.1.4 - re-release with Cargo.lock
+
 #### ✅ v2.1.2 bug fixes and improvements
 
 * Performance fix when showing folders with large amounts of files
