@@ -49,6 +49,13 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
  
+#### ✅ v2.1.6 - use latest version of open-rs
+
+That way, pressing `shift + O` to open the currently selected file won't possibly spam the terminal
+with messages caused by the program used to find the system program to open the file.
+
+Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
+
 #### ✅ v2.1.5 - re-release with Cargo.lock
 
 #### ✅ v2.1.2 bug fixes and improvements
