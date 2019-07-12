@@ -64,12 +64,34 @@ impl fmt::Display for DisplayByteVisualization {
 
 impl DisplayByteVisualization {
     fn make_bar(f: &mut fmt::Formatter, percentage: f32, length: usize) -> Result<(), fmt::Error> {
-        let block_length = (length as f32 * percentage).round() as usize;
+        // Print the filled part of the bar
+        let block_length = (length as f32 * percentage).floor() as usize;
         for _ in 0..block_length {
             f.write_str(tui::symbols::block::FULL)?;
         }
-        for _ in 0..length - block_length {
-            f.write_str(" ")?;
+
+        // Bar is done if full length is already used, continue working if not
+        if block_length < length {
+            let block_sections = [
+                " ",
+                tui::symbols::block::ONE_EIGHTH,
+                tui::symbols::block::ONE_QUATER,
+                tui::symbols::block::THREE_EIGHTHS,
+                tui::symbols::block::HALF,
+                tui::symbols::block::FIVE_EIGHTHS,
+                tui::symbols::block::THREE_QUATERS,
+                tui::symbols::block::SEVEN_EIGHTHS,
+                tui::symbols::block::FULL,
+            ];
+            // Get the index based on how filled the remaining part is
+            let index =
+                (((length as f32 * percentage) - block_length as f32) * 8f32).round() as usize;
+            f.write_str(block_sections[index])?;
+
+            // Remainder of the bar should be empty
+            for _ in 0..length - block_length - 1 {
+                f.write_str(" ")?;
+            }
         }
         Ok(())
     }
