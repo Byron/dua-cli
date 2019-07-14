@@ -183,7 +183,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "dua-cli"
-version = "2.1.7"
+version = "2.1.8"
 dependencies = [
  "atty 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "byte-unit 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",

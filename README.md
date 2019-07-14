@@ -48,6 +48,15 @@ dua interactive
 ##### Other Features
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
+
+#### ✅ v2.1.8 - don't follow symbolic links when deleting directories
+
+[A critical bug was discovered](https://github.com/Byron/dua-cli/issues/24) which would lead to deletion
+of unwanted `directories` as `dua` would follow symbolic links during traversal during deletion.
+
+Please note that symbolic links to files would be treated correctly, only removing the symbolic link.
+
+This is now fixed.
  
 #### ✅ v2.1.7 - use latest version of open-rs
 
