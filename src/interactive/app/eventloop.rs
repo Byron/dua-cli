@@ -112,10 +112,10 @@ impl TerminalApp {
                     Char('d') => self.mark_entry(true),
                     Char('u') | Char('h') | Backspace | Left => self.exit_node(),
                     Char('o') | Char('l') | Char('\n') | Right => self.enter_node(),
-                    Ctrl('u') => self.change_entry_selection(CursorDirection::PageUp),
+                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
                     Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
                     Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                    Ctrl('d') => self.change_entry_selection(CursorDirection::PageDown),
+                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
                     Char('s') => self.cycle_sorting(),
                     Char('g') => self.display.byte_vis.cycle(),
                     _ => {}
