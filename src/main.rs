@@ -19,8 +19,6 @@ fn run() -> Result<(), Error> {
     use options::Command::*;
 
     let opt: options::Args = options::Args::from_args();
-    let stdout = io::stdout();
-    let stdout_locked = stdout.lock();
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
@@ -42,7 +40,9 @@ fn run() -> Result<(), Error> {
                 Terminal::new(backend)?
             };
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, paths_from(input)?)?;
-            app.process_events(&mut terminal, io::stdin().keys())?
+            let res = app.process_events(&mut terminal, io::stdin().keys())?;
+            io::stdout().flush().ok();
+            res
         }
         Some(Aggregate {
             input,
@@ -50,6 +50,8 @@ fn run() -> Result<(), Error> {
             no_sort,
             statistics,
         }) => {
+            let stdout = io::stdout();
+            let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
                 stdout_locked,
                 walk_options,
@@ -63,6 +65,8 @@ fn run() -> Result<(), Error> {
             res
         }
         None => {
+            let stdout = io::stdout();
+            let stdout_locked = stdout.lock();
             dua::aggregate(
                 stdout_locked,
                 walk_options,
