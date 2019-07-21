@@ -49,6 +49,12 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.9 - improved handling of broken symlinks
+
+* during symlink deletion, now broken symlinks will be deleted as expected.
+* always return to the previous terminal screen so the TUI doesn't stick to the current one.
+* display broken symlinks on the first level of iteration.
+
 #### ✅ v2.1.8 - don't follow symbolic links when deleting directories
 
 [A critical bug was discovered](https://github.com/Byron/dua-cli/issues/24) which would lead to deletion

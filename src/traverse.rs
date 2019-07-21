@@ -71,14 +71,13 @@ impl Traversal {
 
         const INITIAL_CHECK_INTERVAL: usize = 500;
         let mut check_instant_every = INITIAL_CHECK_INTERVAL;
-        let mut last_seen_eid;
         if walk_options.threads == 0 {
             // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
             // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
             walk_options.threads = num_cpus::get_physical();
         }
         for path in input.into_iter() {
-            last_seen_eid = 0;
+            let mut last_seen_eid = 0;
             for (eid, entry) in walk_options
                 .iter_from_path(path.as_ref())
                 .into_iter()
@@ -142,7 +141,15 @@ impl Traversal {
                         previous_node_idx = entry_index;
                         previous_depth = entry.depth;
                     }
-                    Err(_) => t.io_errors += 1,
+                    Err(_) => {
+                        if previous_depth == 0 {
+                            data.name = path.clone().into();
+                            let entry_index = t.tree.add_node(data);
+                            t.tree.add_edge(parent_node_idx, entry_index, ());
+                        }
+
+                        t.io_errors += 1
+                    }
                 }
 
                 if eid != 0

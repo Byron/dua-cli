@@ -94,7 +94,7 @@ impl TerminalApp {
                     .state
                     .bookmarks
                     .get(&parent_idx)
-                    .map(|v| *v)
+                    .copied()
                     .or_else(|| self.state.entries.get(0).map(|b| b.index));
             }
             None => self.state.message = Some("Top level reached".into()),
@@ -199,13 +199,14 @@ impl TerminalApp {
             }
             self.state.entries =
                 sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
-            if let None = self.traversal.tree.node_weight(self.state.root) {
+            if self.traversal.tree.node_weight(self.state.root).is_none() {
                 self.set_root(self.traversal.root_index);
             }
-            if let None = self
+            if self
                 .state
                 .selected
                 .and_then(|selected| self.state.entries.iter().find(|e| e.index == selected))
+                .is_none()
             {
                 self.state.selected = self.state.entries.get(0).map(|e| e.index);
             }
@@ -325,7 +326,7 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
                 num_errors += into_error_count(fs::remove_file(path));
                 continue;
             }
-            Err(e) => {
+            Err(_) => {
                 num_errors += 1;
                 continue;
             }
