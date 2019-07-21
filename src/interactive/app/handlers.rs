@@ -300,10 +300,11 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
     let mut dirs = Vec::new();
     let mut num_errors = 0;
     while let Some(path) = files_or_dirs.pop() {
+        let assume_symlink_to_try_deletion = true;
         let is_symlink = path
             .metadata()
             .map(|m| m.file_type().is_symlink())
-            .unwrap_or(false);
+            .unwrap_or(assume_symlink_to_try_deletion);
         if is_symlink {
             // do not follow symlinks
             num_errors += into_error_count(fs::remove_file(&path));
@@ -324,7 +325,7 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
                 num_errors += into_error_count(fs::remove_file(path));
                 continue;
             }
-            Err(_) => {
+            Err(e) => {
                 num_errors += 1;
                 continue;
             }
