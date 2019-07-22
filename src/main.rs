@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![allow(clippy::match_bool)]
 extern crate failure;
 extern crate failure_tools;

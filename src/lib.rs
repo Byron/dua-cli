@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 extern crate failure;
 extern crate jwalk;
 
