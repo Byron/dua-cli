@@ -26,8 +26,6 @@ impl Footer {
             message,
         } = props.borrow();
 
-        let bg_color = Color::White;
-        let text_color = Color::Black;
         let lines = [
             Text::Raw(
                 format!(
@@ -46,7 +44,7 @@ impl Footer {
                     m.into(),
                     Style {
                         fg: Color::Red,
-                        bg: bg_color,
+                        bg: Color::Reset,
                         modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
                     },
                 )
@@ -54,8 +52,7 @@ impl Footer {
         ];
         Paragraph::new(lines.iter().filter_map(|x| x.as_ref()))
             .style(Style {
-                fg: text_color,
-                bg: bg_color,
+                modifier: Modifier::REVERSED,
                 ..Default::default()
             })
             .draw(area, buf);

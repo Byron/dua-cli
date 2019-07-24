@@ -9,12 +9,12 @@ pub struct Header;
 
 impl Header {
     pub fn render(&self, bg_color: Color, area: Rect, buf: &mut Buffer) {
-        let text_color = Color::Black;
-        let standard = Style {
-            fg: text_color,
+        let standard = Style{
+            fg: Color::Black,
             bg: bg_color,
             ..Default::default()
         };
+        assert_ne!(standard.bg, standard.fg);
         let modified = |text: &'static str, modifier| {
             Text::Styled(
                 text.into(),
@@ -43,7 +43,6 @@ impl Header {
         ];
         Paragraph::new(lines.iter())
             .style(Style {
-                fg: text_color,
                 bg: bg_color,
                 ..Default::default()
             })

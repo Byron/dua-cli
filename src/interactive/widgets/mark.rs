@@ -1,6 +1,6 @@
 use crate::interactive::{
     fit_string_graphemes_with_ellipsis, path_of,
-    widgets::{COLOR_BYTESIZE_SELECTED, COLOR_MARKED_LIGHT},
+    widgets::get_name_color,
     CursorDirection,
 };
 use dua::{
@@ -219,17 +219,21 @@ impl MarkPane {
             format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
         );
         let selected = self.selected;
+        let has_focus = self.has_focus;
         let entries = marked.values().sorted_by_key(|v| &v.index).enumerate().map(
             |(idx, v): (usize, &EntryMark)| {
-                let (default_style, is_selected) = match selected {
-                    Some(selected) if idx == selected => (
+                let default_style = match selected {
+                    Some(selected) if idx == selected => {
+                        let mut modifier = Modifier::REVERSED;
+                        if has_focus {
+                            modifier.insert(Modifier::BOLD);
+                        }
                         Style {
-                            bg: Color::White,
+                            modifier,
                             ..Default::default()
-                        },
-                        true,
-                    ),
-                    _ => (Style::default(), false),
+                        }
+                    },
+                    _ => Style::default(),
                 };
                 let (path, path_len) = {
                     let path = format!(
@@ -254,14 +258,11 @@ impl MarkPane {
                         _ => (path, num_path_graphemes),
                     }
                 };
+                let fg_path = get_name_color(Color::Reset, false, true);  // TODO: determine whether directory
                 let path = Text::Styled(
                     path.into(),
                     Style {
-                        fg: if is_selected {
-                            Color::Black
-                        } else {
-                            COLOR_MARKED_LIGHT
-                        },
+                        fg: fg_path,
                         ..default_style
                     },
                 );
@@ -273,11 +274,7 @@ impl MarkPane {
                     )
                     .into(),
                     Style {
-                        fg: if is_selected {
-                            COLOR_BYTESIZE_SELECTED
-                        } else {
-                            Color::Green
-                        },
+                        fg: Color::Green,
                         ..default_style
                     },
                 );
@@ -290,7 +287,10 @@ impl MarkPane {
                             .saturating_sub(format.total_width())
                     )
                     .into(),
-                    default_style,
+                    Style {
+                        fg: fg_path,
+                        ..default_style
+                    },
                 );
                 vec![path, spacer, bytes]
             },

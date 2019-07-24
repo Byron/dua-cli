@@ -1,7 +1,7 @@
 use crate::interactive::{
     path_of,
     widgets::{
-        EntryMarkMap, COLOR_BYTESIZE_SELECTED, COLOR_MARKED, COLOR_MARKED_DARK, COLOR_MARKED_DARKER,
+        get_name_color, EntryMarkMap,
     },
     DisplayOptions, EntryDataBundle,
 };
@@ -11,7 +11,7 @@ use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Style, Modifier},
     widgets::{Block, Borders, Text},
 };
 use tui_react::{fill_background_to_right, List, ListProps};
@@ -97,28 +97,18 @@ impl Entries {
                  is_dir,
                  exists,
              }| {
-                let (is_selected, style) = match selected {
-                    Some(idx) if *idx == *node_idx => (
-                        true,
-                        Style {
-                            fg: Color::Black,
-                            bg: if *is_focussed {
-                                Color::White
-                            } else {
-                                Color::DarkGray
-                            },
-                            ..Default::default()
-                        },
-                    ),
-                    _ => (
-                        false,
-                        Style {
-                            fg: Color::White,
-                            bg: Color::Reset,
-                            ..Default::default()
-                        },
-                    ),
+                let mut style = Style::default();
+                let is_selected = if let Some(idx) = selected {
+                    *idx == *node_idx
+                } else {
+                    false
                 };
+                if is_selected {
+                    style.modifier.insert(Modifier::REVERSED);
+                }
+                if *is_focussed & is_selected {
+                    style.modifier.insert(Modifier::BOLD);
+                }
 
                 let bytes = Text::Styled(
                     format!(
@@ -128,11 +118,7 @@ impl Entries {
                     )
                     .into(),
                     Style {
-                        fg: match (is_selected, *is_focussed) {
-                            (true, true) => COLOR_BYTESIZE_SELECTED,
-                            (true, false) => Color::Black,
-                            _ => Color::Green,
-                        },
+                        fg: Color::Green,
                         ..style
                     },
                 );
@@ -142,14 +128,7 @@ impl Entries {
                         display.byte_vis.display(w.size as f32 / total as f32)
                     )
                     .into(),
-                    Style {
-                        fg: match (is_selected, *is_focussed) {
-                            (true, true) => COLOR_MARKED_DARK,
-                            (true, false) => COLOR_MARKED_DARKER,
-                            _ => style.fg,
-                        },
-                        ..style
-                    },
+                    style,
                 );
 
                 let name = Text::Styled(
@@ -162,24 +141,16 @@ impl Entries {
                         area.width,
                     )
                     .into(),
-                    Style {
-                        fg: match (
-                            !is_dir,
-                            exists,
-                            marked.map(|m| m.contains_key(node_idx)).unwrap_or(false),
-                        ) {
-                            (true, true, false) if !is_selected => Color::DarkGray,
-                            (true, true, false) => style.fg,
-                            (false, true, false) => style.fg,
-
-                            (true, true, true) => COLOR_MARKED_DARK,
-                            (false, true, true) => COLOR_MARKED,
-
+                    {
+                        let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+                        let fg = if !exists {
                             // non-existing - always red!
-                            (_, false, _) => Color::Red,
-                        },
-                        ..style
-                    },
+                            Color::Red
+                        } else {
+                            get_name_color(style.fg, !is_dir, is_marked)
+                        };
+                        Style { fg, ..style }
+                    }
                 );
                 vec![bytes, percentage, name]
             },

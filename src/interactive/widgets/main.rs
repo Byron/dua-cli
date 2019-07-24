@@ -1,7 +1,7 @@
 use crate::interactive::{
     widgets::{
         Entries, EntriesProps, Footer, FooterProps, Header, HelpPane, HelpPaneProps, MarkPane,
-        MarkPaneProps, COLOR_MARKED_LIGHT,
+        MarkPaneProps, COLOR_MARKED,
     },
     AppState, DisplayOptions, FocussedPane,
 };
@@ -54,14 +54,14 @@ impl MainWindow {
                 bg: Color::Reset,
                 modifier: Modifier::empty(),
             };
-            let white = Style {
-                fg: Color::White,
+            let bold = Style {
+                modifier: Modifier::BOLD,
                 ..grey
             };
             match state.focussed {
-                Main => (white, grey, grey),
-                Help => (grey, white, grey),
-                Mark => (grey, grey, white),
+                Main => (bold, grey, grey),
+                Help => (grey, bold, grey),
+                Mark => (grey, grey, bold),
             }
         };
 
@@ -76,7 +76,7 @@ impl MainWindow {
             let marked = self.mark_pane.as_ref().map(|p| p.marked());
             let bg_color = match (marked.map_or(true, |m| m.is_empty()), state.focussed) {
                 (false, FocussedPane::Mark) => Color::LightRed,
-                (false, _) => COLOR_MARKED_LIGHT,
+                (false, _) => COLOR_MARKED,
                 (_, _) => Color::White,
             };
             Header.render(bg_color, header_area, buf);
