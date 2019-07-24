@@ -33,6 +33,7 @@ pub struct EntryMark {
     pub path: PathBuf,
     pub index: usize,
     pub num_errors_during_deletion: usize,
+    pub is_dir: bool,
 }
 
 #[derive(Default)]
@@ -62,7 +63,7 @@ impl MarkPane {
             self.selected = None
         }
     }
-    pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree) -> Option<Self> {
+    pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree, is_dir: bool) -> Option<Self> {
         match self.marked.entry(index) {
             Entry::Vacant(entry) => {
                 if let Some(e) = tree.node_weight(index) {
@@ -73,6 +74,7 @@ impl MarkPane {
                         path: path_of(tree, index),
                         index: sorting_index,
                         num_errors_during_deletion: 0,
+                        is_dir,
                     });
                 }
             }
@@ -258,7 +260,7 @@ impl MarkPane {
                         _ => (path, num_path_graphemes),
                     }
                 };
-                let fg_path = get_name_color(Color::Reset, false, true);  // TODO: determine whether directory
+                let fg_path = get_name_color(Color::Reset, !v.is_dir, true);
                 let path = Text::Styled(
                     path.into(),
                     Style {

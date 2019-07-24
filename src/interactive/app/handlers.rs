@@ -160,15 +160,14 @@ impl TerminalApp {
     }
 
     pub fn mark_entry(&mut self, advance_cursor: bool) {
-        match (self.state.selected, self.window.mark_pane.take()) {
-            (Some(index), Some(pane)) => {
-                self.window.mark_pane = pane.toggle_index(index, &self.traversal.tree);
-            }
-            (Some(index), None) => {
+        if let Some(index) = self.state.selected {
+            let is_dir = self.state.entries.iter().find(|e| e.index == index).unwrap().is_dir;
+            if let Some(pane) = self.window.mark_pane.take() {
+                self.window.mark_pane = pane.toggle_index(index, &self.traversal.tree, is_dir);
+            } else {
                 self.window.mark_pane =
-                    MarkPane::default().toggle_index(index, &self.traversal.tree)
+                    MarkPane::default().toggle_index(index, &self.traversal.tree, is_dir)
             }
-            _ => {}
         };
         if advance_cursor {
             self.change_entry_selection(CursorDirection::Down)
