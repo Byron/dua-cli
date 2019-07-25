@@ -49,6 +49,10 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.10 - compatibility with light terminals
+
+* the TUI is now usable on light terminals, and highlighting is more consistent. Thank you, @vks!
+
 #### ✅ v2.1.9 - improved handling of broken symlinks
 
 * during symlink deletion, now broken symlinks will be deleted as expected.
