@@ -52,6 +52,7 @@ dua interactive
 #### ✅ v2.1.10 - compatibility with light terminals
 
 * the TUI is now usable on light terminals, and highlighting is more consistent. Thank you, @vks!
+* Fixes misaligned columns when displaying '100.00%' alongside other rows by displaying `100.0%` instead. Thanks, @vks, for pointing it out.
 
 #### ✅ v2.1.9 - improved handling of broken symlinks
 
