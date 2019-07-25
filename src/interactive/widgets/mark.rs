@@ -1,7 +1,5 @@
 use crate::interactive::{
-    fit_string_graphemes_with_ellipsis, path_of,
-    widgets::get_name_color,
-    CursorDirection,
+    fit_string_graphemes_with_ellipsis, path_of, widgets::entry_color, CursorDirection,
 };
 use dua::{
     traverse::{Tree, TreeIndex},
@@ -234,7 +232,7 @@ impl MarkPane {
                             modifier,
                             ..Default::default()
                         }
-                    },
+                    }
                     _ => Style::default(),
                 };
                 let (path, path_len) = {
@@ -260,7 +258,7 @@ impl MarkPane {
                         _ => (path, num_path_graphemes),
                     }
                 };
-                let fg_path = get_name_color(Color::Reset, !v.is_dir, true);
+                let fg_path = entry_color(Color::Reset, !v.is_dir, true);
                 let path = Text::Styled(
                     path.into(),
                     Style {

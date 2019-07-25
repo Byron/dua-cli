@@ -1,8 +1,6 @@
 use crate::interactive::{
     path_of,
-    widgets::{
-        get_name_color, EntryMarkMap,
-    },
+    widgets::{entry_color, EntryMarkMap},
     DisplayOptions, EntryDataBundle,
 };
 use dua::traverse::{Tree, TreeIndex};
@@ -11,7 +9,7 @@ use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style, Modifier},
+    style::{Color, Modifier, Style},
     widgets::{Block, Borders, Text},
 };
 use tui_react::{fill_background_to_right, List, ListProps};
@@ -147,10 +145,10 @@ impl Entries {
                             // non-existing - always red!
                             Color::Red
                         } else {
-                            get_name_color(style.fg, !is_dir, is_marked)
+                            entry_color(style.fg, !is_dir, is_marked)
                         };
                         Style { fg, ..style }
-                    }
+                    },
                 );
                 vec![bytes, percentage, name]
             },
