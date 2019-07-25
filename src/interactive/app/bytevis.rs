@@ -74,7 +74,7 @@ impl DisplayByteVisualization {
         Ok(())
     }
     fn make_percentage(f: &mut fmt::Formatter, percentage: f32) -> Result<(), fmt::Error> {
-        write!(f, " {:>5.02}% ", percentage * 100.0)
+        write!(f, " {:>5.01}% ", percentage * 100.0)
     }
 }
 
