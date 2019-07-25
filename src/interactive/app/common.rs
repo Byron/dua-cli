@@ -39,7 +39,7 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
         .filter_map(|idx| {
             tree.node_weight(idx).map(|w| {
                 let p = path_of(tree, idx);
-                let pm = p.metadata();
+                let pm = p.symlink_metadata();
                 EntryDataBundle {
                     index: idx,
                     data: w.clone(),
