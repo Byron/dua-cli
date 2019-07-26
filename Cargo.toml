@@ -1,6 +1,6 @@
 [package]
 name = "dua-cli"
-version = "2.1.10"
+version = "2.1.11"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
 edition = "2018"
 include = ["src/**/*", "Cargo.toml"]

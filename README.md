@@ -49,6 +49,12 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.11 - Finally fix symlink handling
+
+`dua` will not follow symbolic links when deleting directories. Thank a ton, @vks!
+
+_Technical Notes_: Handling symbolic links properly is impossible without usage of `symlink_metadata()`.
+
 #### ✅ v2.1.10 - compatibility with light terminals
 
 * the TUI is now usable on light terminals, and highlighting is more consistent. Thank you, @vks!
