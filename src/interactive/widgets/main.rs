@@ -55,6 +55,7 @@ impl MainWindow {
                 modifier: Modifier::empty(),
             };
             let bold = Style {
+                fg: Color::Rgb(230, 230, 230),
                 modifier: Modifier::BOLD,
                 ..grey
             };
