@@ -49,6 +49,12 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.112-- More obvious highlighting of active panel
+
+Depending on the terminal used, it might not have been obvious which panel was active. This might be
+confusing to new and current users.
+Now the color of the widget frame is changed to light gray, instead of remaining gray.
+
 #### ✅ v2.1.11 - Finally fix symlink handling
 
 `dua` will not follow symbolic links when deleting directories. Thank a ton, @vks!
