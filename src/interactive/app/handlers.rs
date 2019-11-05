@@ -307,7 +307,8 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
     let mut num_errors = 0;
     while let Some(path) = files_or_dirs.pop() {
         let assume_symlink_to_try_deletion = true;
-        let is_symlink = path.symlink_metadata()
+        let is_symlink = path
+            .symlink_metadata()
             .map(|m| m.file_type().is_symlink())
             .unwrap_or(assume_symlink_to_try_deletion);
         if is_symlink {

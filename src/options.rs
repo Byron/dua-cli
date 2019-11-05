@@ -31,7 +31,7 @@ impl From<ByteFormat> for LibraryByteFormat {
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "dua", about = "A tool to learn about disk usage, fast!")]
-#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
+#[structopt(setting = structopt::clap::AppSettings::ColoredHelp)]
 pub struct Args {
     #[structopt(subcommand)]
     pub command: Option<Command>,
