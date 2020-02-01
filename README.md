@@ -3,12 +3,21 @@
 [![asciicast](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX.svg)](https://asciinema.org/a/AaFU0fPE2E612XCjpNg9JeAgX)
 
 ### Installation
+
+### Binary Release
+
+```sh
+curl -LSfs https://japaric.github.io/trust/install.sh | \
+    sh -s -- --git byron/dua-cli
+```
+
 #### Cargo
 Via `cargo`, which can be obtained using [rustup][rustup]
 
 ```
 cargo install dua-cli
 ```
+
 #### VoidLinux
 Via `xbps` on your VoidLinux system.
 
