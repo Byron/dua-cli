@@ -49,6 +49,10 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.1.13-- Dependency Update; Github Releases
+
+Binaries for Linux and MacOS are now available on GitHub Releases.
+
 #### ✅ v2.1.12-- More obvious highlighting of active panel
 
 Depending on the terminal used, it might not have been obvious which panel was active. This might be
