@@ -7,11 +7,11 @@ use crate::interactive::{
 };
 use dua::traverse::Traversal;
 use std::borrow::Borrow;
-use tui::style::{Color, Style};
 use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
+    style::{Color, Style},
 };
 use Constraint::*;
 use FocussedPane::*;

@@ -9,5 +9,5 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-tui = "0.6.0"
+tui = "0.8.0"
 log = "0.4.6"

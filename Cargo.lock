@@ -200,7 +200,7 @@ dependencies = [
  "pretty_assertions",
  "structopt",
  "termion",
- "tui 0.7.0",
+ "tui",
  "tui-react",
  "unicode-segmentation",
 ]
@@ -597,25 +597,9 @@ dependencies = [
 
 [[package]]
 name = "tui"
-version = "0.6.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b422ff4986065d33272b587907654f918a3fe8702786a8110bf68dede0d8ee"
-dependencies = [
- "bitflags",
- "cassowary",
- "either",
- "itertools",
- "log",
- "termion",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
-name = "tui"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0606ff286997171664d4f5ace6b130dd6ba1b867e6a27433077f618807aedc3b"
+checksum = "6b871b61f4c4b81e630215cd12e0ec29953d4545898e21a9e023b7520a74a9f9"
 dependencies = [
  "bitflags",
  "cassowary",
@@ -632,7 +616,7 @@ name = "tui-react"
 version = "0.1.2"
 dependencies = [
  "log",
- "tui 0.6.2",
+ "tui",
 ]
 
 [[package]]

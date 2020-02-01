@@ -1,8 +1,9 @@
 use crate::interactive::CursorDirection;
-use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use termion::event::Key;
-use termion::event::Key::*;
+use std::{
+    borrow::Borrow,
+    cell::{Cell, RefCell},
+};
+use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -18,6 +19,15 @@ pub struct HelpPane {
 
 pub struct HelpPaneProps {
     pub border_style: Style,
+}
+
+fn margin(r: Rect, margin: u16) -> Rect {
+    Rect {
+        x: r.x + margin,
+        y: r.y + margin,
+        width: r.width - 2 * margin,
+        height: r.height - 2 * margin,
+    }
 }
 
 impl HelpPane {
@@ -172,7 +182,7 @@ impl HelpPane {
             .borders(Borders::ALL);
         block.draw(area, buf);
 
-        let area = block.inner(area).inner(1);
+        let area = margin(block.inner(area), 1);
         self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));
         Paragraph::new(texts.iter())
             .scroll(self.scroll)
