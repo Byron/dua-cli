@@ -1,24 +1,17 @@
 docker_image = docker_developer_environment
 
-help:
-	$(info -Targets -----------------------------------------------------------------------------)
-	$(info -Development Targets -----------------------------------------------------------------)
-	$(info lint                         | run lints with clippy)
-	$(info benchmark                    | just for fun, really)
-	$(info profile                      | only on linux - run callgrind and annotate it)
-	$(info tests                        | run all tests)
-	$(info unit-tests                   | run all unit tests)
-	$(info continuous-unit-tests        | run all unit tests whenever something changes)
-	$(info journey-tests                | run all stateless journey test)
-	$(info continuous-journey-tests     | run all stateless journey test whenever something changes)
-	$(info -- Use docker for all dependencies - run make interactively from there ----------------)
-	$(info interactive-developer-environment-in-docker | gives you everything you need to run all targets)
+help:  ## Display this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 always:
 
-interactive-developer-environment-in-docker:
+##@ Docker Support
+
+interactive-developer-environment-in-docker: ## Use docker for all dependencies - run make from there
 	docker build -t $(docker_image) - < etc/developer.Dockerfile
 	docker run -v $$PWD:/volume -w /volume -it $(docker_image)
+
+##@ Development
 
 target/debug/dua: always
 	cargo build
@@ -26,27 +19,27 @@ target/debug/dua: always
 target/release/dua: always
 	cargo build --release
 
-lint:
+lint: ## Run lints with clippy
 	cargo clippy
 
-profile: target/release/dua
+profile: target/release/dua ## run callgrind and annotate its output - linux only
 	valgrind --callgrind-out-file=callgrind.profile --tool=callgrind  $< >/dev/null
 	callgrind_annotate --auto=yes callgrind.profile
 
-benchmark: target/release/dua
+benchmark: target/release/dua ## see how fast things are, powered by hyperfine
 	hyperfine '$<'
 
-tests: unit-tests journey-tests
+tests: unit-tests journey-tests ## run all tests
 
-unit-tests:
+unit-tests: ## run all unit tests
 	cargo test --all
 
-continuous-unit-tests:
+continuous-unit-tests: ## run all unit tests whenever something changes
 	watchexec $(MAKE) unit-tests
 
-journey-tests: target/debug/dua
+journey-tests: target/debug/dua ## run stateless journey tests
 	./tests/stateless-journey.sh $<
 
-continuous-journey-tests:
+continuous-journey-tests: ## run stateless journey tests whenever something changes
 	watchexec $(MAKE) journey-tests
 
