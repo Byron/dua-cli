@@ -27,6 +27,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d49d90015b3c36167a20fe2810c5cd875ad504b39cff3d4eae7977e6b7c1cb2"
 
 [[package]]
+name = "autocfg"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
+
+[[package]]
 name = "backtrace"
 version = "0.3.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -132,7 +138,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5064ebdbf05ce3cb95e45c8b086f72263f4166b29b97f6baff7ef7fe047b55ac"
 dependencies = [
- "autocfg",
+ "autocfg 0.1.7",
  "cfg-if",
  "crossbeam-utils",
  "lazy_static",
@@ -156,7 +162,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce446db02cdc3165b94ae73111e570793400d0794e46125cc4056c81cbb039f4"
 dependencies = [
- "autocfg",
+ "autocfg 0.1.7",
  "cfg-if",
  "lazy_static",
 ]
@@ -194,7 +200,7 @@ dependencies = [
  "pretty_assertions",
  "structopt",
  "termion",
- "tui",
+ "tui 0.7.0",
  "tui-react",
  "unicode-segmentation",
 ]
@@ -238,9 +244,9 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.1.9"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86d4de0081402f5e88cdac65c8dcdcc73118c1a7a465e2a05f0da05843a8ea33"
+checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
 
 [[package]]
 name = "heck"
@@ -258,6 +264,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eff2656d88f158ce120947499e971d743c05dbcbed62e5bd2f38f1698bbc3772"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b54058f0a6ff80b6803da8faf8997cde53872b38f4023728f6830b06cd3c0dc"
+dependencies = [
+ "autocfg 1.0.0",
 ]
 
 [[package]]
@@ -335,12 +350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordermap"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a86ed3f5f244b372d6b1a00b72ef7f8876d0bc6a78a4c9985c53614041512063"
-
-[[package]]
 name = "output_vt100"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,12 +360,12 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.4.13"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c3659d1ee90221741f65dd128d9998311b0e40c5d3c23a62445938214abce4f"
+checksum = "29c127eea4a29ec6c85d153c59dc1213f33ec74cead30fe4730aecc88cc1fd92"
 dependencies = [
  "fixedbitset",
- "ordermap",
+ "indexmap",
 ]
 
 [[package]]
@@ -603,11 +612,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "tui"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0606ff286997171664d4f5ace6b130dd6ba1b867e6a27433077f618807aedc3b"
+dependencies = [
+ "bitflags",
+ "cassowary",
+ "either",
+ "itertools",
+ "log",
+ "termion",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "tui-react"
 version = "0.1.2"
 dependencies = [
  "log",
- "tui",
+ "tui 0.6.2",
 ]
 
 [[package]]
