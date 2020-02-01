@@ -41,16 +41,16 @@ before_install:
   - rustup self update
 
 install:
-  - sh bin/ci/install.sh
+  - sh ci/install.sh
   - source ~/.cargo/env || true
 
 script:
-  - bash bin/ci/script.sh
+  - bash ci/script.sh
 
 after_script: set +e
 
 before_deploy:
-  - sh bin/ci/before_deploy.sh
+  - sh ci/before_deploy.sh
   
 deploy:
   - provider: releases
