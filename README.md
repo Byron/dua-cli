@@ -10,7 +10,7 @@
 
 ```sh
 curl -LSfs https://japaric.github.io/trust/install.sh | \
-    sh -s -- --git byron/dua-cli
+    sh -s -- --git byron/dua-cli --crate dua
 ```
 
 #### Cargo
