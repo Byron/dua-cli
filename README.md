@@ -54,11 +54,18 @@ dua interactive
 
 ### Roadmap
 
-#### 🚧v2.2  - Various features and fixes as they come up while people are using it
+#### 🚧v2.3  - Various features and fixes as they come up while people are using it
 
 ##### Other Features
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
+
+#### ✅ v2.2 Show size on disk by default; Dependency Update
+
+Thanks to [this PR](https://github.com/Byron/dua-cli/pull/35), the old apparent size can be displayed with the
+-A flag, and the much more useful 'size on disk' is now shown by default.
+
+To my pleasant surprise, this does not seem to affect performance at all - everything stays speedy.
 
 #### ✅ v2.1.13-- Dependency Update; Github Releases
 
