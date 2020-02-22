@@ -52,6 +52,10 @@ pub struct Args {
     #[structopt(short = "f", long = "format")]
     pub format: Option<ByteFormat>,
 
+    /// Display apparent size instead of disk usage.
+    #[structopt(short = "A", long = "apparent-size")]
+    pub apparent_size: bool,
+
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[structopt(parse(from_os_str))]
     pub input: Vec<PathBuf>,

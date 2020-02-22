@@ -29,6 +29,7 @@ fn run() -> Result<(), Error> {
         } else {
             Color::None
         },
+        apparent_size: opt.apparent_size,
         sorting: TraversalSorting::None,
     };
     let res = match opt.command {

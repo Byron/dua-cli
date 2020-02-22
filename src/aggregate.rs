@@ -29,7 +29,17 @@ pub fn aggregate(
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.metadata {
-                        Some(Ok(ref m)) if !m.is_dir() => m.len(),
+                        Some(Ok(ref m)) if !m.is_dir() => {
+                            if options.apparent_size {
+                                m.len()
+                            } else {
+                                filesize::file_real_size_fast(&entry.path(), m)
+                                    .unwrap_or_else(|_| {
+                                        num_errors += 1;
+                                        0
+                                    })
+                            }
+                        },
                         Some(Ok(_)) => 0,
                         Some(Err(_)) => {
                             num_errors += 1;
