@@ -152,7 +152,7 @@ pub struct WalkOptions {
     /// for more information.
     pub threads: usize,
     pub byte_format: ByteFormat,
-    pub count_links: bool,
+    pub count_hard_links: bool,
     pub apparent_size: bool,
     pub color: Color,
     pub sorting: TraversalSorting,

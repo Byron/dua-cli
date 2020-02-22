@@ -165,7 +165,7 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
             threads: 1,
             byte_format: ByteFormat::Metric,
             apparent_size: true,
-            count_links: false,
+            count_hard_links: false,
             color: Color::None,
             sorting: TraversalSorting::AlphabeticalByFileName,
         },

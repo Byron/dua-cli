@@ -94,7 +94,7 @@ impl Traversal {
                             entry.file_name
                         };
                         let file_size = match entry.metadata {
-                                Some(Ok(ref m)) if !m.is_dir() && (walk_options.count_links || inodes.add(m)) => {
+                                Some(Ok(ref m)) if !m.is_dir() && (walk_options.count_hard_links || inodes.add(m)) => {
                                     if walk_options.apparent_size {
                                         m.len()
                                     } else {

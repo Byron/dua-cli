@@ -49,16 +49,16 @@ pub struct Args {
     /// GiB - only gibibytes
     /// MB - only megabytes
     /// MiB - only mebibytes
-    #[structopt(short = "f", long = "format")]
+    #[structopt(short = "f", long)]
     pub format: Option<ByteFormat>,
 
     /// Display apparent size instead of disk usage.
-    #[structopt(short = "A", long = "apparent-size")]
+    #[structopt(short = "A", long)]
     pub apparent_size: bool,
 
     /// Count hard-linked files each time they are seen
-    #[structopt(short = "l", long = "count-links")]
-    pub count_links: bool,
+    #[structopt(short = "l", long)]
+    pub count_hard_links: bool,
 
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[structopt(parse(from_os_str))]
@@ -82,10 +82,10 @@ pub enum Command {
         statistics: bool,
         /// If set, paths will be printed in their order of occurrence on the command-line.
         /// Otherwise they are sorted by their size in bytes, ascending.
-        #[structopt(long = "no-sort")]
+        #[structopt(long)]
         no_sort: bool,
         /// If set, no total column will be computed for multiple inputs
-        #[structopt(long = "no-total")]
+        #[structopt(long)]
         no_total: bool,
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[structopt(parse(from_os_str))]

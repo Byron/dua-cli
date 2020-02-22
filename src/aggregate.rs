@@ -30,7 +30,7 @@ pub fn aggregate(
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.metadata {
-                        Some(Ok(ref m)) if !m.is_dir() && (options.count_links || inodes.add(m)) => {
+                        Some(Ok(ref m)) if !m.is_dir() && (options.count_hard_links || inodes.add(m)) => {
                             if options.apparent_size {
                                 m.len()
                             } else {
