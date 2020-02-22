@@ -60,7 +60,9 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
-#### ✅ v2.2 Show size on disk by default; Dependency Update
+#### ✅ v2.3.1 Include .md files in Crate, update dependencies
+
+#### ✅ v2.3 Show size on disk by default; Dependency Update
 
 Thanks to [this PR](https://github.com/Byron/dua-cli/pull/37), hard links are now not counted anymore.
 The `-l` flag will count hard links as it did before. 
