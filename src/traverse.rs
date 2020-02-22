@@ -1,4 +1,4 @@
-use crate::{get_size_or_panic, WalkOptions};
+use crate::{get_size_or_panic, WalkOptions, InodeFilter};
 use failure::Error;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
@@ -66,6 +66,7 @@ impl Traversal {
         let mut sizes_per_depth_level = Vec::new();
         let mut current_size_at_depth = 0;
         let mut previous_depth = 0;
+        let mut inodes = InodeFilter::default();
 
         let mut last_checked = Instant::now();
 
@@ -93,7 +94,7 @@ impl Traversal {
                             entry.file_name
                         };
                         let file_size = match entry.metadata {
-                                Some(Ok(ref m)) if !m.is_dir() => {
+                                Some(Ok(ref m)) if !m.is_dir() && (walk_options.count_links || inodes.add(m)) => {
                                     if walk_options.apparent_size {
                                         m.len()
                                     } else {
