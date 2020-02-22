@@ -30,6 +30,7 @@ fn run() -> Result<(), Error> {
             Color::None
         },
         apparent_size: opt.apparent_size,
+        count_links: opt.count_links,
         sorting: TraversalSorting::None,
     };
     let res = match opt.command {

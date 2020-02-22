@@ -1,4 +1,4 @@
-use crate::{WalkOptions, WalkResult};
+use crate::{InodeFilter, WalkOptions, WalkResult};
 use failure::Error;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};
@@ -20,6 +20,7 @@ pub fn aggregate(
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
+    let mut inodes = InodeFilter::default();
     for path in paths.into_iter() {
         num_roots += 1;
         let mut num_bytes = 0u64;
@@ -29,7 +30,7 @@ pub fn aggregate(
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.metadata {
-                        Some(Ok(ref m)) if !m.is_dir() => {
+                        Some(Ok(ref m)) if !m.is_dir() && (options.count_links || inodes.add(m)) => {
                             if options.apparent_size {
                                 m.len()
                             } else {
