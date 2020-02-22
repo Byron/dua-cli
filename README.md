@@ -62,8 +62,15 @@ dua interactive
 
 #### ✅ v2.2 Show size on disk by default; Dependency Update
 
+Thanks to [this PR](https://github.com/Byron/dua-cli/pull/37), hard links are now not counted anymore.
+The `-l` flag will count hard links as it did before. 
+
+And of course, this has no noticable performance impact.
+
+#### ✅ v2.2 Show size on disk by default; Dependency Update
+
 Thanks to [this PR](https://github.com/Byron/dua-cli/pull/35), the old apparent size can be displayed with the
--A flag, and the much more useful 'size on disk' is now shown by default.
+`-A` flag, and the much more useful 'size on disk' is now shown by default.
 
 To my pleasant surprise, this does not seem to affect performance at all - everything stays speedy.
 
