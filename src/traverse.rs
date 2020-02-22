@@ -93,7 +93,18 @@ impl Traversal {
                             entry.file_name
                         };
                         let file_size = match entry.metadata {
-                                Some(Ok(ref m)) if !m.is_dir() => m.len(),
+                                Some(Ok(ref m)) if !m.is_dir() => {
+                                    if walk_options.apparent_size {
+                                        m.len()
+                                    } else {
+                                        filesize::file_real_size_fast(&data.name, m)
+                                            .unwrap_or_else(|_| {
+                                                t.io_errors += 1;
+                                                data.metadata_io_error = true;
+                                                0
+                                            })
+                                    }
+                                },
                                 Some(Ok(_)) => 0,
                                 Some(Err(_)) => {
                                     t.io_errors += 1;

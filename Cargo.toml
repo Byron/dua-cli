@@ -25,6 +25,7 @@ log = "0.4.6"
 tui-react = { path = "./tui-react", version = "0.2" }
 num_cpus = "1.10.0"
 unicode-segmentation = "1.3.0"
+filesize = "0.1.0"
 
 [[bin]]
 name="dua"
