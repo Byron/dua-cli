@@ -1,11 +1,10 @@
-
 #![cfg_attr(windows, feature(windows_by_handle))]
 
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
 pub struct InodeFilter {
-    inner: HashMap<u64, u64>
+    inner: HashMap<u64, u64>,
 }
 
 impl InodeFilter {
@@ -46,7 +45,7 @@ impl InodeFilter {
                 }
 
                 false
-            },
+            }
             None => {
                 self.inner.insert(inode, nlinks - 1);
                 true

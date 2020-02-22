@@ -1,4 +1,4 @@
-use crate::{WalkOptions, WalkResult, InodeFilter};
+use crate::{InodeFilter, WalkOptions, WalkResult};
 use failure::Error;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};

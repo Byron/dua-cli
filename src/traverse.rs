@@ -1,4 +1,4 @@
-use crate::{get_size_or_panic, WalkOptions, InodeFilter};
+use crate::{get_size_or_panic, InodeFilter, WalkOptions};
 use failure::Error;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
