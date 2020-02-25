@@ -60,6 +60,8 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
 
+#### ✅ v2.3.2 Incude the license file in crate
+
 #### ✅ v2.3.1 Include .md files in Crate, update dependencies
 
 #### ✅ v2.3 Show size on disk by default; Dependency Update

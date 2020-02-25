@@ -35,3 +35,7 @@ by TUI, which can serve as standard building blocks in a stateful world.
 
 Thus far, the experience was fantastic, and it feels much better than before. Let's see what
 happens with it.
+
+### Changelog
+
+#### v0.2.1 - add license file to crate
