@@ -27,6 +27,13 @@ Via `xbps` on your VoidLinux system.
 xbps-install dua-cli
 ```
 
+#### Fedora
+Via `dnf` on your Fedora system.
+
+```
+sudo dnf install rust-dua-cli
+```
+
 ### Usage
 
 ```bash
