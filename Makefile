@@ -35,7 +35,7 @@ unit-tests: ## run all unit tests
 	cargo test --all
 
 continuous-unit-tests: ## run all unit tests whenever something changes
-	watchexec $(MAKE) unit-tests
+	watchexec -w src $(MAKE) unit-tests
 
 journey-tests: target/debug/dua ## run stateless journey tests
 	./tests/stateless-journey.sh $<
