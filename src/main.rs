@@ -44,7 +44,7 @@ fn run() -> Result<(), Error> {
                 Terminal::new(backend)?
             };
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, paths_from(input)?)?;
-            let res = app.process_events(&mut terminal, io::stdin().keys())?;
+            let res = app.process_events(terminal, io::stdin().keys())?;
             io::stdout().flush().ok();
             res
         }

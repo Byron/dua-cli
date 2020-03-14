@@ -8,7 +8,12 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::{collections::BTreeMap, io, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    io,
+    path::PathBuf,
+    io::Write
+};
 use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -72,7 +77,7 @@ impl TerminalApp {
     }
     pub fn process_events<B>(
         &mut self,
-        terminal: &mut Terminal<B>,
+        mut terminal: Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
@@ -81,7 +86,7 @@ impl TerminalApp {
         use termion::event::Key::*;
         use FocussedPane::*;
 
-        self.draw(terminal)?;
+        self.draw(&mut terminal)?;
         for key in keys.filter_map(Result::ok) {
             self.update_message();
             match key {
@@ -91,7 +96,13 @@ impl TerminalApp {
                 }
                 Ctrl('c') => break,
                 Char('q') | Esc => match self.state.focussed {
-                    Main => break,
+                    Main => {
+                        drop(terminal);
+                        io::stdout().flush().ok();
+                        // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
+                        // Let the OS do it - we have nothing to lose, literally.
+                        std::process::exit(0);
+                    },
                     Mark => self.state.focussed = Main,
                     Help => {
                         self.state.focussed = Main;
@@ -102,7 +113,7 @@ impl TerminalApp {
             }
 
             match self.state.focussed {
-                FocussedPane::Mark => self.dispatch_to_mark_pane(key, terminal),
+                FocussedPane::Mark => self.dispatch_to_mark_pane(key, &mut terminal),
                 FocussedPane::Help => {
                     self.window.help_pane.as_mut().expect("help pane").key(key);
                 }
@@ -121,7 +132,7 @@ impl TerminalApp {
                     _ => {}
                 },
             };
-            self.draw(terminal)?;
+            self.draw(&mut terminal)?;
         }
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
