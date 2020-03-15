@@ -66,8 +66,10 @@ dua interactive
 ##### Other Features
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
+ 
+#### ✅ v2.3.4 Fast exit from interactive mode for a responsive exit
 
-#### ✅ v2.3.3 Fast exit from interactive mode for a responsive exit
+#### ✅ v2.3.3 YANKED - journey tests failed to changed method signature
 
 #### ✅ v2.3.2 Incude the license file in crate
 
