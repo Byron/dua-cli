@@ -8,12 +8,7 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::{
-    collections::BTreeMap,
-    io,
-    path::PathBuf,
-    io::Write
-};
+use std::{collections::BTreeMap, io, io::Write, path::PathBuf};
 use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -102,7 +97,7 @@ impl TerminalApp {
                         // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
                         // Let the OS do it - we have nothing to lose, literally.
                         std::process::exit(0);
-                    },
+                    }
                     Mark => self.state.focussed = Main,
                     Help => {
                         self.state.focussed = Main;

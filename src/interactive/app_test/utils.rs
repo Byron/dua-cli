@@ -155,7 +155,7 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
     fixture_paths: &[P],
     mut convert: impl FnMut(&Path) -> PathBuf,
 ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
-    let mut terminal = Terminal::new(TestBackend::new(40, 20))?;
+    let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
     let input = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
@@ -172,6 +172,10 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
         input,
     )?;
     Ok((terminal, app))
+}
+
+pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {
+    Terminal::new(TestBackend::new(40, 20))
 }
 
 pub fn initialized_app_and_terminal_from_paths(
