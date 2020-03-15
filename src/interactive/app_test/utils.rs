@@ -73,11 +73,8 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
-    for entry in WalkDir::new(&path)
-        .parallelism(jwalk::Parallelism::Serial)
-        .into_iter()
-    {
-        let entry: DirEntry<_> = entry?;
+    for entry in WalkDir::new(&path).num_threads(1).into_iter() {
+        let entry: DirEntry = entry?;
         let p = entry.path();
         match p.is_dir() {
             true => dirs.push(p),
@@ -102,11 +99,8 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
-    for entry in WalkDir::new(&src)
-        .parallelism(jwalk::Parallelism::Serial)
-        .into_iter()
-    {
-        let entry: DirEntry<_> = entry?;
+    for entry in WalkDir::new(&src).num_threads(1).into_iter() {
+        let entry: DirEntry = entry?;
         let entry_path = entry.path();
         entry_path
             .strip_prefix(&src)

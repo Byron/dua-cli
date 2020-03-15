@@ -88,36 +88,34 @@ impl Traversal {
                 let mut data = EntryData::default();
                 match entry {
                     Ok(entry) => {
-                        let metadata = entry.metadata();
                         data.name = if entry.depth < 1 {
                             path.clone().into()
                         } else {
                             entry.file_name
                         };
-                        let file_size = match metadata {
-                            Ok(ref m)
-                                if !m.is_dir()
-                                    && (walk_options.count_hard_links || inodes.add(m)) =>
-                            {
-                                if walk_options.apparent_size {
-                                    m.len()
-                                } else {
-                                    filesize::file_real_size_fast(&data.name, m).unwrap_or_else(
-                                        |_| {
-                                            t.io_errors += 1;
-                                            data.metadata_io_error = true;
-                                            0
-                                        },
-                                    )
+                        let file_size = match entry.metadata {
+                                Some(Ok(ref m)) if !m.is_dir() && (walk_options.count_hard_links || inodes.add(m)) => {
+                                    if walk_options.apparent_size {
+                                        m.len()
+                                    } else {
+                                        filesize::file_real_size_fast(&data.name, m)
+                                            .unwrap_or_else(|_| {
+                                                t.io_errors += 1;
+                                                data.metadata_io_error = true;
+                                                0
+                                            })
+                                    }
+                                },
+                                Some(Ok(_)) => 0,
+                                Some(Err(_)) => {
+                                    t.io_errors += 1;
+                                    data.metadata_io_error = true;
+                                    0
                                 }
-                            }
-                            Ok(_) => 0,
-                            Err(_) => {
-                                t.io_errors += 1;
-                                data.metadata_io_error = true;
-                                0
-                            }
-                        };
+                                None => unreachable!(
+                                    "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
+                                ),
+                            };
 
                         match (entry.depth, previous_depth) {
                             (n, p) if n > p => {
