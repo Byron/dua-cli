@@ -301,6 +301,8 @@ fn io_err_to_usize(err: io::Error) -> usize {
     }
 }
 
+// TODO: could use jwalk for this
+// see https://github.com/Byron/dua-cli/issues/43
 fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
     let mut files_or_dirs = vec![path];
     let mut dirs = Vec::new();
