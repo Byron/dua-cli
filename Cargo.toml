@@ -19,7 +19,7 @@ termion = "1.5.2"
 atty = "0.2.11"
 tui = "0.8.0"
 petgraph = "0.5"
-itertools = "0.8.0"
+itertools = "0.9.0"
 open = "1.2.2"
 log = "0.4.6"
 tui-react = { path = "./tui-react", version = "0.2" }
