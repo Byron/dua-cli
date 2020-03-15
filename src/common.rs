@@ -161,13 +161,17 @@ pub struct WalkOptions {
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, path: &Path) -> WalkDir {
         WalkDir::new(path)
-            .preload_metadata(true)
+            .follow_links(false)
             .sort(match self.sorting {
                 TraversalSorting::None => false,
                 TraversalSorting::AlphabeticalByFileName => true,
             })
             .skip_hidden(false)
-            .num_threads(self.threads)
+            .parallelism(if self.threads == 0 {
+                jwalk::Parallelism::RayonDefaultPool
+            } else {
+                jwalk::Parallelism::RayonNewPool(self.threads)
+            })
     }
 }
 

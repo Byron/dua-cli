@@ -29,26 +29,24 @@ pub fn aggregate(
             stats.entries_traversed += 1;
             match entry {
                 Ok(entry) => {
-                    let file_size = match entry.metadata {
-                        Some(Ok(ref m)) if !m.is_dir() && (options.count_hard_links || inodes.add(m)) => {
+                    let file_size = match entry.metadata() {
+                        Ok(ref m) if !m.is_dir() && (options.count_hard_links || inodes.add(m)) => {
                             if options.apparent_size {
                                 m.len()
                             } else {
-                                filesize::file_real_size_fast(&entry.path(), m)
-                                    .unwrap_or_else(|_| {
+                                filesize::file_real_size_fast(&entry.path(), m).unwrap_or_else(
+                                    |_| {
                                         num_errors += 1;
                                         0
-                                    })
+                                    },
+                                )
                             }
-                        },
-                        Some(Ok(_)) => 0,
-                        Some(Err(_)) => {
+                        }
+                        Ok(_) => 0,
+                        Err(_) => {
                             num_errors += 1;
                             0
                         }
-                        None => unreachable!(
-                            "we ask for metadata, so we at least have Some(Err(..))). Issue in jwalk?"
-                        ),
                     };
                     stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                     stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
