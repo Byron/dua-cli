@@ -1,6 +1,5 @@
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
-use jwalk::WalkDir;
 use std::{fmt, path::Path};
 
 pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
@@ -158,16 +157,29 @@ pub struct WalkOptions {
     pub sorting: TraversalSorting,
 }
 
+type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
+
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, path: &Path) -> WalkDir {
         WalkDir::new(path)
-            .preload_metadata(true)
+            .follow_links(false)
             .sort(match self.sorting {
                 TraversalSorting::None => false,
                 TraversalSorting::AlphabeticalByFileName => true,
             })
             .skip_hidden(false)
-            .num_threads(self.threads)
+            .process_read_dir(|_, dir_entry_results| {
+                dir_entry_results.iter_mut().for_each(|dir_entry_result| {
+                    if let Ok(dir_entry) = dir_entry_result {
+                        dir_entry.client_state = Some(dir_entry.metadata());
+                    }
+                })
+            })
+            .parallelism(if self.threads == 0 {
+                jwalk::Parallelism::RayonDefaultPool
+            } else {
+                jwalk::Parallelism::RayonNewPool(self.threads)
+            })
     }
 }
 

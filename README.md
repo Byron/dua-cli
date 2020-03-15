@@ -196,8 +196,6 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 ### Limitations
 
 * Interactive mode only looks good in dark terminals (see [this issue](https://github.com/Byron/dua-cli/issues/13))
-* _Symlinks_ are followed and we obtain the logical size of the file they point to. Ideally, we only
-  count their actual size.
 * _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
   This can be due to graphemes not interpreted correctly. With Chinese characters for instance,
