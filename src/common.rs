@@ -175,10 +175,10 @@ impl WalkOptions {
                     }
                 })
             })
-            .parallelism(if self.threads == 0 {
-                jwalk::Parallelism::RayonDefaultPool
-            } else {
-                jwalk::Parallelism::RayonNewPool(self.threads)
+            .parallelism(match self.threads {
+                0 => jwalk::Parallelism::RayonDefaultPool,
+                1 => jwalk::Parallelism::Serial,
+                _ => jwalk::Parallelism::RayonNewPool(self.threads),
             })
     }
 }
