@@ -67,7 +67,9 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
  
-#### ✅ v2.3.4 Fast exit from interactive mode for a responsive exit
+#### ✅ v2.3.5 Fast exit from interactive mode for a responsive exit; dependency updates (except jwalk)
+
+#### ✅ v2.3.4 YANKED - jwalk 0.5.0 shows a performance regression
 
 #### ✅ v2.3.3 YANKED - journey tests failed to changed method signature
 
