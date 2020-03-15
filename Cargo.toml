@@ -38,7 +38,8 @@ name="dua"
 panic = 'unwind'
 incremental = false
 overflow-checks = false
-lto = true
+lto = "fat"
+codegen-units = 1
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
