@@ -67,6 +67,8 @@ dua interactive
 
  * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
  
+#### ✅ v2.3.6 Upgrade to jwalk 0.5 bringing better threading control and no symlink following during traversal
+
 #### ✅ v2.3.5 Fast exit from interactive mode for a responsive exit; dependency updates (except jwalk)
 
 #### ✅ v2.3.4 YANKED - jwalk 0.5.0 wasn't used correctly which led to a performance regression
