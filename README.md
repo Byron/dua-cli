@@ -31,7 +31,7 @@ xbps-install dua-cli
 Via `dnf` on your Fedora system.
 
 ```
-sudo dnf install rust-dua-cli
+sudo dnf install dua-cli
 ```
 
 ### Usage
