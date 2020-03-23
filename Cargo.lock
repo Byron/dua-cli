@@ -242,9 +242,9 @@ dependencies = [
 
 [[package]]
 name = "filesize"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a941e39ae509cebcd46c6734c20553a9a209b92cea5fc54618fe778fea61701"
+checksum = "12d741e2415d4e2e5bd1c1d00409d1a8865a57892c2d689b504365655d237d43"
 dependencies = [
  "winapi",
 ]

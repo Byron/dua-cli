@@ -11,7 +11,6 @@ use petgraph::prelude::NodeIndex;
 use std::{
     env::temp_dir,
     ffi::OsStr,
-    ffi::OsString,
     fmt,
     fs::{copy, create_dir_all, remove_dir, remove_file},
     io::ErrorKind,
@@ -272,7 +271,7 @@ pub fn make_add_node<'a>(
 ) -> impl FnMut(&str, u64, Option<NodeIndex>) -> NodeIndex + 'a {
     move |name, size, maybe_from_idx| {
         let n = t.add_node(EntryData {
-            name: OsString::from(name),
+            name: PathBuf::from(name),
             size,
             metadata_io_error: false,
         });

@@ -1,5 +1,6 @@
 use crate::{InodeFilter, WalkOptions, WalkResult};
 use failure::Error;
+use filesize::PathExt;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};
 use termion::color;
@@ -36,7 +37,7 @@ pub fn aggregate(
                             if options.apparent_size {
                                 m.len()
                             } else {
-                                filesize::file_real_size_fast(&entry.path(), m).unwrap_or_else(
+                                entry.path().size_on_disk_fast(m).unwrap_or_else(
                                     |_| {
                                         num_errors += 1;
                                         0
