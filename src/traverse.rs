@@ -1,14 +1,15 @@
 use crate::{get_size_or_panic, InodeFilter, WalkOptions};
 use failure::Error;
+use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
-use std::{ffi::OsString, path::PathBuf, time::Duration, time::Instant};
+use std::{path::PathBuf, time::Duration, time::Instant};
 
 pub type TreeIndex = NodeIndex;
 pub type Tree = StableGraph<EntryData, (), Directed>;
 
 #[derive(Eq, PartialEq, Debug, Default, Clone)]
 pub struct EntryData {
-    pub name: OsString,
+    pub name: PathBuf,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
     pub size: u64,
     /// If set, the item meta-data could not be obtained
@@ -91,7 +92,7 @@ impl Traversal {
                         data.name = if entry.depth < 1 {
                             path.clone().into()
                         } else {
-                            entry.file_name
+                            entry.file_name.into()
                         };
                         let file_size = match entry.client_state {
                             Some(Ok(ref m))
@@ -101,7 +102,7 @@ impl Traversal {
                                 if walk_options.apparent_size {
                                     m.len()
                                 } else {
-                                    filesize::file_real_size_fast(&data.name, m).unwrap_or_else(
+                                    data.name.size_on_disk_fast(m).unwrap_or_else(
                                         |_| {
                                             t.io_errors += 1;
                                             data.metadata_io_error = true;
