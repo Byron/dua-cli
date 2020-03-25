@@ -1,7 +1,7 @@
   0.00   B b.empty
-123.00   B z123.b
-256.00   B a
-256.00   B c.lnk
-666.00   B .hidden.666
-  1.20 MiB dir
-  1.20 MiB total
+  0.00   B c.lnk
+  4.00 KiB .hidden.666
+  4.00 KiB a
+  4.00 KiB z123.b
+  1.21 MiB dir
+  1.22 MiB total
