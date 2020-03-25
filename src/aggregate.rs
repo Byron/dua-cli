@@ -37,12 +37,10 @@ pub fn aggregate(
                             if options.apparent_size {
                                 m.len()
                             } else {
-                                entry.path().size_on_disk_fast(m).unwrap_or_else(
-                                    |_| {
-                                        num_errors += 1;
-                                        0
-                                    },
-                                )
+                                entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
+                                    num_errors += 1;
+                                    0
+                                })
                             }
                         }
                         Some(Ok(_)) => 0,

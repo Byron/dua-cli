@@ -76,7 +76,7 @@ impl Traversal {
         if walk_options.threads == 0 {
             // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
             // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
-            walk_options.threads = num_cpus::get_physical();
+            walk_options.threads = num_cpus::get();
         }
         for path in input.into_iter() {
             let mut last_seen_eid = 0;
