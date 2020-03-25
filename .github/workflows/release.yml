@@ -15,7 +15,7 @@ on:
   push:
     # Enable when testing release infrastructure on a branch.
     branches:
-     - release
+      - release
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
 jobs:
@@ -75,7 +75,8 @@ jobs:
       RUST_BACKTRACE: 1
     strategy:
       matrix:
-        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
+#        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
+        build: [linux, linux-arm, macos]
         include:
           - build: linux
             os: ubuntu-18.04
