@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Set to force version number, e.g., when no tag exists.
-      ARTIFACT_VERSION: TEST-0.0.0
+      ARTIFACT_VERSION: TEST-0.0.7
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -165,7 +165,7 @@ jobs:
 
       - name: Strip release binary (linux and macos)
         if: matrix.build == 'linux' || matrix.build == 'macos'
-        run: strip "target/${{ matrix.target }}/release/rg"
+        run: strip "target/${{ matrix.target }}/release/dua"
 
       - name: Strip release binary (arm)
         if: matrix.build == 'linux-arm'
@@ -174,20 +174,19 @@ jobs:
             "$PWD/target:/target:Z" \
             rustembedded/cross:arm-unknown-linux-gnueabihf \
             arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/rg
+            /target/arm-unknown-linux-gnueabihf/release/dua
 
       - name: Build archive
         shell: bash
         run: |
-          outdir="$(ci/cargo-out-dir "${{ env.TARGET_DIR }}")"
           staging="dua-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
           mkdir -p "$staging"/{complete,doc}
 
           cp {README.md,LICENSE} "$staging/"
-          cp {CHANGELOG.md} "$staging/doc/"
+          cp CHANGELOG.md "$staging/doc/"
 
           if [ "${{ matrix.os }}" = "windows-2019" ]; then
-            cp "target/${{ matrix.target }}/release/rg.exe" "$staging/"
+            cp "target/${{ matrix.target }}/release/dua.exe" "$staging/"
             7z a "$staging.zip" "$staging"
             echo "::set-env name=ASSET::$staging.zip"
           else
