@@ -1,3 +1,7 @@
+#### ✅ v2.3.8 `dua interactive` (`dua i`) is now about twice as fast due to using all logical cores, not just physical ones
+
+This is also the first release with github releases: https://github.com/Byron/dua-cli/releases/tag/v2.3.8
+
 #### ✅ v2.3.7 Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
 
 #### ✅ v2.3.6 Upgrade to jwalk 0.5 bringing better threading control and no symlink following during traversal
