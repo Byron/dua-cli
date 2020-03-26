@@ -14,17 +14,17 @@ name: release
 on:
   push:
     # Enable when testing release infrastructure on a branch.
-    branches:
-      - release
+#    branches:
+#      - release
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
 jobs:
   create-release:
     name: create-release
     runs-on: ubuntu-latest
-    env:
-      # Set to force version number, e.g., when no tag exists.
-      ARTIFACT_VERSION: TEST-0.0.7
+#    env:
+#      # Set to force version number, e.g., when no tag exists.
+#      ARTIFACT_VERSION: TEST-0.0.7
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -180,10 +180,8 @@ jobs:
         shell: bash
         run: |
           staging="dua-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
-          mkdir -p "$staging"/{complete,doc}
 
-          cp {README.md,LICENSE} "$staging/"
-          cp CHANGELOG.md "$staging/doc/"
+          cp {README.md,LICENSE,CHANGELOG.md} "$staging/"
 
           if [ "${{ matrix.os }}" = "windows-2019" ]; then
             cp "target/${{ matrix.target }}/release/dua.exe" "$staging/"
