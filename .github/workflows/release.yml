@@ -181,6 +181,7 @@ jobs:
         shell: bash
         run: |
           staging="${{ env.BIN_NAME }}-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
+          mkdir -p "$staging"
 
           cp {README.md,LICENSE,CHANGELOG.md} "$staging/"
 
