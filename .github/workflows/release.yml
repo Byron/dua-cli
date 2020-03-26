@@ -17,7 +17,7 @@ on:
 #    branches:
 #      - release
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 jobs:
   create-release:
     name: create-release
@@ -73,6 +73,7 @@ jobs:
       TARGET_DIR: ./target
       # Emit backtraces on panics.
       RUST_BACKTRACE: 1
+      BIN_NAME: dua
     strategy:
       matrix:
 #        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
@@ -165,7 +166,7 @@ jobs:
 
       - name: Strip release binary (linux and macos)
         if: matrix.build == 'linux' || matrix.build == 'macos'
-        run: strip "target/${{ matrix.target }}/release/dua"
+        run: strip "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
 
       - name: Strip release binary (arm)
         if: matrix.build == 'linux-arm'
@@ -174,21 +175,21 @@ jobs:
             "$PWD/target:/target:Z" \
             rustembedded/cross:arm-unknown-linux-gnueabihf \
             arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/dua
+            /target/arm-unknown-linux-gnueabihf/release/${{ env.BIN_NAME }}
 
       - name: Build archive
         shell: bash
         run: |
-          staging="dua-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
+          staging="${{ env.BIN_NAME }}-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
 
           cp {README.md,LICENSE,CHANGELOG.md} "$staging/"
 
           if [ "${{ matrix.os }}" = "windows-2019" ]; then
-            cp "target/${{ matrix.target }}/release/dua.exe" "$staging/"
+            cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" "$staging/"
             7z a "$staging.zip" "$staging"
             echo "::set-env name=ASSET::$staging.zip"
           else
-            cp "target/${{ matrix.target }}/release/dua" "$staging/"
+            cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}" "$staging/"
             tar czf "$staging.tar.gz" "$staging"
             echo "::set-env name=ASSET::$staging.tar.gz"
           fi
