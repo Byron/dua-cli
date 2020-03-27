@@ -78,7 +78,16 @@ impl Traversal {
             // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
             walk_options.threads = num_cpus::get();
         }
+        let input_len = input.len();
         for path in input.into_iter() {
+            // For now, bluntly ignore symlinks that are on the top-level, and there are more roots to follow
+            if input_len > 1 {
+                if let Ok(meta) = path.symlink_metadata() {
+                    if meta.file_type().is_symlink() {
+                        continue;
+                    }
+                }
+            }
             let mut last_seen_eid = 0;
             for (eid, entry) in walk_options
                 .iter_from_path(path.as_ref())
@@ -102,13 +111,11 @@ impl Traversal {
                                 if walk_options.apparent_size {
                                     m.len()
                                 } else {
-                                    data.name.size_on_disk_fast(m).unwrap_or_else(
-                                        |_| {
-                                            t.io_errors += 1;
-                                            data.metadata_io_error = true;
-                                            0
-                                        },
-                                    )
+                                    data.name.size_on_disk_fast(m).unwrap_or_else(|_| {
+                                        t.io_errors += 1;
+                                        data.metadata_io_error = true;
+                                        0
+                                    })
                                 }
                             }
                             Some(Ok(_)) => 0,
