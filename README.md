@@ -34,6 +34,13 @@ Via `dnf` on your Fedora system.
 sudo dnf install dua-cli
 ```
 
+#### Arch Linux
+Via `pacman` on your ArchLinux system.
+
+```
+sudo pacman -S dua-cli
+```
+
 ### Usage
 
 ```bash
