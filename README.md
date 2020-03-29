@@ -96,6 +96,9 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 ### Limitations
 
+* Does not show symbolic links at all if no path is provided when invoking `dua`
+  * in an effort to skip symbolic links, for now there are pruned and are not used as a root. Symbolic links will be shown if they
+    are not a traversal root, but will not be followed.
 * Interactive mode only looks good in dark terminals (see [this issue](https://github.com/Byron/dua-cli/issues/13))
 * _easy fix_: file names in main window are not truncated if too large. They are cut off on the right.
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.

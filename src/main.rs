@@ -102,6 +102,14 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
             e.ok()
                 .and_then(|e| e.path().strip_prefix(".").ok().map(ToOwned::to_owned))
         })
+        .filter(|p| {
+            if let Ok(meta) = p.symlink_metadata() {
+                if meta.file_type().is_symlink() {
+                    return false;
+                }
+            };
+            true
+        })
         .collect();
     v.sort();
     Ok(v)

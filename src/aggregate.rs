@@ -23,16 +23,7 @@ pub fn aggregate(
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
     let paths: Vec<_> = paths.into_iter().collect();
-    let input_len = paths.len();
     for path in paths.into_iter() {
-        // For now, bluntly ignore symlinks that are on the top-level, and there are more roots to follow
-        if input_len > 1 {
-            if let Ok(meta) = path.as_ref().symlink_metadata() {
-                if meta.file_type().is_symlink() {
-                    continue;
-                }
-            }
-        }
         num_roots += 1;
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
