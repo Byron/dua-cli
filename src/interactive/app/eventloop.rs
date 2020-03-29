@@ -45,11 +45,6 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
-/// A set of events that multiple kinds of input sources
-enum Event {
-    Key(Key),
-}
-
 impl TerminalApp {
     pub fn draw_window<B>(
         window: &mut MainWindow,
@@ -78,7 +73,7 @@ impl TerminalApp {
     pub fn process_events<B>(
         &mut self,
         mut terminal: Terminal<B>,
-        keys: impl Iterator<Item = Result<Key, io::Error>> + Send + 'static,
+        keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
         B: Backend,
@@ -86,70 +81,53 @@ impl TerminalApp {
         use termion::event::Key::*;
         use FocussedPane::*;
 
-        let (keys_tx, keys_rx) = crossbeam_channel::bounded(1);
-        std::thread::spawn(move || {
-            for key in keys.filter_map(Result::ok) {
-                if keys_tx.send(Event::Key(key)).is_err() {
-                    break;
-                }
-            }
-        });
-
         self.draw(&mut terminal)?;
-        for event in keys_rx {
+        for key in keys.filter_map(Result::ok) {
             self.update_message();
-            match event {
-                Event::Key(key) => {
-                    match key {
-                        Char('?') => self.toggle_help_pane(),
-                        Char('\t') => {
-                            self.cycle_focus();
-                        }
-                        Ctrl('c') => break,
-                        Char('q') | Esc => match self.state.focussed {
-                            Main => {
-                                drop(terminal);
-                                io::stdout().flush().ok();
-                                // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
-                                // Let the OS do it - we have nothing to lose, literally.
-                                std::process::exit(0);
-                            }
-                            Mark => self.state.focussed = Main,
-                            Help => {
-                                self.state.focussed = Main;
-                                self.window.help_pane = None
-                            }
-                        },
-                        _ => {}
-                    }
-
-                    match self.state.focussed {
-                        FocussedPane::Mark => self.dispatch_to_mark_pane(key, &mut terminal),
-                        FocussedPane::Help => {
-                            self.window.help_pane.as_mut().expect("help pane").key(key);
-                        }
-                        FocussedPane::Main => match key {
-                            Char('O') => self.open_that(),
-                            Char(' ') => self.mark_entry(false),
-                            Char('d') => self.mark_entry(true),
-                            Char('u') | Char('h') | Backspace | Left => self.exit_node(),
-                            Char('o') | Char('l') | Char('\n') | Right => self.enter_node(),
-                            Ctrl('u') | PageUp => {
-                                self.change_entry_selection(CursorDirection::PageUp)
-                            }
-                            Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                            Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                            Ctrl('d') | PageDown => {
-                                self.change_entry_selection(CursorDirection::PageDown)
-                            }
-                            Char('s') => self.cycle_sorting(),
-                            Char('g') => self.display.byte_vis.cycle(),
-                            _ => {}
-                        },
-                    };
-                    self.draw(&mut terminal)?;
+            match key {
+                Char('?') => self.toggle_help_pane(),
+                Char('\t') => {
+                    self.cycle_focus();
                 }
+                Ctrl('c') => break,
+                Char('q') | Esc => match self.state.focussed {
+                    Main => {
+                        drop(terminal);
+                        io::stdout().flush().ok();
+                        // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
+                        // Let the OS do it - we have nothing to lose, literally.
+                        std::process::exit(0);
+                    }
+                    Mark => self.state.focussed = Main,
+                    Help => {
+                        self.state.focussed = Main;
+                        self.window.help_pane = None
+                    }
+                },
+                _ => {}
             }
+
+            match self.state.focussed {
+                FocussedPane::Mark => self.dispatch_to_mark_pane(key, &mut terminal),
+                FocussedPane::Help => {
+                    self.window.help_pane.as_mut().expect("help pane").key(key);
+                }
+                FocussedPane::Main => match key {
+                    Char('O') => self.open_that(),
+                    Char(' ') => self.mark_entry(false),
+                    Char('d') => self.mark_entry(true),
+                    Char('u') | Char('h') | Backspace | Left => self.exit_node(),
+                    Char('o') | Char('l') | Char('\n') | Right => self.enter_node(),
+                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('s') => self.cycle_sorting(),
+                    Char('g') => self.display.byte_vis.cycle(),
+                    _ => {}
+                },
+            };
+            self.draw(&mut terminal)?;
         }
         Ok(WalkResult {
             num_errors: self.traversal.io_errors,
