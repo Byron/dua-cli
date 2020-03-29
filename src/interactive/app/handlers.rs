@@ -1,10 +1,11 @@
-use crate::interactive::widgets::MarkMode;
 use crate::interactive::{
     app::{FocussedPane::*, TerminalApp},
     path_of, sorted_entries,
+    widgets::MarkMode,
     widgets::{HelpPane, MarkPane},
+    EntryDataBundle,
 };
-use dua::traverse::TreeIndex;
+use dua::traverse::{Traversal, TreeIndex};
 use itertools::Itertools;
 use petgraph::{visit::Bfs, Direction};
 use std::{fs, io, path::PathBuf};
@@ -73,23 +74,36 @@ impl TerminalApp {
         self.state.message = None;
     }
 
-    pub fn open_that(&mut self) {
+    pub fn open_that(&self) {
+        self.open_that_with_traversal(&self.traversal)
+    }
+
+    pub fn open_that_with_traversal(&self, traversal: &Traversal) {
         if let Some(ref idx) = self.state.selected {
-            open::that(path_of(&self.traversal.tree, *idx)).ok();
+            open::that(path_of(&traversal.tree, *idx)).ok();
         }
     }
 
     pub fn exit_node(&mut self) {
-        match self
+        let entries = self
             .traversal
             .tree
             .neighbors_directed(self.state.root, Direction::Incoming)
             .next()
-        {
-            Some(parent_idx) => {
+            .map(|parent_idx| {
+                (
+                    parent_idx,
+                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting),
+                )
+            });
+        self.exit_node_with_traversal(entries)
+    }
+
+    pub fn exit_node_with_traversal(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
+        match entries {
+            Some((parent_idx, entries)) => {
                 self.state.root = parent_idx;
-                self.state.entries =
-                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting);
+                self.state.entries = entries;
                 self.state.selected = self
                     .state
                     .bookmarks
