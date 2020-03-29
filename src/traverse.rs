@@ -174,7 +174,7 @@ impl Traversal {
                     check_instant_every = (INITIAL_CHECK_INTERVAL as f64
                         * ((eid - last_seen_eid) as f64 / INITIAL_CHECK_INTERVAL as f64)
                         * (REFRESH_RATE.as_millis() as f64 / elapsed))
-                        as usize;
+                        .max(1.0) as usize;
                     last_seen_eid = eid;
                     last_checked = now;
 

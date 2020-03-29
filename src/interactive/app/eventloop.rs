@@ -241,11 +241,7 @@ impl TerminalApp {
                     }
                 });
                 s.reset_message();
-                s.entries = sorted_entries(
-                    &traversal.tree,
-                    s.root,
-                    s.sorting,
-                );
+                s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
                 s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
                 s
             },
