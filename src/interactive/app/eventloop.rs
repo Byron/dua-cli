@@ -154,80 +154,21 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    pub fn draw<B>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Error>
-    where
-        B: Backend,
-    {
-        let props = MainWindowProps {
-            traversal: &self.traversal,
-            display: self.display,
-            state: &self.state,
-        };
-        draw_window(&mut self.window, props, terminal)
-    }
     pub fn process_events<B>(
         &mut self,
-        mut terminal: Terminal<B>,
+        terminal: Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
         B: Backend,
     {
-        use termion::event::Key::*;
-        use FocussedPane::*;
-        fn exit_now<B: Backend>(terminal: Terminal<B>) -> ! {
-            drop(terminal);
-            io::stdout().flush().ok();
-            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
-            // Let the OS do it - we have nothing to lose, literally.
-            std::process::exit(0);
-        }
-
-        self.draw(&mut terminal)?;
-        for key in keys.filter_map(Result::ok) {
-            self.reset_message();
-            match key {
-                Char('?') => self.toggle_help_pane(),
-                Char('\t') => {
-                    self.cycle_focus();
-                }
-                Ctrl('c') => exit_now(terminal),
-                Char('q') | Esc => match self.state.focussed {
-                    Main => exit_now(terminal),
-                    Mark => self.state.focussed = Main,
-                    Help => {
-                        self.state.focussed = Main;
-                        self.window.help_pane = None
-                    }
-                },
-                _ => {}
-            }
-
-            match self.state.focussed {
-                FocussedPane::Mark => self.dispatch_to_mark_pane(key, &mut terminal),
-                FocussedPane::Help => {
-                    self.window.help_pane.as_mut().expect("help pane").key(key);
-                }
-                FocussedPane::Main => match key {
-                    Char('O') => self.open_that(),
-                    Char(' ') => self.mark_entry(false),
-                    Char('d') => self.mark_entry(true),
-                    Char('u') | Char('h') | Backspace | Left => self.exit_node(),
-                    Char('o') | Char('l') | Char('\n') | Right => self.enter_node(),
-                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                    Char('s') => self.cycle_sorting(),
-                    Char('g') => self.display.byte_vis.cycle(),
-                    _ => {}
-                },
-            };
-            self.draw(&mut terminal)?;
-        }
-        Ok(WalkResult {
-            num_errors: self.traversal.io_errors,
-        })
+        self.state.process_events(
+            &mut self.window,
+            &mut self.traversal,
+            self.display,
+            terminal,
+            keys,
+        )
     }
 
     pub fn initialize<B>(

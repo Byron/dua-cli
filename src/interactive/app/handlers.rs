@@ -1,6 +1,6 @@
 use crate::interactive::widgets::MainWindow;
 use crate::interactive::{
-    app::{FocussedPane::*, TerminalApp},
+    app::FocussedPane::*,
     path_of, sorted_entries,
     widgets::MarkMode,
     widgets::{HelpPane, MarkPane},
@@ -309,102 +309,6 @@ impl AppState {
         if advance_cursor {
             self.change_entry_selection(CursorDirection::Down)
         }
-    }
-}
-
-impl TerminalApp {
-    pub fn cycle_focus(&mut self) {
-        if let Some(p) = self.window.mark_pane.as_mut() {
-            p.set_focus(false)
-        };
-        self.state.focussed = match (
-            self.state.focussed,
-            &self.window.help_pane,
-            &mut self.window.mark_pane,
-        ) {
-            (Main, Some(_), _) => Help,
-            (Help, _, Some(ref mut pane)) => {
-                pane.set_focus(true);
-                Mark
-            }
-            (Help, _, None) => Main,
-            (Mark, _, _) => Main,
-            (Main, None, None) => Main,
-            (Main, None, Some(ref mut pane)) => {
-                pane.set_focus(true);
-                Mark
-            }
-        };
-    }
-
-    pub fn toggle_help_pane(&mut self) {
-        self.state.focussed = match self.state.focussed {
-            Main | Mark => {
-                self.window.help_pane = Some(HelpPane::default());
-                Help
-            }
-            Help => {
-                self.window.help_pane = None;
-                Main
-            }
-        }
-    }
-
-    pub fn reset_message(&mut self) {
-        self.state.reset_message()
-    }
-
-    pub fn open_that(&self) {
-        self.state.open_that(&self.traversal)
-    }
-
-    pub fn exit_node(&mut self) {
-        let entries = self.state.entries_for_exit_node(&self.traversal);
-        self.state.exit_node(entries);
-    }
-
-    pub fn enter_node(&mut self) {
-        let new_entries = self.state.entries_for_enter_node(&self.traversal);
-        self.state.enter_node(new_entries)
-    }
-
-    pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        self.state.change_entry_selection(direction)
-    }
-
-    pub fn cycle_sorting(&mut self) {
-        self.state.cycle_sorting(&self.traversal)
-    }
-
-    pub fn mark_entry(&mut self, advance_cursor: bool) {
-        self.state
-            .mark_entry(advance_cursor, &mut self.window, &self.traversal)
-    }
-
-    fn set_root(&mut self, root: TreeIndex) {
-        self.state.set_root(root, &self.traversal);
-    }
-
-    pub fn delete_entry(&mut self, index: TreeIndex) -> Result<usize, usize> {
-        self.state.delete_entry(index, &mut self.traversal)
-    }
-
-    fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
-        self.state
-            .recompute_sizes_recursively(index, &mut self.traversal)
-    }
-
-    pub fn dispatch_to_mark_pane<B>(&mut self, key: Key, terminal: &mut Terminal<B>)
-    where
-        B: Backend,
-    {
-        self.state.dispatch_to_mark_pane(
-            key,
-            &mut self.window,
-            &mut self.traversal,
-            self.display,
-            terminal,
-        );
     }
 }
 
