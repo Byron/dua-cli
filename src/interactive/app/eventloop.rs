@@ -60,7 +60,7 @@ impl AppState {
         &mut self,
         window: &mut MainWindow,
         traversal: &mut Traversal,
-        mut display: DisplayOptions,
+        display: &mut DisplayOptions,
         mut terminal: Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
@@ -78,7 +78,7 @@ impl AppState {
             std::process::exit(0);
         }
 
-        self.draw(window, traversal, display, &mut terminal)?;
+        self.draw(window, traversal, display.clone(), &mut terminal)?;
         for key in keys.filter_map(Result::ok) {
             match key {
                 Char('?') => self.toggle_help_pane(window),
@@ -98,9 +98,13 @@ impl AppState {
             }
 
             match self.focussed {
-                FocussedPane::Mark => {
-                    self.dispatch_to_mark_pane(key, window, traversal, display, &mut terminal)
-                }
+                FocussedPane::Mark => self.dispatch_to_mark_pane(
+                    key,
+                    window,
+                    traversal,
+                    display.clone(),
+                    &mut terminal,
+                ),
                 FocussedPane::Help => {
                     window.help_pane.as_mut().expect("help pane").key(key);
                 }
@@ -123,7 +127,7 @@ impl AppState {
                     _ => {}
                 },
             };
-            self.draw(window, traversal, display, &mut terminal)?;
+            self.draw(window, traversal, display.clone(), &mut terminal)?;
         }
         Ok(WalkResult {
             num_errors: traversal.io_errors,
@@ -165,7 +169,7 @@ impl TerminalApp {
         self.state.process_events(
             &mut self.window,
             &mut self.traversal,
-            self.display,
+            &mut self.display,
             terminal,
             keys,
         )
