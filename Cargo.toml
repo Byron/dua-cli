@@ -1,6 +1,6 @@
 [package]
 name = "dua-cli"
-version = "2.4.0"
+version = "2.4.1"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
 edition = "2018"
 include = ["src/**/*", "Cargo.*", "*.md", "LICENSE"]

@@ -1,3 +1,5 @@
+#### v2.4.1 Bugfix: Update currently visible entries when scanning
+
 #### v2.4.0 Full interaction during scanning phase; add inline-help for better UX
 
 #### v2.3.9 Do not follow symlinks unless it's the only root path to follow
