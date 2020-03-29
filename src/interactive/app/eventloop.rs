@@ -195,13 +195,13 @@ impl TerminalApp {
         let mut display: DisplayOptions = options.clone().into();
         display.byte_vis = ByteVisualization::PercentageAndBar;
         let mut window = MainWindow::default();
-        let (keys_tx, keys_rx) = crossbeam_channel::unbounded();
+        let (keys_tx, keys_rx) = std::sync::mpsc::channel(); // unbounded
         match mode {
             Interaction::None => drop(keys_tx),
             Interaction::Full => drop(std::thread::spawn(move || {
                 let keys = std::io::stdin().keys();
                 for key in keys {
-                    if let Err(_) = keys_tx.try_send(key) {
+                    if let Err(_) = keys_tx.send(key) {
                         break;
                     }
                 }

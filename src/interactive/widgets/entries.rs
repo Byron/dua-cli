@@ -64,7 +64,7 @@ impl Entries {
             p => p,
         };
         let title = format!(
-            " {} ({} item{})",
+            " {} ({} item{}) ",
             title,
             entries.len(),
             match entries.len() {
