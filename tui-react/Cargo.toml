@@ -1,6 +1,6 @@
 [package]
 name = "tui-react"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Sebastian Thiel <sthiel@thoughtworks.com>"]
 edition = "2018"
 repository = "https://github.com/Byron/dua-cli"
@@ -11,3 +11,5 @@ license = "MIT"
 [dependencies]
 tui = "0.8.0"
 log = "0.4.6"
+unicode-segmentation = "1.6.0"
+unicode-width = "0.1.7"
