@@ -74,6 +74,43 @@ pub fn draw_text_with_ellipsis_nowrap<'a>(
     total_width as u16
 }
 
+pub fn draw_text_without_ellipsis_nowrap<'a>(
+    bound: Rect,
+    buf: &mut Buffer,
+    text: impl AsRef<str>,
+    style: impl Into<Option<Style>>,
+) -> u16 {
+    let s = style.into();
+    let t = text.as_ref();
+    let mut graphemes = t.graphemes(true);
+    let mut total_width = 0;
+    {
+        let mut x_offset = 0;
+        for (g, mut x) in graphemes.by_ref().zip(bound.left()..bound.right()) {
+            let width = g.width();
+            total_width += width;
+
+            x += x_offset;
+            let cell = buf.get_mut(x, bound.y);
+            cell.symbol = g.into();
+            if let Some(s) = s {
+                cell.style = s;
+            }
+
+            x_offset += width.saturating_sub(1) as u16;
+            if x + x_offset >= bound.right() {
+                break;
+            }
+            let x = x as usize;
+            for x in x + 1..x + width {
+                let i = buf.index_of(x as u16, bound.y);
+                buf.content[i].reset();
+            }
+        }
+    }
+    total_width as u16
+}
+
 pub fn draw_text_nowrap_fn(
     bound: Rect,
     buf: &mut Buffer,

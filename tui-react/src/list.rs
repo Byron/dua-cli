@@ -1,7 +1,10 @@
+use crate::draw_text_without_ellipsis_nowrap;
+use crate::util::rect::offset_x;
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, Paragraph, Text, Widget},
+    style::Style,
+    widgets::{Block, Text, Widget},
 };
 
 #[derive(Default)]
@@ -62,15 +65,20 @@ impl List {
             .take(list_area.height as usize)
         {
             let (x, y) = (list_area.left(), list_area.top() + i as u16);
-            Paragraph::new(text_iterator.iter()).draw(
-                Rect {
-                    x,
-                    y,
-                    width: list_area.width,
-                    height: 1,
-                },
-                buf,
-            );
+            let mut bound = Rect {
+                x,
+                y,
+                width: list_area.width,
+                height: 1,
+            };
+            for text in text_iterator.into_iter() {
+                let (text, style) = match text {
+                    Text::Raw(s) => (s, Style::default()),
+                    Text::Styled(s, style) => (s, style),
+                };
+                let offset = draw_text_without_ellipsis_nowrap(bound, buf, text, Some(style));
+                bound = offset_x(bound, offset);
+            }
         }
     }
 }
