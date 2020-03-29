@@ -1,3 +1,5 @@
+#### v2.4.0 Full interaction during scanning phase; add inline-help for better UX
+
 #### v2.3.9 Do not follow symlinks unless it's the only root path to follow
 
 This brutally fixes an issue where symbolics links are honored when they are placed in the current working directory, as internally `dua` will 
