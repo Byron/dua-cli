@@ -11,6 +11,10 @@ use tui::{
     style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph, Text, Widget},
 };
+use tui_react::{
+    draw_text_nowrap_fn,
+    util::{block_width, rect},
+};
 
 #[derive(Default, Clone)]
 pub struct HelpPane {
@@ -19,6 +23,7 @@ pub struct HelpPane {
 
 pub struct HelpPaneProps {
     pub border_style: Style,
+    pub has_focus: bool,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -174,13 +179,34 @@ impl HelpPane {
             (lines.into_inner(), num_lines.get())
         };
 
-        let HelpPaneProps { border_style } = props.borrow();
+        let HelpPaneProps {
+            border_style,
+            has_focus,
+        } = props.borrow();
 
+        let title = "Help";
         let mut block = Block::default()
-            .title("Help")
+            .title(title)
             .border_style(*border_style)
             .borders(Borders::ALL);
         block.draw(area, buf);
+
+        if *has_focus {
+            let help_text = " . = o|.. = u || ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text_block_width = block_width(help_text);
+            let bound = Rect {
+                width: area.width.saturating_sub(1),
+                ..area
+            };
+            if block_width(title) + help_text_block_width <= bound.width {
+                draw_text_nowrap_fn(
+                    rect::snap_to_right(bound, help_text_block_width),
+                    buf,
+                    help_text,
+                    |_, _, _| Style::default(),
+                );
+            }
+        }
 
         let area = margin(block.inner(area), 1);
         self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));

@@ -117,6 +117,11 @@ impl MainWindow {
         if let Some((help_area, pane)) = help_pane {
             let props = HelpPaneProps {
                 border_style: help_style,
+                has_focus: if let Help = state.focussed {
+                    true
+                } else {
+                    false
+                },
             };
             pane.render(props, help_area, buf);
         }
