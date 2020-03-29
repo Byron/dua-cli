@@ -10,6 +10,8 @@ use dua::{
 use failure::Error;
 use std::{collections::BTreeMap, io, io::Write, path::PathBuf};
 use termion::event::Key;
+use termion::input::TermRead;
+use termion::screen::ToMainScreen;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
@@ -61,7 +63,7 @@ impl AppState {
         window: &mut MainWindow,
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
-        mut terminal: Terminal<B>,
+        terminal: &mut Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
@@ -70,24 +72,25 @@ impl AppState {
         use termion::event::Key::*;
         use FocussedPane::*;
 
-        fn exit_now<B: Backend>(terminal: Terminal<B>) -> ! {
-            drop(terminal);
+        fn exit_now() -> ! {
+            write!(io::stdout(), "{}", ToMainScreen).ok();
             io::stdout().flush().ok();
             // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
             // Let the OS do it - we have nothing to lose, literally.
             std::process::exit(0);
         }
 
-        self.draw(window, traversal, display.clone(), &mut terminal)?;
+        self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
+            self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(window),
                 Char('\t') => {
                     self.cycle_focus(window);
                 }
-                Ctrl('c') => exit_now(terminal),
+                Ctrl('c') => exit_now(),
                 Char('q') | Esc => match self.focussed {
-                    Main => exit_now(terminal),
+                    Main => exit_now(),
                     Mark => self.focussed = Main,
                     Help => {
                         self.focussed = Main;
@@ -98,13 +101,9 @@ impl AppState {
             }
 
             match self.focussed {
-                FocussedPane::Mark => self.dispatch_to_mark_pane(
-                    key,
-                    window,
-                    traversal,
-                    display.clone(),
-                    &mut terminal,
-                ),
+                FocussedPane::Mark => {
+                    self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
+                }
                 FocussedPane::Help => {
                     window.help_pane.as_mut().expect("help pane").key(key);
                 }
@@ -127,7 +126,7 @@ impl AppState {
                     _ => {}
                 },
             };
-            self.draw(window, traversal, display.clone(), &mut terminal)?;
+            self.draw(window, traversal, display.clone(), terminal)?;
         }
         Ok(WalkResult {
             num_errors: traversal.io_errors,
@@ -160,7 +159,7 @@ pub struct TerminalApp {
 impl TerminalApp {
     pub fn process_events<B>(
         &mut self,
-        terminal: Terminal<B>,
+        terminal: &mut Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
     ) -> Result<WalkResult, Error>
     where
@@ -189,21 +188,43 @@ impl TerminalApp {
         let mut display_options: DisplayOptions = options.clone().into();
         display_options.byte_vis = ByteVisualization::Bar;
         let mut window = MainWindow::default();
+        let (keys_tx, keys_rx) = crossbeam_channel::unbounded();
+        match mode {
+            Interaction::None => drop(keys_tx),
+            Interaction::Full => drop(std::thread::spawn(move || {
+                let keys = std::io::stdin().keys();
+                for key in keys {
+                    if let Err(_) = keys_tx.try_send(key) {
+                        break;
+                    }
+                }
+            })),
+        }
+
+        let fetch_buffered_key_events = || {
+            let mut keys = Vec::new();
+            while let Ok(key) = keys_rx.try_recv() {
+                keys.push(key);
+            }
+            keys
+        };
 
         let traversal = Traversal::from_walk(options, input, move |traversal| {
-            let state = AppState {
+            let mut state = AppState {
                 root: traversal.root_index,
                 sorting: Default::default(),
                 message: Some("-> scanning <-".into()),
                 entries: sorted_entries(&traversal.tree, traversal.root_index, Default::default()),
                 ..Default::default()
             };
-            let props = MainWindowProps {
+            state.process_events(
+                &mut window,
                 traversal,
-                display: display_options,
-                state: &state,
-            };
-            draw_window(&mut window, props, terminal)
+                &mut display_options,
+                terminal,
+                fetch_buffered_key_events().into_iter(),
+            )?;
+            Ok(())
         })?;
 
         let sorting = Default::default();
@@ -227,6 +248,7 @@ impl TerminalApp {
 }
 
 pub enum Interaction {
-    Limited,
+    Full,
+    #[allow(dead_code)]
     None,
 }

@@ -186,6 +186,7 @@ version = "3.0.0"
 dependencies = [
  "atty",
  "byte-unit",
+ "crossbeam-channel",
  "failure",
  "failure-tools",
  "filesize",

@@ -47,9 +47,9 @@ fn run() -> Result<(), Error> {
                 &mut terminal,
                 walk_options,
                 paths_from(input)?,
-                Interaction::Limited,
+                Interaction::Full,
             )?;
-            let res = app.process_events(terminal, io::stdin().keys())?;
+            let res = app.process_events(&mut terminal, io::stdin().keys())?;
             io::stdout().flush().ok();
             res
         }

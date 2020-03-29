@@ -1,7 +1,7 @@
 use crate::{
     interactive::app_test::utils::{
-        fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, new_test_terminal,
-        node_by_index, node_by_name,
+        fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, node_by_index,
+        node_by_name,
     },
     interactive::app_test::FIXTURE_PATH,
     interactive::SortMode,
@@ -15,7 +15,8 @@ use termion::input::TermRead;
 fn simple_user_journey_read_only() -> Result<(), Error> {
     let long_root = "sample-02/dir";
     let short_root = "sample-01";
-    let (terminal, mut app) = initialized_app_and_terminal_from_fixture(&[short_root, long_root])?;
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_fixture(&[short_root, long_root])?;
 
     // POST-INIT
     // after initialization, we expect that...
@@ -48,7 +49,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
     // SORTING
     {
         // when hitting the S key
-        app.process_events(terminal, b"s".keys())?;
+        app.process_events(&mut terminal, b"s".keys())?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeAscending,
@@ -60,7 +61,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
             "it recomputes the cached entries"
         );
         // when hitting the S key again
-        app.process_events(new_test_terminal()?, b"s".keys())?;
+        app.process_events(&mut terminal, b"s".keys())?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
@@ -76,35 +77,35 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
     // Entry-Navigation
     {
         // when hitting the j key
-        app.process_events(new_test_terminal()?, b"j".keys())?;
+        app.process_events(&mut terminal, b"j".keys())?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.selected.as_ref().unwrap()),
             "it moves the cursor down and selects the next entry based on the current sort mode"
         );
         // when hitting it while there is nowhere to go
-        app.process_events(new_test_terminal()?, b"j".keys())?;
+        app.process_events(&mut terminal, b"j".keys())?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.selected.as_ref().unwrap()),
             "it stays at the previous position"
         );
         // when hitting the k key
-        app.process_events(new_test_terminal()?, b"k".keys())?;
+        app.process_events(&mut terminal, b"k".keys())?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
             node_by_index(&app, *app.state.selected.as_ref().unwrap()),
             "it moves the cursor up and selects the next entry based on the current sort mode"
         );
         // when hitting the k key again
-        app.process_events(new_test_terminal()?, b"k".keys())?;
+        app.process_events(&mut terminal, b"k".keys())?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
             node_by_index(&app, *app.state.selected.as_ref().unwrap()),
             "it stays at the current cursor position as there is nowhere to go"
         );
         // when hitting the o key with a directory selected
-        app.process_events(new_test_terminal()?, b"o".keys())?;
+        app.process_events(&mut terminal, b"o".keys())?;
         {
             let new_root_idx = index_by_name(&app, fixture_str(short_root));
             assert_eq!(
@@ -118,7 +119,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
             );
 
             // when hitting the u key while inside a sub-directory
-            app.process_events(new_test_terminal()?, b"u".keys())?;
+            app.process_events(&mut terminal, b"u".keys())?;
             {
                 assert_eq!(
                     app.traversal.root_index, app.state.root,
@@ -133,7 +134,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
         }
         // when hitting the u key while inside of the root directory
         // We are moving the cursor down just to have a non-default selection
-        app.process_events(new_test_terminal()?, b"ju".keys())?;
+        app.process_events(&mut terminal, b"ju".keys())?;
         {
             assert_eq!(
                 app.traversal.root_index, app.state.root,
@@ -150,9 +151,9 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
     // Deletion
     {
         // when hitting the 'd' key (also move cursor back to start)
-        app.process_events(new_test_terminal()?, b"k".keys())?;
+        app.process_events(&mut terminal, b"k".keys())?;
         let previously_selected_index = *app.state.selected.as_ref().unwrap();
-        app.process_events(new_test_terminal()?, b"d".keys())?;
+        app.process_events(&mut terminal, b"d".keys())?;
         {
             assert_eq!(
                 Some(1),
@@ -174,7 +175,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
 
         // when hitting the 'd' key again
         {
-            app.process_events(new_test_terminal()?, b"d".keys())?;
+            app.process_events(&mut terminal, b"d".keys())?;
 
             assert_eq!(
                 Some(2),
@@ -191,7 +192,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
 
         // when hitting the 'd' key once again
         {
-            app.process_events(new_test_terminal()?, b"d".keys())?;
+            app.process_events(&mut terminal, b"d".keys())?;
 
             assert_eq!(
                 Some(1),
@@ -208,7 +209,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
         }
         // when hitting the spacebar (after moving up to the first entry)
         {
-            app.process_events(new_test_terminal()?, b"k ".keys())?;
+            app.process_events(&mut terminal, b"k ".keys())?;
 
             assert_eq!(
                 None,
@@ -227,7 +228,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
     // Marking
     {
         // select something
-        app.process_events(new_test_terminal()?, b" j ".keys())?;
+        app.process_events(&mut terminal, b" j ".keys())?;
         assert_eq!(
             Some(false),
             app.window.mark_pane.as_ref().map(|p| p.has_focus()),
@@ -241,7 +242,7 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
         );
 
         // when advancing the selection to the marker pane
-        app.process_events(new_test_terminal()?, b"\t".keys())?;
+        app.process_events(&mut terminal, b"\t".keys())?;
         {
             assert_eq!(
                 Some(true),
