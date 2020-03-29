@@ -174,8 +174,8 @@ impl TerminalApp {
     {
         terminal.hide_cursor()?;
         terminal.clear()?;
-        let mut display_options: DisplayOptions = options.clone().into();
-        display_options.byte_vis = ByteVisualization::Bar;
+        let mut display: DisplayOptions = options.clone().into();
+        display.byte_vis = ByteVisualization::Bar;
         let mut window = MainWindow::default();
         let (keys_tx, keys_rx) = crossbeam_channel::unbounded();
         match mode {
@@ -219,14 +219,14 @@ impl TerminalApp {
             s.process_events(
                 &mut window,
                 traversal,
-                &mut display_options,
+                &mut display,
                 terminal,
                 fetch_buffered_key_events().into_iter(),
             )?;
             Ok(())
         })?;
 
-        display_options.byte_vis = ByteVisualization::PercentageAndBar;
+        display.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
             state: {
                 let mut s = state.unwrap_or_else(|| {
@@ -241,13 +241,17 @@ impl TerminalApp {
                     }
                 });
                 s.reset_message();
-                s.entries = sorted_entries(&traversal.tree, traversal.root_index, s.sorting);
-                s.selected = s.entries.get(0).map(|b| b.index);
+                s.entries = sorted_entries(
+                    &traversal.tree,
+                    s.root,
+                    s.sorting,
+                );
+                s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
                 s
             },
-            display: display_options,
+            display,
             traversal,
-            window: Default::default(),
+            window,
         })
     }
 }
