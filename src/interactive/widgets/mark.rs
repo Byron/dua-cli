@@ -18,7 +18,11 @@ use tui::{
     widgets::Text,
     widgets::{Paragraph, Widget},
 };
-use tui_react::{List, ListProps};
+use tui_react::{
+    draw_text_nowrap_fn,
+    util::{block_width, rect},
+    List, ListProps,
+};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub enum MarkMode {
@@ -366,6 +370,23 @@ impl MarkPane {
             block: None,
             entry_in_view,
         };
-        self.list.render(props, entries, list_area, buf)
+        self.list.render(props, entries, list_area, buf);
+
+        if has_focus {
+            let help_text = " . = o|.. = u || ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text_block_width = block_width(help_text);
+            let bound = Rect {
+                width: area.width.saturating_sub(1),
+                ..area
+            };
+            if block_width(&title) + help_text_block_width <= bound.width {
+                draw_text_nowrap_fn(
+                    rect::snap_to_right(bound, help_text_block_width),
+                    buf,
+                    help_text,
+                    |_, _, _| Style::default(),
+                );
+            }
+        }
     }
 }

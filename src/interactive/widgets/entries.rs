@@ -12,7 +12,11 @@ use tui::{
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Text},
 };
-use tui_react::{fill_background_to_right, List, ListProps};
+use tui_react::{
+    draw_text_nowrap_fn, fill_background_to_right,
+    util::{block_width, rect},
+    List, ListProps,
+};
 
 pub struct EntriesProps<'a> {
     pub tree: &'a Tree,
@@ -155,5 +159,22 @@ impl Entries {
         );
 
         list.render(props, lines, area, buf);
+
+        if *is_focussed {
+            let help_text = " . = o|.. = u || ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text_block_width = block_width(help_text);
+            let bound = Rect {
+                width: area.width.saturating_sub(1),
+                ..area
+            };
+            if block_width(&title) + help_text_block_width <= bound.width {
+                draw_text_nowrap_fn(
+                    rect::snap_to_right(bound, help_text_block_width),
+                    buf,
+                    help_text,
+                    |_, _, _| Style::default(),
+                );
+            }
+        }
     }
 }
