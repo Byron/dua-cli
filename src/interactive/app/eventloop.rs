@@ -62,6 +62,77 @@ impl AppState {
         draw_window(window, props, terminal)
     }
 
+    pub fn process_event<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        key: Key,
+    ) -> Result<ProcessingResult, Error>
+    where
+        B: Backend,
+    {
+        use termion::event::Key::*;
+        use FocussedPane::*;
+
+        self.reset_message();
+        match key {
+            Char('?') => self.toggle_help_pane(window),
+            Char('\t') => {
+                self.cycle_focus(window);
+            }
+            Ctrl('c') => {
+                return Ok(ProcessingResult::ExitRequested(WalkResult {
+                    num_errors: traversal.io_errors,
+                }))
+            }
+            Char('q') | Esc => match self.focussed {
+                Main => {
+                    return Ok(ProcessingResult::ExitRequested(WalkResult {
+                        num_errors: traversal.io_errors,
+                    }))
+                }
+                Mark => self.focussed = Main,
+                Help => {
+                    self.focussed = Main;
+                    window.help_pane = None
+                }
+            },
+            _ => {}
+        }
+
+        match self.focussed {
+            FocussedPane::Mark => {
+                self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
+            }
+            FocussedPane::Help => {
+                window.help_pane.as_mut().expect("help pane").key(key);
+            }
+            FocussedPane::Main => match key {
+                Char('O') => self.open_that(traversal),
+                Char(' ') => self.mark_entry(false, window, traversal),
+                Char('d') => self.mark_entry(true, window, traversal),
+                Char('u') | Char('h') | Backspace | Left => {
+                    self.exit_node_with_traversal(traversal)
+                }
+                Char('o') | Char('l') | Char('\n') | Right => {
+                    self.enter_node_with_traversal(traversal)
+                }
+                Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                Char('s') => self.cycle_sorting(traversal),
+                Char('g') => display.byte_vis.cycle(),
+                _ => {}
+            },
+        };
+        self.draw(window, traversal, display.clone(), terminal)?;
+        Ok(ProcessingResult::Finished(WalkResult {
+            num_errors: traversal.io_errors,
+        }))
+    }
     pub fn process_events<B>(
         &mut self,
         window: &mut MainWindow,
@@ -73,65 +144,14 @@ impl AppState {
     where
         B: Backend,
     {
-        use termion::event::Key::*;
-        use FocussedPane::*;
-
         self.reset_message();
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
-            self.reset_message();
-            match key {
-                Char('?') => self.toggle_help_pane(window),
-                Char('\t') => {
-                    self.cycle_focus(window);
-                }
-                Ctrl('c') => {
-                    return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: traversal.io_errors,
-                    }))
-                }
-                Char('q') | Esc => match self.focussed {
-                    Main => {
-                        return Ok(ProcessingResult::ExitRequested(WalkResult {
-                            num_errors: traversal.io_errors,
-                        }))
-                    }
-                    Mark => self.focussed = Main,
-                    Help => {
-                        self.focussed = Main;
-                        window.help_pane = None
-                    }
-                },
-                _ => {}
+            if let r @ ProcessingResult::ExitRequested(_) =
+                self.process_event(window, traversal, display, terminal, key)?
+            {
+                return Ok(r);
             }
-
-            match self.focussed {
-                FocussedPane::Mark => {
-                    self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
-                }
-                FocussedPane::Help => {
-                    window.help_pane.as_mut().expect("help pane").key(key);
-                }
-                FocussedPane::Main => match key {
-                    Char('O') => self.open_that(traversal),
-                    Char(' ') => self.mark_entry(false, window, traversal),
-                    Char('d') => self.mark_entry(true, window, traversal),
-                    Char('u') | Char('h') | Backspace | Left => {
-                        self.exit_node_with_traversal(traversal)
-                    }
-                    Char('o') | Char('l') | Char('\n') | Right => {
-                        self.enter_node_with_traversal(traversal)
-                    }
-                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                    Char('s') => self.cycle_sorting(traversal),
-                    Char('g') => display.byte_vis.cycle(),
-                    _ => {}
-                },
-            };
-            self.draw(window, traversal, display.clone(), terminal)?;
         }
         Ok(ProcessingResult::Finished(WalkResult {
             num_errors: traversal.io_errors,
