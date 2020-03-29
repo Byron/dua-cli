@@ -37,7 +37,7 @@ impl Traversal {
     pub fn from_walk(
         mut walk_options: WalkOptions,
         input: Vec<PathBuf>,
-        mut update: impl FnMut(&Traversal) -> Result<(), Error>,
+        mut update: impl FnMut(&mut Traversal) -> Result<(), Error>,
     ) -> Result<Traversal, Error> {
         fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u64) {
             tree.node_weight_mut(node_idx)
@@ -178,7 +178,7 @@ impl Traversal {
                     last_seen_eid = eid;
                     last_checked = now;
 
-                    update(&t)?;
+                    update(&mut t)?;
                 }
             }
         }

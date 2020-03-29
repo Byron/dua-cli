@@ -37,7 +37,113 @@ pub struct AppState {
     pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
 }
 
-impl AppState {}
+impl AppState {
+    pub fn draw<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &Traversal,
+        display: DisplayOptions,
+        terminal: &mut Terminal<B>,
+    ) -> Result<(), Error>
+    where
+        B: Backend,
+    {
+        let props = MainWindowProps {
+            traversal: &traversal,
+            display,
+            state: &self,
+        };
+        draw_window(window, props, terminal)
+    }
+
+    pub fn process_events<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        mut display: DisplayOptions,
+        mut terminal: Terminal<B>,
+        keys: impl Iterator<Item = Result<Key, io::Error>>,
+    ) -> Result<WalkResult, Error>
+    where
+        B: Backend,
+    {
+        use termion::event::Key::*;
+        use FocussedPane::*;
+
+        fn exit_now<B: Backend>(terminal: Terminal<B>) -> ! {
+            drop(terminal);
+            io::stdout().flush().ok();
+            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
+            // Let the OS do it - we have nothing to lose, literally.
+            std::process::exit(0);
+        }
+
+        self.draw(window, traversal, display, &mut terminal)?;
+        for key in keys.filter_map(Result::ok) {
+            match key {
+                Char('?') => self.toggle_help_pane(window),
+                Char('\t') => {
+                    self.cycle_focus(window);
+                }
+                Ctrl('c') => exit_now(terminal),
+                Char('q') | Esc => match self.focussed {
+                    Main => exit_now(terminal),
+                    Mark => self.focussed = Main,
+                    Help => {
+                        self.focussed = Main;
+                        window.help_pane = None
+                    }
+                },
+                _ => {}
+            }
+
+            match self.focussed {
+                FocussedPane::Mark => {
+                    self.dispatch_to_mark_pane(key, window, traversal, display, &mut terminal)
+                }
+                FocussedPane::Help => {
+                    window.help_pane.as_mut().expect("help pane").key(key);
+                }
+                FocussedPane::Main => match key {
+                    Char('O') => self.open_that(traversal),
+                    Char(' ') => self.mark_entry(false, window, traversal),
+                    Char('d') => self.mark_entry(true, window, traversal),
+                    Char('u') | Char('h') | Backspace | Left => {
+                        self.exit_node_with_traversal(traversal)
+                    }
+                    Char('o') | Char('l') | Char('\n') | Right => {
+                        self.enter_node_with_traversal(traversal)
+                    }
+                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('s') => self.cycle_sorting(traversal),
+                    Char('g') => display.byte_vis.cycle(),
+                    _ => {}
+                },
+            };
+            self.draw(window, traversal, display, &mut terminal)?;
+        }
+        Ok(WalkResult {
+            num_errors: traversal.io_errors,
+        })
+    }
+}
+
+pub fn draw_window<B>(
+    window: &mut MainWindow,
+    props: MainWindowProps,
+    terminal: &mut Terminal<B>,
+) -> Result<(), Error>
+where
+    B: Backend,
+{
+    let area = terminal.pre_render()?;
+    window.render(props, area, terminal.current_buffer_mut());
+    terminal.post_render()?;
+    Ok(())
+}
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
@@ -48,19 +154,6 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    pub fn draw_window<B>(
-        window: &mut MainWindow,
-        props: MainWindowProps,
-        terminal: &mut Terminal<B>,
-    ) -> Result<(), Error>
-    where
-        B: Backend,
-    {
-        let area = terminal.pre_render()?;
-        window.render(props, area, terminal.current_buffer_mut());
-        terminal.post_render()?;
-        Ok(())
-    }
     pub fn draw<B>(&mut self, terminal: &mut Terminal<B>) -> Result<(), Error>
     where
         B: Backend,
@@ -70,7 +163,7 @@ impl TerminalApp {
             display: self.display,
             state: &self.state,
         };
-        Self::draw_window(&mut self.window, props, terminal)
+        draw_window(&mut self.window, props, terminal)
     }
     pub fn process_events<B>(
         &mut self,
@@ -165,7 +258,7 @@ impl TerminalApp {
                 display: display_options,
                 state: &state,
             };
-            Self::draw_window(&mut window, props, terminal)
+            draw_window(&mut window, props, terminal)
         })?;
 
         let sorting = Default::default();
