@@ -215,10 +215,13 @@ impl TerminalApp {
             keys
         };
 
-        let mut state = None;
+        let mut state = None::<AppState>;
         let traversal = Traversal::from_walk(options, input, |traversal| {
             let s = match state.as_mut() {
-                Some(s) => s,
+                Some(s) => {
+                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
+                    s
+                }
                 None => {
                     state = Some({
                         let sorting = Default::default();
