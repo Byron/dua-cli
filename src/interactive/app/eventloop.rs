@@ -76,6 +76,7 @@ impl AppState {
         use termion::event::Key::*;
         use FocussedPane::*;
 
+        self.reset_message();
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
             self.reset_message();
