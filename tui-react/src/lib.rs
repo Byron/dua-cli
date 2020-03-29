@@ -82,11 +82,11 @@ pub fn draw_text_without_ellipsis_nowrap<'a>(
 ) -> u16 {
     let s = style.into();
     let t = text.as_ref();
-    let mut graphemes = t.graphemes(true);
+    let graphemes = t.graphemes(true);
     let mut total_width = 0;
     {
         let mut x_offset = 0;
-        for (g, mut x) in graphemes.by_ref().zip(bound.left()..bound.right()) {
+        for (g, mut x) in graphemes.zip(bound.left()..bound.right()) {
             let width = g.width();
             total_width += width;
 
