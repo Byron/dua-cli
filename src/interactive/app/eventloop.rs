@@ -72,7 +72,6 @@ impl AppState {
 
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
-            self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(window),
                 Char('\t') => {
@@ -199,15 +198,25 @@ impl TerminalApp {
             keys
         };
 
-        let traversal = Traversal::from_walk(options, input, move |traversal| {
-            let mut state = AppState {
-                root: traversal.root_index,
-                sorting: Default::default(),
-                message: Some("-> scanning <-".into()),
-                entries: sorted_entries(&traversal.tree, traversal.root_index, Default::default()),
-                ..Default::default()
+        let mut state = None;
+        let traversal = Traversal::from_walk(options, input, |traversal| {
+            let s = match state.as_mut() {
+                Some(s) => s,
+                None => {
+                    state = Some({
+                        let sorting = Default::default();
+                        AppState {
+                            root: traversal.root_index,
+                            sorting,
+                            message: Some("-> scanning <-".into()),
+                            entries: sorted_entries(&traversal.tree, traversal.root_index, sorting),
+                            ..Default::default()
+                        }
+                    });
+                    state.as_mut().expect("state to be present, we just set it")
+                }
             };
-            state.process_events(
+            s.process_events(
                 &mut window,
                 traversal,
                 &mut display_options,
@@ -217,18 +226,24 @@ impl TerminalApp {
             Ok(())
         })?;
 
-        let sorting = Default::default();
-        let root = traversal.root_index;
-        let entries = sorted_entries(&traversal.tree, root, sorting);
-        let selected = entries.get(0).map(|b| b.index);
         display_options.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
-            state: AppState {
-                root,
-                sorting,
-                selected,
-                entries,
-                ..Default::default()
+            state: {
+                let mut s = state.unwrap_or_else(|| {
+                    let sorting = Default::default();
+                    let root = traversal.root_index;
+                    let entries = sorted_entries(&traversal.tree, root, sorting);
+                    AppState {
+                        root,
+                        sorting,
+                        entries,
+                        ..Default::default()
+                    }
+                });
+                s.reset_message();
+                s.entries = sorted_entries(&traversal.tree, traversal.root_index, s.sorting);
+                s.selected = s.entries.get(0).map(|b| b.index);
+                s
             },
             display: display_options,
             traversal,
