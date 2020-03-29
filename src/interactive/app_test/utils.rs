@@ -178,7 +178,8 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
         },
         input,
         Interaction::None,
-    )?;
+    )?
+    .map(|(_, app)| app);
     Ok((
         terminal,
         app.expect("app that didn't try to abort iteration"),

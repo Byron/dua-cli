@@ -10,7 +10,7 @@ use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
-use termion::{input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
+use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::backend::TermionBackend;
 use tui_react::Terminal;
 
@@ -49,7 +49,7 @@ fn run() -> Result<(), Error> {
                 paths_from(input)?,
                 Interaction::Full,
             )?
-            .map(|mut app| app.process_events(&mut terminal, io::stdin().keys()));
+            .map(|(keys_rx, mut app)| app.process_events(&mut terminal, keys_rx.into_iter()));
 
             drop(terminal);
             io::stdout().flush().ok();

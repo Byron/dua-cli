@@ -26,6 +26,7 @@ tui-react = { path = "./tui-react", version = "0.2" }
 num_cpus = "1.10.0"
 unicode-segmentation = "1.3.0"
 filesize = "0.2.0"
+flume = {version = "0.7.1", default-features = false}
 
 [[bin]]
 name="dua"

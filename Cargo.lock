@@ -189,6 +189,7 @@ dependencies = [
  "failure",
  "failure-tools",
  "filesize",
+ "flume",
  "itertools 0.9.0",
  "jwalk",
  "log",
@@ -254,6 +255,15 @@ name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+
+[[package]]
+name = "flume"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "855e285c3835897065a6ba6f9463b44553eb9f29c7988d692f3d41283b47388b"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "heck"
@@ -496,6 +506,12 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "spin"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "strsim"

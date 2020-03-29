@@ -62,77 +62,6 @@ impl AppState {
         draw_window(window, props, terminal)
     }
 
-    pub fn process_event<B>(
-        &mut self,
-        window: &mut MainWindow,
-        traversal: &mut Traversal,
-        display: &mut DisplayOptions,
-        terminal: &mut Terminal<B>,
-        key: Key,
-    ) -> Result<ProcessingResult, Error>
-    where
-        B: Backend,
-    {
-        use termion::event::Key::*;
-        use FocussedPane::*;
-
-        self.reset_message();
-        match key {
-            Char('?') => self.toggle_help_pane(window),
-            Char('\t') => {
-                self.cycle_focus(window);
-            }
-            Ctrl('c') => {
-                return Ok(ProcessingResult::ExitRequested(WalkResult {
-                    num_errors: traversal.io_errors,
-                }))
-            }
-            Char('q') | Esc => match self.focussed {
-                Main => {
-                    return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: traversal.io_errors,
-                    }))
-                }
-                Mark => self.focussed = Main,
-                Help => {
-                    self.focussed = Main;
-                    window.help_pane = None
-                }
-            },
-            _ => {}
-        }
-
-        match self.focussed {
-            FocussedPane::Mark => {
-                self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
-            }
-            FocussedPane::Help => {
-                window.help_pane.as_mut().expect("help pane").key(key);
-            }
-            FocussedPane::Main => match key {
-                Char('O') => self.open_that(traversal),
-                Char(' ') => self.mark_entry(false, window, traversal),
-                Char('d') => self.mark_entry(true, window, traversal),
-                Char('u') | Char('h') | Backspace | Left => {
-                    self.exit_node_with_traversal(traversal)
-                }
-                Char('o') | Char('l') | Char('\n') | Right => {
-                    self.enter_node_with_traversal(traversal)
-                }
-                Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                Char('s') => self.cycle_sorting(traversal),
-                Char('g') => display.byte_vis.cycle(),
-                _ => {}
-            },
-        };
-        self.draw(window, traversal, display.clone(), terminal)?;
-        Ok(ProcessingResult::Finished(WalkResult {
-            num_errors: traversal.io_errors,
-        }))
-    }
     pub fn process_events<B>(
         &mut self,
         window: &mut MainWindow,
@@ -144,14 +73,64 @@ impl AppState {
     where
         B: Backend,
     {
-        self.reset_message();
+        use termion::event::Key::*;
+        use FocussedPane::*;
+
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
-            if let r @ ProcessingResult::ExitRequested(_) =
-                self.process_event(window, traversal, display, terminal, key)?
-            {
-                return Ok(r);
+            self.reset_message();
+            match key {
+                Char('?') => self.toggle_help_pane(window),
+                Char('\t') => {
+                    self.cycle_focus(window);
+                }
+                Ctrl('c') => {
+                    return Ok(ProcessingResult::ExitRequested(WalkResult {
+                        num_errors: traversal.io_errors,
+                    }))
+                }
+                Char('q') | Esc => match self.focussed {
+                    Main => {
+                        return Ok(ProcessingResult::ExitRequested(WalkResult {
+                            num_errors: traversal.io_errors,
+                        }))
+                    }
+                    Mark => self.focussed = Main,
+                    Help => {
+                        self.focussed = Main;
+                        window.help_pane = None
+                    }
+                },
+                _ => {}
             }
+
+            match self.focussed {
+                FocussedPane::Mark => {
+                    self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
+                }
+                FocussedPane::Help => {
+                    window.help_pane.as_mut().expect("help pane").key(key);
+                }
+                FocussedPane::Main => match key {
+                    Char('O') => self.open_that(traversal),
+                    Char(' ') => self.mark_entry(false, window, traversal),
+                    Char('d') => self.mark_entry(true, window, traversal),
+                    Char('u') | Char('h') | Backspace | Left => {
+                        self.exit_node_with_traversal(traversal)
+                    }
+                    Char('o') | Char('l') | Char('\n') | Right => {
+                        self.enter_node_with_traversal(traversal)
+                    }
+                    Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                    Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('s') => self.cycle_sorting(traversal),
+                    Char('g') => display.byte_vis.cycle(),
+                    _ => {}
+                },
+            };
+            self.draw(window, traversal, display.clone(), terminal)?;
         }
         Ok(ProcessingResult::Finished(WalkResult {
             num_errors: traversal.io_errors,
@@ -206,7 +185,7 @@ impl TerminalApp {
         options: WalkOptions,
         input: Vec<PathBuf>,
         mode: Interaction,
-    ) -> Result<Option<TerminalApp>, Error>
+    ) -> Result<Option<(flume::Receiver<io::Result<Key>>, TerminalApp)>, Error>
     where
         B: Backend,
     {
@@ -215,7 +194,7 @@ impl TerminalApp {
         let mut display: DisplayOptions = options.clone().into();
         display.byte_vis = ByteVisualization::PercentageAndBar;
         let mut window = MainWindow::default();
-        let (keys_tx, keys_rx) = std::sync::mpsc::channel(); // unbounded
+        let (keys_tx, keys_rx) = flume::unbounded();
         match mode {
             Interaction::None => drop(keys_tx),
             Interaction::Full => drop(std::thread::spawn(move || {
@@ -228,7 +207,7 @@ impl TerminalApp {
             })),
         }
 
-        let fetch_buffered_key_events = move || {
+        let fetch_buffered_key_events = || {
             let mut keys = Vec::new();
             while let Ok(key) = keys_rx.try_recv() {
                 keys.push(key);
@@ -273,30 +252,32 @@ impl TerminalApp {
             Some(t) => t,
             None => return Ok(None),
         };
-        drop(fetch_buffered_key_events); // shutdown input event handler early for good measure
 
-        Ok(Some(TerminalApp {
-            state: {
-                let mut s = state.unwrap_or_else(|| {
-                    let sorting = Default::default();
-                    let root = traversal.root_index;
-                    let entries = sorted_entries(&traversal.tree, root, sorting);
-                    AppState {
-                        root,
-                        sorting,
-                        entries,
-                        ..Default::default()
-                    }
-                });
-                s.is_scanning = false;
-                s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
-                s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
-                s
+        Ok(Some((
+            keys_rx,
+            TerminalApp {
+                state: {
+                    let mut s = state.unwrap_or_else(|| {
+                        let sorting = Default::default();
+                        let root = traversal.root_index;
+                        let entries = sorted_entries(&traversal.tree, root, sorting);
+                        AppState {
+                            root,
+                            sorting,
+                            entries,
+                            ..Default::default()
+                        }
+                    });
+                    s.is_scanning = false;
+                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
+                    s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
+                    s
+                },
+                display,
+                traversal,
+                window,
             },
-            display,
-            traversal,
-            window,
-        }))
+        )))
     }
 }
 
