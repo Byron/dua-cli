@@ -37,8 +37,8 @@ impl Traversal {
     pub fn from_walk(
         mut walk_options: WalkOptions,
         input: Vec<PathBuf>,
-        mut update: impl FnMut(&mut Traversal) -> Result<(), Error>,
-    ) -> Result<Traversal, Error> {
+        mut update: impl FnMut(&mut Traversal) -> Result<bool, Error>,
+    ) -> Result<Option<Traversal>, Error> {
         fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u64) {
             tree.node_weight_mut(node_idx)
                 .expect("node for parent index we just retrieved")
@@ -178,7 +178,9 @@ impl Traversal {
                     last_seen_eid = eid;
                     last_checked = now;
 
-                    update(&mut t)?;
+                    if update(&mut t)? {
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -194,7 +196,7 @@ impl Traversal {
         set_size_or_panic(&mut t.tree, t.root_index, root_size);
         t.total_bytes = Some(root_size);
 
-        Ok(t)
+        Ok(Some(t))
     }
 
     fn recompute_root_size(&self) -> u64 {

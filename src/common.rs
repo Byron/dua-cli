@@ -189,3 +189,13 @@ pub struct WalkResult {
     /// The amount of io::errors we encountered. Can happen when fetching meta-data, or when reading the directory contents.
     pub num_errors: u64,
 }
+
+impl WalkResult {
+    pub fn to_exit_code(&self) -> i32 {
+        if self.num_errors > 0 {
+            1
+        } else {
+            0
+        }
+    }
+}

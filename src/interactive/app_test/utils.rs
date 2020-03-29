@@ -179,7 +179,10 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
         input,
         Interaction::None,
     )?;
-    Ok((terminal, app))
+    Ok((
+        terminal,
+        app.expect("app that didn't try to abort iteration"),
+    ))
 }
 
 pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {

@@ -43,18 +43,20 @@ fn run() -> Result<(), Error> {
                 let backend = TermionBackend::new(stdout);
                 Terminal::new(backend)?
             };
-            let mut app = TerminalApp::initialize(
+            let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
                 paths_from(input)?,
                 Interaction::Full,
-            )?;
-            app.process_events(&mut terminal, io::stdin().keys())?;
+            )?
+            .map(|mut app| app.process_events(&mut terminal, io::stdin().keys()));
+
             drop(terminal);
             io::stdout().flush().ok();
+
             // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
             // Let the OS do it - we have nothing to lose, literally.
-            std::process::exit(0);
+            std::process::exit(res.transpose()?.map(|e| e.to_exit_code()).unwrap_or(0));
         }
         Some(Aggregate {
             input,
@@ -90,10 +92,7 @@ fn run() -> Result<(), Error> {
         }
     };
 
-    if res.num_errors > 0 {
-        process::exit(1);
-    }
-    Ok(())
+    process::exit(res.to_exit_code());
 }
 
 fn paths_from(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {

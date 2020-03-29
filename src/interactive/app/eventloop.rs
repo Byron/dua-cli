@@ -38,6 +38,11 @@ pub struct AppState {
     pub is_scanning: bool,
 }
 
+pub enum ProcessingResult {
+    Finished(WalkResult),
+    ExitRequested(WalkResult),
+}
+
 impl AppState {
     pub fn draw<B>(
         &mut self,
@@ -64,7 +69,7 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         keys: impl Iterator<Item = Result<Key, io::Error>>,
-    ) -> Result<WalkResult, Error>
+    ) -> Result<ProcessingResult, Error>
     where
         B: Backend,
     {
@@ -79,9 +84,17 @@ impl AppState {
                 Char('\t') => {
                     self.cycle_focus(window);
                 }
-                Ctrl('c') => break,
+                Ctrl('c') => {
+                    return Ok(ProcessingResult::ExitRequested(WalkResult {
+                        num_errors: traversal.io_errors,
+                    }))
+                }
                 Char('q') | Esc => match self.focussed {
-                    Main => break,
+                    Main => {
+                        return Ok(ProcessingResult::ExitRequested(WalkResult {
+                            num_errors: traversal.io_errors,
+                        }))
+                    }
                     Mark => self.focussed = Main,
                     Help => {
                         self.focussed = Main;
@@ -119,9 +132,9 @@ impl AppState {
             };
             self.draw(window, traversal, display.clone(), terminal)?;
         }
-        Ok(WalkResult {
+        Ok(ProcessingResult::Finished(WalkResult {
             num_errors: traversal.io_errors,
-        })
+        }))
     }
 }
 
@@ -156,13 +169,15 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        self.state.process_events(
+        match self.state.process_events(
             &mut self.window,
             &mut self.traversal,
             &mut self.display,
             terminal,
             keys,
-        )
+        )? {
+            ProcessingResult::Finished(res) | ProcessingResult::ExitRequested(res) => Ok(res),
+        }
     }
 
     pub fn initialize<B>(
@@ -170,14 +185,14 @@ impl TerminalApp {
         options: WalkOptions,
         input: Vec<PathBuf>,
         mode: Interaction,
-    ) -> Result<TerminalApp, Error>
+    ) -> Result<Option<TerminalApp>, Error>
     where
         B: Backend,
     {
         terminal.hide_cursor()?;
         terminal.clear()?;
         let mut display: DisplayOptions = options.clone().into();
-        display.byte_vis = ByteVisualization::Bar;
+        display.byte_vis = ByteVisualization::PercentageAndBar;
         let mut window = MainWindow::default();
         let (keys_tx, keys_rx) = crossbeam_channel::unbounded();
         match mode {
@@ -207,10 +222,13 @@ impl TerminalApp {
                 None => {
                     state = Some({
                         let sorting = Default::default();
+                        let entries =
+                            sorted_entries(&traversal.tree, traversal.root_index, sorting);
                         AppState {
                             root: traversal.root_index,
                             sorting,
-                            entries: sorted_entries(&traversal.tree, traversal.root_index, sorting),
+                            selected: entries.get(0).map(|b| b.index),
+                            entries,
                             is_scanning: true,
                             ..Default::default()
                         }
@@ -218,19 +236,25 @@ impl TerminalApp {
                     state.as_mut().expect("state to be present, we just set it")
                 }
             };
-            s.process_events(
+            let should_exit = match s.process_events(
                 &mut window,
                 traversal,
                 &mut display,
                 terminal,
                 fetch_buffered_key_events().into_iter(),
-            )?;
-            Ok(())
+            )? {
+                ProcessingResult::ExitRequested(_) => true,
+                ProcessingResult::Finished(_) => false,
+            };
+            Ok(should_exit)
         })?;
+        let traversal = match traversal {
+            Some(t) => t,
+            None => return Ok(None),
+        };
         drop(fetch_buffered_key_events); // shutdown input event handler early for good measure
 
-        display.byte_vis = ByteVisualization::PercentageAndBar;
-        Ok(TerminalApp {
+        Ok(Some(TerminalApp {
             state: {
                 let mut s = state.unwrap_or_else(|| {
                     let sorting = Default::default();
@@ -251,7 +275,7 @@ impl TerminalApp {
             display,
             traversal,
             window,
-        })
+        }))
     }
 }
 
