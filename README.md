@@ -66,16 +66,6 @@ dua i
 dua interactive
 ```
 
-### Roadmap
-
-#### 🚧v2.3  - Various features and fixes as they come up while people are using it
-
-##### Other Features
-
- * [ ] Evaluate unit coloring - can we highlight different units better, make them stick out?
- 
- See `CHANGELOG.md` for past releases.
- 
 ### Development
 
 #### Run tests
