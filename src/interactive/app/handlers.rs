@@ -3,7 +3,7 @@ use crate::interactive::{
     path_of, sorted_entries,
     widgets::MarkMode,
     widgets::{HelpPane, MarkPane},
-    EntryDataBundle,
+    AppState, EntryDataBundle,
 };
 use dua::traverse::{Traversal, TreeIndex};
 use itertools::Itertools;
@@ -29,6 +29,106 @@ impl CursorDirection {
             PageDown => n.saturating_add(10),
             PageUp => n.saturating_sub(10),
         }
+    }
+}
+
+impl AppState {
+    pub fn open_that(&self, traversal: &Traversal) {
+        if let Some(idx) = self.selected {
+            open::that(path_of(&traversal.tree, idx)).ok();
+        }
+    }
+
+    fn entries_for_exit_node(
+        &self,
+        traversal: &Traversal,
+    ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
+        traversal
+            .tree
+            .neighbors_directed(self.root, Direction::Incoming)
+            .next()
+            .map(|parent_idx| {
+                (
+                    parent_idx,
+                    sorted_entries(&traversal.tree, parent_idx, self.sorting),
+                )
+            })
+    }
+
+    pub fn exit_node(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
+        match entries {
+            Some((parent_idx, entries)) => {
+                self.root = parent_idx;
+                self.entries = entries;
+                self.selected = self
+                    .bookmarks
+                    .get(&parent_idx)
+                    .copied()
+                    .or_else(|| self.entries.get(0).map(|b| b.index));
+            }
+            None => self.message = Some("Top level reached".into()),
+        }
+    }
+
+    fn entries_for_enter_node(
+        &self,
+        traversal: &Traversal,
+    ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
+        self.selected.map(|previously_selected| {
+            (
+                previously_selected,
+                sorted_entries(&traversal.tree, previously_selected, self.sorting),
+            )
+        })
+    }
+
+    pub fn enter_node(&mut self, entries_at_selected: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
+        if let Some((previously_selected, new_entries)) = entries_at_selected {
+            match new_entries.get(
+                self.bookmarks
+                    .get(&previously_selected)
+                    .and_then(|selected| {
+                        new_entries
+                            .iter()
+                            .find_position(|b| b.index == *selected)
+                            .map(|(pos, _)| pos)
+                    })
+                    .unwrap_or(0),
+            ) {
+                Some(b) => {
+                    self.bookmarks.insert(self.root, previously_selected);
+                    self.root = previously_selected;
+                    self.selected = Some(b.index);
+                    self.entries = new_entries;
+                }
+                None => self.message = Some("Entry is a file or an empty directory".into()),
+            }
+        }
+    }
+
+    pub fn change_entry_selection(&mut self, direction: CursorDirection) {
+        let entries = &self.entries;
+        let next_selected_pos = match self.selected {
+            Some(ref selected) => entries
+                .iter()
+                .find_position(|b| b.index == *selected)
+                .map(|(idx, _)| direction.move_cursor(idx))
+                .unwrap_or(0),
+            None => 0,
+        };
+        self.selected = entries
+            .get(next_selected_pos)
+            .or_else(|| entries.last())
+            .map(|b| b.index)
+            .or(self.selected);
+        if let Some(selected) = self.selected {
+            self.bookmarks.insert(self.root, selected);
+        }
+    }
+
+    pub fn cycle_sorting(&mut self, traversal: &Traversal) {
+        self.sorting.toggle_size();
+        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
     }
 }
 
@@ -75,102 +175,25 @@ impl TerminalApp {
     }
 
     pub fn open_that(&self) {
-        self.open_that_with_traversal(&self.traversal)
-    }
-
-    pub fn open_that_with_traversal(&self, traversal: &Traversal) {
-        if let Some(ref idx) = self.state.selected {
-            open::that(path_of(&traversal.tree, *idx)).ok();
-        }
+        self.state.open_that(&self.traversal)
     }
 
     pub fn exit_node(&mut self) {
-        let entries = self
-            .traversal
-            .tree
-            .neighbors_directed(self.state.root, Direction::Incoming)
-            .next()
-            .map(|parent_idx| {
-                (
-                    parent_idx,
-                    sorted_entries(&self.traversal.tree, parent_idx, self.state.sorting),
-                )
-            });
-        self.exit_node_with_traversal(entries)
-    }
-
-    pub fn exit_node_with_traversal(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
-        match entries {
-            Some((parent_idx, entries)) => {
-                self.state.root = parent_idx;
-                self.state.entries = entries;
-                self.state.selected = self
-                    .state
-                    .bookmarks
-                    .get(&parent_idx)
-                    .copied()
-                    .or_else(|| self.state.entries.get(0).map(|b| b.index));
-            }
-            None => self.state.message = Some("Top level reached".into()),
-        }
+        let entries = self.state.entries_for_exit_node(&self.traversal);
+        self.state.exit_node(entries);
     }
 
     pub fn enter_node(&mut self) {
-        if let Some(previously_selected) = self.state.selected {
-            let new_entries = sorted_entries(
-                &self.traversal.tree,
-                previously_selected,
-                self.state.sorting,
-            );
-            match new_entries.get(
-                self.state
-                    .bookmarks
-                    .get(&previously_selected)
-                    .and_then(|selected| {
-                        new_entries
-                            .iter()
-                            .find_position(|b| b.index == *selected)
-                            .map(|(pos, _)| pos)
-                    })
-                    .unwrap_or(0),
-            ) {
-                Some(b) => {
-                    self.state
-                        .bookmarks
-                        .insert(self.state.root, previously_selected);
-                    self.state.root = previously_selected;
-                    self.state.selected = Some(b.index);
-                    self.state.entries = new_entries;
-                }
-                None => self.state.message = Some("Entry is a file or an empty directory".into()),
-            }
-        }
+        let new_entries = self.state.entries_for_enter_node(&self.traversal);
+        self.state.enter_node(new_entries)
     }
 
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let entries = &self.state.entries;
-        let next_selected_pos = match self.state.selected {
-            Some(ref selected) => entries
-                .iter()
-                .find_position(|b| b.index == *selected)
-                .map(|(idx, _)| direction.move_cursor(idx))
-                .unwrap_or(0),
-            None => 0,
-        };
-        self.state.selected = entries
-            .get(next_selected_pos)
-            .or_else(|| entries.last())
-            .map(|b| b.index)
-            .or(self.state.selected);
-        if let Some(selected) = self.state.selected {
-            self.state.bookmarks.insert(self.state.root, selected);
-        }
+        self.state.change_entry_selection(direction)
     }
 
     pub fn cycle_sorting(&mut self) {
-        self.state.sorting.toggle_size();
-        self.state.entries =
-            sorted_entries(&self.traversal.tree, self.state.root, self.state.sorting);
+        self.state.cycle_sorting(&self.traversal)
     }
 
     pub fn mark_entry(&mut self, advance_cursor: bool) {
