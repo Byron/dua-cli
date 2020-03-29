@@ -27,6 +27,11 @@ fn simple_user_journey_read_only() -> Result<(), Error> {
             "it will sort entries in descending order by size"
         );
 
+        assert_eq!(
+            app.state.is_scanning, false,
+            "it will not think it is still scanning"
+        );
+
         let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
         assert_eq!(
             node_by_name(&app, &first_selected_path).name,

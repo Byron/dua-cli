@@ -143,7 +143,11 @@ impl AppState {
     }
 
     pub fn reset_message(&mut self) {
-        self.message = None;
+        if self.is_scanning {
+            self.message = Some("-> scanning <-".into());
+        } else {
+            self.message = None;
+        }
     }
 
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {

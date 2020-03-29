@@ -35,6 +35,7 @@ pub struct AppState {
     pub message: Option<String>,
     pub focussed: FocussedPane,
     pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
+    pub is_scanning: bool,
 }
 
 impl AppState {
@@ -72,6 +73,7 @@ impl AppState {
 
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
+            self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(window),
                 Char('\t') => {
@@ -190,7 +192,7 @@ impl TerminalApp {
             })),
         }
 
-        let fetch_buffered_key_events = || {
+        let fetch_buffered_key_events = move || {
             let mut keys = Vec::new();
             while let Ok(key) = keys_rx.try_recv() {
                 keys.push(key);
@@ -208,8 +210,8 @@ impl TerminalApp {
                         AppState {
                             root: traversal.root_index,
                             sorting,
-                            message: Some("-> scanning <-".into()),
                             entries: sorted_entries(&traversal.tree, traversal.root_index, sorting),
+                            is_scanning: true,
                             ..Default::default()
                         }
                     });
@@ -225,6 +227,7 @@ impl TerminalApp {
             )?;
             Ok(())
         })?;
+        drop(fetch_buffered_key_events); // shutdown input event handler early for good measure
 
         display.byte_vis = ByteVisualization::PercentageAndBar;
         Ok(TerminalApp {
@@ -240,7 +243,7 @@ impl TerminalApp {
                         ..Default::default()
                     }
                 });
-                s.reset_message();
+                s.is_scanning = false;
                 s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
                 s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
                 s
