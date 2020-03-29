@@ -8,8 +8,8 @@ use dua::{
     WalkOptions, WalkResult,
 };
 use failure::Error;
-use std::{collections::BTreeMap, io, io::Write, path::PathBuf};
-use termion::{event::Key, input::TermRead, raw::IntoRawMode, screen::ToMainScreen};
+use std::{collections::BTreeMap, io, path::PathBuf};
+use termion::{event::Key, input::TermRead};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
@@ -70,20 +70,6 @@ impl AppState {
         use termion::event::Key::*;
         use FocussedPane::*;
 
-        fn exit_now<B: Backend>(terminal: &mut Terminal<B>) -> ! {
-            terminal.show_cursor().ok();
-            write!(io::stdout(), "{}", ToMainScreen).ok();
-            io::stdout()
-                .into_raw_mode()
-                .expect("TTY")
-                .suspend_raw_mode()
-                .ok();
-            io::stdout().flush().ok();
-            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
-            // Let the OS do it - we have nothing to lose, literally.
-            std::process::exit(0);
-        }
-
         self.draw(window, traversal, display.clone(), terminal)?;
         for key in keys.filter_map(Result::ok) {
             self.reset_message();
@@ -92,9 +78,9 @@ impl AppState {
                 Char('\t') => {
                     self.cycle_focus(window);
                 }
-                Ctrl('c') => exit_now(terminal),
+                Ctrl('c') => break,
                 Char('q') | Esc => match self.focussed {
-                    Main => exit_now(terminal),
+                    Main => break,
                     Mark => self.focussed = Main,
                     Help => {
                         self.focussed = Main;

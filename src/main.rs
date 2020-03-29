@@ -49,9 +49,12 @@ fn run() -> Result<(), Error> {
                 paths_from(input)?,
                 Interaction::Full,
             )?;
-            let res = app.process_events(&mut terminal, io::stdin().keys())?;
+            app.process_events(&mut terminal, io::stdin().keys())?;
+            drop(terminal);
             io::stdout().flush().ok();
-            res
+            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
+            // Let the OS do it - we have nothing to lose, literally.
+            std::process::exit(0);
         }
         Some(Aggregate {
             input,
