@@ -170,7 +170,7 @@ impl TerminalApp {
         }
     }
 
-    pub fn update_message(&mut self) {
+    pub fn reset_message(&mut self) {
         self.state.message = None;
     }
 

@@ -37,6 +37,8 @@ pub struct AppState {
     pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
 }
 
+impl AppState {}
+
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
     pub traversal: Traversal,
@@ -80,24 +82,25 @@ impl TerminalApp {
     {
         use termion::event::Key::*;
         use FocussedPane::*;
+        fn exit_now<B: Backend>(terminal: Terminal<B>) -> ! {
+            drop(terminal);
+            io::stdout().flush().ok();
+            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
+            // Let the OS do it - we have nothing to lose, literally.
+            std::process::exit(0);
+        }
 
         self.draw(&mut terminal)?;
         for key in keys.filter_map(Result::ok) {
-            self.update_message();
+            self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(),
                 Char('\t') => {
                     self.cycle_focus();
                 }
-                Ctrl('c') => break,
+                Ctrl('c') => exit_now(terminal),
                 Char('q') | Esc => match self.state.focussed {
-                    Main => {
-                        drop(terminal);
-                        io::stdout().flush().ok();
-                        // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
-                        // Let the OS do it - we have nothing to lose, literally.
-                        std::process::exit(0);
-                    }
+                    Main => exit_now(terminal),
                     Mark => self.state.focussed = Main,
                     Help => {
                         self.state.focussed = Main;
@@ -138,6 +141,7 @@ impl TerminalApp {
         terminal: &mut Terminal<B>,
         options: WalkOptions,
         input: Vec<PathBuf>,
+        mode: Interaction,
     ) -> Result<TerminalApp, Error>
     where
         B: Backend,
@@ -182,4 +186,9 @@ impl TerminalApp {
             window: Default::default(),
         })
     }
+}
+
+pub enum Interaction {
+    Limited,
+    None,
 }

@@ -1,5 +1,7 @@
-use crate::interactive::app_test::FIXTURE_PATH;
-use crate::interactive::TerminalApp;
+use crate::{
+    interactive::app_test::FIXTURE_PATH,
+    interactive::{Interaction, TerminalApp},
+};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, Color, TraversalSorting, WalkOptions,
@@ -175,6 +177,7 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
             sorting: TraversalSorting::AlphabeticalByFileName,
         },
         input,
+        Interaction::None,
     )?;
     Ok((terminal, app))
 }
