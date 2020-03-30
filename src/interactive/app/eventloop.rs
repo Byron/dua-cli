@@ -160,6 +160,8 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
+type KeyboardInputAndApp = (flume::Receiver<io::Result<Key>>, TerminalApp);
+
 impl TerminalApp {
     pub fn process_events<B>(
         &mut self,
@@ -185,7 +187,7 @@ impl TerminalApp {
         options: WalkOptions,
         input: Vec<PathBuf>,
         mode: Interaction,
-    ) -> Result<Option<(flume::Receiver<io::Result<Key>>, TerminalApp)>, Error>
+    ) -> Result<Option<KeyboardInputAndApp>, Error>
     where
         B: Backend,
     {
@@ -200,7 +202,7 @@ impl TerminalApp {
             Interaction::Full => drop(std::thread::spawn(move || {
                 let keys = std::io::stdin().keys();
                 for key in keys {
-                    if let Err(_) = keys_tx.send(key) {
+                    if keys_tx.send(key).is_err() {
                         break;
                     }
                 }

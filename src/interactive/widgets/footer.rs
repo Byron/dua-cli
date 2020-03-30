@@ -31,7 +31,7 @@ impl Footer {
                 format!(
                     " Total disk usage: {}  Entries: {}   ",
                     match total_bytes {
-                        Some(b) => format!("{}", format.display(*b)).to_owned(),
+                        Some(b) => format!("{}", format.display(*b)),
                         None => "-".to_owned(),
                     },
                     entries_traversed,
