@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-tui = "0.8.0"
+tui = { version = "0.8.0", default-features = false }
 log = "0.4.6"
 unicode-segmentation = "1.6.0"
 unicode-width = "0.1.7"
