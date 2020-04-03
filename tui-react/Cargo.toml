@@ -1,6 +1,6 @@
 [package]
 name = "tui-react"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["Sebastian Thiel <sthiel@thoughtworks.com>"]
 edition = "2018"
 repository = "https://github.com/Byron/dua-cli"
