@@ -75,11 +75,11 @@ impl DisplayByteVisualization {
             let block_sections = [
                 " ",
                 tui::symbols::block::ONE_EIGHTH,
-                tui::symbols::block::ONE_QUATER,
+                tui::symbols::block::ONE_QUARTER,
                 tui::symbols::block::THREE_EIGHTHS,
                 tui::symbols::block::HALF,
                 tui::symbols::block::FIVE_EIGHTHS,
-                tui::symbols::block::THREE_QUATERS,
+                tui::symbols::block::THREE_QUARTERS,
                 tui::symbols::block::SEVEN_EIGHTHS,
                 tui::symbols::block::FULL,
             ];
