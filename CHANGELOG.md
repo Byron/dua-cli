@@ -1,3 +1,5 @@
+#### v2.5.0 Much more nuanced percentage bars for a more precise visualization of space consumption
+
 #### v2.4.1 Bugfix: Update currently visible entries when scanning
 
 #### v2.4.0 Full interaction during scanning phase; add inline-help for better UX
