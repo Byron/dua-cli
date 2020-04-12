@@ -1,4 +1,6 @@
-[![Build Status](https://travis-ci.org/Byron/dua-cli.svg?branch=master)](https://travis-ci.org/Byron/dua-cli)
+![Rust](https://github.com/Byron/dua-cli/workflows/Rust/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/dua-cli.svg)](https://crates.io/crates/dua-cli)
+[![Packaging status](https://repology.org/badge/tiny-repos/dua-cli.svg)](https://repology.org/project/dua-cli/badges)
 
 **dua** (-> _Disk Usage Analyzer_) is a tool to conveniently learn about the usage of disk space of a given directory. It's parallel by default and will max out your SSD, providing relevant information as fast as possible. Optionally delete superfluous data, and do so more quickly than `rm`.
 
@@ -12,6 +14,10 @@
 curl -LSfs https://japaric.github.io/trust/install.sh | \
     sh -s -- --git byron/dua-cli --crate dua
 ```
+
+See the [releases section][releases] for manual installation.
+
+[releases]: https://github.com/Byron/dua-cli/releases
 
 #### Cargo
 Via `cargo`, which can be obtained using [rustup][rustup]
