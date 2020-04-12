@@ -30,7 +30,7 @@ pub fn fill_background(area: Rect, buf: &mut Buffer, color: Color) {
     }
 }
 
-pub fn draw_text_with_ellipsis_nowrap<'a>(
+pub fn draw_text_with_ellipsis_nowrap(
     bound: Rect,
     buf: &mut Buffer,
     text: impl AsRef<str>,

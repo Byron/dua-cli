@@ -90,7 +90,7 @@ impl Traversal {
                 match entry {
                     Ok(entry) => {
                         data.name = if entry.depth < 1 {
-                            path.clone().into()
+                            path.clone()
                         } else {
                             entry.file_name.into()
                         };
@@ -156,7 +156,7 @@ impl Traversal {
                     }
                     Err(_) => {
                         if previous_depth == 0 {
-                            data.name = path.clone().into();
+                            data.name = path.clone();
                             let entry_index = t.tree.add_node(data);
                             t.tree.add_edge(parent_node_idx, entry_index, ());
                         }
