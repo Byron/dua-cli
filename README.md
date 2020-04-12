@@ -1,4 +1,4 @@
-![Rust](https://github.com/Byron/dua-cli/workflows/Rust/badge.svg)
+[![Rust](https://github.com/Byron/dua-cli/workflows/Rust/badge.svg)](https://github.com/byron/dua-cli/actions)
 [![Crates.io](https://img.shields.io/crates/v/dua-cli.svg)](https://crates.io/crates/dua-cli)
 [![Packaging status](https://repology.org/badge/tiny-repos/dua-cli.svg)](https://repology.org/project/dua-cli/badges)
 
