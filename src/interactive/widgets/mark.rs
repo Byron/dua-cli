@@ -317,13 +317,13 @@ impl MarkPane {
                 Some(marked.len().saturating_sub(1))
             }
         };
-        let mut block = Block::default()
+        let block = Block::default()
             .title(&title)
             .border_style(*border_style)
             .borders(Borders::ALL);
 
         let inner_area = block.inner(area);
-        block.draw(area, buf);
+        block.render(area, buf);
 
         let list_area = if self.has_focus {
             let (help_line_area, list_area) = {
@@ -370,7 +370,7 @@ impl MarkPane {
                 .iter(),
             )
             .style(default_style)
-            .draw(help_line_area, buf);
+            .render(help_line_area, buf);
             list_area
         } else {
             inner_area

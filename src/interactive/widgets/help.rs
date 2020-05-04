@@ -194,11 +194,11 @@ impl HelpPane {
         } = props.borrow();
 
         let title = "Help";
-        let mut block = Block::default()
+        let block = Block::default()
             .title(title)
             .border_style(*border_style)
             .borders(Borders::ALL);
-        block.draw(area, buf);
+        block.render(area, buf);
 
         if *has_focus {
             let help_text = " . = o|.. = u || ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
@@ -221,6 +221,6 @@ impl HelpPane {
         self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));
         Paragraph::new(texts.iter())
             .scroll(self.scroll)
-            .draw(area, buf);
+            .render(area, buf);
     }
 }

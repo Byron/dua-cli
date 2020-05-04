@@ -43,8 +43,8 @@ impl List {
         } = props;
 
         let list_area = match block {
-            Some(mut b) => {
-                b.draw(area, buf);
+            Some(b) => {
+                b.render(area, buf);
                 b.inner(area)
             }
             None => area,
@@ -62,7 +62,7 @@ impl List {
             .take(list_area.height as usize)
         {
             let (x, y) = (list_area.left(), list_area.top() + i as u16);
-            Paragraph::new(text_iterator.iter()).draw(
+            Paragraph::new(text_iterator.iter()).render(
                 Rect {
                     x,
                     y,

@@ -46,6 +46,6 @@ impl Header {
                 bg: bg_color,
                 ..Default::default()
             })
-            .draw(area, buf);
+            .render(area, buf);
     }
 }

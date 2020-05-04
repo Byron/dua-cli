@@ -5,9 +5,9 @@ use tui::{
     layout::Rect,
     style::Modifier,
     style::{Color, Style},
-    widgets::Widget,
-    widgets::{Paragraph, Text},
+    widgets::{Paragraph, Text, Widget},
 };
+
 pub struct Footer;
 
 pub struct FooterProps {
@@ -55,6 +55,6 @@ impl Footer {
                 modifier: Modifier::REVERSED,
                 ..Default::default()
             })
-            .draw(area, buf);
+            .render(area, buf);
     }
 }
