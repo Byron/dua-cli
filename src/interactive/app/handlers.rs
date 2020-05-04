@@ -14,6 +14,12 @@ use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
+#[derive(Copy, Clone)]
+pub enum CursorMode {
+    Toggle,
+    ToggleAndAdvanceDown,
+}
+
 pub enum CursorDirection {
     PageDown,
     Down,
@@ -291,12 +297,7 @@ impl AppState {
             .map(|w| w.size);
     }
 
-    pub fn mark_entry(
-        &mut self,
-        advance_cursor: bool,
-        window: &mut MainWindow,
-        traversal: &Traversal,
-    ) {
+    pub fn mark_entry(&mut self, mode: CursorMode, window: &mut MainWindow, traversal: &Traversal) {
         if let Some(index) = self.selected {
             let is_dir = self
                 .entries
@@ -310,7 +311,7 @@ impl AppState {
                 window.mark_pane = MarkPane::default().toggle_index(index, &traversal.tree, is_dir)
             }
         };
-        if advance_cursor {
+        if let CursorMode::ToggleAndAdvanceDown = mode {
             self.change_entry_selection(CursorDirection::Down)
         }
     }
