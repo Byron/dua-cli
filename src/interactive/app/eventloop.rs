@@ -1,7 +1,8 @@
 use crate::interactive::{
     sorted_entries,
     widgets::{MainWindow, MainWindowProps},
-    ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, SortMode,
+    ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
+    SortMode,
 };
 use dua::{
     traverse::{Traversal, TreeIndex},
@@ -113,10 +114,24 @@ impl AppState {
                 }
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(traversal),
-                    Char(' ') => self.mark_entry(CursorMode::Toggle, window, traversal),
-                    Char('d') => {
-                        self.mark_entry(CursorMode::ToggleAndAdvanceDown, window, traversal)
-                    }
+                    Char(' ') => self.mark_entry(
+                        CursorMode::KeepPosition,
+                        MarkEntryMode::Toggle,
+                        window,
+                        traversal,
+                    ),
+                    Char('d') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::Toggle,
+                        window,
+                        traversal,
+                    ),
+                    Char('x') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::MarkForDeletion,
+                        window,
+                        traversal,
+                    ),
                     Char('u') | Char('h') | Backspace | Left => {
                         self.exit_node_with_traversal(traversal)
                     }

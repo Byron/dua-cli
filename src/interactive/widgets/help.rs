@@ -154,12 +154,17 @@ impl HelpPane {
                     "Toggle the currently selected entry and move down",
                     None,
                 );
+                hotkey(
+                    "x",
+                    "Mark for the currently selected entry for deletion and move down",
+                    None,
+                );
                 hotkey("<space bar>", "Toggle the currently selected entry", None);
                 spacer();
             }
             title("Keys in the Mark pane");
             {
-                hotkey("d/<space>", "remove the selected entry from the list", None);
+                hotkey("x/d/<space>", "remove the selected entry from the list", None);
                 hotkey(
                     "Ctrl + r",
                     "Permanently delete all marked entries without prompt!",

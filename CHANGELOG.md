@@ -1,3 +1,7 @@
+#### v2.6.0
+
+* Use `x` to only mark entries for deletion, instead of toggling them.
+
 #### v2.5.0 Much more nuanced percentage bars for a more precise visualization of space consumption
 
 #### v2.4.1 Bugfix: Update currently visible entries when scanning

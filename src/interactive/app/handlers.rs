@@ -16,8 +16,14 @@ use tui_react::Terminal;
 
 #[derive(Copy, Clone)]
 pub enum CursorMode {
+    Advance,
+    KeepPosition,
+}
+
+#[derive(Copy, Clone)]
+pub enum MarkEntryMode {
     Toggle,
-    ToggleAndAdvanceDown,
+    MarkForDeletion,
 }
 
 pub enum CursorDirection {
@@ -297,7 +303,13 @@ impl AppState {
             .map(|w| w.size);
     }
 
-    pub fn mark_entry(&mut self, mode: CursorMode, window: &mut MainWindow, traversal: &Traversal) {
+    pub fn mark_entry(
+        &mut self,
+        cursor: CursorMode,
+        mode: MarkEntryMode,
+        window: &mut MainWindow,
+        traversal: &Traversal,
+    ) {
         if let Some(index) = self.selected {
             let is_dir = self
                 .entries
@@ -305,13 +317,18 @@ impl AppState {
                 .find(|e| e.index == index)
                 .unwrap()
                 .is_dir;
+            let should_toggle = match mode {
+                MarkEntryMode::Toggle => true,
+                MarkEntryMode::MarkForDeletion => false,
+            };
             if let Some(pane) = window.mark_pane.take() {
-                window.mark_pane = pane.toggle_index(index, &traversal.tree, is_dir);
+                window.mark_pane = pane.toggle_index(index, &traversal.tree, is_dir, should_toggle);
             } else {
-                window.mark_pane = MarkPane::default().toggle_index(index, &traversal.tree, is_dir)
+                window.mark_pane =
+                    MarkPane::default().toggle_index(index, &traversal.tree, is_dir, should_toggle)
             }
         };
-        if let CursorMode::ToggleAndAdvanceDown = mode {
+        if let CursorMode::Advance = cursor {
             self.change_entry_selection(CursorDirection::Down)
         }
     }

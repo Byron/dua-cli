@@ -6,22 +6,21 @@ use dua::{
     ByteFormat,
 };
 use itertools::Itertools;
-use std::{borrow::Borrow, collections::btree_map::Entry, collections::BTreeMap, path::PathBuf};
+use std::{
+    borrow::Borrow,
+    collections::{btree_map::Entry, BTreeMap},
+    path::PathBuf,
+};
 use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
-    layout::Rect,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::Block,
-    widgets::Borders,
-    widgets::Text,
-    widgets::{Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph, Text, Widget},
 };
 use tui_react::{
     draw_text_nowrap_fn,
-    util::rect::line_bound,
-    util::{block_width, rect},
+    util::{block_width, rect, rect::line_bound},
     List, ListProps,
 };
 use unicode_segmentation::UnicodeSegmentation;
@@ -66,7 +65,13 @@ impl MarkPane {
             self.selected = None
         }
     }
-    pub fn toggle_index(mut self, index: TreeIndex, tree: &Tree, is_dir: bool) -> Option<Self> {
+    pub fn toggle_index(
+        mut self,
+        index: TreeIndex,
+        tree: &Tree,
+        is_dir: bool,
+        toggle: bool,
+    ) -> Option<Self> {
         match self.marked.entry(index) {
             Entry::Vacant(entry) => {
                 if let Some(e) = tree.node_weight(index) {
@@ -82,7 +87,9 @@ impl MarkPane {
                 }
             }
             Entry::Occupied(entry) => {
-                entry.remove();
+                if toggle {
+                    entry.remove();
+                }
             }
         };
         if self.marked.is_empty() {
@@ -98,7 +105,9 @@ impl MarkPane {
         let action = None;
         match key {
             Ctrl('r') => return self.prepare_deletion(),
-            Char('d') | Char(' ') => return self.remove_selected().map(|s| (s, action)),
+            Char('x') | Char('d') | Char(' ') => {
+                return self.remove_selected().map(|s| (s, action))
+            }
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
