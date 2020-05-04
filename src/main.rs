@@ -32,6 +32,7 @@ fn run() -> Result<(), Error> {
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
+        cross_filesystems: !opt.stay_on_filesystem,
     };
     let res = match opt.command {
         Some(Interactive { input }) => {

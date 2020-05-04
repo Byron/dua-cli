@@ -5,6 +5,7 @@ extern crate jwalk;
 
 mod aggregate;
 mod common;
+mod crossdev;
 mod inodefilter;
 
 pub mod traverse;

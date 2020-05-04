@@ -1,4 +1,4 @@
-use crate::{InodeFilter, WalkOptions, WalkResult};
+use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use failure::Error;
 use filesize::PathExt;
 use std::borrow::Cow;
@@ -10,7 +10,7 @@ use termion::color;
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
-    options: WalkOptions,
+    walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
@@ -27,15 +27,19 @@ pub fn aggregate(
         num_roots += 1;
         let mut num_bytes = 0u64;
         let mut num_errors = 0u64;
-        for entry in options.iter_from_path(path.as_ref()) {
+        let device_id = crossdev::init(path.as_ref())?;
+        for entry in walk_options.iter_from_path(path.as_ref()) {
             stats.entries_traversed += 1;
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.client_state {
                         Some(Ok(ref m))
-                            if !m.is_dir() && (options.count_hard_links || inodes.add(m)) =>
+                            if !m.is_dir()
+                                && (walk_options.count_hard_links || inodes.add(m))
+                                && (walk_options.cross_filesystems
+                                    || crossdev::is_same_device(device_id, m)) =>
                         {
-                            if options.apparent_size {
+                            if walk_options.apparent_size {
                                 m.len()
                             } else {
                                 entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
@@ -64,7 +68,7 @@ pub fn aggregate(
         } else {
             write_path(
                 &mut out,
-                &options,
+                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
@@ -84,7 +88,7 @@ pub fn aggregate(
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
             write_path(
                 &mut out,
-                &options,
+                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
@@ -96,7 +100,7 @@ pub fn aggregate(
     if num_roots > 1 && compute_total {
         write_path(
             &mut out,
-            &options,
+            &walk_options,
             Path::new("total"),
             total,
             res.num_errors,

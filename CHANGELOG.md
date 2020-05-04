@@ -1,6 +1,7 @@
 #### v2.6.0
 
 * Use `x` to only mark entries for deletion, instead of toggling them.
+* Add `-x` | `--stay-on-filesystem` flag to force staying on the file system the root is on, similar to `-x` in the venerable `du` tool.
 
 #### v2.5.0 Much more nuanced percentage bars for a more precise visualization of space consumption
 

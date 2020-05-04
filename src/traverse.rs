@@ -1,4 +1,4 @@
-use crate::{get_size_or_panic, InodeFilter, WalkOptions};
+use crate::{crossdev, get_size_or_panic, InodeFilter, WalkOptions};
 use failure::Error;
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
@@ -80,6 +80,7 @@ impl Traversal {
         }
         for path in input.into_iter() {
             let mut last_seen_eid = 0;
+            let device_id = crossdev::init(path.as_ref())?;
             for (eid, entry) in walk_options
                 .iter_from_path(path.as_ref())
                 .into_iter()
@@ -97,7 +98,9 @@ impl Traversal {
                         let file_size = match entry.client_state {
                             Some(Ok(ref m))
                                 if !m.is_dir()
-                                    && (walk_options.count_hard_links || inodes.add(m)) =>
+                                    && (walk_options.count_hard_links || inodes.add(m))
+                                    && (walk_options.cross_filesystems
+                                        || crossdev::is_same_device(device_id, m)) =>
                             {
                                 if walk_options.apparent_size {
                                     m.len()

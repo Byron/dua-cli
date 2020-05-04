@@ -60,6 +60,10 @@ pub struct Args {
     #[structopt(short = "l", long)]
     pub count_hard_links: bool,
 
+    /// If set, we will not cross filesystems or traverse mount points
+    #[structopt(short = "x", long)]
+    pub stay_on_filesystem: bool,
+
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[structopt(parse(from_os_str))]
     pub input: Vec<PathBuf>,

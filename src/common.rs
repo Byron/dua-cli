@@ -155,6 +155,7 @@ pub struct WalkOptions {
     pub apparent_size: bool,
     pub color: Color,
     pub sorting: TraversalSorting,
+    pub cross_filesystems: bool,
 }
 
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
