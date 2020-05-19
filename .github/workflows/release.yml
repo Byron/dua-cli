@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Set to force version number, e.g., when no tag exists.
-      ARTIFACT_VERSION: TEST-0.0.3
+      ARTIFACT_VERSION: TEST-0.0.1
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -109,7 +109,6 @@ jobs:
     steps:
       - name: Checkout repository (at least get a clone)
         uses: actions/checkout@v1
-        continue-on-error: true
         with:
           fetch-depth: 1
 
