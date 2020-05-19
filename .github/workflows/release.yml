@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Set to force version number, e.g., when no tag exists.
-      ARTIFACT_VERSION: TEST-0.0.2
+      ARTIFACT_VERSION: TEST-0.0.3
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -114,7 +114,7 @@ jobs:
           fetch-depth: 1
 
       - name: Checkout sparsely to avoid issues with unicode paths
-        if: '!success()'
+        if: failure()
         run: |
           git sparse-checkout init
           git sparse-checkout set '/*' '!/tests/'
@@ -132,7 +132,7 @@ jobs:
       - name: Patch Cargo.toml (Windows)
         if: matrix.os == 'windows-2019'
         run: |
-          cat Cargo.toml.windows-suffix >> Cargo.toml
+          bash -c "cat Cargo.toml.windows-suffix >> Cargo.toml"
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
