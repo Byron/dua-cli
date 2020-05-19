@@ -114,7 +114,10 @@ jobs:
 
       - name: Checkout sparsely to avoid issues with unicode paths
         if: failure()
+        shell: bash
         run: |
+          set -x
+          git clone --depth=1 --no-checkout https://github.com/${{ github.repository }}
           git sparse-checkout init
           git sparse-checkout set '/*' '!/tests/'
 
@@ -130,8 +133,9 @@ jobs:
 
       - name: Patch Cargo.toml (Windows)
         if: matrix.os == 'windows-2019'
+        shell: bash
         run: |
-          bash -c "cat Cargo.toml.windows-suffix >> Cargo.toml"
+          cat Cargo.toml.windows-suffix >> Cargo.toml
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
