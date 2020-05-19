@@ -107,10 +107,17 @@ jobs:
 #            target: i686-pc-windows-msvc
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (at least get a clone)
         uses: actions/checkout@v1
+        continue-on-error: true
         with:
           fetch-depth: 1
+
+      - name: Checkout sparsely to avoid issues with unicode paths
+        if: !success()
+        run: |
+          git sparse-checkout init
+          git sparse-checkout set '/*' '!/tests/'
 
       - name: Install packages (Ubuntu)
         if: matrix.os == 'ubuntu-18.04'
@@ -123,7 +130,7 @@ jobs:
           ci/macos-install-packages
 
       - name: Patch Cargo.toml (Windows)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'windows-2019'
         run: |
           cat Cargo.toml.windows-suffix >> Cargo.toml
 
