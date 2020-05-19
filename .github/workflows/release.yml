@@ -114,7 +114,7 @@ jobs:
           fetch-depth: 1
 
       - name: Checkout sparsely to avoid issues with unicode paths
-        if: !success()
+        if: '!success()'
         run: |
           git sparse-checkout init
           git sparse-checkout set '/*' '!/tests/'
