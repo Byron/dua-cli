@@ -107,21 +107,10 @@ jobs:
 #            target: i686-pc-windows-msvc
 
     steps:
-      - name: Checkout repository (at least get a clone)
+      - name: Checkout repository
         uses: actions/checkout@v1
-        continue-on-error: true
         with:
           fetch-depth: 1
-
-      - name: Checkout sparsely to avoid issues with unicode paths
-        if: matrix.os == 'windows-2019'
-        shell: bash
-        run: |
-          set -x
-          echo ${{ github.sha }} > .git/HEAD
-          git read-tree HEAD
-          # This leaves us with just enough files to build and package
-          git restore src/ 'Cargo.*' tui-react/ ci/ CHANGELOG.md LICENSE README.md
 
       - name: Install packages (Ubuntu)
         if: matrix.os == 'ubuntu-18.04'
