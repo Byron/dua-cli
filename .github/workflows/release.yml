@@ -109,6 +109,7 @@ jobs:
     steps:
       - name: Checkout repository (at least get a clone)
         uses: actions/checkout@v1
+        continue-on-error: true
         with:
           fetch-depth: 1
 
