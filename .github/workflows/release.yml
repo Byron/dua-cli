@@ -118,10 +118,10 @@ jobs:
         shell: bash
         run: |
           set -x
-          git sparse-checkout init
-          git sparse-checkout set '/*' '!/tests/'
-          pwd
-          ls -l
+          echo ${{ github.sha }} > .git/HEAD
+          git read-tree HEAD
+          # This leaves us with just enough files to build and package
+          git restore src/ 'Cargo.*' tui-react/ ci/ CHANGELOG.md LICENSE README.md
 
       - name: Install packages (Ubuntu)
         if: matrix.os == 'ubuntu-18.04'
