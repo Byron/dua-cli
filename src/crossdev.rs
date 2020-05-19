@@ -14,12 +14,12 @@ pub fn is_same_device(device_id: u64, meta: &std::fs::Metadata) -> bool {
     meta.dev() == device_id
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(not(unix))]
 pub fn is_same_device(device_id: u64, meta: &std::fs::Metadata) -> bool {
     true
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(not(unix))]
 pub fn init(path: &Path) -> io::Result<u64> {
     Ok(0)
 }
