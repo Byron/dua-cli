@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Set to force version number, e.g., when no tag exists.
-      ARTIFACT_VERSION: TEST-0.0.1
+      ARTIFACT_VERSION: TEST-0.0.2
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
