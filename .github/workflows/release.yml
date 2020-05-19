@@ -114,7 +114,7 @@ jobs:
           fetch-depth: 1
 
       - name: Checkout sparsely to avoid issues with unicode paths
-        if: failure()
+        if: matrix.os == 'windows-2019'
         shell: bash
         run: |
           set -x
