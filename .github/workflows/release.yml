@@ -118,7 +118,10 @@ jobs:
         shell: bash
         run: |
           set -x
-          git clone --depth=1 --no-checkout https://github.com/${{ github.repository }}
+          git init
+          git remote add origin https://github.com/${{ github.repository }}
+          git fetch fetch --tags --prune --progress --no-recurse-submodules --depth=1 origin +refs/heads/*:refs/remotes/origin/*
+
           git sparse-checkout init
           git sparse-checkout set '/*' '!/tests/'
           pwd
