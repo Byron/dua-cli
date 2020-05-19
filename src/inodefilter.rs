@@ -1,5 +1,3 @@
-#![cfg_attr(windows, feature(windows_by_handle))]
-
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
