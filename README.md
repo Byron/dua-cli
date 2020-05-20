@@ -47,6 +47,11 @@ Via `pacman` on your ArchLinux system.
 sudo pacman -S dua-cli
 ```
 
+#### Windows
+
+You will find pre-built binaries for Windows in the [releases section](https://github.com/Byron/dua-cli).
+Please note that `dua interactive` only works on nushell and xonsh with Alacritty as terminal emulator.
+
 ### Usage
 
 ```bash
