@@ -3,11 +3,11 @@ name = "dua-cli"
 version = "2.6.0"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
 edition = "2018"
-include = ["src/**/*", "Cargo.*", "*.md", "LICENSE"]
 repository = "https://github.com/Byron/dua-cli"
 readme = "README.md"
 description = "A tool to conveniently learn about the disk usage of directories, fast!"
 license = "MIT"
+include = ["src/**/*", "Cargo.*", "LICENSE", "README.md", "CHANGELOG.md", "!**/*_test/*"]
 
 [dependencies]
 failure = "0.1.1"
