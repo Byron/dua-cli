@@ -11,7 +11,7 @@
 ### Binary Release
 
 ```sh
-curl -LSfs https://japaric.github.io/trust/install.sh | \
+curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh | \
     sh -s -- --git byron/dua-cli --crate dua
 ```
 
