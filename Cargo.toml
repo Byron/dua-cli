@@ -36,7 +36,7 @@ path="src/main.rs"
 name="dua"
 
 [profile.release]
-panic = 'unwind'
+panic = 'abort'
 incremental = false
 overflow-checks = false
 lto = "fat"
