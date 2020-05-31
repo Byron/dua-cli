@@ -50,13 +50,18 @@ fn run() -> Result<(), Error> {
                 paths_from(input)?,
                 Interaction::Full,
             )?
-            .map(|(keys_rx, mut app)| app.process_events(&mut terminal, keys_rx.into_iter()));
+            .map(|(keys_rx, mut app)| {
+                let res = app.process_events(&mut terminal, keys_rx.into_iter());
+                // Leak app memory to avoid having to wait for the hashmap to deallocate, which causes a noticable delay shortly before the the
+                // program exits anyway.
+                std::mem::forget(app);
+                res
+            });
 
             drop(terminal);
             io::stdout().flush().ok();
 
-            // Exit 'quickly' to avoid having to wait for all memory to be freed by us.
-            // Let the OS do it - we have nothing to lose, literally.
+            // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(res.transpose()?.map(|e| e.to_exit_code()).unwrap_or(0));
         }
         Some(Aggregate {
