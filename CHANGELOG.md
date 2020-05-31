@@ -1,3 +1,7 @@
+#### v2.6.1
+
+* quit without delay from interactive mode after having looked at big directory trees
+
 #### v2.6.0
 
 * Use `x` to only mark entries for deletion, instead of toggling them.
