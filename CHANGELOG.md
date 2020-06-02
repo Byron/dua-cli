@@ -1,6 +1,7 @@
 #### v2.6.1
 
-* quit without delay from interactive mode after having looked at big directory trees
+* quit without delay from interactive mode after `dua` was opened on huge directories trees. 
+  See [this commit](https://github.com/Byron/dua-cli/commit/91aade36c71e4e14167030b6ec8c3c13dcdc1b2b) for details.
 
 #### v2.6.0
 
