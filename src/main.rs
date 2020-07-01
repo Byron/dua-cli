@@ -16,6 +16,7 @@ use tui_react::Terminal;
 
 mod interactive;
 mod options;
+mod options_argh;
 
 fn run() -> Result<(), Error> {
     use options::Command::*;
