@@ -11,7 +11,7 @@ use tui::{
 pub struct Footer;
 
 pub struct FooterProps {
-    pub total_bytes: Option<u64>,
+    pub total_bytes: Option<u128>,
     pub entries_traversed: u64,
     pub format: ByteFormat,
     pub message: Option<String>,
