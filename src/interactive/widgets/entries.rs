@@ -60,7 +60,7 @@ impl Entries {
                 .is_none()
         };
 
-        let total: u64 = entries.iter().map(|b| b.data.size).sum();
+        let total: u128 = entries.iter().map(|b| b.data.size).sum();
         let title = match path_of(tree, *root).to_string_lossy().to_string() {
             ref p if p.is_empty() => Path::new(".")
                 .canonicalize()

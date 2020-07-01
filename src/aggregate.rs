@@ -17,7 +17,7 @@ pub fn aggregate(
 ) -> Result<(WalkResult, Statistics), Error> {
     let mut res = WalkResult::default();
     let mut stats = Statistics::default();
-    stats.smallest_file_in_bytes = u64::max_value();
+    stats.smallest_file_in_bytes = u128::max_value();
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
@@ -25,7 +25,7 @@ pub fn aggregate(
     let paths: Vec<_> = paths.into_iter().collect();
     for path in paths.into_iter() {
         num_roots += 1;
-        let mut num_bytes = 0u64;
+        let mut num_bytes = 0u128;
         let mut num_errors = 0u64;
         let device_id = crossdev::init(path.as_ref())?;
         for entry in walk_options.iter_from_path(path.as_ref()) {
@@ -54,7 +54,7 @@ pub fn aggregate(
                             0
                         }
                         None => unreachable!("must have populated client state for metadata"),
-                    };
+                    } as u128;
                     stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                     stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
                     num_bytes += file_size;
@@ -122,7 +122,7 @@ fn write_path<C: fmt::Display>(
     out: &mut impl io::Write,
     options: &WalkOptions,
     path: impl AsRef<Path>,
-    num_bytes: u64,
+    num_bytes: u128,
     num_errors: u64,
     path_color: C,
 ) -> Result<(), io::Error> {
@@ -154,7 +154,7 @@ pub struct Statistics {
     /// The amount of entries we have seen during filesystem traversal
     pub entries_traversed: u64,
     /// The size of the smallest file encountered in bytes
-    pub smallest_file_in_bytes: u64,
+    pub smallest_file_in_bytes: u128,
     /// The size of the largest file encountered in bytes
-    pub largest_file_in_bytes: u64,
+    pub largest_file_in_bytes: u128,
 }

@@ -33,7 +33,7 @@ pub fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> &EntryData {
 pub fn index_by_name_and_size(
     app: &TerminalApp,
     name: impl AsRef<OsStr>,
-    size: Option<u64>,
+    size: Option<u128>,
 ) -> TreeIndex {
     let name = name.as_ref();
     let t: Vec<_> = app
@@ -276,7 +276,7 @@ pub fn sample_02_tree() -> Tree {
 
 pub fn make_add_node<'a>(
     t: &'a mut Tree,
-) -> impl FnMut(&str, u64, Option<NodeIndex>) -> NodeIndex + 'a {
+) -> impl FnMut(&str, u128, Option<NodeIndex>) -> NodeIndex + 'a {
     move |name, size, maybe_from_idx| {
         let n = t.add_node(EntryData {
             name: PathBuf::from(name),

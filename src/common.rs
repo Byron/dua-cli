@@ -7,7 +7,7 @@ pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
         .expect("node should always be retrievable with valid index")
 }
 
-pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
+pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u128 {
     get_entry_or_panic(tree, node_idx).size
 }
 
@@ -52,7 +52,7 @@ impl ByteFormat {
             }
             + THE_SPACE_BETWEEN_UNIT_AND_NUMBER
     }
-    pub fn display(self, bytes: u64) -> ByteFormatDisplay {
+    pub fn display(self, bytes: u128) -> ByteFormatDisplay {
         ByteFormatDisplay {
             format: self,
             bytes,
@@ -62,7 +62,7 @@ impl ByteFormat {
 
 pub struct ByteFormatDisplay {
     format: ByteFormat,
-    bytes: u64,
+    bytes: u128,
 }
 
 impl fmt::Display for ByteFormatDisplay {
@@ -84,7 +84,7 @@ impl fmt::Display for ByteFormatDisplay {
             (_, Some((divisor, unit))) => Byte::from_unit(self.bytes as f64 / divisor as f64, unit)
                 .expect("byte count > 0")
                 .get_adjusted_unit(unit),
-            (binary, None) => Byte::from_bytes(u128::from(self.bytes)).get_appropriate_unit(binary),
+            (binary, None) => Byte::from_bytes(self.bytes).get_appropriate_unit(binary),
         }
         .format(2);
         let mut splits = b.split(' ');

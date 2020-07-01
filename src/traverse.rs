@@ -11,7 +11,7 @@ pub type Tree = StableGraph<EntryData, (), Directed>;
 pub struct EntryData {
     pub name: PathBuf,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
-    pub size: u64,
+    pub size: u128,
     /// If set, the item meta-data could not be obtained
     pub metadata_io_error: bool,
 }
@@ -30,7 +30,7 @@ pub struct Traversal {
     /// Total amount of IO errors encountered when traversing the filesystem
     pub io_errors: u64,
     /// Total amount of bytes seen during the traversal
-    pub total_bytes: Option<u64>,
+    pub total_bytes: Option<u128>,
 }
 
 impl Traversal {
@@ -39,7 +39,7 @@ impl Traversal {
         input: Vec<PathBuf>,
         mut update: impl FnMut(&mut Traversal) -> Result<bool, Error>,
     ) -> Result<Option<Traversal>, Error> {
-        fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u64) {
+        fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u128) {
             tree.node_weight_mut(node_idx)
                 .expect("node for parent index we just retrieved")
                 .size = current_size_at_depth;
@@ -49,7 +49,7 @@ impl Traversal {
                 .next()
                 .expect("every node in the iteration has a parent")
         }
-        fn pop_or_panic(v: &mut Vec<u64>) -> u64 {
+        fn pop_or_panic(v: &mut Vec<u128>) -> u128 {
             v.pop().expect("sizes per level to be in sync with graph")
         }
 
@@ -65,7 +65,7 @@ impl Traversal {
 
         let (mut previous_node_idx, mut parent_node_idx) = (t.root_index, t.root_index);
         let mut sizes_per_depth_level = Vec::new();
-        let mut current_size_at_depth = 0;
+        let mut current_size_at_depth: u128 = 0;
         let mut previous_depth = 0;
         let mut inodes = InodeFilter::default();
 
@@ -119,7 +119,7 @@ impl Traversal {
                                 0
                             }
                             None => unreachable!("must have populated client state for metadata"),
-                        };
+                        } as u128;
 
                         match (entry.depth, previous_depth) {
                             (n, p) if n > p => {
@@ -202,7 +202,7 @@ impl Traversal {
         Ok(Some(t))
     }
 
-    fn recompute_root_size(&self) -> u64 {
+    fn recompute_root_size(&self) -> u128 {
         self.tree
             .neighbors_directed(self.root_index, Direction::Outgoing)
             .map(|idx| get_size_or_panic(&self.tree, idx))
