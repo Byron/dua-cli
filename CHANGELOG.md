@@ -1,3 +1,13 @@
+#### v2.7.0
+
+* [Support for extremely large][issue-58], zeta byte scale, files or filesystem traversals.
+* [Fix possibly incorrect handling of hard links][pr-57] in traversals spanning multiple devices.
+
+Both changes were enabled by a single contributor, and I am very thankful towards them.
+
+[issue-58]: https://github.com/Byron/dua-cli/issues/58
+[pr-57]: https://github.com/Byron/dua-cli/pull/57
+
 #### v2.6.1
 
 * quit without delay from interactive mode after `dua` was opened on huge directories trees. 
