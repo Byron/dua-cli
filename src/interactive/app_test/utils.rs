@@ -1,12 +1,9 @@
-use crate::{
-    interactive::app_test::FIXTURE_PATH,
-    interactive::{Interaction, TerminalApp},
-};
+use crate::interactive::{app_test::FIXTURE_PATH, Interaction, TerminalApp};
+use anyhow::{Context, Error, Result};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, Color, TraversalSorting, WalkOptions,
 };
-use failure::{Error, ResultExt};
 use itertools::Itertools;
 use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
@@ -16,8 +13,7 @@ use std::{
     fmt,
     fs::{copy, create_dir_all, remove_dir, remove_file},
     io::ErrorKind,
-    path::Path,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use tui::backend::TestBackend;
 use tui_react::Terminal;
@@ -70,7 +66,7 @@ impl Drop for WritableFixture {
     }
 }
 
-fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
+fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
@@ -95,7 +91,7 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<(), Error> {
                 .rev()
                 .map(|d| {
                     remove_dir(d)
-                        .with_context(|_| format!("Could not delete '{}'", d.display()))
+                        .with_context(|| format!("Could not delete '{}'", d.display()))
                         .map_err(Error::from)
                 }),
         )

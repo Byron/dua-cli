@@ -1,5 +1,5 @@
 use crate::{crossdev, get_size_or_panic, InodeFilter, WalkOptions};
-use failure::Error;
+use anyhow::Result;
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{path::PathBuf, time::Duration, time::Instant};
@@ -37,8 +37,8 @@ impl Traversal {
     pub fn from_walk(
         mut walk_options: WalkOptions,
         input: Vec<PathBuf>,
-        mut update: impl FnMut(&mut Traversal) -> Result<bool, Error>,
-    ) -> Result<Option<Traversal>, Error> {
+        mut update: impl FnMut(&mut Traversal) -> Result<bool>,
+    ) -> Result<Option<Traversal>> {
         fn set_size_or_panic(tree: &mut Tree, node_idx: TreeIndex, current_size_at_depth: u128) {
             tree.node_weight_mut(node_idx)
                 .expect("node for parent index we just retrieved")

@@ -1,9 +1,7 @@
-use crate::interactive::widgets::MainWindow;
 use crate::interactive::{
     app::FocussedPane::*,
     path_of, sorted_entries,
-    widgets::MarkMode,
-    widgets::{HelpPane, MarkPane},
+    widgets::{HelpPane, MainWindow, MarkMode, MarkPane},
     AppState, DisplayOptions, EntryDataBundle,
 };
 use dua::traverse::{Traversal, TreeIndex};

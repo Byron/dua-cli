@@ -1,7 +1,6 @@
 #![cfg_attr(windows, feature(windows_by_handle))]
 #![forbid(unsafe_code)]
 
-extern crate failure;
 extern crate jwalk;
 
 mod aggregate;

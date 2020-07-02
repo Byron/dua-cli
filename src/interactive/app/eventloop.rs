@@ -4,11 +4,11 @@ use crate::interactive::{
     ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
     SortMode,
 };
+use anyhow::Result;
 use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
 };
-use failure::Error;
 use std::{collections::BTreeMap, io, path::PathBuf};
 use termion::{event::Key, input::TermRead};
 use tui::backend::Backend;
@@ -51,7 +51,7 @@ impl AppState {
         traversal: &Traversal,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     where
         B: Backend,
     {
@@ -69,8 +69,8 @@ impl AppState {
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = Result<Key, io::Error>>,
-    ) -> Result<ProcessingResult, Error>
+        keys: impl Iterator<Item = std::result::Result<Key, io::Error>>,
+    ) -> Result<ProcessingResult>
     where
         B: Backend,
     {
@@ -159,7 +159,7 @@ pub fn draw_window<B>(
     window: &mut MainWindow,
     props: MainWindowProps,
     terminal: &mut Terminal<B>,
-) -> Result<(), Error>
+) -> Result<()>
 where
     B: Backend,
 {
@@ -183,8 +183,8 @@ impl TerminalApp {
     pub fn process_events<B>(
         &mut self,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = Result<Key, io::Error>>,
-    ) -> Result<WalkResult, Error>
+        keys: impl Iterator<Item = std::result::Result<Key, io::Error>>,
+    ) -> Result<WalkResult>
     where
         B: Backend,
     {
@@ -204,7 +204,7 @@ impl TerminalApp {
         options: WalkOptions,
         input: Vec<PathBuf>,
         mode: Interaction,
-    ) -> Result<Option<KeyboardInputAndApp>, Error>
+    ) -> Result<Option<KeyboardInputAndApp>>
     where
         B: Backend,
     {

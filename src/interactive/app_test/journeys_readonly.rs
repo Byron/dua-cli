@@ -1,18 +1,18 @@
-use crate::{
-    interactive::app_test::utils::{
+use crate::interactive::{
+    app_test::utils::{
         fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, node_by_index,
         node_by_name,
     },
-    interactive::app_test::FIXTURE_PATH,
-    interactive::SortMode,
+    app_test::FIXTURE_PATH,
+    SortMode,
 };
-use failure::Error;
+use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 use termion::input::TermRead;
 
 #[test]
-fn simple_user_journey_read_only() -> Result<(), Error> {
+fn simple_user_journey_read_only() -> Result<()> {
     let long_root = "sample-02/dir";
     let short_root = "sample-01";
     let (mut terminal, mut app) =

@@ -1,13 +1,13 @@
 use crate::interactive::app_test::utils::{
     initialized_app_and_terminal_from_paths, WritableFixture,
 };
-use failure::Error;
+use anyhow::Result;
 use pretty_assertions::assert_eq;
 use termion::event::Key;
 use termion::input::TermRead;
 
 #[test]
-fn basic_user_journey_with_deletion() -> Result<(), Error> {
+fn basic_user_journey_with_deletion() -> Result<()> {
     let fixture = WritableFixture::from("sample-02");
     let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
 

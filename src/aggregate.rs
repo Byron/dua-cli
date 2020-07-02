@@ -1,5 +1,5 @@
 use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
-use failure::Error;
+use anyhow::Result;
 use filesize::PathExt;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};
@@ -14,7 +14,7 @@ pub fn aggregate(
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
-) -> Result<(WalkResult, Statistics), Error> {
+) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
     let mut stats = Statistics::default();
     stats.smallest_file_in_bytes = u128::max_value();
@@ -125,7 +125,7 @@ fn write_path<C: fmt::Display>(
     num_bytes: u128,
     num_errors: u64,
     path_color: C,
-) -> Result<(), io::Error> {
+) -> std::result::Result<(), io::Error> {
     writeln!(
         out,
         "{byte_color}{:>byte_column_width$}{byte_color_reset} {path_color}{}{path_color_reset}{}",

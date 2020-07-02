@@ -1,9 +1,8 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::match_bool)]
 use crate::interactive::{Interaction, TerminalApp};
+use anyhow::{Context, Result};
 use dua::{ByteFormat, Color, TraversalSorting};
-use failure::{Error, ResultExt};
-use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
 use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::backend::TermionBackend;
@@ -12,7 +11,7 @@ use tui_react::Terminal;
 mod interactive;
 mod options;
 
-fn run() -> Result<(), Error> {
+fn main() -> Result<()> {
     use options::*;
 
     let opt: options::Args = argh::from_env();
@@ -35,7 +34,7 @@ fn run() -> Result<(), Error> {
             let mut terminal = {
                 let stdout = io::stdout()
                     .into_raw_mode()
-                    .with_context(|_| "Interactive mode requires a connected terminal")?;
+                    .with_context(|| "Interactive mode requires a connected terminal")?;
                 let stdout = AlternateScreen::from(stdout);
                 let backend = TermionBackend::new(stdout);
                 Terminal::new(backend)?
@@ -128,8 +127,4 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
         .collect();
     v.sort();
     Ok(v)
-}
-
-fn main() {
-    ok_or_exit(run())
 }
