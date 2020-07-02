@@ -18,7 +18,7 @@ for anyone who passes paths to their command-line tool.
 * [Support for extremely large][issue-58], zeta byte scale, files or filesystem traversals.
 * [Fix possibly incorrect handling of hard links][pr-57] in traversals spanning multiple devices.
 
-Both changes were enabled by a single contributor, and I am very thankful towards them.
+Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby thank wholeheartedly :).
 
 [issue-58]: https://github.com/Byron/dua-cli/issues/58
 [pr-57]: https://github.com/Byron/dua-cli/pull/57
