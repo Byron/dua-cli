@@ -1,27 +1,21 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::match_bool)]
-extern crate failure;
-extern crate failure_tools;
-extern crate structopt;
-
 use crate::interactive::{Interaction, TerminalApp};
 use dua::{ByteFormat, Color, TraversalSorting};
 use failure::{Error, ResultExt};
 use failure_tools::ok_or_exit;
 use std::{fs, io, io::Write, path::PathBuf, process};
-use structopt::StructOpt;
 use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::backend::TermionBackend;
 use tui_react::Terminal;
 
 mod interactive;
 mod options;
-mod options_argh;
 
 fn run() -> Result<(), Error> {
-    use options::Command::*;
+    use options::*;
 
-    let opt: options::Args = options::Args::from_args();
+    let opt: options::Args = argh::from_env();
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
@@ -36,7 +30,8 @@ fn run() -> Result<(), Error> {
         cross_filesystems: !opt.stay_on_filesystem,
     };
     let res = match opt.command {
-        Some(Interactive { input }) => {
+        Some(Command::Interactive(Interactive { input }))
+        | Some(Command::InteractiveAlias(InteractiveAlias { input })) => {
             let mut terminal = {
                 let stdout = io::stdout()
                     .into_raw_mode()
@@ -65,23 +60,29 @@ fn run() -> Result<(), Error> {
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(res.transpose()?.map(|e| e.to_exit_code()).unwrap_or(0));
         }
-        Some(Aggregate {
+        Some(Command::Aggregate(Aggregate {
             input,
             no_total,
             no_sort,
-            statistics,
-        }) => {
+            stats,
+        }))
+        | Some(Command::AggregateAlias(AggregateAlias {
+            input,
+            no_total,
+            no_sort,
+            stats,
+        })) => {
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            let (res, stats) = dua::aggregate(
+            let (res, statistics) = dua::aggregate(
                 stdout_locked,
                 walk_options,
                 !no_total,
                 !no_sort,
                 paths_from(input)?,
             )?;
-            if statistics {
-                writeln!(io::stderr(), "{:?}", stats).ok();
+            if stats {
+                writeln!(io::stderr(), "{:?}", statistics).ok();
             }
             res
         }

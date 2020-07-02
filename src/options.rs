@@ -1,47 +1,63 @@
-use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
-use structopt::{clap::arg_enum, StructOpt};
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    pub enum ByteFormat {
-        Metric,
-        Binary,
-        Bytes,
-        GB,
-        GiB,
-        MB,
-        MiB
+use argh::{FromArgValue, FromArgs};
+use dua::ByteFormat;
+
+pub enum CliByteFormat {
+    Metric,
+    Binary,
+    Bytes,
+    GB,
+    GiB,
+    MB,
+    MiB,
+}
+
+impl FromArgValue for CliByteFormat {
+    fn from_arg_value(value: &str) -> Result<Self, String> {
+        use CliByteFormat::*;
+        let value_lc = value.to_ascii_lowercase();
+        Ok(match value_lc.as_str() {
+            "metric" => Metric,
+            "binary" => Binary,
+            "bytes" => Bytes,
+            "gb" => GB,
+            "gib" => GiB,
+            "mb" => MB,
+            "mib" => MiB,
+            _ => return Err(format!("Invalid byte format: {}", value)),
+        })
     }
 }
 
-impl From<ByteFormat> for LibraryByteFormat {
-    fn from(input: ByteFormat) -> Self {
+impl From<CliByteFormat> for ByteFormat {
+    fn from(input: CliByteFormat) -> Self {
+        use CliByteFormat::*;
         match input {
-            ByteFormat::Metric => LibraryByteFormat::Metric,
-            ByteFormat::Binary => LibraryByteFormat::Binary,
-            ByteFormat::Bytes => LibraryByteFormat::Bytes,
-            ByteFormat::GB => LibraryByteFormat::GB,
-            ByteFormat::GiB => LibraryByteFormat::GiB,
-            ByteFormat::MB => LibraryByteFormat::MB,
-            ByteFormat::MiB => LibraryByteFormat::MiB,
+            Metric => ByteFormat::Metric,
+            Binary => ByteFormat::Binary,
+            Bytes => ByteFormat::Bytes,
+            GB => ByteFormat::GB,
+            GiB => ByteFormat::GiB,
+            MB => ByteFormat::MB,
+            MiB => ByteFormat::MiB,
         }
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "dua", about = "A tool to learn about disk usage, fast!")]
-#[structopt(setting = structopt::clap::AppSettings::ColoredHelp)]
+/// a tool to learn about disk usage, fast!
+#[derive(FromArgs)]
+#[argh(name = "dua")]
 pub struct Args {
-    #[structopt(subcommand)]
+    #[argh(subcommand)]
     pub command: Option<Command>,
 
-    /// The amount of threads to use. Defaults to the amount of logical processors.
+    /// the amount of threads to use. Defaults to the amount of logical processors.
     /// Set to 1 to use only a single thread.
-    #[structopt(short = "t", long = "threads")]
+    #[argh(option, short = 't')]
     pub threads: Option<usize>,
 
-    /// The format with which to print byte counts.
+    /// the format with which to print byte counts.
     /// Metric - uses 1000 as base (default)
     /// Binary - uses 1024 as base
     /// Bytes - plain bytes without any formatting
@@ -49,50 +65,85 @@ pub struct Args {
     /// GiB - only gibibytes
     /// MB - only megabytes
     /// MiB - only mebibytes
-    #[structopt(short = "f", long)]
-    pub format: Option<ByteFormat>,
+    #[argh(option, short = 'f')]
+    pub format: Option<CliByteFormat>,
 
-    /// Display apparent size instead of disk usage.
-    #[structopt(short = "A", long)]
+    /// display apparent size instead of disk usage.
+    #[argh(switch, short = 'A')]
     pub apparent_size: bool,
 
-    /// Count hard-linked files each time they are seen
-    #[structopt(short = "l", long)]
+    /// count hard-linked files each time they are seen
+    #[argh(switch, short = 'l')]
     pub count_hard_links: bool,
 
-    /// If set, we will not cross filesystems or traverse mount points
-    #[structopt(short = "x", long)]
+    /// if set, we will not cross filesystems or traverse mount points
+    #[argh(switch, short = 'x')]
     pub stay_on_filesystem: bool,
 
-    /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-    #[structopt(parse(from_os_str))]
+    /// one or more input files or directories. If unset, we will use all entries in the current working directory.
+    #[argh(positional)]
     pub input: Vec<PathBuf>,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(FromArgs)]
+#[argh(subcommand)]
 pub enum Command {
-    /// Launch the terminal user interface
-    #[structopt(name = "interactive", alias = "i")]
-    Interactive {
-        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[structopt(parse(from_os_str))]
-        input: Vec<PathBuf>,
-    },
-    /// Aggregrate the consumed space of one or more directories or files
-    #[structopt(name = "aggregate", alias = "a")]
-    Aggregate {
-        /// If set, print additional statistics about the file traversal to stderr
-        #[structopt(long = "stats")]
-        statistics: bool,
-        /// If set, paths will be printed in their order of occurrence on the command-line.
-        /// Otherwise they are sorted by their size in bytes, ascending.
-        #[structopt(long)]
-        no_sort: bool,
-        /// If set, no total column will be computed for multiple inputs
-        #[structopt(long)]
-        no_total: bool,
-        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[structopt(parse(from_os_str))]
-        input: Vec<PathBuf>,
-    },
+    Interactive(Interactive),
+    InteractiveAlias(InteractiveAlias),
+    Aggregate(Aggregate),
+    AggregateAlias(AggregateAlias),
+}
+
+/// Launch the terminal user interface
+#[derive(FromArgs)]
+#[argh(subcommand, name = "interactive")]
+pub struct Interactive {
+    /// one or more input files or directories. If unset, we will use all entries in the current working directory.
+    #[argh(positional)]
+    pub input: Vec<PathBuf>,
+}
+
+/// Alias for 'interactive'
+#[derive(FromArgs)]
+#[argh(subcommand, name = "i")]
+pub struct InteractiveAlias {
+    #[argh(positional)]
+    pub input: Vec<PathBuf>,
+}
+
+/// Aggregate the consumed space of one or more directories or files
+#[derive(FromArgs)]
+#[argh(subcommand, name = "aggregate")]
+pub struct Aggregate {
+    /// if set, print additional statistics about the file traversal to stderr
+    #[argh(switch)]
+    pub stats: bool,
+    /// if set, paths will be printed in their order of occurrence on the command-line.
+    /// Otherwise they are sorted by their size in bytes, ascending.
+    #[argh(switch)]
+    pub no_sort: bool,
+    /// if set, no total column will be computed for multiple inputs
+    #[argh(switch)]
+    pub no_total: bool,
+    /// one or more input files or directories. If unset, we will use all entries in the current working directory.
+    #[argh(positional)]
+    pub input: Vec<PathBuf>,
+}
+
+/// An alias for "aggregate"
+#[derive(FromArgs)]
+#[argh(subcommand, name = "a")]
+pub struct AggregateAlias {
+    /// see `dua aggregate --help`
+    #[argh(switch)]
+    pub stats: bool,
+    /// see `dua aggregate --help`
+    #[argh(switch)]
+    pub no_sort: bool,
+    /// see `dua aggregate --help`
+    #[argh(switch)]
+    pub no_total: bool,
+    /// see `dua aggregate --help`
+    #[argh(positional)]
+    pub input: Vec<PathBuf>,
 }
