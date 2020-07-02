@@ -1,3 +1,10 @@
+#### v2.8.2
+
+* Switch back to `structopt` from `argh` to support non-UTF-8 encoded paths to be passed to dua
+
+I hope that `argh` or an alternative will one day consider supporting os-strings, as it would in theory be an issue
+for anyone who passes paths to their command-line tool.
+
 #### v2.8.1
 
 * Switch from deprecated `failure` to `anyhow` to reduce compile times a little and binary size by 130kb.
