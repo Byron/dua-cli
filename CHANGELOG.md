@@ -1,3 +1,7 @@
+#### v2.8.0
+
+* Switched from `structopt` to `argh` for a 300kb reduction in binary size and 1 minute smaller compile times.
+
 #### v2.7.0
 
 * [Support for extremely large][issue-58], zeta byte scale, files or filesystem traversals.
