@@ -72,14 +72,14 @@ pub struct Args {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     /// Launch the terminal user interface
-    #[structopt(name = "interactive", alias = "i")]
+    #[structopt(name = "interactive", visible_alias = "i")]
     Interactive {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[structopt(parse(from_os_str))]
         input: Vec<PathBuf>,
     },
     /// Aggregrate the consumed space of one or more directories or files
-    #[structopt(name = "aggregate", alias = "a")]
+    #[structopt(name = "aggregate", visible_alias = "a")]
     Aggregate {
         /// If set, print additional statistics about the file traversal to stderr
         #[structopt(long = "stats")]
