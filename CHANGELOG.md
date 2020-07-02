@@ -1,3 +1,7 @@
+#### v2.8.1
+
+* Switch from deprecated `failure` to `anyhow` to reduce compile times a little and binary size by 130kb.
+
 #### v2.8.0
 
 * Switched from `structopt` to `argh` for a 300kb reduction in binary size and 1 minute smaller compile times.
