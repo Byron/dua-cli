@@ -49,7 +49,7 @@ pub struct Args {
     /// GiB - only gibibytes
     /// MB - only megabytes
     /// MiB - only mebibytes
-    #[structopt(short = "f", long)]
+    #[structopt(short = "f", long, possible_values(&ByteFormat::variants()))]
     pub format: Option<ByteFormat>,
 
     /// Display apparent size instead of disk usage.
