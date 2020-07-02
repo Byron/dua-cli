@@ -4,6 +4,7 @@ use crate::interactive::{Interaction, TerminalApp};
 use anyhow::{Context, Result};
 use dua::{ByteFormat, Color, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
+use structopt::StructOpt;
 use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::backend::TermionBackend;
 use tui_react::Terminal;
@@ -12,9 +13,9 @@ mod interactive;
 mod options;
 
 fn main() -> Result<()> {
-    use options::*;
+    use options::Command::*;
 
-    let opt: options::Args = argh::from_env();
+    let opt: options::Args = options::Args::from_args();
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
@@ -29,8 +30,7 @@ fn main() -> Result<()> {
         cross_filesystems: !opt.stay_on_filesystem,
     };
     let res = match opt.command {
-        Some(Command::Interactive(Interactive { input }))
-        | Some(Command::InteractiveAlias(InteractiveAlias { input })) => {
+        Some(Interactive { input }) => {
             let mut terminal = {
                 let stdout = io::stdout()
                     .into_raw_mode()
@@ -59,29 +59,23 @@ fn main() -> Result<()> {
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(res.transpose()?.map(|e| e.to_exit_code()).unwrap_or(0));
         }
-        Some(Command::Aggregate(Aggregate {
+        Some(Aggregate {
             input,
             no_total,
             no_sort,
-            stats,
-        }))
-        | Some(Command::AggregateAlias(AggregateAlias {
-            input,
-            no_total,
-            no_sort,
-            stats,
-        })) => {
+            statistics,
+        }) => {
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            let (res, statistics) = dua::aggregate(
+            let (res, stats) = dua::aggregate(
                 stdout_locked,
                 walk_options,
                 !no_total,
                 !no_sort,
                 paths_from(input)?,
             )?;
-            if stats {
-                writeln!(io::stderr(), "{:?}", statistics).ok();
+            if statistics {
+                writeln!(io::stderr(), "{:?}", stats).ok();
             }
             res
         }
