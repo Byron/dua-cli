@@ -1,3 +1,8 @@
+#### v2.9.0 - Full windows support!
+
+* On Windows, we will now build using `crossterm`, which was greatly facilitated by `crosstermion`.
+* On Unix systems, the backend is still `termion`.
+
 #### v2.8.2
 
 * Switch back to `structopt` from `argh` to support non-UTF-8 encoded paths to be passed to dua

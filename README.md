@@ -24,6 +24,9 @@ Via `cargo`, which can be obtained using [rustup][rustup]
 
 ```
 cargo install dua-cli
+
+# And if you don't need a terminal user interface
+cargo install dua-cli --no-default-features
 ```
 
 #### VoidLinux
