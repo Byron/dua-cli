@@ -4,11 +4,11 @@ use crate::interactive::{
     widgets::{HelpPane, MainWindow, MarkMode, MarkPane},
     AppState, DisplayOptions, EntryDataBundle,
 };
+use crosstermion::input::Key;
 use dua::traverse::{Traversal, TreeIndex};
 use itertools::Itertools;
 use petgraph::{visit::Bfs, Direction};
 use std::{fs, io, path::PathBuf};
-use termion::event::Key;
 use tui::backend::Backend;
 use tui_react::Terminal;
 

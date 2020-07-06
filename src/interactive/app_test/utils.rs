@@ -18,6 +18,14 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
+pub fn adapt(
+    keys: impl Iterator<Item = std::io::Result<termion::event::Key>>,
+) -> impl Iterator<Item = crosstermion::input::Key> {
+    use std::convert::TryFrom;
+    keys.filter_map(Result::ok)
+        .filter_map(|k| crosstermion::input::Key::try_from(k).ok())
+}
+
 pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
     app.traversal.tree.node_weight(id).unwrap()
 }

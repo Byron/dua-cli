@@ -1,9 +1,9 @@
 use crate::interactive::CursorDirection;
+use crosstermion::{input::Key, input::Key::*};
 use std::{
     borrow::Borrow,
     cell::{Cell, RefCell},
 };
-use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
     layout::Rect,

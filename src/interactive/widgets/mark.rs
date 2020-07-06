@@ -1,6 +1,7 @@
 use crate::interactive::{
     fit_string_graphemes_with_ellipsis, path_of, widgets::entry_color, CursorDirection,
 };
+use crosstermion::{input::Key, input::Key::*};
 use dua::{
     traverse::{Tree, TreeIndex},
     ByteFormat,
@@ -11,7 +12,6 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     path::PathBuf,
 };
-use termion::{event::Key, event::Key::*};
 use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},

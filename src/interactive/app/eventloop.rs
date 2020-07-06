@@ -5,12 +5,12 @@ use crate::interactive::{
     SortMode,
 };
 use anyhow::Result;
+use crosstermion::input::{key_input_channel, Key};
 use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
 };
-use std::{collections::BTreeMap, io, path::PathBuf};
-use termion::{event::Key, input::TermRead};
+use std::{collections::BTreeMap, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
@@ -69,16 +69,16 @@ impl AppState {
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = std::result::Result<Key, io::Error>>,
+        keys: impl Iterator<Item = Key>,
     ) -> Result<ProcessingResult>
     where
         B: Backend,
     {
-        use termion::event::Key::*;
+        use crosstermion::input::Key::*;
         use FocussedPane::*;
 
         self.draw(window, traversal, display.clone(), terminal)?;
-        for key in keys.filter_map(Result::ok) {
+        for key in keys {
             self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(window),
@@ -177,13 +177,13 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
-type KeyboardInputAndApp = (flume::Receiver<io::Result<Key>>, TerminalApp);
+type KeyboardInputAndApp = (flume::Receiver<Key>, TerminalApp);
 
 impl TerminalApp {
     pub fn process_events<B>(
         &mut self,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = std::result::Result<Key, io::Error>>,
+        keys: impl Iterator<Item = Key>,
     ) -> Result<WalkResult>
     where
         B: Backend,
@@ -213,18 +213,13 @@ impl TerminalApp {
         let mut display: DisplayOptions = options.clone().into();
         display.byte_vis = ByteVisualization::PercentageAndBar;
         let mut window = MainWindow::default();
-        let (keys_tx, keys_rx) = flume::unbounded();
-        match mode {
-            Interaction::None => drop(keys_tx),
-            Interaction::Full => drop(std::thread::spawn(move || {
-                let keys = std::io::stdin().keys();
-                for key in keys {
-                    if keys_tx.send(key).is_err() {
-                        break;
-                    }
-                }
-            })),
-        }
+        let keys_rx = match mode {
+            Interaction::None => {
+                let (_, keys_rx) = flume::unbounded();
+                keys_rx
+            }
+            Interaction::Full => key_input_channel(),
+        };
 
         let fetch_buffered_key_events = || {
             let mut keys = Vec::new();

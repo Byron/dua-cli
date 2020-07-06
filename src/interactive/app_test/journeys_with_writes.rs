@@ -1,10 +1,10 @@
 use crate::interactive::app_test::utils::{
-    initialized_app_and_terminal_from_paths, WritableFixture,
+    adapt, initialized_app_and_terminal_from_paths, WritableFixture,
 };
 use anyhow::Result;
 use pretty_assertions::assert_eq;
-use termion::event::Key;
-use termion::input::TermRead;
+use std::convert::TryInto;
+use termion::{event::Key, input::TermRead};
 
 #[test]
 fn basic_user_journey_with_deletion() -> Result<()> {
@@ -12,7 +12,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
 
     // With a selection of items
-    app.process_events(&mut terminal, b"doddd".keys())?;
+    app.process_events(&mut terminal, adapt(b"doddd".keys()))?;
 
     assert_eq!(
         app.window.mark_pane.as_ref().map(|p| p.marked().len()),
@@ -29,7 +29,11 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        vec![Ok(Key::Char('\t')), Ok(Key::Ctrl('r'))].into_iter(),
+        vec![
+            Key::Char('\t').try_into().unwrap(),
+            Key::Ctrl('r').try_into().unwrap(),
+        ]
+        .into_iter(),
     )?;
     assert_eq!(
         app.window.mark_pane.is_none(),
