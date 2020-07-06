@@ -1,3 +1,0 @@
-
-[patch.crates-io]
-termion = { git = "https://gitlab.redox-os.org/Jezza/termion.git", branch = "windows-support" }
