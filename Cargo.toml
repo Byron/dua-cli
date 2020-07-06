@@ -27,6 +27,7 @@ filesize = "0.2.0"
 flume = {version = "0.7.1", default-features = false}
 anyhow = "1.0.31"
 crosstermion = { version = "0.1.3", default-features = false, features = ["tui-react-crossterm", "input-thread-flume"]}
+colored = "1.9.3"
 
 [[bin]]
 name="dua"
