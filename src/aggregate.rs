@@ -1,9 +1,9 @@
 use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
-use colored::Colorize;
 use filesize::PathExt;
 use std::borrow::Cow;
 use std::{fmt, io, path::Path};
+use termcolor;
 use termion::color;
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
@@ -130,12 +130,7 @@ fn write_path<C: fmt::Display>(
     writeln!(
         out,
         "{byte_color}{:>byte_column_width$}{byte_color_reset} {path_color}{}{path_color_reset}{}",
-        options
-            .byte_format
-            .display(num_bytes)
-            .to_string()
-            .as_str()
-            .green(), // needed for formatting to work (unless we implement it ourselves)
+        options.byte_format.display(num_bytes),
         path.as_ref().display(),
         if num_errors == 0 {
             Cow::Borrowed("")
