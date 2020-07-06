@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         Some(Interactive { input }) => {
             let mut terminal = new_terminal(
                 AlternateRawScreen::try_from(io::stdout())
-                    .with_context(|| "Failed to initialize alternate raw screen")?,
+                    .with_context(|| "Interactive mode requires a connected terminal")?,
             )
             .with_context(|| "Could not instantiate terminal")?;
             let res = TerminalApp::initialize(

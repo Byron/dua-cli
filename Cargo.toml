@@ -20,18 +20,13 @@ petgraph = "0.5"
 itertools = "0.9.0"
 open = "1.2.2"
 log = "0.4.6"
-tui-react = { version = "0.4" }
+tui-react = "0.4"
 num_cpus = "1.10.0"
 unicode-segmentation = "1.3.0"
 filesize = "0.2.0"
 flume = {version = "0.7.1", default-features = false}
 anyhow = "1.0.31"
-
-[target.'cfg(windows)'.dependencies]
 crosstermion = { version = "0.1.3", default-features = false, features = ["tui-react-crossterm", "input-thread-flume"]}
-
-[target.'cfg(unix)'.dependencies]
-crosstermion = { version = "0.1.3", default-features = false, features = ["tui-react-termion", "input-thread-flume"]}
 
 [[bin]]
 name="dua"
@@ -49,6 +44,7 @@ codegen-units = 1
 
 [dev-dependencies]
 # Tests only run on linux as we use some conveniences offered by termion
+crosstermion = { version = "0.1.3", default-features = false, features = ["tui-react-termion", "input-thread-flume"]}
 termion = "1.5.2"
 pretty_assertions = "0.6.1"
 
