@@ -1,10 +1,9 @@
 use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
+use colored::{Color, Colorize};
 use filesize::PathExt;
 use std::borrow::Cow;
-use std::{fmt, io, path::Path};
-use termcolor;
-use termion::color;
+use std::{io, path::Path};
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
@@ -67,13 +66,13 @@ pub fn aggregate(
         if sort_by_size_in_bytes {
             aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
         } else {
-            write_path(
+            output_colored_path(
                 &mut out,
                 &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
-                path_color(&path),
+                path_color_of(&path),
             )?;
         }
         total += num_bytes;
@@ -87,51 +86,62 @@ pub fn aggregate(
     if sort_by_size_in_bytes {
         aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
-            write_path(
+            output_colored_path(
                 &mut out,
                 &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
-                path_color(&path),
+                path_color_of(&path),
             )?;
         }
     }
 
     if num_roots > 1 && compute_total {
-        write_path(
+        output_colored_path(
             &mut out,
             &walk_options,
             Path::new("total"),
             total,
             res.num_errors,
-            color::Fg(color::Reset),
+            None,
         )?;
     }
     Ok((res, stats))
 }
 
-fn path_color(path: impl AsRef<Path>) -> Box<dyn fmt::Display> {
+fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
     if path.as_ref().is_file() {
-        Box::new(color::Fg(color::LightBlack))
+        Some(Color::BrightBlack)
     } else {
-        Box::new(color::Fg(color::Reset))
+        None
     }
 }
 
-fn write_path<C: fmt::Display>(
+fn output_colored_path(
     out: &mut impl io::Write,
     options: &WalkOptions,
     path: impl AsRef<Path>,
     num_bytes: u128,
     num_errors: u64,
-    path_color: C,
+    path_color: Option<colored::Color>,
 ) -> std::result::Result<(), io::Error> {
     writeln!(
         out,
-        "{byte_color}{:>byte_column_width$}{byte_color_reset} {path_color}{}{path_color_reset}{}",
-        options.byte_format.display(num_bytes),
-        path.as_ref().display(),
+        "{:>byte_column_width$} {}{}",
+        options
+            .byte_format
+            .display(num_bytes)
+            .to_string()
+            .as_str()
+            .green(),
+        options.color.display(
+            path.as_ref()
+                .display()
+                .to_string()
+                .as_str()
+                .color(path_color.unwrap_or(Color::White))
+        ),
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
@@ -141,10 +151,6 @@ fn write_path<C: fmt::Display>(
                 if num_errors > 1 { "s" } else { "" }
             ))
         },
-        byte_color = options.color.display(color::Fg(color::Green)),
-        byte_color_reset = options.color.display(color::Fg(color::Reset)),
-        path_color = options.color.display(path_color),
-        path_color_reset = options.color.display(color::Fg(color::Reset)),
         byte_column_width = options.byte_format.width()
     )
 }
