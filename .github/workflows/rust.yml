@@ -34,7 +34,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: default
-          toolchain: stable
+          toolchain: nightly
           override: true
       - name: "Check (crossterm)"
         uses: actions-rs/cargo@v1
