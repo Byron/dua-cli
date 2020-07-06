@@ -13,18 +13,18 @@
 name: release
 on:
   push:
-    # Enable when testing release infrastructure on a branch.
-#    branches:
-#      - release
+     Enable when testing release infrastructure on a branch.
+    branches:
+      - master
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 jobs:
   create-release:
     name: create-release
     runs-on: ubuntu-latest
-#    env:
-#      # Set to force version number, e.g., when no tag exists.
-#      ARTIFACT_VERSION: TEST-0.0.1
+    env:
+      # Set to force version number, e.g., when no tag exists.
+      ARTIFACT_VERSION: TEST-0.0.1
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -82,27 +82,32 @@ jobs:
             os: ubuntu-18.04
             rust: nightly
             target: x86_64-unknown-linux-musl
+            feature: tui-unix
           - build: linux-arm
             os: ubuntu-18.04
             rust: nightly
             target: arm-unknown-linux-gnueabihf
+            feature: tui-unix
           - build: macos
             os: macos-latest
             rust: nightly
             target: x86_64-apple-darwin
-#            no windows support, at least not with GUI (see https://github.com/Byron/dua-cli/issues/2)
+            feature: tui-unix
           - build: win-msvc
             os: windows-2019
             rust: nightly
             target: x86_64-pc-windows-msvc
+            feature: tui-crossplatform
           - build: win-gnu
             os: windows-2019
             rust: nightly-x86_64-gnu
             target: x86_64-pc-windows-gnu
+            feature: tui-crossplatform
           - build: win32-msvc
             os: windows-2019
             rust: nightly
             target: i686-pc-windows-msvc
+            feature: tui-crossplatform
 
     steps:
       - name: Checkout repository
@@ -119,12 +124,6 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           ci/macos-install-packages
-
-      - name: Patch Cargo.toml (Windows)
-        if: matrix.os == 'windows-2019'
-        shell: bash
-        run: |
-          cat Cargo.toml.windows-suffix >> Cargo.toml
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -167,7 +166,7 @@ jobs:
           echo "release version: $RELEASE_VERSION"
 
       - name: Build release binary
-        run: ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
+        run: ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }} --no-default-features --features ${{ matrix.feature }}
 
       - name: Strip release binary (linux and macos)
         if: matrix.build == 'linux' || matrix.build == 'macos'
