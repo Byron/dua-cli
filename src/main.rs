@@ -4,6 +4,7 @@ use anyhow::Result;
 use dua::{ByteFormat, Color, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
+use wild;
 
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;
@@ -12,7 +13,7 @@ mod options;
 fn main() -> Result<()> {
     use options::Command::*;
 
-    let opt: options::Args = options::Args::from_args();
+    let opt: options::Args = options::Args::from_iter(wild::args_os());
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
