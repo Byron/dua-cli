@@ -72,6 +72,7 @@ pub struct Args {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     /// Launch the terminal user interface
+    #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
     #[structopt(name = "interactive", visible_alias = "i")]
     Interactive {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.

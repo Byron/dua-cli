@@ -29,7 +29,14 @@ profile: target/release/dua ## run callgrind and annotate its output - linux onl
 benchmark: target/release/dua ## see how fast things are, powered by hyperfine
 	hyperfine '$<'
 
-tests: unit-tests journey-tests ## run all tests
+tests: check unit-tests journey-tests ## run all tests
+
+check:## run all unit tests
+	cargo check --all
+	cargo check --all-features
+	cargo check --no-default-features
+	cargo check --features tui-unix
+	cargo check --features tui-crossplatform
 
 unit-tests: ## run all unit tests
 	cargo test --all

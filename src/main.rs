@@ -1,12 +1,11 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::match_bool)]
-use crate::interactive::{Interaction, TerminalApp};
-use anyhow::{Context, Result};
-use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
+use anyhow::Result;
 use dua::{ByteFormat, Color, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
 
+#[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;
 mod options;
 
@@ -28,7 +27,12 @@ fn main() -> Result<()> {
         cross_filesystems: !opt.stay_on_filesystem,
     };
     let res = match opt.command {
+        #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
         Some(Interactive { input }) => {
+            use crate::interactive::{Interaction, TerminalApp};
+            use anyhow::Context;
+            use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
+
             let mut terminal = new_terminal(
                 AlternateRawScreen::try_from(io::stdout())
                     .with_context(|| "Interactive mode requires a connected terminal")?,

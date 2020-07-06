@@ -205,6 +205,7 @@ checksum = "74ba604c40d092aa60a7a17f6cf148f2ede84f4372e2b691d49fdd89820e7846"
 dependencies = [
  "crossterm",
  "flume",
+ "termion",
  "tui",
  "tui-react 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -238,7 +239,6 @@ dependencies = [
  "flume",
  "itertools",
  "jwalk",
- "log",
  "num_cpus",
  "open",
  "petgraph",
