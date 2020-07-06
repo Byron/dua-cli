@@ -2,12 +2,10 @@
 #![allow(clippy::match_bool)]
 use crate::interactive::{Interaction, TerminalApp};
 use anyhow::{Context, Result};
+use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 use dua::{ByteFormat, Color, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
-use termion::{raw::IntoRawMode, screen::AlternateScreen};
-use tui::backend::TermionBackend;
-use tui_react::Terminal;
 
 mod interactive;
 mod options;
@@ -31,14 +29,11 @@ fn main() -> Result<()> {
     };
     let res = match opt.command {
         Some(Interactive { input }) => {
-            let mut terminal = {
-                let stdout = io::stdout()
-                    .into_raw_mode()
-                    .with_context(|| "Interactive mode requires a connected terminal")?;
-                let stdout = AlternateScreen::from(stdout);
-                let backend = TermionBackend::new(stdout);
-                Terminal::new(backend)?
-            };
+            let mut terminal = new_terminal(
+                AlternateRawScreen::try_from(io::stdout())
+                    .with_context(|| "Failed to initialize alternate raw screen")?,
+            )
+            .with_context(|| "Could not instantiate terminal")?;
             let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,

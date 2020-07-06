@@ -232,7 +232,7 @@ dependencies = [
  "structopt",
  "termion",
  "tui",
- "tui-react 0.4.0",
+ "tui-react 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation",
 ]
 
