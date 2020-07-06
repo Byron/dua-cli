@@ -50,7 +50,11 @@ sudo pacman -S dua-cli
 #### Windows
 
 You will find pre-built binaries for Windows in the [releases section](https://github.com/Byron/dua-cli).
-Please note that `dua interactive` only works on nushell and xonsh with Alacritty as terminal emulator.
+Alternatively, install via cargo as in
+
+```
+cargo install dua-cli
+```
 
 ### Usage
 
@@ -79,6 +83,8 @@ dua interactive
 
 ### Development
 
+Please note that all the following assumes a unix system. On Windows, the linux subsystem should do the job.
+
 #### Run tests
 
 ```bash
@@ -90,6 +96,16 @@ make tests
 ```
 make
 ```
+
+#### But why is…
+
+#### …there two available backends? `crossterm` works everywhere!
+
+Why add complexity to support `termion` if `crossterm` works everywhere? The answer is compile time and binary size, which both are larger
+when using `crossterm`. Thus on Unix we still build with `termion`, but there is no reason to stop supporting it once `crossterm` has no
+disadvantages.
+
+The `crosstermion` crate makes handling this a bit less cumbersome.
 
 ### Acknowledgements
 
@@ -114,9 +130,6 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
   * The actual amount of nodes stored might be lower, as there might be more edges than nodes, which are also limited by a `u32` (I guess)
   * The limitation is imposed by the underlying [`petgraph`][petgraph] crate, which declares it as `unsafe` to use u64 for instance.
   * It's possibly *UB* when that limit is reached, however, it was never observed either.
-* Dedication to `termion`
-  * we use [`termion`][termion] exlusively, and even though [`tui`][tui] supports multiple backends, we only support its termion backend. _Reason_: `tui` is only used for parts of the program, and in all other parts `termion` is used for coloring the output. Thus we wouldn't support changing to a different backend anyway unless everything is done with TUI, which is really not what it is made for.
-
 
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
