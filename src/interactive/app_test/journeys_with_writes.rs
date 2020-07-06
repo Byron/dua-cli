@@ -1,10 +1,8 @@
 use crate::interactive::app_test::utils::{
-    adapt, initialized_app_and_terminal_from_paths, WritableFixture,
+    initialized_app_and_terminal_from_paths, into_keys, WritableFixture,
 };
 use anyhow::Result;
 use pretty_assertions::assert_eq;
-use std::convert::TryInto;
-use termion::{event::Key, input::TermRead};
 
 #[test]
 fn basic_user_journey_with_deletion() -> Result<()> {
@@ -12,7 +10,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
 
     // With a selection of items
-    app.process_events(&mut terminal, adapt(b"doddd".keys()))?;
+    app.process_events(&mut terminal, into_keys(b"doddd".iter()))?;
 
     assert_eq!(
         app.window.mark_pane.as_ref().map(|p| p.marked().len()),
@@ -30,8 +28,8 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     app.process_events(
         &mut terminal,
         vec![
-            Key::Char('\t').try_into().unwrap(),
-            Key::Ctrl('r').try_into().unwrap(),
+            crosstermion::input::Key::Char('\t'),
+            crosstermion::input::Key::Ctrl('r'),
         ]
         .into_iter(),
     )?;

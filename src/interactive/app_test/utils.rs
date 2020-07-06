@@ -18,12 +18,10 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-pub fn adapt(
-    keys: impl Iterator<Item = std::io::Result<termion::event::Key>>,
-) -> impl Iterator<Item = crosstermion::input::Key> {
-    use std::convert::TryFrom;
-    keys.filter_map(Result::ok)
-        .filter_map(|k| crosstermion::input::Key::try_from(k).ok())
+pub fn into_keys<'a>(
+    bytes: impl Iterator<Item = &'a u8> + 'a,
+) -> impl Iterator<Item = crosstermion::input::Key> + 'a {
+    bytes.map(|b| crosstermion::input::Key::Char(std::char::from_u32(*b as u32).unwrap()))
 }
 
 pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {

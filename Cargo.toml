@@ -43,9 +43,6 @@ lto = "fat"
 codegen-units = 1
 
 [dev-dependencies]
-# Tests only run on linux as we use some conveniences offered by termion
-crosstermion = { version = "0.1.3", default-features = false, features = ["tui-react-termion", "input-thread-flume"]}
-termion = "1.5.2"
 pretty_assertions = "0.6.1"
 
 [workspace]
