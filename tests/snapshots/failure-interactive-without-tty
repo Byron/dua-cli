@@ -1,4 +1,1 @@
 Error: Interactive mode requires a connected terminal
-
-Caused by:
-    Inappropriate ioctl for device (os error 25)

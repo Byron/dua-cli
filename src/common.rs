@@ -112,38 +112,6 @@ pub enum TraversalSorting {
     AlphabeticalByFileName,
 }
 
-/// Specify the kind of color to use
-#[derive(Clone, Copy)]
-pub enum Color {
-    /// Use no color
-    None,
-    /// Use terminal colors
-    Terminal,
-}
-
-pub(crate) struct DisplayColor<C> {
-    kind: Color,
-    color: C,
-}
-
-impl Color {
-    pub(crate) fn display<C>(self, color: C) -> DisplayColor<C> {
-        DisplayColor { kind: self, color }
-    }
-}
-
-impl<C> fmt::Display for DisplayColor<C>
-where
-    C: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self.kind {
-            Color::None => Ok(()),
-            Color::Terminal => self.color.fmt(f),
-        }
-    }
-}
-
 /// Configures a filesystem walk, including output and formatting options.
 #[derive(Clone)]
 pub struct WalkOptions {
@@ -153,7 +121,6 @@ pub struct WalkOptions {
     pub byte_format: ByteFormat,
     pub count_hard_links: bool,
     pub apparent_size: bool,
-    pub color: Color,
     pub sorting: TraversalSorting,
     pub cross_filesystems: bool,
 }

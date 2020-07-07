@@ -1,9 +1,10 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::match_bool)]
-use anyhow::Result;
-use dua::{ByteFormat, Color, TraversalSorting};
+use anyhow::{anyhow, Result};
+use dua::{ByteFormat, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
+use wild;
 
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;
@@ -12,15 +13,10 @@ mod options;
 fn main() -> Result<()> {
     use options::Command::*;
 
-    let opt: options::Args = options::Args::from_args();
+    let opt: options::Args = options::Args::from_iter(wild::args_os());
     let walk_options = dua::WalkOptions {
         threads: opt.threads.unwrap_or(0),
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
-        color: if atty::is(atty::Stream::Stdout) {
-            Color::Terminal
-        } else {
-            Color::None
-        },
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
@@ -32,10 +28,13 @@ fn main() -> Result<()> {
             use crate::interactive::{Interaction, TerminalApp};
             use anyhow::Context;
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
+            let no_tty_msg = "Interactive mode requires a connected terminal";
+            if atty::isnt(atty::Stream::Stdout) {
+                return Err(anyhow!(no_tty_msg));
+            }
 
             let mut terminal = new_terminal(
-                AlternateRawScreen::try_from(io::stdout())
-                    .with_context(|| "Interactive mode requires a connected terminal")?,
+                AlternateRawScreen::try_from(io::stdout()).with_context(|| no_tty_msg)?,
             )
             .with_context(|| "Could not instantiate terminal")?;
             let res = TerminalApp::initialize(

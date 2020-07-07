@@ -2,7 +2,7 @@ use crate::interactive::{app_test::FIXTURE_PATH, Interaction, TerminalApp};
 use anyhow::{Context, Error, Result};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
-    ByteFormat, Color, TraversalSorting, WalkOptions,
+    ByteFormat, TraversalSorting, WalkOptions,
 };
 use itertools::Itertools;
 use jwalk::{DirEntry, WalkDir};
@@ -175,7 +175,6 @@ pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
             byte_format: ByteFormat::Metric,
             apparent_size: true,
             count_hard_links: false,
-            color: Color::None,
             sorting: TraversalSorting::AlphabeticalByFileName,
             cross_filesystems: false,
         },
