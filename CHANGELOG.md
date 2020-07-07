@@ -1,3 +1,8 @@
+#### v2.9.1 - Globs for Windows; fixed handling of colors
+
+* On widnows, `dua` will now expand glob patterns by itself as this capability is not implemented by shells `dua` can now run in.
+* A bug was discovered that could cause `dua a` invocation to now show paths behind their size in an incorrect attempt to not print with color.
+
 #### v2.9.0 - Full windows support!
 
 * On Windows, we will now build using `crossterm`, which was greatly facilitated by `crosstermion`.
