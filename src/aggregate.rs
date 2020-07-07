@@ -135,13 +135,11 @@ fn output_colored_path(
             .to_string()
             .as_str()
             .green(),
-        options.color.display(
-            path.as_ref()
-                .display()
-                .to_string()
-                .as_str()
-                .color(path_color.unwrap_or(Color::White))
-        ),
+        path.as_ref()
+            .display()
+            .to_string()
+            .as_str()
+            .color(path_color.unwrap_or(Color::White)),
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
