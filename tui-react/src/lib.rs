@@ -113,7 +113,7 @@ pub mod util {
     }
 
     pub fn block_width(s: &str) -> u16 {
-        s.graphemes(true).map(|g| g.width()).sum::<usize>() as u16
+        d.width() as u16
     }
 
     pub mod rect {
