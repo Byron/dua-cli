@@ -113,7 +113,7 @@ pub mod util {
     }
 
     pub fn block_width(s: &str) -> u16 {
-        d.width() as u16
+        s.width() as u16
     }
 
     pub mod rect {

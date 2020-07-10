@@ -38,4 +38,6 @@ happens with it.
 
 ### Changelog
 
+#### v0.4.1 - Simplify `block_width(…)` function
+
 #### v0.2.1 - add license file to crate

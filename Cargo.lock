@@ -207,7 +207,7 @@ dependencies = [
  "flume",
  "termion",
  "tui",
- "tui-react 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tui-react 0.4.0",
 ]
 
 [[package]]
@@ -245,7 +245,7 @@ dependencies = [
  "pretty_assertions",
  "structopt",
  "tui",
- "tui-react 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tui-react 0.4.0",
  "unicode-segmentation",
  "wild",
 ]
@@ -717,6 +717,8 @@ dependencies = [
 [[package]]
 name = "tui-react"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c585aaa750085a1eeb4b78cdfdd0306e86e8fb76acc2349a787e70b5ce8413d4"
 dependencies = [
  "log",
  "tui",
@@ -726,9 +728,7 @@ dependencies = [
 
 [[package]]
 name = "tui-react"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c585aaa750085a1eeb4b78cdfdd0306e86e8fb76acc2349a787e70b5ce8413d4"
+version = "0.4.1"
 dependencies = [
  "log",
  "tui",
