@@ -177,7 +177,7 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
-type KeyboardInputAndApp = (flume::Receiver<Key>, TerminalApp);
+type KeyboardInputAndApp = (std::sync::mpsc::Receiver<Key>, TerminalApp);
 
 impl TerminalApp {
     pub fn process_events<B>(
@@ -215,7 +215,7 @@ impl TerminalApp {
         let mut window = MainWindow::default();
         let keys_rx = match mode {
             Interaction::None => {
-                let (_, keys_rx) = flume::unbounded();
+                let (_, keys_rx) = std::sync::mpsc::channel();
                 keys_rx
             }
             Interaction::Full => key_input_channel(),

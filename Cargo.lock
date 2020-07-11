@@ -199,12 +199,11 @@ dependencies = [
 
 [[package]]
 name = "crosstermion"
-version = "0.1.5"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6230d2d1d8306a9aad35b85225e6a713da16421b6bc258bf58b982336257a5f9"
+checksum = "032534543c938ffc4106ee75411f4b7be2e0260e044d17dae36f9409ada87895"
 dependencies = [
  "crossterm",
- "flume",
  "termion",
  "tui",
  "tui-react 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -236,7 +235,6 @@ dependencies = [
  "colored",
  "crosstermion",
  "filesize",
- "flume",
  "itertools",
  "jwalk",
  "num_cpus",
@@ -270,15 +268,6 @@ name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
-
-[[package]]
-name = "flume"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "855e285c3835897065a6ba6f9463b44553eb9f29c7988d692f3d41283b47388b"
-dependencies = [
- "spin",
-]
 
 [[package]]
 name = "glob"
@@ -561,9 +550,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.1.56"
+version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
+checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
 
 [[package]]
 name = "redox_termios"
@@ -618,12 +607,6 @@ dependencies = [
  "redox_syscall",
  "winapi",
 ]
-
-[[package]]
-name = "spin"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "strsim"
