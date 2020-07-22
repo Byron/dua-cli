@@ -50,13 +50,14 @@ impl MainWindow {
 
         let (entries_style, help_style, mark_style) = {
             let grey = Style {
-                fg: Color::DarkGray,
-                bg: Color::Reset,
-                modifier: Modifier::empty(),
+                fg: Color::DarkGray.into(),
+                bg: Color::Reset.into(),
+                add_modifier: Modifier::empty(),
+                ..Style::default()
             };
             let bold = Style {
-                fg: Color::Rgb(230, 230, 230),
-                modifier: Modifier::BOLD,
+                fg: Color::Rgb(230, 230, 230).into(),
+                add_modifier: Modifier::BOLD,
                 ..grey
             };
             match state.focussed {

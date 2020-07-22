@@ -7,9 +7,9 @@ use std::{
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    style::Color,
-    style::{Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Text, Widget},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans, Text},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_react::{
     draw_text_nowrap_fn,
@@ -57,14 +57,14 @@ impl HelpPane {
 
             let spacer = || {
                 count(2);
-                lines.borrow_mut().push(Text::Raw("\n\n".into()));
+                lines.borrow_mut().push(Span::from("\n\n"));
             };
             let title = |name| {
                 count(2);
-                lines.borrow_mut().push(Text::Styled(
-                    format!("{}\n\n", name).into(),
+                lines.borrow_mut().push(Span::styled(
+                    format!("{}\n\n", name),
                     Style {
-                        modifier: Modifier::BOLD | Modifier::UNDERLINED,
+                        add_modifier: Modifier::BOLD | Modifier::UNDERLINED,
                         ..Default::default()
                     },
                 ));
@@ -73,33 +73,27 @@ impl HelpPane {
                 let separator_size = 3;
                 let column_size = 11 + separator_size;
                 count(1 + other_line.iter().count() as u16);
-                lines.borrow_mut().push(Text::Styled(
+                lines.borrow_mut().push(Span::styled(
                     format!(
                         "{:>column_size$}",
                         keys,
                         column_size = column_size - separator_size
-                    )
-                    .into(),
+                    ),
                     Style {
-                        fg: Color::Green,
+                        fg: Color::Green.into(),
                         ..Default::default()
                     },
                 ));
-                lines.borrow_mut().push(Text::Styled(
-                    format!(" => {}\n", description).into(),
-                    Style::default(),
-                ));
+                lines
+                    .borrow_mut()
+                    .push(Span::from(format!(" => {}\n", description)));
                 if let Some(second_line) = other_line {
-                    lines.borrow_mut().push(Text::Styled(
-                        format!(
-                            "{:>column_size$}{}\n",
-                            "",
-                            second_line,
-                            column_size = column_size + 1
-                        )
-                        .into(),
-                        Style::default(),
-                    ));
+                    lines.borrow_mut().push(Span::from(format!(
+                        "{:>column_size$}{}\n",
+                        "",
+                        second_line,
+                        column_size = column_size + 1
+                    )));
                 }
             };
 
@@ -219,8 +213,8 @@ impl HelpPane {
 
         let area = margin(block.inner(area), 1);
         self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));
-        Paragraph::new(texts.iter())
-            .scroll(self.scroll)
+        Paragraph::new(Text::from(Spans::from(texts)))
+            .scroll((self.scroll, 0))
             .render(area, buf);
     }
 }

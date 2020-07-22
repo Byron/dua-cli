@@ -10,7 +10,8 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Text},
+    text::Span,
+    widgets::{Block, Borders},
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
@@ -78,7 +79,7 @@ impl Entries {
             }
         );
         let block = Block::default()
-            .title(&title)
+            .title(title.as_str())
             .border_style(*border_style)
             .borders(Borders::ALL);
         let entry_in_view = selected.map(|selected| {
@@ -107,34 +108,32 @@ impl Entries {
                     false
                 };
                 if is_selected {
-                    style.modifier.insert(Modifier::REVERSED);
+                    style.add_modifier.insert(Modifier::REVERSED);
                 }
                 if *is_focussed & is_selected {
-                    style.modifier.insert(Modifier::BOLD);
+                    style.add_modifier.insert(Modifier::BOLD);
                 }
 
-                let bytes = Text::Styled(
+                let bytes = Span::styled(
                     format!(
                         "{:>byte_column_width$}",
                         display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
                         byte_column_width = display.byte_format.width()
-                    )
-                    .into(),
+                    ),
                     Style {
-                        fg: Color::Green,
+                        fg: Color::Green.into(),
                         ..style
                     },
                 );
-                let percentage = Text::Styled(
+                let percentage = Span::styled(
                     format!(
                         " |{}| ",
                         display.byte_vis.display(w.size as f32 / total as f32)
-                    )
-                    .into(),
+                    ),
                     style,
                 );
 
-                let name = Text::Styled(
+                let name = Span::styled(
                     fill_background_to_right(
                         format!(
                             "{prefix}{}",
@@ -142,15 +141,14 @@ impl Entries {
                             prefix = if *is_dir && !is_top(*root) { "/" } else { " " }
                         ),
                         area.width,
-                    )
-                    .into(),
+                    ),
                     {
                         let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
                         let fg = if !exists {
                             // non-existing - always red!
-                            Color::Red
+                            Some(Color::Red)
                         } else {
-                            entry_color(style.fg, !is_dir, is_marked)
+                            entry_color(style.fg, !*is_dir, is_marked)
                         };
                         Style { fg, ..style }
                     },

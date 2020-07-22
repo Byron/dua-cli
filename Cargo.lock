@@ -242,8 +242,8 @@ dependencies = [
  "petgraph",
  "pretty_assertions",
  "structopt",
- "tui 0.9.5",
- "tui-react 0.4.1",
+ "tui 0.10.0",
+ "tui-react 0.10.0",
  "unicode-segmentation",
  "wild",
 ]

@@ -5,7 +5,8 @@ use tui::{
     layout::Rect,
     style::Modifier,
     style::{Color, Style},
-    widgets::{Paragraph, Text, Widget},
+    text::{Span, Spans, Text},
+    widgets::{Paragraph, Widget},
 };
 
 pub struct Footer;
@@ -26,35 +27,35 @@ impl Footer {
             message,
         } = props.borrow();
 
-        let lines = [
-            Text::Raw(
-                format!(
-                    " Total disk usage: {}  Entries: {}   ",
-                    match total_bytes {
-                        Some(b) => format!("{}", format.display(*b)),
-                        None => "-".to_owned(),
-                    },
-                    entries_traversed,
-                )
-                .into(),
-            )
+        let spans = vec![
+            Span::from(format!(
+                " Total disk usage: {}  Entries: {}   ",
+                match total_bytes {
+                    Some(b) => format!("{}", format.display(*b)),
+                    None => "-".to_owned(),
+                },
+                entries_traversed,
+            ))
             .into(),
             message.as_ref().map(|m| {
-                Text::Styled(
-                    m.into(),
+                Span::styled(
+                    m,
                     Style {
-                        fg: Color::Red,
-                        bg: Color::Reset,
-                        modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
+                        fg: Color::Red.into(),
+                        bg: Color::Reset.into(),
+                        add_modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
+                        ..Style::default()
                     },
                 )
             }),
         ];
-        Paragraph::new(lines.iter().filter_map(|x| x.as_ref()))
-            .style(Style {
-                modifier: Modifier::REVERSED,
-                ..Default::default()
-            })
-            .render(area, buf);
+        Paragraph::new(Text::from(Spans::from(
+            spans
+                .into_iter()
+                .filter_map(std::convert::identity)
+                .collect::<Vec<_>>(),
+        )))
+        .style(Style::default().add_modifier(Modifier::REVERSED))
+        .render(area, buf);
     }
 }

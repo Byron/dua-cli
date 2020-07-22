@@ -2,7 +2,8 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{Paragraph, Text, Widget},
+    text::{Span, Spans, Text},
+    widgets::{Paragraph, Widget},
 };
 
 pub struct Header;
@@ -10,25 +11,25 @@ pub struct Header;
 impl Header {
     pub fn render(&self, bg_color: Color, area: Rect, buf: &mut Buffer) {
         let standard = Style {
-            fg: Color::Black,
-            bg: bg_color,
+            fg: Color::Black.into(),
+            bg: bg_color.into(),
             ..Default::default()
         };
         debug_assert_ne!(standard.bg, standard.fg);
         let modified = |text: &'static str, modifier| {
-            Text::Styled(
-                text.into(),
+            Span::styled(
+                text,
                 Style {
-                    modifier,
+                    add_modifier: modifier,
                     ..standard
                 },
             )
         };
         let bold = |text: &'static str| modified(text, Modifier::BOLD);
         let italic = |text: &'static str| modified(text, Modifier::UNDERLINED);
-        let text = |text: &'static str| Text::Styled(text.into(), standard);
+        let text = |text: &'static str| Span::styled(text, standard);
 
-        let lines = [
+        let spans = vec![
             bold(" D"),
             text("isk "),
             bold("U"),
@@ -41,9 +42,9 @@ impl Header {
             modified("?", Modifier::BOLD | Modifier::UNDERLINED),
             italic(" for help)"),
         ];
-        Paragraph::new(lines.iter())
+        Paragraph::new(Text::from(Spans::from(spans)))
             .style(Style {
-                bg: bg_color,
+                bg: bg_color.into(),
                 ..Default::default()
             })
             .render(area, buf);

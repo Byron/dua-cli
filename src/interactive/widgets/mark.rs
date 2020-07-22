@@ -16,7 +16,8 @@ use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Text, Widget},
+    text::{Span, Spans, Text},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_react::{
     draw_text_nowrap_fn,
@@ -236,14 +237,14 @@ impl MarkPane {
         let has_focus = self.has_focus;
         let entries = marked.values().sorted_by_key(|v| &v.index).enumerate().map(
             |(idx, v): (usize, &EntryMark)| {
-                let default_style = match selected {
+                let base_style = match selected {
                     Some(selected) if idx == selected => {
                         let mut modifier = Modifier::REVERSED;
                         if has_focus {
                             modifier.insert(Modifier::BOLD);
                         }
                         Style {
-                            modifier,
+                            add_modifier: modifier,
                             ..Default::default()
                         }
                     }
@@ -272,38 +273,36 @@ impl MarkPane {
                         _ => (path, num_path_graphemes),
                     }
                 };
-                let fg_path = entry_color(Color::Reset, !v.is_dir, true);
-                let path = Text::Styled(
-                    path.into(),
+                let fg_path = entry_color(None, !v.is_dir, true);
+                let path = Span::styled(
+                    path,
                     Style {
                         fg: fg_path,
-                        ..default_style
+                        ..Style::default()
                     },
                 );
-                let bytes = Text::Styled(
+                let bytes = Span::styled(
                     format!(
                         "{:>byte_column_width$} ",
                         format.display(v.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
                         byte_column_width = format.width()
-                    )
-                    .into(),
+                    ),
                     Style {
-                        fg: Color::Green,
-                        ..default_style
+                        fg: Color::Green.into(),
+                        ..base_style
                     },
                 );
-                let spacer = Text::Styled(
+                let spacer = Span::styled(
                     format!(
                         "{:-space$}",
                         "",
                         space = (area.width as usize)
                             .saturating_sub(path_len)
                             .saturating_sub(format.total_width())
-                    )
-                    .into(),
+                    ),
                     Style {
-                        fg: fg_path,
-                        ..default_style
+                        fg: fg_path.into(),
+                        ..base_style
                     },
                 );
                 vec![path, spacer, bytes]
@@ -318,7 +317,7 @@ impl MarkPane {
             }
         };
         let block = Block::default()
-            .title(&title)
+            .title(title.as_str())
             .border_style(*border_style)
             .borders(Borders::ALL);
 
@@ -348,27 +347,25 @@ impl MarkPane {
             };
 
             let default_style = Style {
-                fg: Color::Black,
-                bg: Color::Yellow,
-                modifier: Modifier::BOLD,
+                fg: Color::Black.into(),
+                bg: Color::Yellow.into(),
+                add_modifier: Modifier::BOLD,
+                sub_modifier: Modifier::empty(),
             };
-            Paragraph::new(
-                [
-                    Text::Styled(
-                        " Ctrl + r".into(),
-                        Style {
-                            fg: Color::LightRed,
-                            modifier: default_style.modifier | Modifier::RAPID_BLINK,
-                            ..default_style
-                        },
-                    ),
-                    Text::Styled(
-                        " deletes listed entries from disk without prompt".into(),
-                        default_style,
-                    ),
-                ]
-                .iter(),
-            )
+            Paragraph::new(Text::from(Spans::from(vec![
+                Span::styled(
+                    " Ctrl + r",
+                    Style {
+                        fg: Color::LightRed.into(),
+                        add_modifier: default_style.add_modifier | Modifier::RAPID_BLINK,
+                        ..default_style
+                    },
+                ),
+                Span::styled(
+                    " deletes listed entries from disk without prompt",
+                    default_style,
+                ),
+            ])))
             .style(default_style)
             .render(help_line_area, buf);
             list_area
