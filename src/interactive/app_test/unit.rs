@@ -4,8 +4,6 @@ use crate::interactive::app_test::utils::{
 use anyhow::Result;
 use pretty_assertions::assert_eq;
 
-// Won't work on windows as there are backslashes in the paths :D
-#[cfg_attr(windows, ignore)]
 #[test]
 fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<()> {
     let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
@@ -19,8 +17,6 @@ fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(
     Ok(())
 }
 
-// Won't work on windows as there are backslashes in the paths :D
-#[cfg_attr(windows, ignore)]
 #[test]
 fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
     let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-02"])?;

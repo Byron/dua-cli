@@ -211,7 +211,10 @@ pub fn sample_01_tree() -> Tree {
     let mut t = Tree::new();
     {
         let mut add_node = make_add_node(&mut t);
+        #[cfg(not(windows))]
         let root_size = 1259070;
+        #[cfg(windows)]
+        let root_size = 1259069;
         let r = add_node("", root_size, None);
         {
             let s = add_node(&fixture_str("sample-01"), root_size, Some(r));
@@ -219,7 +222,10 @@ pub fn sample_01_tree() -> Tree {
                 add_node(".hidden.666", 666, Some(s));
                 add_node("a", 256, Some(s));
                 add_node("b.empty", 0, Some(s));
+                #[cfg(not(windows))]
                 add_node("c.lnk", 1, Some(s));
+                #[cfg(windows)]
+                add_node("c.lnk", 0, Some(s));
                 let d = add_node("dir", 1258024, Some(s));
                 {
                     add_node("1000bytes", 1000, Some(d));
@@ -249,7 +255,7 @@ pub fn sample_02_tree() -> Tree {
         let r = add_node("", root_size, None);
         {
             let s = add_node(
-                format!("{}/{}", FIXTURE_PATH, "sample-02").as_str(),
+                Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
                 root_size,
                 Some(r),
             );
