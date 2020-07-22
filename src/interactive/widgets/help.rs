@@ -1,9 +1,6 @@
 use crate::interactive::CursorDirection;
 use crosstermion::{input::Key, input::Key::*};
-use std::{
-    borrow::Borrow,
-    cell::{Cell, RefCell},
-};
+use std::{borrow::Borrow, cell::RefCell};
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -50,30 +47,26 @@ impl HelpPane {
     }
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
-        let (texts, num_lines) = {
-            let num_lines = Cell::new(0u16);
-            let count = |n| num_lines.set(num_lines.get() + n);
-            let lines = RefCell::new(Vec::with_capacity(30));
+        let lines = {
+            let lines = RefCell::new(Vec::<Spans>::with_capacity(30));
 
             let spacer = || {
-                count(2);
-                lines.borrow_mut().push(Span::from("\n\n"));
+                lines.borrow_mut().push(Spans::from(""));
+                lines.borrow_mut().push(Spans::from(""));
             };
             let title = |name| {
-                count(2);
-                lines.borrow_mut().push(Span::styled(
+                lines.borrow_mut().push(Spans::from(Span::styled(
                     format!("{}\n\n", name),
                     Style {
                         add_modifier: Modifier::BOLD | Modifier::UNDERLINED,
                         ..Default::default()
                     },
-                ));
+                )));
             };
             let hotkey = |keys, description, other_line: Option<&str>| {
                 let separator_size = 3;
                 let column_size = 11 + separator_size;
-                count(1 + other_line.iter().count() as u16);
-                lines.borrow_mut().push(Span::styled(
+                lines.borrow_mut().push(Spans::from(Span::styled(
                     format!(
                         "{:>column_size$}",
                         keys,
@@ -83,17 +76,17 @@ impl HelpPane {
                         fg: Color::Green.into(),
                         ..Default::default()
                     },
-                ));
+                )));
                 lines
                     .borrow_mut()
-                    .push(Span::from(format!(" => {}\n", description)));
+                    .push(Spans::from(Span::from(format!(" => {}\n", description))));
                 if let Some(second_line) = other_line {
-                    lines.borrow_mut().push(Span::from(format!(
+                    lines.borrow_mut().push(Spans::from(Span::from(format!(
                         "{:>column_size$}{}\n",
                         "",
                         second_line,
                         column_size = column_size + 1
-                    )));
+                    ))));
                 }
             };
 
@@ -179,7 +172,7 @@ impl HelpPane {
                 );
                 spacer();
             }
-            (lines.into_inner(), num_lines.get())
+            lines.into_inner()
         };
 
         let HelpPaneProps {
@@ -213,8 +206,10 @@ impl HelpPane {
         }
 
         let area = margin(inner_block_area, 1);
-        self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));
-        Paragraph::new(Text::from(Spans::from(texts)))
+        self.scroll = self
+            .scroll
+            .min(lines.len().saturating_sub(area.height as usize) as u16);
+        Paragraph::new(Text::from(lines))
             .scroll((self.scroll, 0))
             .render(area, buf);
     }
