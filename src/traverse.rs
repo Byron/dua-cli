@@ -95,7 +95,7 @@ impl Traversal {
                         } else {
                             entry.file_name.into()
                         };
-                        let file_size = match entry.client_state {
+                        let file_size = match &entry.client_state {
                             Some(Ok(ref m))
                                 if !m.is_dir()
                                     && (walk_options.count_hard_links || inodes.add(m))
@@ -105,11 +105,15 @@ impl Traversal {
                                 if walk_options.apparent_size {
                                     m.len()
                                 } else {
-                                    data.name.size_on_disk_fast(m).unwrap_or_else(|_| {
-                                        t.io_errors += 1;
-                                        data.metadata_io_error = true;
-                                        0
-                                    })
+                                    entry
+                                        .parent_path
+                                        .join(&data.name)
+                                        .size_on_disk_fast(m)
+                                        .unwrap_or_else(|_| {
+                                            t.io_errors += 1;
+                                            data.metadata_io_error = true;
+                                            0
+                                        })
                                 }
                             }
                             Some(Ok(_)) => 0,
