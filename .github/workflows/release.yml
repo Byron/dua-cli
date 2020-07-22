@@ -100,12 +100,12 @@ jobs:
             feature: tui-crossplatform
           - build: win-gnu
             os: windows-2019
-            rust: stable-x86_64-gnu
+            rust: nightly-x86_64-gnu
             target: x86_64-pc-windows-gnu
             feature: tui-crossplatform
           - build: win32-msvc
             os: windows-2019
-            rust: stable
+            rust: nightly
             target: i686-pc-windows-msvc
             feature: tui-crossplatform
 
