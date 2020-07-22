@@ -57,7 +57,7 @@ impl fmt::Display for DisplayByteVisualization {
                 Self::make_bar(f, percentage, BAR_SIZE)
             }
             Bar => Self::make_bar(f, percentage, BAR_SIZE),
-            LongBar => Self::make_bar(f, percentage, 20),
+            LongBar => Self::make_bar(f, percentage, 19),
         }
     }
 }
