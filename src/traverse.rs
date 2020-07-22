@@ -2,7 +2,12 @@ use crate::{crossdev, get_size_or_panic, InodeFilter, WalkOptions};
 use anyhow::Result;
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
-use std::{path::PathBuf, time::Duration, time::Instant};
+use std::{
+    fs::Metadata,
+    io,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 pub type TreeIndex = NodeIndex;
 pub type Tree = StableGraph<EntryData, (), Directed>;
@@ -78,6 +83,16 @@ impl Traversal {
             // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
             walk_options.threads = num_cpus::get();
         }
+
+        #[cfg(not(windows))]
+        fn size_on_disk(_parent: &Path, name: &Path, meta: &Metadata) -> io::Result<u64> {
+            name.size_on_disk_fast(meta)
+        }
+        #[cfg(windows)]
+        fn size_on_disk(parent: &Path, name: &Path, meta: &Metadata) -> io::Result<u64> {
+            parent.join(name).size_on_disk_fast(meta)
+        }
+
         for path in input.into_iter() {
             let mut last_seen_eid = 0;
             let device_id = crossdev::init(path.as_ref())?;
@@ -105,15 +120,13 @@ impl Traversal {
                                 if walk_options.apparent_size {
                                     m.len()
                                 } else {
-                                    entry
-                                        .parent_path
-                                        .join(&data.name)
-                                        .size_on_disk_fast(m)
-                                        .unwrap_or_else(|_| {
+                                    size_on_disk(&entry.parent_path, &data.name, m).unwrap_or_else(
+                                        |_| {
                                             t.io_errors += 1;
                                             data.metadata_io_error = true;
                                             0
-                                        })
+                                        },
+                                    )
                                 }
                             }
                             Some(Ok(_)) => 0,
