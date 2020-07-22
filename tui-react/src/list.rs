@@ -1,7 +1,8 @@
 use tui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, Paragraph, Text, Widget},
+    text::{Span, Spans, Text},
+    widgets::{Block, Paragraph, Widget},
 };
 
 #[derive(Default)]
@@ -33,7 +34,7 @@ impl List {
     pub fn render<'a, 't>(
         &mut self,
         props: ListProps<'a>,
-        items: impl IntoIterator<Item = Vec<Text<'t>>>,
+        items: impl IntoIterator<Item = Vec<Span<'t>>>,
         area: Rect,
         buf: &mut Buffer,
     ) {
@@ -44,8 +45,9 @@ impl List {
 
         let list_area = match block {
             Some(b) => {
+                let area = b.inner(area);
                 b.render(area, buf);
-                b.inner(area)
+                area
             }
             None => area,
         };
@@ -55,14 +57,14 @@ impl List {
             return;
         }
 
-        for (i, text_iterator) in items
+        for (i, vec_of_spans) in items
             .into_iter()
             .skip(self.offset)
             .enumerate()
             .take(list_area.height as usize)
         {
             let (x, y) = (list_area.left(), list_area.top() + i as u16);
-            Paragraph::new(text_iterator.iter()).render(
+            Paragraph::new(Text::from(Spans::from(vec_of_spans))).render(
                 Rect {
                     x,
                     y,

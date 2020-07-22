@@ -54,7 +54,7 @@ pub fn draw_text_with_ellipsis_nowrap(
             }
             cell.symbol = g.into();
             if let Some(s) = s {
-                cell.style = s;
+                cell.set_style(s);
             }
 
             x_offset += width.saturating_sub(1) as u16;
@@ -86,7 +86,7 @@ pub fn draw_text_nowrap_fn(
     for (g, x) in t.as_ref().graphemes(true).zip(bound.left()..bound.right()) {
         let cell = buf.get_mut(x, bound.y);
         cell.symbol = g.into();
-        cell.style = s(&cell.symbol, x, bound.y);
+        cell.set_style(s(&cell.symbol, x, bound.y));
     }
 }
 
