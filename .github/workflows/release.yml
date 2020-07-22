@@ -95,7 +95,7 @@ jobs:
             feature: tui-unix
           - build: win-msvc
             os: windows-2019
-            rust: stable
+            rust: nightly
             target: x86_64-pc-windows-msvc
             feature: tui-crossplatform
           - build: win-gnu
