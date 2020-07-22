@@ -2,8 +2,7 @@ use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
 use colored::{Color, Colorize};
 use filesize::PathExt;
-use std::borrow::Cow;
-use std::{io, path::Path};
+use std::{borrow::Cow, io, path::Path};
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
