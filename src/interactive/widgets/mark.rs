@@ -278,7 +278,7 @@ impl MarkPane {
                     path,
                     Style {
                         fg: fg_path,
-                        ..Style::default()
+                        ..base_style
                     },
                 );
                 let bytes = Span::styled(
