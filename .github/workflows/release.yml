@@ -85,7 +85,7 @@ jobs:
             feature: tui-unix
           - build: linux-arm
             os: ubuntu-18.04
-            rust: nightly
+            rust: stable
             target: arm-unknown-linux-gnueabihf
             feature: tui-unix
           - build: macos
