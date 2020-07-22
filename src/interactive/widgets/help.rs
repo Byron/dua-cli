@@ -192,6 +192,7 @@ impl HelpPane {
             .title(title)
             .border_style(*border_style)
             .borders(Borders::ALL);
+        let inner_block_area = block.inner(area);
         block.render(area, buf);
 
         if *has_focus {
@@ -211,7 +212,7 @@ impl HelpPane {
             }
         }
 
-        let area = margin(block.inner(area), 1);
+        let area = margin(inner_block_area, 1);
         self.scroll = self.scroll.min(num_lines.saturating_sub(area.height));
         Paragraph::new(Text::from(Spans::from(texts)))
             .scroll((self.scroll, 0))
