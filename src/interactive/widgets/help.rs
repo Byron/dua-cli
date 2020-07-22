@@ -49,40 +49,43 @@ impl HelpPane {
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let lines = {
             let lines = RefCell::new(Vec::<Spans>::with_capacity(30));
-
-            let spacer = || {
-                lines.borrow_mut().push(Spans::from(""));
-                lines.borrow_mut().push(Spans::from(""));
+            let add_newlines = |n| {
+                for _ in 0..n {
+                    lines.borrow_mut().push(Spans::from(Span::raw("")))
+                }
             };
+
+            let spacer = || add_newlines(2);
             let title = |name| {
                 lines.borrow_mut().push(Spans::from(Span::styled(
-                    format!("{}\n\n", name),
+                    format!("{}", name),
                     Style {
                         add_modifier: Modifier::BOLD | Modifier::UNDERLINED,
                         ..Default::default()
                     },
                 )));
+                add_newlines(1);
             };
             let hotkey = |keys, description, other_line: Option<&str>| {
                 let separator_size = 3;
                 let column_size = 11 + separator_size;
-                lines.borrow_mut().push(Spans::from(Span::styled(
-                    format!(
-                        "{:>column_size$}",
-                        keys,
-                        column_size = column_size - separator_size
+                lines.borrow_mut().push(Spans::from(vec![
+                    Span::styled(
+                        format!(
+                            "{:>column_size$}",
+                            keys,
+                            column_size = column_size - separator_size
+                        ),
+                        Style {
+                            fg: Color::Green.into(),
+                            ..Default::default()
+                        },
                     ),
-                    Style {
-                        fg: Color::Green.into(),
-                        ..Default::default()
-                    },
-                )));
-                lines
-                    .borrow_mut()
-                    .push(Spans::from(Span::from(format!(" => {}\n", description))));
+                    Span::from(format!(" => {}", description)),
+                ]));
                 if let Some(second_line) = other_line {
                     lines.borrow_mut().push(Spans::from(Span::from(format!(
-                        "{:>column_size$}{}\n",
+                        "{:>column_size$}{}",
                         "",
                         second_line,
                         column_size = column_size + 1
