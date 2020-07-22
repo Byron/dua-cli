@@ -45,9 +45,9 @@ impl List {
 
         let list_area = match block {
             Some(b) => {
-                let area = b.inner(area);
+                let inner_area = b.inner(area);
                 b.render(area, buf);
-                area
+                inner_area
             }
             None => area,
         };
