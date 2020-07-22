@@ -255,7 +255,7 @@ pub fn sample_02_tree() -> Tree {
         let r = add_node("", root_size, None);
         {
             let s = add_node(
-                format!("{}/{}", FIXTURE_PATH, "sample-02").as_str(),
+                Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
                 root_size,
                 Some(r),
             );
