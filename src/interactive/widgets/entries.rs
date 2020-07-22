@@ -125,13 +125,20 @@ impl Entries {
                         ..style
                     },
                 );
+                let fraction = w.size as f32 / total as f32;
+                let should_avoid_showing_a_big_reversed_bar = fraction > 0.9;
+                let local_style = if should_avoid_showing_a_big_reversed_bar {
+                    style.remove_modifier(Modifier::REVERSED)
+                } else {
+                    style
+                };
+
+                let left_bar = Span::styled(" |", local_style);
                 let percentage = Span::styled(
-                    format!(
-                        " |{}| ",
-                        display.byte_vis.display(w.size as f32 / total as f32)
-                    ),
-                    style,
+                    format!("{}", display.byte_vis.display(fraction)),
+                    local_style,
                 );
+                let right_bar = Span::styled("| ", local_style);
 
                 let name = Span::styled(
                     fill_background_to_right(
@@ -153,7 +160,7 @@ impl Entries {
                         Style { fg, ..style }
                     },
                 );
-                vec![bytes, percentage, name]
+                vec![bytes, left_bar, percentage, right_bar, name]
             },
         );
 

@@ -206,7 +206,7 @@ dependencies = [
  "crossterm",
  "termion",
  "tui",
- "tui-react 0.10.0",
+ "tui-react 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -227,7 +227,7 @@ checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
 name = "dua-cli"
-version = "2.9.1"
+version = "2.10.0"
 dependencies = [
  "anyhow",
  "atty",
@@ -243,7 +243,7 @@ dependencies = [
  "pretty_assertions",
  "structopt",
  "tui",
- "tui-react 0.10.0",
+ "tui-react 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation",
  "wild",
 ]
@@ -707,9 +707,7 @@ dependencies = [
 
 [[package]]
 name = "tui-react"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21bbc5221de660fa2cc79a5386d72f268174a90e37eef004f5210cc7f94baf78"
+version = "0.10.1"
 dependencies = [
  "log",
  "tui",
@@ -720,6 +718,8 @@ dependencies = [
 [[package]]
 name = "tui-react"
 version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97bea172550957047351f406690772b6fa6244c20b95cbb230228bbb7477c61"
 dependencies = [
  "log",
  "tui",

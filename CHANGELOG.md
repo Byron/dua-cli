@@ -1,3 +1,7 @@
+#### v2.10.0 - Minor improvements of looks; improved windows support
+
+* previously in interactive mode on Windows, directory sizes would appear as 0 bytes in size. This is now fixed!
+
 #### v2.9.1 - Globs for Windows; fixed handling of colors
 
 * On widnows, `dua` will now expand glob patterns by itself as this capability is not implemented by shells `dua` can now run in.
