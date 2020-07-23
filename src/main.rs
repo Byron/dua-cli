@@ -1,10 +1,8 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::match_bool)]
 use anyhow::{anyhow, Result};
 use dua::{ByteFormat, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 use structopt::StructOpt;
-use wild;
 
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;

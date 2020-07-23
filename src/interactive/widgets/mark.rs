@@ -301,7 +301,7 @@ impl MarkPane {
                             .saturating_sub(format.total_width())
                     ),
                     Style {
-                        fg: fg_path.into(),
+                        fg: fg_path,
                         ..base_style
                     },
                 );

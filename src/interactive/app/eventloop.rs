@@ -77,7 +77,7 @@ impl AppState {
         use crosstermion::input::Key::*;
         use FocussedPane::*;
 
-        self.draw(window, traversal, display.clone(), terminal)?;
+        self.draw(window, traversal, *display, terminal)?;
         for key in keys {
             self.reset_message();
             match key {
@@ -107,7 +107,7 @@ impl AppState {
 
             match self.focussed {
                 FocussedPane::Mark => {
-                    self.dispatch_to_mark_pane(key, window, traversal, display.clone(), terminal)
+                    self.dispatch_to_mark_pane(key, window, traversal, *display, terminal)
                 }
                 FocussedPane::Help => {
                     window.help_pane.as_mut().expect("help pane").key(key);
@@ -147,7 +147,7 @@ impl AppState {
                     _ => {}
                 },
             };
-            self.draw(window, traversal, display.clone(), terminal)?;
+            self.draw(window, traversal, *display, terminal)?;
         }
         Ok(ProcessingResult::Finished(WalkResult {
             num_errors: traversal.io_errors,

@@ -56,9 +56,9 @@ impl HelpPane {
             };
 
             let spacer = || add_newlines(2);
-            let title = |name| {
+            let title = |name: &str| {
                 lines.borrow_mut().push(Spans::from(Span::styled(
-                    format!("{}", name),
+                    name.to_string(),
                     Style {
                         add_modifier: Modifier::BOLD | Modifier::UNDERLINED,
                         ..Default::default()
