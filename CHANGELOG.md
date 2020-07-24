@@ -1,3 +1,7 @@
+#### v2.10.1 - Change light-grey color to Cyan to fix disappearing text
+
+See [this PR](https://github.com/Byron/dua-cli/pull/62) for reference.
+
 #### v2.10.0 - Minor improvements of looks; improved windows support
 
 * previously in interactive mode on Windows, directory sizes would appear as 0 bytes in size. This is now fixed!
