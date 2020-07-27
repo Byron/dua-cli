@@ -1,4 +1,6 @@
-#### v2.10.1 - Change light-grey color to Cyan to fix disappearing text
+#### v2.10.2 - Change light-grey color in command-line mode to Cyan to fix disappearing text
+
+#### v2.10.1 - Change light-grey color in interactive mode to Cyan to fix disappearing text
 
 See [this PR](https://github.com/Byron/dua-cli/pull/62) for reference.
 
