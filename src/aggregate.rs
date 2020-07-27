@@ -117,14 +117,6 @@ fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
     }
 }
 
-fn colorize_path(path: &Path, path_color: Option<colored::Color>) -> colored::ColoredString {
-    if let Some(path_color) = path_color {
-        path.display().to_string().as_str().color(path_color)
-    } else {
-        path.display().to_string().as_str().normal()
-    }
-}
-
 fn output_colored_path(
     out: &mut impl io::Write,
     options: &WalkOptions,
@@ -142,7 +134,13 @@ fn output_colored_path(
             .to_string()
             .as_str()
             .green(),
-        colorize_path(path.as_ref(), path_color),
+        {
+            let path = path.as_ref().display().to_string();
+            match path_color {
+                Some(color) => path.color(color),
+                None => path.normal(),
+            }
+        },
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
