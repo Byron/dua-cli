@@ -111,9 +111,17 @@ pub fn aggregate(
 
 fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
     if path.as_ref().is_file() {
-        Some(Color::BrightBlack)
-    } else {
         None
+    } else {
+        Some(Color::Cyan)
+    }
+}
+
+fn colorize_path(path: &Path, path_color: Option<colored::Color>) -> colored::ColoredString {
+    if let Some(path_color) = path_color {
+        path.display().to_string().as_str().color(path_color)
+    } else {
+        path.display().to_string().as_str().normal()
     }
 }
 
@@ -134,11 +142,7 @@ fn output_colored_path(
             .to_string()
             .as_str()
             .green(),
-        path.as_ref()
-            .display()
-            .to_string()
-            .as_str()
-            .color(path_color.unwrap_or(Color::White)),
+        colorize_path(path.as_ref(), path_color),
         if num_errors == 0 {
             Cow::Borrowed("")
         } else {
