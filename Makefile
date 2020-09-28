@@ -31,7 +31,7 @@ benchmark: target/release/dua ## see how fast things are, powered by hyperfine
 
 tests: check unit-tests journey-tests ## run all tests
 
-check:## run all unit tests
+check:## run cargo-check with various features
 	cargo check --all
 	cargo check --all-features
 	cargo check --no-default-features

@@ -199,14 +199,14 @@ dependencies = [
 
 [[package]]
 name = "crosstermion"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "893b2cce6bdffad38cace7e10ada7661a4bcf5f7440bc3bafc403eccdb710eff"
+checksum = "5147a6e732c07ab18f5792f89925b1ffd2de55888e533a3976fcfc5ccae7ba0b"
 dependencies = [
  "crossterm",
  "termion",
- "tui 0.10.0",
- "tui-react 0.10.1",
+ "tui",
+ "tui-react 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -242,8 +242,8 @@ dependencies = [
  "petgraph",
  "pretty_assertions",
  "structopt",
- "tui 0.10.0",
- "tui-react 0.10.1",
+ "tui",
+ "tui-react 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation",
  "wild",
 ]
@@ -677,9 +677,9 @@ dependencies = [
 
 [[package]]
 name = "tui"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a977b0bb2e2033a6fef950f218f13622c3c34e59754b704ce3492dedab1dfe95"
+checksum = "c2eaeee894a1e9b90f80aa466fe59154fdb471980b5e104d8836fcea309ae17e"
 dependencies = [
  "bitflags",
  "cassowary",
@@ -690,25 +690,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2eaeee894a1e9b90f80aa466fe59154fdb471980b5e104d8836fcea309ae17e"
-dependencies = [
- "bitflags",
- "cassowary",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "tui-react"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97bea172550957047351f406690772b6fa6244c20b95cbb230228bbb7477c61"
+version = "0.12.0"
 dependencies = [
  "log",
- "tui 0.10.0",
+ "tui",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -716,9 +702,11 @@ dependencies = [
 [[package]]
 name = "tui-react"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7750e2087df1869b0bf5db57dba0d6361a8ba1419962fa169358a279a9fa6eeb"
 dependencies = [
  "log",
- "tui 0.12.0",
+ "tui",
  "unicode-segmentation",
  "unicode-width",
 ]
