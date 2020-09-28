@@ -8,11 +8,22 @@
 
 ### Installation
 
-### Binary Release
+### Binary Release (MacOS, Windows)
+
+#### MacOS & Windows
 
 ```sh
 curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh | \
     sh -s -- --git byron/dua-cli --crate dua
+```
+
+#### Linux
+
+Linux requires the target to be specified explicitly to obtain the MUSL build.
+
+```sh
+curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh | \
+    sh -s -- --git byron/dua-cli --target x86_64-unknown-linux-musl --crate dua
 ```
 
 See the [releases section][releases] for manual installation.
