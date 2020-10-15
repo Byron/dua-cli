@@ -1,3 +1,7 @@
+#### v2.10.3 - dependency update
+
+Should fix [this issue](https://github.com/Byron/dua-cli/issues/66)
+
 #### v2.10.2 - Change light-grey color in command-line mode to Cyan to fix disappearing text
 
 #### v2.10.1 - Change light-grey color in interactive mode to Cyan to fix disappearing text
