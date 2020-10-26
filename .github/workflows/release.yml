@@ -14,17 +14,17 @@ name: release
 on:
   push:
 #     Enable when testing release infrastructure on a branch.
-#    branches:
-#      - master
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - release-test
+#    tags:
+#      - 'v[0-9]+.[0-9]+.[0-9]+'
 jobs:
   create-release:
     name: create-release
     runs-on: ubuntu-latest
-#    env:
-#      # Set to force version number, e.g., when no tag exists.
-#      ARTIFACT_VERSION: TEST-0.0.1
+    env:
+      # Set to force version number, e.g., when no tag exists.
+      ARTIFACT_VERSION: TEST-0.0.1
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -76,19 +76,19 @@ jobs:
       BIN_NAME: dua
     strategy:
       matrix:
-#        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
-        build: [linux, macos, win-msvc, win-gnu, win32-msvc]
+        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
+#        build: [linux, macos, win-msvc, win-gnu, win32-msvc]
         include:
           - build: linux
             os: ubuntu-18.04
             rust: stable
             target: x86_64-unknown-linux-musl
             feature: tui-unix
-#          - build: linux-arm
-#            os: ubuntu-18.04
-#            rust: stable
-#            target: arm-unknown-linux-gnueabihf
-#            feature: tui-unix
+          - build: linux-arm
+            os: ubuntu-18.04
+            rust: stable
+            target: arm-unknown-linux-gnueabihf
+            feature: tui-unix
           - build: macos
             os: macos-latest
             rust: stable
