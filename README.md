@@ -8,9 +8,9 @@
 
 ### Installation
 
-### Binary Release (MacOS, Windows)
+### Binary Release (all but Windows)
 
-#### MacOS & Windows
+#### MacOS
 
 ```sh
 curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh | \
@@ -26,6 +26,8 @@ curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh 
     sh -s -- --git byron/dua-cli --target x86_64-unknown-linux-musl --crate dua
 ```
 
+#### Windows and others
+
 See the [releases section][releases] for manual installation.
 
 [releases]: https://github.com/Byron/dua-cli/releases
@@ -33,11 +35,17 @@ See the [releases section][releases] for manual installation.
 #### Cargo
 Via `cargo`, which can be obtained using [rustup][rustup]
 
+For _Unix_…
 ```
 cargo install dua-cli
 
 # And if you don't need a terminal user interface
 cargo install dua-cli --no-default-features
+```
+
+For _Windows_, nightly features are currently required.
+```
+cargo +nightly install dua-cli
 ```
 
 #### VoidLinux
@@ -67,7 +75,7 @@ You will find pre-built binaries for Windows in the [releases section](https://g
 Alternatively, install via cargo as in
 
 ```
-cargo install dua-cli
+cargo +nightly install dua-cli
 ```
 
 ### Usage
