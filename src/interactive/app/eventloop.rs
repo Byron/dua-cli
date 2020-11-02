@@ -253,6 +253,7 @@ impl TerminalApp {
                     state.as_mut().expect("state to be present, we just set it")
                 }
             };
+            s.reset_message(); // force "scanning" to appear
             let should_exit = match s.process_events(
                 &mut window,
                 traversal,
