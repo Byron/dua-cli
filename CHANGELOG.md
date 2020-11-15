@@ -1,3 +1,7 @@
+#### v2.10.4 - dependency update
+
+* upgrade to TUI v0.13.0
+
 #### v2.10.3 - dependency update
 
 Should fix [this issue](https://github.com/Byron/dua-cli/issues/66)
