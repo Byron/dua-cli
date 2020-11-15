@@ -258,8 +258,8 @@ checksum = "5147a6e732c07ab18f5792f89925b1ffd2de55888e533a3976fcfc5ccae7ba0b"
 dependencies = [
  "crossterm",
  "termion",
- "tui",
- "tui-react 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tui 0.12.0",
+ "tui-react 0.12.0",
 ]
 
 [[package]]
@@ -295,8 +295,8 @@ dependencies = [
  "petgraph",
  "pretty_assertions",
  "structopt",
- "tui",
- "tui-react 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tui 0.12.0",
+ "tui-react 0.12.0",
  "unicode-segmentation",
  "wild",
 ]
@@ -741,11 +741,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-react"
-version = "0.12.0"
+name = "tui"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d4e6c82bb967df89f20b875fa8835fab5d5622c6a5efa574a1f0b6d0aa6e8f6"
 dependencies = [
- "log",
- "tui",
+ "bitflags",
+ "cassowary",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -757,7 +759,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7750e2087df1869b0bf5db57dba0d6361a8ba1419962fa169358a279a9fa6eeb"
 dependencies = [
  "log",
- "tui",
+ "tui 0.12.0",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
+name = "tui-react"
+version = "0.13.0"
+dependencies = [
+ "log",
+ "tui 0.13.0",
  "unicode-segmentation",
  "unicode-width",
 ]
