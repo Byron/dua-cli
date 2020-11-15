@@ -28,7 +28,7 @@ See [this PR](https://github.com/Byron/dua-cli/pull/62) for reference.
 
 #### v2.8.2
 
-* Switch back to `structopt` from `argh` to support non-UTF-8 encoded paths to be passed to dua
+* Switch back to `clap` from `argh` to support non-UTF-8 encoded paths to be passed to dua
 
 I hope that `argh` or an alternative will one day consider supporting os-strings, as it would in theory be an issue
 for anyone who passes paths to their command-line tool.
@@ -39,7 +39,7 @@ for anyone who passes paths to their command-line tool.
 
 #### v2.8.0
 
-* Switched from `structopt` to `argh` for a 300kb reduction in binary size and 1 minute smaller compile times.
+* Switched from `clap` to `argh` for a 300kb reduction in binary size and 1 minute smaller compile times.
 
 #### v2.7.0
 
