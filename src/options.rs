@@ -53,6 +53,7 @@ impl From<ByteFormat> for LibraryByteFormat {
 #[derive(Debug, Clap)]
 #[clap(name = "dua", about = "A tool to learn about disk usage, fast!")]
 #[clap(setting = clap::AppSettings::ColoredHelp)]
+#[clap(override_usage = "dua [FLAGS] [OPTIONS] [SUBCOMMAND] [input]...")]
 pub struct Args {
     #[clap(subcommand)]
     pub command: Option<Command>,
