@@ -1,4 +1,6 @@
-#### v2.10.4 - dependency update
+#### v2.10.6 - Fix `dua -h` usage string
+
+#### v2.10.5 - dependency update
 
 * upgrade to TUI v0.13.0
 
