@@ -13,7 +13,7 @@ fn main() -> Result<()> {
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
     let walk_options = dua::WalkOptions {
-        threads: opt.threads.unwrap_or(0),
+        threads: opt.threads,
         byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
