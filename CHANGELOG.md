@@ -1,3 +1,12 @@
+#### v2.10.7 - Better performance on Apple Silicon (M1)
+
+The IO subsystem on Apple Silicon is different and won't scale nicely just by using all amount of available cores. Instead it seems best to only
+use as many threads as performance cores are present on the system - otherwise the performance might actually get worse while using more power.
+
+On all other systems, the default number of threads did not change.
+
+**Please note that for optimial performance** one would need an arm build on MacOS, currently provided is only intel builds.
+
 #### v2.10.6 - Fix `dua -h` usage string
 
 #### v2.10.5 - dependency update
