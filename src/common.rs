@@ -136,7 +136,7 @@ impl WalkOptions {
                 TraversalSorting::AlphabeticalByFileName => true,
             })
             .skip_hidden(false)
-            .process_read_dir(|_, dir_entry_results| {
+            .process_read_dir(|_, _, _, dir_entry_results| {
                 dir_entry_results.iter_mut().for_each(|dir_entry_result| {
                     if let Ok(dir_entry) = dir_entry_result {
                         dir_entry.client_state = Some(dir_entry.metadata());
