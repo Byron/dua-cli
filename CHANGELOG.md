@@ -1,3 +1,8 @@
+#### v2.10.8 - Fix build
+
+A breaking change in jwalk can cause builds to fail. This prevents the issue from spreading at least
+with dua-cli.
+
 #### v2.10.7 - Better performance on Apple Silicon (M1)
 
 The IO subsystem on Apple Silicon is different and won't scale nicely just by using all amount of available cores. Instead it seems best to only
