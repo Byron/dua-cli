@@ -1,5 +1,12 @@
 #### v2.10.8 - Fix build
 
+Now that `jwalk` was released in v0.6 with v0.5.2 yanked, `cargo install` will use the previous
+version v0.5.1 which does not fit the latest `dua` anymore.
+
+This is now fixed and hopefully permanently so thanks to using `jwalk` v0.6.
+
+#### v2.10.8 - Fix build
+
 A breaking change in jwalk can cause builds to fail. This prevents the issue from spreading at least
 with dua-cli.
 
