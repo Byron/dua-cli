@@ -1,3 +1,8 @@
+#### v2.10.10 - Fix --version flag
+
+It looks like the latest BETAs of clap removed setting the version implicitly.
+
+
 #### v2.10.9 - Fix build
 
 Now that `jwalk` was released in v0.6 with v0.5.2 yanked, `cargo install` will use the previous
