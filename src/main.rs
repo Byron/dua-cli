@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Clap;
 use dua::{ByteFormat, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
         Some(Interactive { input }) => {
             use crate::interactive::{Interaction, TerminalApp};
-            use anyhow::Context;
+            use anyhow::{anyhow, Context};
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";

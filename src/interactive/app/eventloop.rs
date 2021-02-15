@@ -236,10 +236,14 @@ impl TerminalApp {
         };
 
         let mut state = None::<AppState>;
+        let mut received_events = false;
         let traversal = Traversal::from_walk(options, input, |traversal| {
             let s = match state.as_mut() {
                 Some(s) => {
                     s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
+                    if !received_events {
+                        s.selected = s.entries.get(0).map(|b| b.index);
+                    }
                     s
                 }
                 None => {
@@ -260,12 +264,15 @@ impl TerminalApp {
                 }
             };
             s.reset_message(); // force "scanning" to appear
+            let events = fetch_buffered_key_events();
+            received_events |= !events.is_empty();
+
             let should_exit = match s.process_events(
                 &mut window,
                 traversal,
                 &mut display,
                 terminal,
-                fetch_buffered_key_events().into_iter(),
+                events.into_iter(),
             )? {
                 ProcessingResult::ExitRequested(_) => true,
                 ProcessingResult::Finished(_) => false,
@@ -294,7 +301,11 @@ impl TerminalApp {
                     });
                     s.is_scanning = false;
                     s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
-                    s.selected = s.selected.or_else(|| s.entries.get(0).map(|b| b.index));
+                    s.selected = if received_events {
+                        s.selected.or_else(|| s.entries.get(0).map(|b| b.index))
+                    } else {
+                        s.entries.get(0).map(|b| b.index)
+                    };
                     s
                 },
                 display,
