@@ -279,7 +279,7 @@ impl TerminalApp {
             };
             Ok(should_exit)
         })?;
-        let traversal = match traversal {
+        let mut traversal = match traversal {
             Some(t) => t,
             None => return Ok(None),
         };
@@ -306,6 +306,15 @@ impl TerminalApp {
                     } else {
                         s.entries.get(0).map(|b| b.index)
                     };
+                    // Force event processing with a key that doesn't do anything.
+                    s.process_events(
+                        &mut window,
+                        &mut traversal,
+                        &mut display,
+                        terminal,
+                        std::iter::once(Key::Alt('\r')),
+                    )
+                    .ok();
                     s
                 },
                 display,

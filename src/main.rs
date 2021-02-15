@@ -44,7 +44,7 @@ fn main() -> Result<()> {
             )?
             .map(|(keys_rx, mut app)| {
                 let res = app.process_events(&mut terminal, keys_rx.into_iter());
-                // Leak app memory to avoid having to wait for the hashmap to deallocate, which causes a noticable delay shortly before the the
+                // Leak app memory to avoid having to wait for the hashmap to deallocate, which causes a noticeable delay shortly before the the
                 // program exits anyway.
                 std::mem::forget(app);
                 res
