@@ -1,3 +1,8 @@
+#### v2.11.0
+
+* Add binding capital 'H' to go to the top of any pane/list
+* Add binding capital 'G' to go to the bottom of any pane/list
+
 #### v2.10.10 - Fix --version flag
 
 It looks like the latest BETAs of clap removed setting the version implicitly.

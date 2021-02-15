@@ -110,7 +110,11 @@ impl AppState {
                     self.dispatch_to_mark_pane(key, window, traversal, *display, terminal)
                 }
                 FocussedPane::Help => {
-                    window.help_pane.as_mut().expect("help pane").key(key);
+                    window
+                        .help_pane
+                        .as_mut()
+                        .expect("help pane")
+                        .process_events(key);
                 }
                 FocussedPane::Main => match key {
                     Char('O') => self.open_that(traversal),
@@ -138,6 +142,8 @@ impl AppState {
                     Char('o') | Char('l') | Char('\n') | Right => {
                         self.enter_node_with_traversal(traversal)
                     }
+                    Char('H') => self.change_entry_selection(CursorDirection::ToTop),
+                    Char('G') => self.change_entry_selection(CursorDirection::ToBottom),
                     Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
                     Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
                     Char('j') | Down => self.change_entry_selection(CursorDirection::Down),

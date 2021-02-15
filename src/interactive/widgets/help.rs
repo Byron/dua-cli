@@ -33,8 +33,10 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
-    pub fn key(&mut self, key: Key) {
+    pub fn process_events(&mut self, key: Key) {
         match key {
+            Char('H') => self.scroll_help(CursorDirection::ToTop),
+            Char('G') => self.scroll_help(CursorDirection::ToBottom),
             Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
             Char('k') | Up => self.scroll_help(CursorDirection::Up),
             Char('j') | Down => self.scroll_help(CursorDirection::Down),
@@ -120,6 +122,8 @@ impl HelpPane {
                 hotkey("<Page Down>", "^", None);
                 hotkey("Ctrl + u", "move up 10 entries at once", None);
                 hotkey("<Page Up>", "^", None);
+                hotkey("H", "Move to the top of the entries list", None);
+                hotkey("G", "Move to the bottomw of the entries list", None);
                 spacer();
             }
             title("Keys for display");

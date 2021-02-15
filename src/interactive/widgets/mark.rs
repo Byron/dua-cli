@@ -102,13 +102,15 @@ impl MarkPane {
     pub fn marked(&self) -> &EntryMarkMap {
         &self.marked
     }
-    pub fn key(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
+    pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         match key {
             Ctrl('r') => return self.prepare_deletion(),
             Char('x') | Char('d') | Char(' ') => {
                 return self.remove_selected().map(|s| (s, action))
             }
+            Char('H') => self.change_selection(CursorDirection::ToTop),
+            Char('G') => self.change_selection(CursorDirection::ToBottom),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),

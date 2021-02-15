@@ -29,12 +29,16 @@ pub enum CursorDirection {
     Down,
     Up,
     PageUp,
+    ToTop,
+    ToBottom,
 }
 
 impl CursorDirection {
     pub fn move_cursor(&self, n: usize) -> usize {
         use CursorDirection::*;
         match self {
+            ToTop => 0,
+            ToBottom => usize::MAX,
             Down => n.saturating_add(1),
             Up => n.saturating_sub(1),
             PageDown => n.saturating_add(10),
@@ -202,7 +206,7 @@ impl AppState {
     ) where
         B: Backend,
     {
-        let res = window.mark_pane.take().and_then(|p| p.key(key));
+        let res = window.mark_pane.take().and_then(|p| p.process_events(key));
         window.mark_pane = match res {
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
