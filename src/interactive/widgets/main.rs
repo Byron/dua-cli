@@ -118,11 +118,7 @@ impl MainWindow {
         if let Some((help_area, pane)) = help_pane {
             let props = HelpPaneProps {
                 border_style: help_style,
-                has_focus: if let Help = state.focussed {
-                    true
-                } else {
-                    false
-                },
+                has_focus: matches!(state.focussed, Help),
             };
             pane.render(props, help_area, buf);
         }
@@ -136,11 +132,7 @@ impl MainWindow {
             marked,
             selected: state.selected,
             border_style: entries_style,
-            is_focussed: if let Main = state.focussed {
-                true
-            } else {
-                false
-            },
+            is_focussed: matches!(state.focussed, Main),
         };
         self.entries_pane.render(props, entries_area, buf);
 

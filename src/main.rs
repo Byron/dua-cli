@@ -26,6 +26,7 @@ fn main() -> Result<()> {
             use crate::interactive::{Interaction, TerminalApp};
             use anyhow::Context;
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
+
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if atty::isnt(atty::Stream::Stdout) {
                 return Err(anyhow!(no_tty_msg));
