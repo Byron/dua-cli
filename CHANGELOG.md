@@ -1,7 +1,13 @@
 #### v2.11.0
 
+##### Features
+
 * Add binding capital 'H' to go to the top of any pane/list
 * Add binding capital 'G' to go to the bottom of any pane/list
+
+##### Fixes
+* Without user input during `dua i [<multiple paths>]` the top-most entry will remain selected.
+* Avoid stale frame at the end of traversal in interactive sessions when there is no user input.
 
 #### v2.10.10 - Fix --version flag
 
