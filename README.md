@@ -17,6 +17,12 @@ curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh 
     sh -s -- --git byron/dua-cli --crate dua
 ```
 
+#### MacOS via [MacPorts](https://www.macports.org):
+```sh
+sudo port selfupdate
+sudo port install dua-cli
+```
+
 #### Linux
 
 Linux requires the target to be specified explicitly to obtain the MUSL build.
