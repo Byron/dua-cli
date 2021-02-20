@@ -4,6 +4,7 @@ use clap::Clap;
 use dua::{ByteFormat, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 
+mod crossdev;
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;
 mod options;
@@ -39,7 +40,7 @@ fn main() -> Result<()> {
             let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
-                paths_from(input)?,
+                paths_from(input, !opt.stay_on_filesystem)?,
                 Interaction::Full,
             )?
             .map(|(keys_rx, mut app)| {
@@ -69,7 +70,7 @@ fn main() -> Result<()> {
                 walk_options,
                 !no_total,
                 !no_sort,
-                paths_from(input)?,
+                paths_from(input, !opt.stay_on_filesystem)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{:?}", stats).ok();
@@ -84,7 +85,7 @@ fn main() -> Result<()> {
                 walk_options,
                 true,
                 true,
-                paths_from(opt.input)?,
+                paths_from(opt.input, !opt.stay_on_filesystem)?,
             )?
             .0
         }
@@ -93,9 +94,22 @@ fn main() -> Result<()> {
     process::exit(res.to_exit_code());
 }
 
-fn paths_from(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
+fn paths_from(paths: Vec<PathBuf>, cross_filesystems: bool) -> Result<Vec<PathBuf>, io::Error> {
+    let device_id = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| crossdev::init(&cwd).ok());
+
     if paths.is_empty() {
-        cwd_dirlist()
+        cwd_dirlist().map(|paths| match device_id {
+            Some(device_id) if !cross_filesystems => paths
+                .into_iter()
+                .filter(|p| match p.metadata() {
+                    Ok(meta) => crossdev::is_same_device(device_id, &meta),
+                    Err(_) => true,
+                })
+                .collect(),
+            _ => paths,
+        })
     } else {
         Ok(paths)
     }
