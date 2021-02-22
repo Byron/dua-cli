@@ -1,3 +1,8 @@
+#### v2.11.1
+
+* The `-x/--stay-on-filesystem` flag is now respected for multiple root paths, as in `dua -x
+  path-FS1/ path-FS2/`, as such `dua` will stay in FS1 if the CWD is in FS1.
+
 #### v2.11.0
 
 ##### Features
