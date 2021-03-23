@@ -15,8 +15,10 @@ pub fn aggregate(
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
-    let mut stats = Statistics::default();
-    stats.smallest_file_in_bytes = u128::max_value();
+    let mut stats = Statistics {
+        smallest_file_in_bytes: u128::max_value(),
+        ..Default::default()
+    };
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
