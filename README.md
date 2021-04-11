@@ -23,6 +23,12 @@ sudo port selfupdate
 sudo port install dua-cli
 ```
 
+#### MacOS via [Homebrew](https://brew.sh)
+```sh
+brew update
+brew install dua-cli
+```
+
 #### Linux
 
 Linux requires the target to be specified explicitly to obtain the MUSL build.
