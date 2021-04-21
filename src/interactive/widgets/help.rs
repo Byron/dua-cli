@@ -123,7 +123,7 @@ impl HelpPane {
                 hotkey("Ctrl + u", "move up 10 entries at once", None);
                 hotkey("<Page Up>", "^", None);
                 hotkey("H", "Move to the top of the entries list", None);
-                hotkey("G", "Move to the bottomw of the entries list", None);
+                hotkey("G", "Move to the bottom of the entries list", None);
                 spacer();
             }
             title("Keys for display");
