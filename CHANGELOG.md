@@ -1,3 +1,7 @@
+#### v2.11.2
+
+* dependency updates (including tui 0.15)
+
 #### v2.11.1
 
 * The `-x/--stay-on-filesystem` flag is now respected for multiple root paths, as in `dua -x
