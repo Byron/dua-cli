@@ -294,8 +294,8 @@ impl TerminalApp {
                         let entries = sorted_entries(&traversal.tree, root, sorting);
                         AppState {
                             root,
-                            sorting,
                             entries,
+                            sorting,
                             ..Default::default()
                         }
                     });

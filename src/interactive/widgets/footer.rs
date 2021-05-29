@@ -50,10 +50,7 @@ impl Footer {
             }),
         ];
         Paragraph::new(Text::from(Spans::from(
-            spans
-                .into_iter()
-                .filter_map(std::convert::identity)
-                .collect::<Vec<_>>(),
+            spans.into_iter().flatten().collect::<Vec<_>>(),
         )))
         .style(Style::default().add_modifier(Modifier::REVERSED))
         .render(area, buf);
