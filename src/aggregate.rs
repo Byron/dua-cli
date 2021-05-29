@@ -46,7 +46,7 @@ pub fn aggregate(
                 write!(
                     err,
                     "Enumerating {} entries\r",
-                    shared_count.load(Ordering::Relaxed)
+                    shared_count.load(Ordering::Acquire)
                 )
                 .ok();
             }
