@@ -2,17 +2,20 @@
 use anyhow::Result;
 use clap::Clap;
 use dua::{ByteFormat, TraversalSorting};
-use std::{
-    fs, io,
-    io::{stderr, Write},
-    path::PathBuf,
-    process,
-};
+use std::{fs, io, io::Write, path::PathBuf, process};
 
 mod crossdev;
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
 mod interactive;
 mod options;
+
+fn stderr_if_tty() -> Option<io::Stderr> {
+    if atty::is(atty::Stream::Stderr) {
+        Some(io::stderr())
+    } else {
+        None
+    }
+}
 
 fn main() -> Result<()> {
     use options::Command::*;
@@ -72,7 +75,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
                 stdout_locked,
-                stderr(),
+                stderr_if_tty(),
                 walk_options,
                 !no_total,
                 !no_sort,
@@ -88,7 +91,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             dua::aggregate(
                 stdout_locked,
-                stderr(),
+                stderr_if_tty(),
                 walk_options,
                 true,
                 true,

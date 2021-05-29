@@ -19,7 +19,7 @@ use std::{
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
-    mut err: impl io::Write + Send + 'static,
+    err: Option<impl io::Write + Send + 'static>,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
@@ -36,19 +36,23 @@ pub fn aggregate(
     let mut inodes = InodeFilter::default();
     let paths: Vec<_> = paths.into_iter().collect();
     let shared_count = Arc::new(AtomicU64::new(0));
-    thread::spawn({
-        let shared_count = Arc::clone(&shared_count);
-        thread::sleep(Duration::from_secs(1));
-        move || loop {
-            thread::sleep(Duration::from_millis(100));
-            write!(
-                err,
-                "Enumerating {} entries\r",
-                shared_count.load(Ordering::Relaxed)
-            )
-            .ok();
-        }
-    });
+
+    if let Some(mut err) = err {
+        thread::spawn({
+            let shared_count = Arc::clone(&shared_count);
+            thread::sleep(Duration::from_secs(1));
+            move || loop {
+                thread::sleep(Duration::from_millis(100));
+                write!(
+                    err,
+                    "Enumerating {} entries\r",
+                    shared_count.load(Ordering::Relaxed)
+                )
+                .ok();
+            }
+        });
+    }
+
     for path in paths.into_iter() {
         num_roots += 1;
         let mut num_bytes = 0u128;
