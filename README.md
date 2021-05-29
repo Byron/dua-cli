@@ -165,6 +165,21 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
   * The limitation is imposed by the underlying [`petgraph`][petgraph] crate, which declares it as `unsafe` to use u64 for instance.
   * It's possibly *UB* when that limit is reached, however, it was never observed either.
 
+### Similar Programs 
+
+* **CLI:**
+  * `du`
+  * [`dust`](https://github.com/bootandy/dust)
+  * [`dutree`](https://github.com/nachoparker/dutree)
+  * [`pdu`](https://github.com/KSXGitHub/parallel-disk-usage)
+* **TUI:**
+  * [`ncdu`](https://dev.yorhel.nl/ncdu)
+  * [`gdu`](https://github.com/dundee/gdu)
+  * [`godu`](https://github.com/viktomas/godu)
+* **GUI:**
+  * [GNOME's Disk Usage Analyzer, a.k.a. `baobab`](https://wiki.gnome.org/action/show/Apps/DiskUsageAnalyzer)
+  * Filelight
+  
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
