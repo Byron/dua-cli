@@ -2,7 +2,12 @@
 use anyhow::Result;
 use clap::Clap;
 use dua::{ByteFormat, TraversalSorting};
-use std::{fs, io, io::Write, path::PathBuf, process};
+use std::{
+    fs, io,
+    io::{stderr, Write},
+    path::PathBuf,
+    process,
+};
 
 mod crossdev;
 #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
@@ -67,6 +72,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
                 stdout_locked,
+                stderr(),
                 walk_options,
                 !no_total,
                 !no_sort,
@@ -82,6 +88,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             dua::aggregate(
                 stdout_locked,
+                stderr(),
                 walk_options,
                 true,
                 true,

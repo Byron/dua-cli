@@ -2,13 +2,24 @@ use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
 use colored::{Color, Colorize};
 use filesize::PathExt;
-use std::{borrow::Cow, io, path::Path};
+use std::time::Duration;
+use std::{
+    borrow::Cow,
+    io,
+    path::Path,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
+    mut err: impl io::Write + Send + 'static,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
@@ -24,6 +35,20 @@ pub fn aggregate(
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
     let paths: Vec<_> = paths.into_iter().collect();
+    let shared_count = Arc::new(AtomicU64::new(0));
+    thread::spawn({
+        let shared_count = Arc::clone(&shared_count);
+        thread::sleep(Duration::from_secs(1));
+        move || loop {
+            thread::sleep(Duration::from_millis(100));
+            write!(
+                err,
+                "Enumerating {} entries\r",
+                shared_count.load(Ordering::Relaxed)
+            )
+            .ok();
+        }
+    });
     for path in paths.into_iter() {
         num_roots += 1;
         let mut num_bytes = 0u128;
@@ -31,6 +56,7 @@ pub fn aggregate(
         let device_id = crossdev::init(path.as_ref())?;
         for entry in walk_options.iter_from_path(path.as_ref()) {
             stats.entries_traversed += 1;
+            shared_count.fetch_add(1, Ordering::Relaxed);
             match entry {
                 Ok(entry) => {
                     let file_size = match entry.client_state {

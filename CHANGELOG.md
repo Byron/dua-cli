@@ -1,3 +1,7 @@
+#### v2.12
+
+* Add minimal progress for when `dua` invocations take longer than 1 second
+
 #### v2.11.3 - re-add arm builds
 
 * dependency updates (including tui 0.15)
