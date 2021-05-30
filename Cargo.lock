@@ -328,9 +328,7 @@ dependencies = [
 
 [[package]]
 name = "jwalk"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "172752e853a067cbce46427de8470ddf308af7fd8ceaf9b682ef31a5021b6bb9"
+version = "0.6.1-alpha.0"
 dependencies = [
  "crossbeam",
  "rayon",

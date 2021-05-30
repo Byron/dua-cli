@@ -18,7 +18,7 @@ tui-shared = ["tui", "tui-react", "open", "unicode-segmentation"]
 
 [dependencies]
 clap = "3.0.0-beta.2"
-jwalk = "0.6.0"
+jwalk = "0.6.1-alpha.0"
 byte-unit = "4"
 atty = "0.2.11"
 petgraph = "0.5"
@@ -53,3 +53,6 @@ build-override = { opt-level = 0 }
 
 [dev-dependencies]
 pretty_assertions = "0.7.0"
+
+[patch.crates-io]
+jwalk = { version = "0.6.1-alpha.0", path = "../../jessegrosjean/jwalk" }
