@@ -40,15 +40,17 @@ pub fn aggregate(
     if let Some(mut err) = err {
         thread::spawn({
             let shared_count = Arc::clone(&shared_count);
-            thread::sleep(Duration::from_secs(1));
-            move || loop {
-                thread::sleep(Duration::from_millis(100));
-                write!(
-                    err,
-                    "Enumerating {} entries\r",
-                    shared_count.load(Ordering::Acquire)
-                )
-                .ok();
+            move || {
+                thread::sleep(Duration::from_secs(1));
+                loop {
+                    thread::sleep(Duration::from_millis(100));
+                    write!(
+                        err,
+                        "Enumerating {} entries\r",
+                        shared_count.load(Ordering::Acquire)
+                    )
+                    .ok();
+                }
             }
         });
     }

@@ -1,4 +1,9 @@
-#### v2.12
+#### v2.12.1
+
+* Fixed bug that would cause `dua` to unconditionally sleep for 1 second. This sleep was intended for a spawned thread,
+  but it slipped into the main thread.
+
+#### v2.12.0 [YANKED]
 
 * Add minimal progress for when `dua` invocations take longer than 1 second
 
