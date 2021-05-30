@@ -84,7 +84,7 @@ pub fn aggregate(
                             num_errors += 1;
                             0
                         }
-                        None => unreachable!("must have populated client state for metadata"),
+                        None => 0, // ignore directory
                     } as u128;
                     stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                     stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);

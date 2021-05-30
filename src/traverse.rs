@@ -135,7 +135,7 @@ impl Traversal {
                                 data.metadata_io_error = true;
                                 0
                             }
-                            None => unreachable!("must have populated client state for metadata"),
+                            None => 0, // a directory
                         } as u128;
 
                         match (entry.depth, previous_depth) {
