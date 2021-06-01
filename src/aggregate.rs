@@ -55,46 +55,82 @@ pub fn aggregate(
         });
     }
 
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(8)
+        .build_global()
+        .unwrap();
+    fn recursive_descent(
+        root: impl AsRef<Path>,
+        cb: impl Fn(&Path, std::fs::Metadata) + Send + Sync + Copy,
+    ) {
+        use rayon::prelude::*;
+        let root = root.as_ref();
+        match std::fs::symlink_metadata(root).map(|m| {
+            let is_dir = m.file_type().is_dir();
+            (m, is_dir)
+        }) {
+            Ok((metadata, is_dir)) => {
+                if is_dir {
+                    std::fs::read_dir(root)
+                        .map({
+                            |iter| {
+                                iter.filter_map(Result::ok)
+                                    .collect::<Vec<_>>()
+                                    .into_par_iter()
+                                    .map({ |entry| recursive_descent(entry.path(), cb) })
+                                    .for_each(|_| {})
+                            }
+                        })
+                        .unwrap_or_default()
+                } else {
+                    cb(root, metadata);
+                }
+            }
+            Err(_) => {}
+        };
+    }
+
     for path in paths.into_iter() {
         num_roots += 1;
         let mut num_bytes = 0u128;
         let mut num_errors = 0u64;
         let device_id = crossdev::init(path.as_ref())?;
-        for entry in walk_options.iter_from_path(path.as_ref()) {
-            stats.entries_traversed += 1;
-            shared_count.fetch_add(1, Ordering::Relaxed);
-            match entry {
-                Ok(entry) => {
-                    let file_size = match entry.client_state {
-                        Some(Ok(ref m))
-                            if !m.is_dir()
-                                && (walk_options.count_hard_links || inodes.add(m))
-                                && (walk_options.cross_filesystems
-                                    || crossdev::is_same_device(device_id, m)) =>
-                        {
-                            if walk_options.apparent_size {
-                                m.len()
-                            } else {
-                                entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
-                                    num_errors += 1;
-                                    0
-                                })
-                            }
-                        }
-                        Some(Ok(_)) => 0,
-                        Some(Err(_)) => {
-                            num_errors += 1;
-                            0
-                        }
-                        None => 0, // ignore directory
-                    } as u128;
-                    stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                    stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
-                    num_bytes += file_size;
-                }
-                Err(_) => num_errors += 1,
-            }
-        }
+        recursive_descent(path.as_ref(), |_path, _m| {});
+        // for entry in walk_options.iter_from_path(path.as_ref()) {
+        //     stats.entries_traversed += 1;
+        //     shared_count.fetch_add(1, Ordering::Relaxed);
+        //     match entry {
+        //         Ok(entry) => {
+        //             let file_size = match entry.client_state {
+        //                 Some(Ok(ref m))
+        //                     if !m.is_dir()
+        //                         && (walk_options.count_hard_links || inodes.add(m))
+        //                         && (walk_options.cross_filesystems
+        //                             || crossdev::is_same_device(device_id, m)) =>
+        //                 {
+        //                     if walk_options.apparent_size {
+        //                         m.len()
+        //                     } else {
+        //                         entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
+        //                             num_errors += 1;
+        //                             0
+        //                         })
+        //                     }
+        //                 }
+        //                 Some(Ok(_)) => 0,
+        //                 Some(Err(_)) => {
+        //                     num_errors += 1;
+        //                     0
+        //                 }
+        //                 None => 0, // ignore directory
+        //             } as u128;
+        //             stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
+        //             stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
+        //             num_bytes += file_size;
+        //         }
+        //         Err(_) => num_errors += 1,
+        //     }
+        // }
 
         if sort_by_size_in_bytes {
             aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));

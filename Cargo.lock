@@ -241,6 +241,7 @@ dependencies = [
  "open",
  "petgraph",
  "pretty_assertions",
+ "rayon",
  "tui",
  "tui-react",
  "unicode-segmentation",
