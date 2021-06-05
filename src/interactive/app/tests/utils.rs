@@ -1,4 +1,3 @@
-use crate::interactive::{app_test::FIXTURE_PATH, Interaction, TerminalApp};
 use anyhow::{Context, Error, Result};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
@@ -17,6 +16,8 @@ use std::{
 };
 use tui::backend::TestBackend;
 use tui_react::Terminal;
+
+use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};
 
 pub fn into_keys<'a>(
     bytes: impl Iterator<Item = &'a u8> + 'a,
@@ -160,8 +161,8 @@ pub fn fixture_str(p: impl AsRef<Path>) -> String {
     fixture(p).to_str().unwrap().to_owned()
 }
 
-pub fn initialized_app_and_terminal_with_closure<P: AsRef<Path>>(
-    fixture_paths: &[P],
+pub fn initialized_app_and_terminal_with_closure(
+    fixture_paths: &[impl AsRef<Path>],
     mut convert: impl FnMut(&Path) -> PathBuf,
 ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
     let mut terminal = new_test_terminal()?;

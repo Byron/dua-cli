@@ -1,7 +1,7 @@
 mod app;
-pub mod widgets;
+pub use app::*;
 
-pub use self::app::*;
+pub mod widgets;
 
 mod utils {
     use dua::{
@@ -29,7 +29,4 @@ mod utils {
             })
     }
 }
-pub use utils::*;
-
-#[cfg(test)]
-mod app_test;
+pub use utils::path_of;

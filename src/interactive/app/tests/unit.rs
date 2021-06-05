@@ -1,4 +1,4 @@
-use crate::interactive::app_test::utils::{
+use crate::interactive::app::tests::utils::{
     debug, initialized_app_and_terminal_from_fixture, sample_01_tree, sample_02_tree,
 };
 use anyhow::Result;

@@ -1,4 +1,4 @@
-use crate::interactive::app_test::utils::{
+use crate::interactive::app::tests::utils::{
     initialized_app_and_terminal_from_paths, into_keys, WritableFixture,
 };
 use anyhow::Result;
