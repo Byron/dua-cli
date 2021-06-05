@@ -168,7 +168,7 @@ pub fn initialized_app_and_terminal_with_closure(
     let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
-    let input = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
+    let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
     let app = TerminalApp::initialize(
         &mut terminal,
         WalkOptions {
@@ -179,7 +179,7 @@ pub fn initialized_app_and_terminal_with_closure(
             sorting: TraversalSorting::AlphabeticalByFileName,
             cross_filesystems: false,
         },
-        input,
+        input_paths,
         Interaction::None,
     )?
     .map(|(_, app)| app);

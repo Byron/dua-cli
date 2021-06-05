@@ -2,12 +2,24 @@ use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 
-use crate::interactive::app::tests::utils::{
-    fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
-    node_by_index, node_by_name,
+use crate::interactive::{
+    app::tests::{
+        utils::{
+            fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
+            node_by_index, node_by_name,
+        },
+        FIXTURE_PATH,
+    },
+    SortMode,
 };
-use crate::interactive::app::tests::FIXTURE_PATH;
-use crate::interactive::SortMode;
+
+#[test]
+fn init_from_pdu_results() -> Result<()> {
+    use crate::interactive::app::tests::utils::new_test_terminal;
+    let _terminal = new_test_terminal()?;
+
+    Ok(())
+}
 
 #[test]
 fn simple_user_journey_read_only() -> Result<()> {

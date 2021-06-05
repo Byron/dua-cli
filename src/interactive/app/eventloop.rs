@@ -186,6 +186,21 @@ pub struct TerminalApp {
 type KeyboardInputAndApp = (std::sync::mpsc::Receiver<Key>, TerminalApp);
 
 impl TerminalApp {
+    pub fn refresh_view<B>(&mut self, terminal: &mut Terminal<B>)
+    where
+        B: Backend,
+    {
+        // Use an event that does nothing to trigger a refresh
+        self.state
+            .process_events(
+                &mut self.window,
+                &mut self.traversal,
+                &mut self.display,
+                terminal,
+                std::iter::once(Key::Alt('\r')),
+            )
+            .ok();
+    }
     pub fn process_events<B>(
         &mut self,
         terminal: &mut Terminal<B>,
@@ -208,7 +223,7 @@ impl TerminalApp {
     pub fn initialize<B>(
         terminal: &mut Terminal<B>,
         options: WalkOptions,
-        input: Vec<PathBuf>,
+        input_paths: Vec<PathBuf>,
         mode: Interaction,
     ) -> Result<Option<KeyboardInputAndApp>>
     where
@@ -237,7 +252,7 @@ impl TerminalApp {
 
         let mut state = None::<AppState>;
         let mut received_events = false;
-        let traversal = Traversal::from_walk(options, input, |traversal| {
+        let traversal = Traversal::from_walk(options, input_paths, |traversal| {
             let s = match state.as_mut() {
                 Some(s) => {
                     s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
@@ -279,14 +294,13 @@ impl TerminalApp {
             };
             Ok(should_exit)
         })?;
-        let mut traversal = match traversal {
+        let traversal = match traversal {
             Some(t) => t,
             None => return Ok(None),
         };
 
-        Ok(Some((
-            keys_rx,
-            TerminalApp {
+        Ok(Some((keys_rx, {
+            let mut app = TerminalApp {
                 state: {
                     let mut s = state.unwrap_or_else(|| {
                         let sorting = Default::default();
@@ -306,22 +320,15 @@ impl TerminalApp {
                     } else {
                         s.entries.get(0).map(|b| b.index)
                     };
-                    // Force event processing with a key that doesn't do anything.
-                    s.process_events(
-                        &mut window,
-                        &mut traversal,
-                        &mut display,
-                        terminal,
-                        std::iter::once(Key::Alt('\r')),
-                    )
-                    .ok();
                     s
                 },
                 display,
                 traversal,
                 window,
-            },
-        )))
+            };
+            app.refresh_view(terminal);
+            app
+        })))
     }
 }
 
