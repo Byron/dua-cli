@@ -1,3 +1,8 @@
+#### v2.12.2
+
+* Prepare for release of new Apple hardware and be more specific when auto-configuring the correct amount of threads.
+  Instead an error message will be printed to inform that the given CPU brand isn't configurable yet.
+
 #### v2.12.1
 
 * Fixed bug that would cause `dua` to unconditionally sleep for 1 second. This sleep was intended for a spawned thread,

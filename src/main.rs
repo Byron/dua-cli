@@ -41,7 +41,7 @@ fn derive_default_threads(threads: usize) -> usize {
                 "Apple M1" => 4,
                 other => {
                     eprintln!(
-                        "Couldn't auto-configure correct amount of threads for {}",
+                        "Couldn't auto-configure correct amount of threads for {}. Create an issue here: https://github.com/byron/dua-cli/issues",
                         other
                     );
                     0
