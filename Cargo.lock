@@ -103,6 +103,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-foundation-sys"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea221b5284a47e40033bf9b66f35f984ec0ea2931eb03505246cd27a963f981b"
+
+[[package]]
 name = "crossbeam"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -224,6 +230,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
 
 [[package]]
+name = "doc-comment"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
 name = "dua-cli"
 version = "2.12.1"
 dependencies = [
@@ -240,6 +252,7 @@ dependencies = [
  "open",
  "petgraph",
  "pretty_assertions",
+ "sysinfo",
  "tui",
  "tui-react",
  "unicode-segmentation",
@@ -420,6 +433,12 @@ name = "numtoa"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
+
+[[package]]
+name = "once_cell"
+version = "1.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "open"
@@ -625,6 +644,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d404aefa651a24a7f2a1190fec9fb6380ba84ac511a6fefad79eb0e63d39a97d"
+dependencies = [
+ "cfg-if",
+ "core-foundation-sys",
+ "doc-comment",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "winapi",
 ]
 
 [[package]]

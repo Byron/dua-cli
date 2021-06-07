@@ -59,22 +59,9 @@ pub struct Args {
     #[clap(subcommand)]
     pub command: Option<Command>,
 
-    /// The amount of threads to use. Defaults to the amount of logical processors.
+    /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
     /// Set to 1 to use only a single thread.
-    #[clap(short = 't', long = "threads")]
-    // On macos with apple silicon, the IO subsystem is entirely different and one thread can mostly max it out.
-    // Thus using more threads just burns energy unnecessarily.
-    // It's notable that `du` is very fast even on a single core and more power efficient than dua with a single core.
-    // The default of '4' seems related to the amount of performance cores present in the system.
-    #[cfg_attr(
-        all(target_os = "macos", target_arch = "aarch64"),
-        clap(default_value = "4")
-    )]
-    // On everything else, it's usually a good idea to use as many threads as possible for noticeable speedups.
-    #[cfg_attr(
-        not(all(target_os = "macos", target_arch = "aarch64")),
-        clap(default_value = "0")
-    )]
+    #[clap(short = 't', long = "threads", default_value = "0")]
     pub threads: usize,
 
     /// The format with which to print byte counts.
