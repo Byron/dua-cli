@@ -102,6 +102,9 @@ impl MarkPane {
     pub fn marked(&self) -> &EntryMarkMap {
         &self.marked
     }
+    pub fn into_paths(self) -> impl Iterator<Item = PathBuf> {
+        self.marked.into_iter().map(|(_k, v)| v.path)
+    }
     pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         match key {

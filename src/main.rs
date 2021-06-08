@@ -89,8 +89,18 @@ fn main() -> Result<()> {
             )?
             .map(|(keys_rx, mut app)| {
                 let res = app.process_events(&mut terminal, keys_rx.into_iter());
-                // Leak app memory to avoid having to wait for the hashmap to deallocate, which causes a noticeable delay shortly before the the
-                // program exits anyway.
+
+                let res = res.map(|r| {
+                    (
+                        r,
+                        app.window
+                            .mark_pane
+                            .take()
+                            .map(|marked| marked.into_paths()),
+                    )
+                });
+                // Leak app memory to avoid having to wait for the hashmap to deallocate,
+                // which causes a noticeable delay shortly before the the program exits anyway.
                 std::mem::forget(app);
                 res
             });
@@ -99,7 +109,18 @@ fn main() -> Result<()> {
             io::stdout().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
-            std::process::exit(res.transpose()?.map(|e| e.to_exit_code()).unwrap_or(0));
+            std::process::exit(
+                res.transpose()?
+                    .map(|(walk_result, paths)| {
+                        if let Some(paths) = paths {
+                            for path in paths {
+                                println!("{}", path.display())
+                            }
+                        }
+                        walk_result.to_exit_code()
+                    })
+                    .unwrap_or(0),
+            );
         }
         Some(Aggregate {
             input,
