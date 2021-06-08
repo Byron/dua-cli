@@ -1,3 +1,8 @@
+#### v2.13.0
+
+* Print remaining marked paths upon exit on stdout. This may help to use `dua i` with other programs
+  who want to process the marked paths on their own.
+
 #### v2.12.2
 
 * Prepare for release of new Apple hardware and be more specific when auto-configuring the correct amount of threads.
