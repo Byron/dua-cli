@@ -1,3 +1,8 @@
+#### v2.13.1
+
+* Allow usage of the feature introduced in v2.13 by writing the TUI to stderr instead of stdout.
+  That way the output can be redirected.
+
 #### v2.13.0
 
 * Print remaining marked paths upon exit on stdout. This may help to use `dua i` with other programs
