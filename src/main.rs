@@ -73,12 +73,12 @@ fn main() -> Result<()> {
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
-            if atty::isnt(atty::Stream::Stdout) {
+            if atty::isnt(atty::Stream::Stderr) {
                 return Err(anyhow!(no_tty_msg));
             }
 
             let mut terminal = new_terminal(
-                AlternateRawScreen::try_from(io::stdout()).with_context(|| no_tty_msg)?,
+                AlternateRawScreen::try_from(io::stderr()).with_context(|| no_tty_msg)?,
             )
             .with_context(|| "Could not instantiate terminal")?;
             let res = TerminalApp::initialize(
@@ -106,7 +106,7 @@ fn main() -> Result<()> {
             });
 
             drop(terminal);
-            io::stdout().flush().ok();
+            io::stderr().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(
