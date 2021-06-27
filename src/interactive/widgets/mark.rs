@@ -28,6 +28,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub enum MarkMode {
     Delete,
+    Trash,
 }
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
@@ -109,6 +110,7 @@ impl MarkPane {
         let action = None;
         match key {
             Ctrl('r') => return Some(self.prepare_deletion()),
+            Ctrl('t') => return Some(self.prepare_trashing()),
             Char('x') | Char('d') | Char(' ') => {
                 return self.remove_selected().map(|s| (s, action))
             }
@@ -183,6 +185,13 @@ impl MarkPane {
         }
         self.selected = Some(0);
         (self, Some(MarkMode::Delete))
+    }
+    fn prepare_trashing(mut self) -> (Self, Option<MarkMode>) {
+        for entry in self.marked.values_mut() {
+            entry.num_errors_during_deletion = 0;
+        }
+        self.selected = Some(0);
+        (self, Some(MarkMode::Trash))
     }
     fn remove_selected(mut self) -> Option<Self> {
         if let Some(mut selected) = self.selected {
