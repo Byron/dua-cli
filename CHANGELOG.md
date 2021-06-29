@@ -1,7 +1,8 @@
-#### v2.14.0
+#### v2.14.1
 
 * Pressing `ctrl+t` in the mark pane now trashes entries instead of deleting them. Not only does that make
   'deletion' reversible but it makes removal of the entry faster in many cases as well.
+* updated dependencies
 
 #### v2.13.1
 
