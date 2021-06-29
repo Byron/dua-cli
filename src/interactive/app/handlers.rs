@@ -9,7 +9,6 @@ use dua::traverse::{Traversal, TreeIndex};
 use itertools::Itertools;
 use petgraph::{visit::Bfs, Direction};
 use std::{fs, io, path::PathBuf};
-use trash;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
@@ -281,7 +280,7 @@ impl AppState {
         let mut entries_deleted = 0;
         if let Some(_entry) = traversal.tree.node_weight(index) {
             let path_to_delete = path_of(&traversal.tree, index);
-            if let Err(_) = trash::delete(path_to_delete) {
+            if  trash::delete(path_to_delete).is_err() {
                 return Err(1);
             }
             entries_deleted = self.delete_entries_in_traversal(index, traversal);
@@ -318,7 +317,7 @@ impl AppState {
             self.selected = self.entries.get(0).map(|e| e.index);
         }
         self.recompute_sizes_recursively(parent_idx, traversal);
-        return entries_deleted;
+        entries_deleted
     }
 
     fn set_root(&mut self, root: TreeIndex, traversal: &Traversal) {
