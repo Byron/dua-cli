@@ -258,7 +258,7 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dua-cli"
-version = "2.14.0"
+version = "2.14.1"
 dependencies = [
  "anyhow",
  "atty",
