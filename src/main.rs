@@ -35,9 +35,9 @@ fn derive_default_threads(threads: usize) -> usize {
     use sysinfo::{ProcessorExt, RefreshKind, SystemExt};
     if threads == 0 {
         sysinfo::System::new_with_specifics(RefreshKind::new().with_cpu())
-            .get_processors()
+            .processors()
             .get(0)
-            .map_or(0, |p| match p.get_brand() {
+            .map_or(0, |p| match p.brand() {
                 "Apple M1" => 4,
                 other => {
                     eprintln!(
