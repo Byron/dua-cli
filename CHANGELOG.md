@@ -1,3 +1,8 @@
+#### v2.14.0
+
+* Pressing `ctrl+t` in the mark pane now trashes entries instead of deleting them. Not only does that make
+  'deletion' reversible but it makes removal of the entry faster in many cases as well.
+
 #### v2.13.1
 
 * Allow usage of the feature introduced in v2.13 by writing the TUI to stderr instead of stdout.
