@@ -361,6 +361,18 @@ impl MarkPane {
             };
             Paragraph::new(Text::from(Spans::from(vec![
                 Span::styled(
+                    " Ctrl + t",
+                    Style {
+                        fg: Color::White.into(),
+                        bg: Color::Black.into(),
+                        ..default_style
+                    },
+                ),
+                Span::styled(
+                    " to trash or ",
+                    default_style,
+                ),
+                Span::styled(
                     " Ctrl + r",
                     Style {
                         fg: Color::LightRed.into(),
@@ -369,7 +381,7 @@ impl MarkPane {
                     },
                 ),
                 Span::styled(
-                    " deletes listed entries from disk without prompt",
+                    " to delete without prompt",
                     default_style,
                 ),
             ])))
