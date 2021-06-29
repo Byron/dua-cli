@@ -268,29 +268,7 @@ impl AppState {
         if let Some(_entry) = traversal.tree.node_weight(index) {
             let path_to_delete = path_of(&traversal.tree, index);
             delete_directory_recursively(path_to_delete)?;
-            let parent_idx = traversal
-                .tree
-                .neighbors_directed(index, Direction::Incoming)
-                .next()
-                .expect("us being unable to delete the root index");
-            let mut bfs = Bfs::new(&traversal.tree, index);
-            while let Some(nx) = bfs.next(&traversal.tree) {
-                traversal.tree.remove_node(nx);
-                traversal.entries_traversed -= 1;
-                entries_deleted += 1;
-            }
-            self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
-            if traversal.tree.node_weight(self.root).is_none() {
-                self.set_root(traversal.root_index, traversal);
-            }
-            if self
-                .selected
-                .and_then(|selected| self.entries.iter().find(|e| e.index == selected))
-                .is_none()
-            {
-                self.selected = self.entries.get(0).map(|e| e.index);
-            }
-            self.recompute_sizes_recursively(parent_idx, traversal);
+            entries_deleted = self.delete_entries_in_traversal(index, traversal);
         }
         Ok(entries_deleted)
     }
@@ -300,37 +278,47 @@ impl AppState {
         index: TreeIndex,
         traversal: &mut Traversal,
     ) -> Result<usize, usize> {
-        let mut entries_trashed = 0;
+        let mut entries_deleted = 0;
         if let Some(_entry) = traversal.tree.node_weight(index) {
             let path_to_delete = path_of(&traversal.tree, index);
             if let Err(_) = trash::delete(path_to_delete) {
                 return Err(1);
             }
-            let parent_idx = traversal
-                .tree
-                .neighbors_directed(index, Direction::Incoming)
-                .next()
-                .expect("us being unable to delete the root index");
-            let mut bfs = Bfs::new(&traversal.tree, index);
-            while let Some(nx) = bfs.next(&traversal.tree) {
-                traversal.tree.remove_node(nx);
-                traversal.entries_traversed -= 1;
-                entries_trashed += 1;
-            }
-            self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
-            if traversal.tree.node_weight(self.root).is_none() {
-                self.set_root(traversal.root_index, traversal);
-            }
-            if self
-                .selected
-                .and_then(|selected| self.entries.iter().find(|e| e.index == selected))
-                .is_none()
-            {
-                self.selected = self.entries.get(0).map(|e| e.index);
-            }
-            self.recompute_sizes_recursively(parent_idx, traversal);
+            entries_deleted = self.delete_entries_in_traversal(index, traversal);
         }
-        Ok(entries_trashed)
+        Ok(entries_deleted)
+    }
+
+    pub fn delete_entries_in_traversal(
+        &mut self,
+        index: TreeIndex,
+        traversal: &mut Traversal,
+    ) -> usize {
+        let mut entries_deleted = 0;
+        let parent_idx = traversal
+            .tree
+            .neighbors_directed(index, Direction::Incoming)
+            .next()
+            .expect("us being unable to delete the root index");
+        let mut bfs = Bfs::new(&traversal.tree, index);
+        while let Some(nx) = bfs.next(&traversal.tree) {
+            traversal.tree.remove_node(nx);
+            traversal.entries_traversed -= 1;
+            entries_deleted += 1;
+        }
+        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
+        if traversal.tree.node_weight(self.root).is_none() {
+            self.set_root(traversal.root_index, traversal);
+        }
+        if self
+            .selected
+            .and_then(|selected| self.entries.iter().find(|e| e.index == selected))
+            .is_none()
+        {
+            self.selected = self.entries.get(0).map(|e| e.index);
+        }
+        self.recompute_sizes_recursively(parent_idx, traversal);
+        return entries_deleted;
     }
 
     fn set_root(&mut self, root: TreeIndex, traversal: &Traversal) {
