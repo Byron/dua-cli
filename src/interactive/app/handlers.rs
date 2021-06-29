@@ -280,7 +280,7 @@ impl AppState {
         let mut entries_deleted = 0;
         if let Some(_entry) = traversal.tree.node_weight(index) {
             let path_to_delete = path_of(&traversal.tree, index);
-            if  trash::delete(path_to_delete).is_err() {
+            if trash::delete(path_to_delete).is_err() {
                 return Err(1);
             }
             entries_deleted = self.delete_entries_in_traversal(index, traversal);

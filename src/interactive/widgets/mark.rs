@@ -368,10 +368,7 @@ impl MarkPane {
                         ..default_style
                     },
                 ),
-                Span::styled(
-                    " to trash or ",
-                    default_style,
-                ),
+                Span::styled(" to trash or ", default_style),
                 Span::styled(
                     " Ctrl + r",
                     Style {
@@ -380,10 +377,7 @@ impl MarkPane {
                         ..default_style
                     },
                 ),
-                Span::styled(
-                    " to delete without prompt",
-                    default_style,
-                ),
+                Span::styled(" to delete without prompt", default_style),
             ])))
             .style(default_style)
             .render(help_line_area, buf);
