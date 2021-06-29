@@ -168,6 +168,11 @@ impl HelpPane {
                     "Permanently delete all marked entries without prompt!",
                     Some("This operation cannot be undone!"),
                 );
+                hotkey(
+                    "Ctrl + t",
+                    "Move all marked entries to the trash bin",
+                    Some("The entries can be restored from the trash bin"),
+                );
                 spacer();
             }
             title("Keys for application control");

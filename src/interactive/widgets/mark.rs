@@ -28,6 +28,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub enum MarkMode {
     Delete,
+    Trash,
 }
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
@@ -108,7 +109,8 @@ impl MarkPane {
     pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         match key {
-            Ctrl('r') => return Some(self.prepare_deletion()),
+            Ctrl('r') => return Some(self.prepare_deletion(MarkMode::Delete)),
+            Ctrl('t') => return Some(self.prepare_deletion(MarkMode::Trash)),
             Char('x') | Char('d') | Char(' ') => {
                 return self.remove_selected().map(|s| (s, action))
             }
@@ -177,12 +179,12 @@ impl MarkPane {
             d.num_errors_during_deletion = num_errors;
         }
     }
-    fn prepare_deletion(mut self) -> (Self, Option<MarkMode>) {
+    fn prepare_deletion(mut self, mark: MarkMode) -> (Self, Option<MarkMode>) {
         for entry in self.marked.values_mut() {
             entry.num_errors_during_deletion = 0;
         }
         self.selected = Some(0);
-        (self, Some(MarkMode::Delete))
+        (self, Some(mark))
     }
     fn remove_selected(mut self) -> Option<Self> {
         if let Some(mut selected) = self.selected {
@@ -359,6 +361,18 @@ impl MarkPane {
             };
             Paragraph::new(Text::from(Spans::from(vec![
                 Span::styled(
+                    " Ctrl + t",
+                    Style {
+                        fg: Color::White.into(),
+                        bg: Color::Black.into(),
+                        ..default_style
+                    },
+                ),
+                Span::styled(
+                    " to trash or ",
+                    default_style,
+                ),
+                Span::styled(
                     " Ctrl + r",
                     Style {
                         fg: Color::LightRed.into(),
@@ -367,7 +381,7 @@ impl MarkPane {
                     },
                 ),
                 Span::styled(
-                    " deletes listed entries from disk without prompt",
+                    " to delete without prompt",
                     default_style,
                 ),
             ])))
