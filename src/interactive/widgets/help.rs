@@ -168,6 +168,7 @@ impl HelpPane {
                     "Permanently delete all marked entries without prompt!",
                     Some("This operation cannot be undone!"),
                 );
+                #[cfg(feature = "trash-move")]
                 hotkey(
                     "Ctrl + t",
                     "Move all marked entries to the trash bin",
