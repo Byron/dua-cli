@@ -18,11 +18,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
         "expecting 4 selected entries, the parent dir, and some children"
     );
 
-    assert_eq!(
-        fixture.as_ref().is_dir(),
-        true,
-        "expecting fixture root to exist"
-    );
+    assert!(fixture.as_ref().is_dir(), "expecting fixture root to exist");
 
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
@@ -33,9 +29,8 @@ fn basic_user_journey_with_deletion() -> Result<()> {
         ]
         .into_iter(),
     )?;
-    assert_eq!(
+    assert!(
         app.window.mark_pane.is_none(),
-        true,
         "the marker pane is gone as all entries have been removed"
     );
     assert_eq!(app.state.selected, None, "nothing is left to be selected");
@@ -43,9 +38,8 @@ fn basic_user_journey_with_deletion() -> Result<()> {
         app.state.root, app.traversal.root_index,
         "the only root left is the top-level"
     );
-    assert_eq!(
-        fixture.as_ref().is_dir(),
-        false,
+    assert!(
+        !fixture.as_ref().is_dir(),
         "the directory should have been deleted",
     );
     Ok(())
