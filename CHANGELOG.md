@@ -1,3 +1,9 @@
+#### v2.14.2
+
+* `Ctrl-T` to trash (instead of removal) is now an optional default feature, allowing it to be
+  disabled on FreeBSD which isn't currently supported.
+* Update dependencies
+
 #### v2.14.1
 
 * Pressing `ctrl+t` in the mark pane now trashes entries instead of deleting them. Not only does that make
