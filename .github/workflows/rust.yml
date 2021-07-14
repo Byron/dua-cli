@@ -13,6 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Test compilation
+      run: make check
     - name: Run tests
       run: make unit-tests
     - name: fmt
