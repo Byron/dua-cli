@@ -2,7 +2,6 @@ use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
 use colored::{Color, Colorize};
 use filesize::PathExt;
-use std::time::Duration;
 use std::{
     borrow::Cow,
     io,
@@ -12,6 +11,7 @@ use std::{
         Arc,
     },
     thread,
+    time::Duration,
 };
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.

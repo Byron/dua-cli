@@ -1,3 +1,7 @@
+#### v2.14.3
+
+* upgrade `open` crate to v2
+
 #### v2.14.2
 
 * `Ctrl-T` to trash (instead of removal) is now an optional default feature, allowing it to be
