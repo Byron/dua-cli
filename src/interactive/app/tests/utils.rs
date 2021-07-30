@@ -30,7 +30,7 @@ pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
 }
 
 pub fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> &EntryData {
-    node_by_index(app, index_by_name(&app, name))
+    node_by_index(app, index_by_name(app, name))
 }
 
 pub fn index_by_name_and_size(
@@ -135,7 +135,7 @@ fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Er
 
 impl From<&'static str> for WritableFixture {
     fn from(fixture_name: &str) -> Self {
-        const TEMP_TLD_DIRNAME: &'static str = "dua-unit";
+        const TEMP_TLD_DIRNAME: &str = "dua-unit";
 
         let src = fixture(fixture_name);
         let dst = temp_dir().join(TEMP_TLD_DIRNAME);
@@ -205,73 +205,75 @@ pub fn initialized_app_and_terminal_from_paths(
 pub fn initialized_app_and_terminal_from_fixture(
     fixture_paths: &[&str],
 ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+    #[allow(clippy::redundant_closure)]
+    // doesn't actually work that way due to borrowchk - probably a bug
     initialized_app_and_terminal_with_closure(fixture_paths, |p| fixture(p))
 }
 
 pub fn sample_01_tree() -> Tree {
-    let mut t = Tree::new();
+    let mut tree = Tree::new();
     {
-        let mut add_node = make_add_node(&mut t);
+        let mut add_node = make_add_node(&mut tree);
         #[cfg(not(windows))]
         let root_size = 1259070;
         #[cfg(windows)]
         let root_size = 1259069;
-        let r = add_node("", root_size, None);
+        let rn = add_node("", root_size, None);
         {
-            let s = add_node(&fixture_str("sample-01"), root_size, Some(r));
+            let sn = add_node(&fixture_str("sample-01"), root_size, Some(rn));
             {
-                add_node(".hidden.666", 666, Some(s));
-                add_node("a", 256, Some(s));
-                add_node("b.empty", 0, Some(s));
+                add_node(".hidden.666", 666, Some(sn));
+                add_node("a", 256, Some(sn));
+                add_node("b.empty", 0, Some(sn));
                 #[cfg(not(windows))]
-                add_node("c.lnk", 1, Some(s));
+                add_node("c.lnk", 1, Some(sn));
                 #[cfg(windows)]
-                add_node("c.lnk", 0, Some(s));
-                let d = add_node("dir", 1258024, Some(s));
+                add_node("c.lnk", 0, Some(sn));
+                let dn = add_node("dir", 1258024, Some(sn));
                 {
-                    add_node("1000bytes", 1000, Some(d));
-                    add_node("dir-a.1mb", 1_000_000, Some(d));
-                    add_node("dir-a.kb", 1024, Some(d));
-                    let e = add_node("empty-dir", 0, Some(d));
+                    add_node("1000bytes", 1000, Some(dn));
+                    add_node("dir-a.1mb", 1_000_000, Some(dn));
+                    add_node("dir-a.kb", 1024, Some(dn));
+                    let en = add_node("empty-dir", 0, Some(dn));
                     {
-                        add_node(".gitkeep", 0, Some(e));
+                        add_node(".gitkeep", 0, Some(en));
                     }
-                    let sub = add_node("sub", 256_000, Some(d));
+                    let sub = add_node("sub", 256_000, Some(dn));
                     {
                         add_node("dir-sub-a.256kb", 256_000, Some(sub));
                     }
                 }
-                add_node("z123.b", 123, Some(s));
+                add_node("z123.b", 123, Some(sn));
             }
         }
     }
-    t
+    tree
 }
 
 pub fn sample_02_tree() -> Tree {
-    let mut t = Tree::new();
+    let mut tree = Tree::new();
     {
-        let mut add_node = make_add_node(&mut t);
+        let mut add_node = make_add_node(&mut tree);
         let root_size = 1540;
-        let r = add_node("", root_size, None);
+        let rn = add_node("", root_size, None);
         {
-            let s = add_node(
+            let sn = add_node(
                 Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
                 root_size,
-                Some(r),
+                Some(rn),
             );
             {
-                add_node("a", 256, Some(s));
-                add_node("b", 1, Some(s));
-                let d = add_node("dir", 1283, Some(s));
+                add_node("a", 256, Some(sn));
+                add_node("b", 1, Some(sn));
+                let dn = add_node("dir", 1283, Some(sn));
                 {
-                    add_node("c", 257, Some(d));
-                    add_node("d", 2, Some(d));
-                    let e = add_node("empty-dir", 0, Some(d));
+                    add_node("c", 257, Some(dn));
+                    add_node("d", 2, Some(dn));
+                    let en = add_node("empty-dir", 0, Some(dn));
                     {
-                        add_node(".gitkeep", 0, Some(e));
+                        add_node(".gitkeep", 0, Some(en));
                     }
-                    let sub = add_node("sub", 1024, Some(d));
+                    let sub = add_node("sub", 1024, Some(dn));
                     {
                         add_node("e", 1024, Some(sub));
                     }
@@ -279,12 +281,10 @@ pub fn sample_02_tree() -> Tree {
             }
         }
     }
-    t
+    tree
 }
 
-pub fn make_add_node<'a>(
-    t: &'a mut Tree,
-) -> impl FnMut(&str, u128, Option<NodeIndex>) -> NodeIndex + 'a {
+pub fn make_add_node(t: &mut Tree) -> impl FnMut(&str, u128, Option<NodeIndex>) -> NodeIndex + '_ {
     move |name, size, maybe_from_idx| {
         let n = t.add_node(EntryData {
             name: PathBuf::from(name),

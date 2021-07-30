@@ -1,4 +1,4 @@
-pub const FIXTURE_PATH: &'static str = "tests/fixtures";
+pub const FIXTURE_PATH: &str = "tests/fixtures";
 
 mod journeys_readonly;
 mod journeys_with_writes;

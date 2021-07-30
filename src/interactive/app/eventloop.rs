@@ -56,9 +56,9 @@ impl AppState {
         B: Backend,
     {
         let props = MainWindowProps {
-            traversal: &traversal,
+            traversal,
             display,
-            state: &self,
+            state: self,
         };
         draw_window(window, props, terminal)
     }

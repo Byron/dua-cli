@@ -125,7 +125,7 @@ impl MainWindow {
 
         let marked = self.mark_pane.as_ref().map(|p| p.marked());
         let props = EntriesProps {
-            tree: &tree,
+            tree,
             root: state.root,
             display: *display,
             entries: &state.entries,
