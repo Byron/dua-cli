@@ -10,12 +10,13 @@ license = "MIT"
 include = ["src/**/*", "Cargo.*", "LICENSE", "README.md", "CHANGELOG.md", "!**/tests/*"]
 
 [features]
-default = ["tui-crossplatform", "trash-move"]
+default = ["tui-crossplatform", "trash-move", "aggregate-scan-progress"]
 tui-unix = ["crosstermion/tui-react-termion", "tui-shared"]
 tui-crossplatform = ["crosstermion/tui-react-crossterm", "tui-shared"]
 
 tui-shared = ["tui", "tui-react", "open", "unicode-segmentation"]
 trash-move = ["trash"]
+aggregate-scan-progress = []
 
 [dependencies]
 clap = "3.0.0-beta.2"

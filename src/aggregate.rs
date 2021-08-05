@@ -2,10 +2,9 @@ use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
 use colored::{Color, Colorize};
 use filesize::PathExt;
+use std::{borrow::Cow, io, path::Path};
+#[cfg(feature = "aggregate-scan-progress")]
 use std::{
-    borrow::Cow,
-    io,
-    path::Path,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -19,7 +18,9 @@ use std::{
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
-    err: Option<impl io::Write + Send + 'static>,
+    #[cfg_attr(not(feature = "aggregate-scan-progress"), allow(unused_variables))] err: Option<
+        impl io::Write + Send + 'static,
+    >,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
@@ -35,9 +36,11 @@ pub fn aggregate(
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
     let paths: Vec<_> = paths.into_iter().collect();
+    #[cfg(feature = "aggregate-scan-progress")]
     let shared_count = Arc::new(AtomicU64::new(0));
 
-    if let Some(mut err) = err {
+    #[cfg(feature = "aggregate-scan-progress")]
+    if let Some(mut out) = err {
         thread::spawn({
             let shared_count = Arc::clone(&shared_count);
             move || {
@@ -45,7 +48,7 @@ pub fn aggregate(
                 loop {
                     thread::sleep(Duration::from_millis(100));
                     write!(
-                        err,
+                        out,
                         "Enumerating {} entries\r",
                         shared_count.load(Ordering::Acquire)
                     )
@@ -62,6 +65,7 @@ pub fn aggregate(
         let device_id = crossdev::init(path.as_ref())?;
         for entry in walk_options.iter_from_path(path.as_ref()) {
             stats.entries_traversed += 1;
+            #[cfg(feature = "aggregate-scan-progress")]
             shared_count.fetch_add(1, Ordering::Relaxed);
             match entry {
                 Ok(entry) => {

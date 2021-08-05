@@ -38,6 +38,7 @@ check:## run cargo-check with various features
 	cargo check --no-default-features --features tui-unix
 	cargo check --no-default-features --features tui-crossplatform
 	cargo check --no-default-features --features trash-move
+	cargo check --no-default-features --features aggregate-scan-progress
 
 unit-tests: ## run all unit tests
 	cargo test --all
