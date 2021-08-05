@@ -1,3 +1,8 @@
+#### v2.14.4
+
+* upgrade depencies
+* upgrade to tui 0.16
+
 #### v2.14.3
 
 * upgrade `open` crate to v2
