@@ -81,6 +81,20 @@ Via `pacman` on your ArchLinux system.
 sudo pacman -S dua-cli
 ```
 
+#### NetBSD
+Via `pkgin` on your NetBSD system.
+
+```
+pkgin install dua-cli
+```
+
+Or, building from source
+
+```
+cd /usr/pkgsrc/sysutils/dua-cli
+make install
+```
+
 #### Windows
 
 You will find pre-built binaries for Windows in the [releases section](https://github.com/Byron/dua-cli).
