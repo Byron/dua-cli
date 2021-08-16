@@ -1,3 +1,7 @@
+#### v2.14.5
+
+* Fix installation via `cargo install dua-cli`. Please note that it might break again as it still depends on the unsable `clap-3 beta 4`. Even when pinning it breakage is possible as its dependencies itself aren't pinned.
+
 #### v2.14.4
 
 * upgrade depencies
