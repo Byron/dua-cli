@@ -35,7 +35,7 @@ pub fn aggregate(
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
-    
+
     #[cfg(feature = "aggregate-scan-progress")]
     let shared_count = Arc::new(AtomicU64::new(0));
 
