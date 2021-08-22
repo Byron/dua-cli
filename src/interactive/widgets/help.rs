@@ -98,32 +98,32 @@ impl HelpPane {
             title("Keys for pane control");
             {
                 hotkey(
-                    "q/<ESC>",
+                    "q/<Esc>",
                     "Close the current pane. Closes the program if no",
                     Some("pane is open"),
                 );
-                hotkey("<tab>", "Cycle between all open panes", None);
+                hotkey("<Tab>", "Cycle between all open panes", None);
                 hotkey("?", "Show or hide the help pane", None);
                 spacer();
             }
             title("Keys for Navigation");
             {
-                hotkey("j/<down>", "move down an entry", None);
-                hotkey("k/<up>", "move up an entry", None);
-                hotkey("o/l/<enter>", "descent into the selected directory", None);
-                hotkey("<right>", "^", None);
+                hotkey("j/<Down>", "move down an entry", None);
+                hotkey("k/<Up>", "move up an entry", None);
+                hotkey("o/l/<Enter>", "descent into the selected directory", None);
+                hotkey("<Right>", "^", None);
                 hotkey(
-                    "u/h/<left>",
+                    "u/h/<Left>",
                     "ascent one level into the parent directory",
                     None,
                 );
-                hotkey("<backspace>", "^", None);
+                hotkey("<Backspace>", "^", None);
                 hotkey("Ctrl + d", "move down 10 entries at once", None);
                 hotkey("<Page Down>", "^", None);
                 hotkey("Ctrl + u", "move up 10 entries at once", None);
                 hotkey("<Page Up>", "^", None);
-                hotkey("H", "Move to the top of the entries list", None);
-                hotkey("G", "Move to the bottom of the entries list", None);
+                hotkey("H/<Home>", "Move to the top of the entries list", None);
+                hotkey("G/<End>", "Move to the bottom of the entries list", None);
                 spacer();
             }
             title("Keys for display");
@@ -153,13 +153,13 @@ impl HelpPane {
                     "Mark for the currently selected entry for deletion and move down",
                     None,
                 );
-                hotkey("<space bar>", "Toggle the currently selected entry", None);
+                hotkey("<Space>", "Toggle the currently selected entry", None);
                 spacer();
             }
             title("Keys in the Mark pane");
             {
                 hotkey(
-                    "x/d/<space>",
+                    "x/d/<Space>",
                     "remove the selected entry from the list",
                     None,
                 );
@@ -202,7 +202,7 @@ impl HelpPane {
         block.render(area, buf);
 
         if *has_focus {
-            let help_text = " . = o|.. = u || ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
             let help_text_block_width = block_width(help_text);
             let bound = Rect {
                 width: area.width.saturating_sub(1),

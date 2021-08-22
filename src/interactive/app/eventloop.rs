@@ -142,8 +142,8 @@ impl AppState {
                     Char('o') | Char('l') | Char('\n') | Right => {
                         self.enter_node_with_traversal(traversal)
                     }
-                    Char('H') => self.change_entry_selection(CursorDirection::ToTop),
-                    Char('G') => self.change_entry_selection(CursorDirection::ToBottom),
+                    Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
+                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
                     Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
                     Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
