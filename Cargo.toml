@@ -1,6 +1,6 @@
 [package]
 name = "dua-cli"
-version = "2.14.5"
+version = "2.14.6"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
 edition = "2018"
 repository = "https://github.com/Byron/dua-cli"
