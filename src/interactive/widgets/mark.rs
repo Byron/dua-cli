@@ -364,7 +364,7 @@ impl MarkPane {
             Paragraph::new(Text::from(Spans::from(vec![
                 #[cfg(feature = "trash-move")]
                 Span::styled(
-                    " Ctrl + t",
+                    " Ctrl + t ",
                     Style {
                         fg: Color::White.into(),
                         bg: Color::Black.into(),
@@ -374,9 +374,10 @@ impl MarkPane {
                 #[cfg(feature = "trash-move")]
                 Span::styled(" to trash or ", default_style),
                 Span::styled(
-                    " Ctrl + r",
+                    " Ctrl + r ",
                     Style {
                         fg: Color::LightRed.into(),
+                        bg: Color::Black.into(),
                         add_modifier: default_style.add_modifier | Modifier::RAPID_BLINK,
                         ..default_style
                     },
