@@ -1,6 +1,7 @@
-#### v2.14.5
+#### v2.14.6
 
 * Support for arrow keys as well as Home & End. The help pane was updated to reflect these changes.
+* More readable information on how to delete or trash files in the mark pane.
 
 #### v2.14.5
 
