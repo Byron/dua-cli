@@ -397,7 +397,7 @@ impl MarkPane {
         self.list.render(props, entries, list_area, buf);
 
         if has_focus {
-            let help_text = " . = o|.. = u ── ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
             let help_text_block_width = block_width(help_text);
             let bound = Rect {
                 width: area.width.saturating_sub(1),

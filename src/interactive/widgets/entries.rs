@@ -167,7 +167,7 @@ impl Entries {
         list.render(props, lines, area, buf);
 
         if *is_focussed {
-            let help_text = " . = o|.. = u ── ⇊ = CTRL+d|↓ = j|⇈ = CTRL+u|↑ = k ";
+            let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
             let help_text_block_width = block_width(help_text);
             let bound = Rect {
                 width: area.width.saturating_sub(1),
