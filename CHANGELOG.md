@@ -1,3 +1,7 @@
+#### v2.14.7
+
+* Fix deletion which broke with Rust 1.55, for those who are compiling the tool themselves.
+
 #### v2.14.6
 
 * Support for arrow keys as well as Home & End. The help pane was updated to reflect these changes.
