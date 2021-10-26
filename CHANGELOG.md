@@ -5,13 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.14.8 (2021-10-26)
+
+### Changed
+
+ - <csr-id-49193f0506946981bc056b29c3f09c94e30ac457/> auto-config support for Apple M1 Pro and Apple M1 Max
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -22,8 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - cleanup changelog ([`36fb8a3`](https://github.com/Byron/dua-cli/commit/36fb8a3ab1ad028657c8b720b45c4073a3207c95))
-    - auto-config support for Apple M1 Pro and Apple M1 Max ([`5bae3cf`](https://github.com/Byron/dua-cli/commit/5bae3cf079ca700ff3f4c5e5e15a4a36a4808a78))
+    - Use `cargo changelog` ([`e0b8328`](https://github.com/Byron/dua-cli/commit/e0b8328bde652a02f1f764975a8bf4b2f3619e17))
+    - cleanup changelog ([`c80b1c5`](https://github.com/Byron/dua-cli/commit/c80b1c5017f2679183d1dfc5edc6d379150fbe2a))
+    - auto-config support for Apple M1 Pro and Apple M1 Max ([`49193f0`](https://github.com/Byron/dua-cli/commit/49193f0506946981bc056b29c3f09c94e30ac457))
 </details>
 
 ## v2.14.7 (2021-09-18)
@@ -2135,6 +2140,54 @@ application and GUI state.
     - Simplified handling of 'no paths given' case ([`ae0182f`](https://github.com/Byron/dua-cli/commit/ae0182f09c0e2c3c77298cb431421cbdc64c0fa8))
 </details>
 
+#### 1.0.0 (2019-06-01)
+
+Simple CLI to list top-level directories similar to sn-sort, but faster and more tailored to getting an idea of where most space is used.
+
+##### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 27 commits contributed to the release over the course of 3 calendar days.
+ - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+##### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Add description to Cargo.toml ([`a53c2ac`](https://github.com/Byron/dua-cli/commit/a53c2acb65457df740f3605124b9e42d363897de))
+    - Better readme ([`e8a83e7`](https://github.com/Byron/dua-cli/commit/e8a83e779f694a8ba2a264a5def7add6d65b191c))
+    - Add asciicast ([`a66cf95`](https://github.com/Byron/dua-cli/commit/a66cf95bf57f477eae7a8ef307fd62a4df0da76d))
+    - now with colored help ([`3798be8`](https://github.com/Byron/dua-cli/commit/3798be8a31902a74f4c0280d0d1def8d6bb74d10))
+    - Prepare for release ([`28079ec`](https://github.com/Byron/dua-cli/commit/28079ec7d976aef0eacd88e0090f05ad87219558))
+    - Create LICENSE ([`0678400`](https://github.com/Byron/dua-cli/commit/06784008779ceace1fabd55f271996e406f6502b))
+    - Udpate readme ([`0ae156e`](https://github.com/Byron/dua-cli/commit/0ae156e5a1b6e3f7be2c61cba2a882d8a8a933c4))
+    - Add minimal library documentation ([`310cd6a`](https://github.com/Byron/dua-cli/commit/310cd6af912cda7333496d5d5d80a68d6ea9b155))
+    - Support for colors. Using green, which might be invisible to some! ([`9d09499`](https://github.com/Byron/dua-cli/commit/9d0949933cb46d2e73c047b5f06201dbd75bca1d))
+    - Add simple statistics, just for fun! ([`498bcd0`](https://github.com/Byron/dua-cli/commit/498bcd0da4dc44d04634f2cabc245f4c46d2c46a))
+    - Sort by size in bytes by default; can be turned off for immediate feedback ([`f8c3ba2`](https://github.com/Byron/dua-cli/commit/f8c3ba29134af08ea7b70b4fe3951307c6be6e3a))
+    - Nicer formatting of numbers ([`e7da784`](https://github.com/Byron/dua-cli/commit/e7da7843ad7894a3560b4d70076a74798404da94))
+    - Make explicit that Sorting is disabled during aggregation; more spacing ([`9ba5a34`](https://github.com/Byron/dua-cli/commit/9ba5a348c67a898abb0ae648e686da48649a33df))
+    - Pull out all modules into files ([`8b2ef49`](https://github.com/Byron/dua-cli/commit/8b2ef49bf9f37d0e126fa68115175fe2cf82aaf5))
+    - Add --no-total option ([`961b743`](https://github.com/Byron/dua-cli/commit/961b743773da2a5112bd4ab70554c50b03ded3ad))
+    - Better error reporting ([`c1cbcf3`](https://github.com/Byron/dua-cli/commit/c1cbcf355755fbd1ca6124cdba3b8e361a7bebf2))
+    - Support for paths specification without subcommand ([`c50332c`](https://github.com/Byron/dua-cli/commit/c50332cead2688e40de192e1b47e50a662763a78))
+    - Compute the total if there are more than one paths ([`04ce0c9`](https://github.com/Byron/dua-cli/commit/04ce0c9312fb5e290d6fbaed8e9427bec3f3e1c6))
+    - Support for various byte formats ([`7dc718b`](https://github.com/Byron/dua-cli/commit/7dc718bd03f7f669638d87b4c5fee67700f045ca))
+    - Add byte formatting ([`6db07e2`](https://github.com/Byron/dua-cli/commit/6db07e2e69f7f674191311719054a245e8c8b886))
+    - By not counting directories, we get the correct amount of bytes ([`a19e3d7`](https://github.com/Byron/dua-cli/commit/a19e3d76fe559f59be467b4967156509e6f26715))
+    - Let's just say we compute the aggregate correctly ([`61ca52a`](https://github.com/Byron/dua-cli/commit/61ca52a2a8b23daffc3eea1fe8d71078e757a0d3))
+    - An attempt to abstract link size, but it's not required actually :D ([`04f50bd`](https://github.com/Byron/dua-cli/commit/04f50bdcdbe995e7d9952788eb4cc4f736299c39))
+    - First basic implementation of aggregation; symlinks are not handled yet ([`638be3c`](https://github.com/Byron/dua-cli/commit/638be3c8e7362b809c2c6558d630aa355349b1e8))
+    - The first failing test ([`449f964`](https://github.com/Byron/dua-cli/commit/449f964850feb89d8a179bbc8a45cea6580577eb))
+    - mission statement and first tasks, to get started ([`247a3b9`](https://github.com/Byron/dua-cli/commit/247a3b9dc851237288fd243a9029afcec6453e5d))
+    - First instantiation of template ([`e9a4472`](https://github.com/Byron/dua-cli/commit/e9a447250ba9ffd10f94f6f7d970c6da141c185d))
+</details>
+
 ## v0.14.0 (2021-01-04)
 
 ### Commit Statistics
@@ -2366,53 +2419,5 @@ application and GUI state.
 
  * **Uncategorized**
     - See if ARM works again ([`db47b37`](https://github.com/Byron/dua-cli/commit/db47b375db9ee8a94aec40d6c0ac430085f6bab1))
-</details>
-
-#### 1.0.0 (2019-06-01)
-
-Simple CLI to list top-level directories similar to sn-sort, but faster and more tailored to getting an idea of where most space is used.
-
-##### Commit Statistics
-
-<csr-read-only-do-not-edit/>
-
- - 27 commits contributed to the release over the course of 3 calendar days.
- - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
-
-##### Commit Details
-
-<csr-read-only-do-not-edit/>
-
-<details><summary>view details</summary>
-
- * **Uncategorized**
-    - Add description to Cargo.toml ([`a53c2ac`](https://github.com/Byron/dua-cli/commit/a53c2acb65457df740f3605124b9e42d363897de))
-    - Better readme ([`e8a83e7`](https://github.com/Byron/dua-cli/commit/e8a83e779f694a8ba2a264a5def7add6d65b191c))
-    - Add asciicast ([`a66cf95`](https://github.com/Byron/dua-cli/commit/a66cf95bf57f477eae7a8ef307fd62a4df0da76d))
-    - now with colored help ([`3798be8`](https://github.com/Byron/dua-cli/commit/3798be8a31902a74f4c0280d0d1def8d6bb74d10))
-    - Prepare for release ([`28079ec`](https://github.com/Byron/dua-cli/commit/28079ec7d976aef0eacd88e0090f05ad87219558))
-    - Create LICENSE ([`0678400`](https://github.com/Byron/dua-cli/commit/06784008779ceace1fabd55f271996e406f6502b))
-    - Udpate readme ([`0ae156e`](https://github.com/Byron/dua-cli/commit/0ae156e5a1b6e3f7be2c61cba2a882d8a8a933c4))
-    - Add minimal library documentation ([`310cd6a`](https://github.com/Byron/dua-cli/commit/310cd6af912cda7333496d5d5d80a68d6ea9b155))
-    - Support for colors. Using green, which might be invisible to some! ([`9d09499`](https://github.com/Byron/dua-cli/commit/9d0949933cb46d2e73c047b5f06201dbd75bca1d))
-    - Add simple statistics, just for fun! ([`498bcd0`](https://github.com/Byron/dua-cli/commit/498bcd0da4dc44d04634f2cabc245f4c46d2c46a))
-    - Sort by size in bytes by default; can be turned off for immediate feedback ([`f8c3ba2`](https://github.com/Byron/dua-cli/commit/f8c3ba29134af08ea7b70b4fe3951307c6be6e3a))
-    - Nicer formatting of numbers ([`e7da784`](https://github.com/Byron/dua-cli/commit/e7da7843ad7894a3560b4d70076a74798404da94))
-    - Make explicit that Sorting is disabled during aggregation; more spacing ([`9ba5a34`](https://github.com/Byron/dua-cli/commit/9ba5a348c67a898abb0ae648e686da48649a33df))
-    - Pull out all modules into files ([`8b2ef49`](https://github.com/Byron/dua-cli/commit/8b2ef49bf9f37d0e126fa68115175fe2cf82aaf5))
-    - Add --no-total option ([`961b743`](https://github.com/Byron/dua-cli/commit/961b743773da2a5112bd4ab70554c50b03ded3ad))
-    - Better error reporting ([`c1cbcf3`](https://github.com/Byron/dua-cli/commit/c1cbcf355755fbd1ca6124cdba3b8e361a7bebf2))
-    - Support for paths specification without subcommand ([`c50332c`](https://github.com/Byron/dua-cli/commit/c50332cead2688e40de192e1b47e50a662763a78))
-    - Compute the total if there are more than one paths ([`04ce0c9`](https://github.com/Byron/dua-cli/commit/04ce0c9312fb5e290d6fbaed8e9427bec3f3e1c6))
-    - Support for various byte formats ([`7dc718b`](https://github.com/Byron/dua-cli/commit/7dc718bd03f7f669638d87b4c5fee67700f045ca))
-    - Add byte formatting ([`6db07e2`](https://github.com/Byron/dua-cli/commit/6db07e2e69f7f674191311719054a245e8c8b886))
-    - By not counting directories, we get the correct amount of bytes ([`a19e3d7`](https://github.com/Byron/dua-cli/commit/a19e3d76fe559f59be467b4967156509e6f26715))
-    - Let's just say we compute the aggregate correctly ([`61ca52a`](https://github.com/Byron/dua-cli/commit/61ca52a2a8b23daffc3eea1fe8d71078e757a0d3))
-    - An attempt to abstract link size, but it's not required actually :D ([`04f50bd`](https://github.com/Byron/dua-cli/commit/04f50bdcdbe995e7d9952788eb4cc4f736299c39))
-    - First basic implementation of aggregation; symlinks are not handled yet ([`638be3c`](https://github.com/Byron/dua-cli/commit/638be3c8e7362b809c2c6558d630aa355349b1e8))
-    - The first failing test ([`449f964`](https://github.com/Byron/dua-cli/commit/449f964850feb89d8a179bbc8a45cea6580577eb))
-    - mission statement and first tasks, to get started ([`247a3b9`](https://github.com/Byron/dua-cli/commit/247a3b9dc851237288fd243a9029afcec6453e5d))
-    - First instantiation of template ([`e9a4472`](https://github.com/Byron/dua-cli/commit/e9a447250ba9ffd10f94f6f7d970c6da141c185d))
 </details>
 
