@@ -1,4 +1,3 @@
-use clap::Clap;
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -50,10 +49,8 @@ impl From<ByteFormat> for LibraryByteFormat {
     }
 }
 
-#[derive(Debug, Clap)]
+#[derive(Debug, clap::Parser)]
 #[clap(name = "dua", about = "A tool to learn about disk usage, fast!", version = clap::crate_version!())]
-#[clap(setting = clap::AppSettings::ColoredHelp)]
-#[clap(setting = clap::AppSettings::DisableVersionForSubcommands)]
 #[clap(override_usage = "dua [FLAGS] [OPTIONS] [SUBCOMMAND] [input]...")]
 pub struct Args {
     #[clap(subcommand)]
@@ -72,7 +69,12 @@ pub struct Args {
     /// GiB - only gibibytes
     /// MB - only megabytes
     /// MiB - only mebibytes
-    #[clap(short = 'f', long, case_insensitive = true, possible_values(&ByteFormat::VARIANTS))]
+    #[clap(
+        short = 'f',
+        long,
+        case_insensitive = true,
+        possible_values(ByteFormat::VARIANTS)
+    )]
     pub format: Option<ByteFormat>,
 
     /// Display apparent size instead of disk usage.
@@ -92,11 +94,12 @@ pub struct Args {
     pub input: Vec<PathBuf>,
 }
 
-#[derive(Debug, Clap)]
+#[derive(Debug, clap::Parser)]
 pub enum Command {
     /// Launch the terminal user interface
     #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
     #[clap(name = "interactive", visible_alias = "i")]
+    #[clap(setting = clap::AppSettings::DisableVersionFlag)]
     Interactive {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[clap(parse(from_os_str))]
@@ -104,6 +107,7 @@ pub enum Command {
     },
     /// Aggregrate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
+    #[clap(setting = clap::AppSettings::DisableVersionFlag)]
     Aggregate {
         /// If set, print additional statistics about the file traversal to stderr
         #[clap(long = "stats")]

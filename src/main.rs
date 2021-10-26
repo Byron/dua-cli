@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use anyhow::Result;
-use clap::Clap;
+use clap::Parser;
 use dua::{ByteFormat, TraversalSorting};
 use std::{fs, io, io::Write, path::PathBuf, process};
 

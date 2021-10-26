@@ -19,7 +19,7 @@ trash-move = ["trash"]
 aggregate-scan-progress = []
 
 [dependencies]
-clap = "3.0.0-beta.4"
+clap = "=3.0.0-beta.5"
 jwalk = "0.6.0"
 byte-unit = "4"
 atty = "0.2.11"
