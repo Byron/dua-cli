@@ -203,10 +203,8 @@ impl MarkPane {
                 }
                 self.selected = Some(selected);
             }
-            Some(self)
-        } else {
-            Some(self)
         }
+        Some(self)
     }
 
     fn tree_index_by_list_position(&mut self, selected: usize) -> Option<TreeIndex> {
