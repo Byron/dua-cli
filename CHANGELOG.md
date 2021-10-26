@@ -5,17 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 2.14.8 (2021-10-26)
+## 2.14.9 (2021-10-26)
 
-### Changed
+### Bug Fixes
 
- - <csr-id-49193f0506946981bc056b29c3f09c94e30ac457/> auto-config support for Apple M1 Pro and Apple M1 Max
+ - <csr-id-d0c2c7cbac9b9dfa18a85a48098f1492c629bfd6/> try to produce release binaries once more
+   With smart-release, this is created automatically.
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 2 commits contributed to the release.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -26,6 +27,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - try to produce release binaries once more ([`d0c2c7c`](https://github.com/Byron/dua-cli/commit/d0c2c7cbac9b9dfa18a85a48098f1492c629bfd6))
+    - update package size to match new changelog ([`9bfc2ea`](https://github.com/Byron/dua-cli/commit/9bfc2ea3040148c3c4e9dd03db3cc9a0b0e7eb0c))
+</details>
+
+## 2.14.8 (2021-10-26)
+
+### Changed
+
+ - <csr-id-49193f0506946981bc056b29c3f09c94e30ac457/> auto-config support for Apple M1 Pro and Apple M1 Max
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 4 commits contributed to the release.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Release dua-cli v2.14.8 ([`b9a9b3e`](https://github.com/Byron/dua-cli/commit/b9a9b3ec113430f44982e07c64bfbdde661779b6))
     - Use `cargo changelog` ([`e0b8328`](https://github.com/Byron/dua-cli/commit/e0b8328bde652a02f1f764975a8bf4b2f3619e17))
     - cleanup changelog ([`c80b1c5`](https://github.com/Byron/dua-cli/commit/c80b1c5017f2679183d1dfc5edc6d379150fbe2a))
     - auto-config support for Apple M1 Pro and Apple M1 Max ([`49193f0`](https://github.com/Byron/dua-cli/commit/49193f0506946981bc056b29c3f09c94e30ac457))
@@ -2140,11 +2167,11 @@ application and GUI state.
     - Simplified handling of 'no paths given' case ([`ae0182f`](https://github.com/Byron/dua-cli/commit/ae0182f09c0e2c3c77298cb431421cbdc64c0fa8))
 </details>
 
-#### 1.0.0 (2019-06-01)
+## 1.0.0 (2019-06-01)
 
 Simple CLI to list top-level directories similar to sn-sort, but faster and more tailored to getting an idea of where most space is used.
 
-##### Commit Statistics
+### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
@@ -2152,7 +2179,7 @@ Simple CLI to list top-level directories similar to sn-sort, but faster and more
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
-##### Commit Details
+### Commit Details
 
 <csr-read-only-do-not-edit/>
 
