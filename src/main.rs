@@ -38,7 +38,7 @@ fn derive_default_threads(threads: usize) -> usize {
             .processors()
             .get(0)
             .map_or(0, |p| match p.brand() {
-                "Apple M1" => 4,
+                "Apple M1"|"Apple M1 Pro"|"Apple M1 Max" => 4,
                 other => {
                     eprintln!(
                         "Couldn't auto-configure correct amount of threads for {}. Create an issue here: https://github.com/byron/dua-cli/issues",
