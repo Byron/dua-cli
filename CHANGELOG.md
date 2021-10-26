@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.14.10 (2021-10-26)
+
+### Bug Fixes
+
+ - <csr-id-e220eef3f3fef4abed85807f8606b1c92527f950/> see if releases work now with a different create-release action
+   We are only interested in the upload_url, not in actually creating a
+   release as smart-release does that already.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - see if releases work now with a different create-release action ([`e220eef`](https://github.com/Byron/dua-cli/commit/e220eef3f3fef4abed85807f8606b1c92527f950))
+</details>
+
 ## 2.14.9 (2021-10-26)
 
 ### Bug Fixes
@@ -16,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -27,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.14.9 ([`ea93ac3`](https://github.com/Byron/dua-cli/commit/ea93ac3efe09e043c6e6711abd0611a5d5af7228))
     - try to produce release binaries once more ([`d0c2c7c`](https://github.com/Byron/dua-cli/commit/d0c2c7cbac9b9dfa18a85a48098f1492c629bfd6))
     - update package size to match new changelog ([`9bfc2ea`](https://github.com/Byron/dua-cli/commit/9bfc2ea3040148c3c4e9dd03db3cc9a0b0e7eb0c))
 </details>
