@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.14.11 (2021-10-26)
 
 ### Bug Fixes
 
@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#111](https://github.com/Byron/dua-cli/issues/111)
 
@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#111](https://github.com/Byron/dua-cli/issues/111)**
     - cargo install without --locked should work now ([`f26309c`](https://github.com/Byron/dua-cli/commit/f26309c91a271f1c2c32dfb55dbbb8c713f5e97d))
  * **Uncategorized**
+    - adjust changelog ([`bd6a1fd`](https://github.com/Byron/dua-cli/commit/bd6a1fd6202a3d1cb0fd5b17bb858c04fd18235c))
     - thanks clippy ([`6cff8bc`](https://github.com/Byron/dua-cli/commit/6cff8bc4aea9ac0c93903fcf1357d29a3b9fea0b))
     - remove superfluous line in release.yml ([`a0625fc`](https://github.com/Byron/dua-cli/commit/a0625fc7070efbca360176aef1a522d2290da086))
 </details>
