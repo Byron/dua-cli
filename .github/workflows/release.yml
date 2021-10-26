@@ -38,8 +38,6 @@ jobs:
       - name: Create GitHub release
         id: release
         uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag: ${{ env.ARTIFACT_VERSION }}
           name: ${{ env.ARTIFACT_VERSION }}
