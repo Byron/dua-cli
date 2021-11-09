@@ -97,7 +97,7 @@ make install
 
 #### Windows
 
-You will find pre-built binaries for Windows in the [releases section](https://github.com/Byron/dua-cli).
+You will find pre-built binaries for Windows in the [releases section][releases].
 Alternatively, install via cargo as in
 
 ```
