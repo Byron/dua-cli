@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.15.0 (2021-12-27)
 
 Make `dua` less prone to hanging by ignoring certain special directories on linux.
 
@@ -24,7 +24,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#116](https://github.com/Byron/dua-cli/issues/116)
 
@@ -37,6 +37,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  * **[#116](https://github.com/Byron/dua-cli/issues/116)**
     - Add `--ignore-dirs` option, with useful default on linux ([`d5fe5cc`](https://github.com/Byron/dua-cli/commit/d5fe5cca53a74c4c3cf392100d6ea5c2fe712a9d))
  * **Uncategorized**
+    - update changelog ([`f22f81d`](https://github.com/Byron/dua-cli/commit/f22f81dc98e40a7095ff4f886c850ddbc9ce2100))
     - upgrade clap ([`03b3520`](https://github.com/Byron/dua-cli/commit/03b3520a96178621d94b6ef986daa5c372b89223))
     - upgrade and update dependencies ([`28c59dd`](https://github.com/Byron/dua-cli/commit/28c59dda8adeeb0c0162d0b6f6ab2a8e9e5e0567))
 </details>
