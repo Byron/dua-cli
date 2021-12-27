@@ -72,7 +72,7 @@ pub struct Args {
     #[clap(
         short = 'f',
         long,
-        case_insensitive = true,
+        ignore_case = true,
         possible_values(ByteFormat::VARIANTS)
     )]
     pub format: Option<ByteFormat>,
