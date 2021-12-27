@@ -64,6 +64,7 @@ fn main() -> Result<()> {
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
         cross_filesystems: !opt.stay_on_filesystem,
+        ignore_dirs: opt.ignore_dirs,
     };
     let res = match opt.command {
         #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]

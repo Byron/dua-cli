@@ -1,5 +1,6 @@
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
+use std::path::PathBuf;
 use std::{fmt, path::Path};
 
 pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
@@ -123,6 +124,7 @@ pub struct WalkOptions {
     pub apparent_size: bool,
     pub sorting: TraversalSorting,
     pub cross_filesystems: bool,
+    pub ignore_dirs: Vec<PathBuf>,
 }
 
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
@@ -136,14 +138,22 @@ impl WalkOptions {
                 TraversalSorting::AlphabeticalByFileName => true,
             })
             .skip_hidden(false)
-            .process_read_dir(|_, _, _, dir_entry_results| {
-                dir_entry_results.iter_mut().for_each(|dir_entry_result| {
-                    if let Ok(dir_entry) = dir_entry_result {
-                        if dir_entry.file_type.is_file() || dir_entry.file_type().is_symlink() {
-                            dir_entry.client_state = Some(dir_entry.metadata());
+            .process_read_dir({
+                let ignore_dirs = self.ignore_dirs.clone();
+                move |_, _, _, dir_entry_results| {
+                    dir_entry_results.iter_mut().for_each(|dir_entry_result| {
+                        if let Ok(dir_entry) = dir_entry_result {
+                            if dir_entry.file_type.is_file() || dir_entry.file_type().is_symlink() {
+                                dir_entry.client_state = Some(dir_entry.metadata());
+                            }
+                            if dir_entry.file_type.is_dir()
+                                && ignore_dirs.contains(&dir_entry.path())
+                            {
+                                dir_entry.read_children_path = None;
+                            }
                         }
-                    }
-                })
+                    })
+                }
             })
             .parallelism(match self.threads {
                 0 => jwalk::Parallelism::RayonDefaultPool,
