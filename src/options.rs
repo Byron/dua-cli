@@ -89,6 +89,13 @@ pub struct Args {
     #[clap(short = 'x', long)]
     pub stay_on_filesystem: bool,
 
+    /// One or more absolute directories to ignore. Note that these are not ignored if they are passed as input path.
+    ///
+    /// Hence, they will only be ignored if they are eventually reached as part of the traversal.
+    #[clap(long = "ignore-dirs", short = 'i', parse(from_os_str))]
+    #[cfg_attr(target_os = "linux", clap(default_values = &["/proc", "/dev", "/sys", "/run"]))]
+    pub ignore_dirs: Vec<PathBuf>,
+
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[clap(parse(from_os_str))]
     pub input: Vec<PathBuf>,

@@ -37,8 +37,8 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it will sort entries in descending order by size"
         );
 
-        assert_eq!(
-            app.state.is_scanning, false,
+        assert!(
+            !app.state.is_scanning,
             "it will not think it is still scanning"
         );
 
