@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### New Features
+
+ - <csr-id-26d65145650cc3aac4ad540fdf04e95e139812e3/> Add `--ignore-dirs` option, with useful default on linux.
+
+   On linux there are a few directories which shouldn't be traversed by
+   default as they may cause hangs and blocking.
+   
+   With the new argument it's possible to specify absolute directories
+   to not enter during traversal, with a default set to avoid
+   problematic directories on linux right away.
+
+### Bug Fixes
+
+ - <csr-id-756ca542a73575df581433fdd84cee8f4bef99b5/> build on platforms without 64-bit atomics
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 7 commits contributed to the release over the course of 60 calendar days.
+ - 74 days passed between releases.
+ - 2 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#116](https://github.com/Byron/dua-cli/issues/116)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#116](https://github.com/Byron/dua-cli/issues/116)**
+    - Add `--ignore-dirs` option, with useful default on linux ([`26d6514`](https://github.com/Byron/dua-cli/commit/26d65145650cc3aac4ad540fdf04e95e139812e3))
+ * **Uncategorized**
+    - build on platforms without 64-bit atomics ([`756ca54`](https://github.com/Byron/dua-cli/commit/756ca542a73575df581433fdd84cee8f4bef99b5))
+    - Release dua-cli v2.15.0 ([`4b71a56`](https://github.com/Byron/dua-cli/commit/4b71a56bc428663249b2f20dbf19507ad559967d))
+    - update changelog ([`a226d1e`](https://github.com/Byron/dua-cli/commit/a226d1e8e4f0be2d9651950846424dda7e2c63b9))
+    - upgrade clap ([`87d8c45`](https://github.com/Byron/dua-cli/commit/87d8c45b105722352f58b2020aaeaff62f3e00f6))
+    - upgrade and update dependencies ([`269c650`](https://github.com/Byron/dua-cli/commit/269c650872b442e793604391cc5c94dc9fa592fc))
+    - Fix link to releases ([`c27da8b`](https://github.com/Byron/dua-cli/commit/c27da8b9bf3d2ea091ff9267d2e96df05a17bf05))
+</details>
+
 ## 2.15.0 (2021-12-27)
 
 Make `dua` less prone to hanging by ignoring certain special directories on linux.
@@ -19,28 +62,6 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
    With the new argument it's possible to specify absolute directories
    to not enter during traversal, with a default set to avoid
    problematic directories on linux right away.
-
-### Commit Statistics
-
-<csr-read-only-do-not-edit/>
-
- - 4 commits contributed to the release.
- - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
- - 1 unique issue was worked on: [#116](https://github.com/Byron/dua-cli/issues/116)
-
-### Commit Details
-
-<csr-read-only-do-not-edit/>
-
-<details><summary>view details</summary>
-
- * **[#116](https://github.com/Byron/dua-cli/issues/116)**
-    - Add `--ignore-dirs` option, with useful default on linux ([`d5fe5cc`](https://github.com/Byron/dua-cli/commit/d5fe5cca53a74c4c3cf392100d6ea5c2fe712a9d))
- * **Uncategorized**
-    - update changelog ([`f22f81d`](https://github.com/Byron/dua-cli/commit/f22f81dc98e40a7095ff4f886c850ddbc9ce2100))
-    - upgrade clap ([`03b3520`](https://github.com/Byron/dua-cli/commit/03b3520a96178621d94b6ef986daa5c372b89223))
-    - upgrade and update dependencies ([`28c59dd`](https://github.com/Byron/dua-cli/commit/28c59dda8adeeb0c0162d0b6f6ab2a8e9e5e0567))
-</details>
 
 ## 2.14.11 (2021-10-26)
 
@@ -136,6 +157,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 38 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -161,6 +183,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 3 commits contributed to the release.
+ - 26 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -186,6 +209,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 8 commits contributed to the release over the course of 3 calendar days.
+ - 5 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -200,8 +224,8 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
     - update change log ([`f48b181`](https://github.com/Byron/dua-cli/commit/f48b181d56d89c3028eb055c80bdf447fe65595d))
     - Merge branch 'style' ([`5904630`](https://github.com/Byron/dua-cli/commit/5904630cfebd4e99bc4ee7a9c23550f85add41d4))
     - Update changelog ([`58bcf90`](https://github.com/Byron/dua-cli/commit/58bcf90ffec21edea8327ba11b6bbc6fcf1440c1))
-    - Support Home/End and fix inconsistent help text ([`29017f6`](https://github.com/Byron/dua-cli/commit/29017f6f94003f58118ad7d1fded1d47f79349eb))
     - Improve mark widget tip style ([`019e4cb`](https://github.com/Byron/dua-cli/commit/019e4cb65e6d6302e08692c446bac56fb3beee25))
+    - Support Home/End and fix inconsistent help text ([`29017f6`](https://github.com/Byron/dua-cli/commit/29017f6f94003f58118ad7d1fded1d47f79349eb))
     - Format correctly ([`8977c17`](https://github.com/Byron/dua-cli/commit/8977c17bcb10373c33d695dd682781fd9590e4e7))
     - Remove unnecessary line ([`d6bbb6d`](https://github.com/Byron/dua-cli/commit/d6bbb6dd91b5367f8bd1f8569d39dbb30b8f89a2))
 </details>
@@ -215,6 +239,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 11 calendar days.
+ - 11 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -242,6 +267,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 3 commits contributed to the release over the course of 6 calendar days.
+ - 11 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -272,6 +298,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
+ - 11 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -297,6 +324,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 10 commits contributed to the release.
+ - 14 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -312,10 +340,10 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
     - Also run 'make check' on CI now that more feature toggles are added ([`9d2f969`](https://github.com/Byron/dua-cli/commit/9d2f969772306b35eab0b74cb792aac79d1d6af1))
     - Merge branch 'optional-trash' ([`b12b98a`](https://github.com/Byron/dua-cli/commit/b12b98a07935c839a11af08cfa9dc872b5a127e8))
     - disable test that now starts failing on windows even though… ([`64175e0`](https://github.com/Byron/dua-cli/commit/64175e028965958d0c22f8ffe55cab2fc01f9fc8))
-    - dependency upgrade: petgraph 0.6 ([`b4aeb14`](https://github.com/Byron/dua-cli/commit/b4aeb149cffae440560b54dcae6211eef51e85e4))
-    - dependency update ([`163bd47`](https://github.com/Byron/dua-cli/commit/163bd4764c7b8d35eb8a49af8e96c61430621b20))
     - refactor ([`6894dd8`](https://github.com/Byron/dua-cli/commit/6894dd8db51cd6fe8a70ad0c906ef351dc0a720c))
+    - dependency upgrade: petgraph 0.6 ([`b4aeb14`](https://github.com/Byron/dua-cli/commit/b4aeb149cffae440560b54dcae6211eef51e85e4))
     - Add checking and testing of new feature toggle ([`ee680b9`](https://github.com/Byron/dua-cli/commit/ee680b9b82618a1d5ecab1fb2e431fe3ff64d130))
+    - dependency update ([`163bd47`](https://github.com/Byron/dua-cli/commit/163bd4764c7b8d35eb8a49af8e96c61430621b20))
     - Make the trash feature optional ([`1fdded1`](https://github.com/Byron/dua-cli/commit/1fdded129fe766729ac332fa881c0681c9495316))
 </details>
 
@@ -353,8 +381,9 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 2 calendar days.
- - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 4 commits contributed to the release.
+ - 20 days passed between releases.
+ - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Thanks Clippy
@@ -374,9 +403,6 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
     - prep changelog ([`e7de79a`](https://github.com/Byron/dua-cli/commit/e7de79af3304ad9ed70cdf2e9fbe8ad4c765317a))
     - Merge branch 'trash' ([`64d8dc8`](https://github.com/Byron/dua-cli/commit/64d8dc8b9baf0fd2e8942b1391f783fe8a7d4586))
     - thanks clippy ([`68bbb68`](https://github.com/Byron/dua-cli/commit/68bbb68ffd4887d2023a520e4dfc69b9d8edc736))
-    - Add mark pane prompt message for ctrl + t ([`af538bc`](https://github.com/Byron/dua-cli/commit/af538bc545c3b3b7c0a3d5541a1a80b0da536e5b))
-    - deduplicate code ([`02dd1b7`](https://github.com/Byron/dua-cli/commit/02dd1b72c8fe741fb153094fdb08816f7f593c6f))
-    - Implement Ctrl+t move to trash ([`00fae90`](https://github.com/Byron/dua-cli/commit/00fae90e0dffc468c75bd362fa4220bc8650fb86))
 </details>
 
 ## v2.13.1 (2021-06-09)
@@ -388,8 +414,9 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
- - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 6 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -400,8 +427,11 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
  * **Uncategorized**
     - (cargo-release) version 2.13.1 ([`5534cd7`](https://github.com/Byron/dua-cli/commit/5534cd7126eada8a040f00cd996295dfd42cb4c1))
+    - Add mark pane prompt message for ctrl + t ([`af538bc`](https://github.com/Byron/dua-cli/commit/af538bc545c3b3b7c0a3d5541a1a80b0da536e5b))
     - prepare for version bump ([`d0150a8`](https://github.com/Byron/dua-cli/commit/d0150a8686b8265ca92a930b2d3676e1c89e2402))
+    - deduplicate code ([`02dd1b7`](https://github.com/Byron/dua-cli/commit/02dd1b72c8fe741fb153094fdb08816f7f593c6f))
     - Show TUI on stderr to enable writing files to stdout ([`a93a642`](https://github.com/Byron/dua-cli/commit/a93a642765540d4010dc2fab90737cd39abaa32d))
+    - Implement Ctrl+t move to trash ([`00fae90`](https://github.com/Byron/dua-cli/commit/00fae90e0dffc468c75bd362fa4220bc8650fb86))
 </details>
 
 ## v2.13.0 (2021-06-08)
@@ -439,6 +469,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 6 commits contributed to the release over the course of 1 calendar day.
+ - 7 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -467,6 +498,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 1 calendar day.
+ - 1 day passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -495,6 +527,7 @@ YANKED.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release.
+ - 19 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -528,6 +561,7 @@ YANKED.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 6 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -553,6 +587,7 @@ YANKED.
 <csr-read-only-do-not-edit/>
 
  - 16 commits contributed to the release over the course of 40 calendar days.
+ - 69 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -597,6 +632,7 @@ YANKED.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 5 calendar days.
+ - 6 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -630,6 +666,7 @@ YANKED.
 <csr-read-only-do-not-edit/>
 
  - 6 commits contributed to the release.
+ - 23 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -664,6 +701,7 @@ It looks like the latest BETAs of clap removed setting the version implicitly.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release over the course of 15 calendar days.
+ - 15 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -694,6 +732,7 @@ This is now fixed and hopefully permanently so thanks to using `jwalk` v0.6.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release over the course of 3 calendar days.
+ - 3 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -722,6 +761,7 @@ with dua-cli.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 18 calendar days.
+ - 18 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -755,6 +795,7 @@ On all other systems, the default number of threads did not change.
 <csr-read-only-do-not-edit/>
 
  - 6 commits contributed to the release over the course of 9 calendar days.
+ - 31 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -810,6 +851,7 @@ Dependency update.
 <csr-read-only-do-not-edit/>
 
  - 8 commits contributed to the release over the course of 19 calendar days.
+ - 30 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -840,6 +882,7 @@ Should fix [this issue](https://github.com/Byron/dua-cli/issues/66)
 <csr-read-only-do-not-edit/>
 
  - 9 commits contributed to the release over the course of 42 calendar days.
+ - 79 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -870,6 +913,7 @@ Change light-grey color in command-line mode to Cyan to fix disappearing text.
 <csr-read-only-do-not-edit/>
 
  - 3 commits contributed to the release.
+ - 3 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -896,6 +940,7 @@ See [this PR](https://github.com/Byron/dua-cli/pull/62) for reference.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 1 day passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -923,6 +968,7 @@ Minor improvements of looks; improved windows support.
 <csr-read-only-do-not-edit/>
 
  - 33 commits contributed to the release over the course of 14 calendar days.
+ - 15 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -949,8 +995,8 @@ Minor improvements of looks; improved windows support.
     - Switch to crosstermion 0.3 for tui 0.10 support ([`fd8c441`](https://github.com/Byron/dua-cli/commit/fd8c441af3739027b7959a21b530ddb4da455f73))
     - Merge remote-tracking branch 'origin/master' ([`4812206`](https://github.com/Byron/dua-cli/commit/4812206eab68ea5588d93f9ea0589f9e772ee5ad))
     - use published version of tui-react ([`ed1f91b`](https://github.com/Byron/dua-cli/commit/ed1f91b42890998b255567f32e8049a842552937))
-    - Upgrade to tui 0.10 step one… ([`839b932`](https://github.com/Byron/dua-cli/commit/839b9323d93b9f562f6414cd66504b6d686c0224))
     - Fix path construction of 'sample_02_tree' for test ([`5a36cd1`](https://github.com/Byron/dua-cli/commit/5a36cd18a31ca1fbdc62d4e594933a6327fe4e7d))
+    - Upgrade to tui 0.10 step one… ([`839b932`](https://github.com/Byron/dua-cli/commit/839b9323d93b9f562f6414cd66504b6d686c0224))
     - Fix platform size difference of 'sample_01_tree' for test ([`62c5833`](https://github.com/Byron/dua-cli/commit/62c58330b41cb19adde1c7d2b08a5db251be3580))
     - tui-react now works with tui 10.0; tracks tui's version number now ([`773497c`](https://github.com/Byron/dua-cli/commit/773497cc48a406a069be84e14194d51484fdbec2))
     - Re-enable test, disabled accidentally ([`48cbe09`](https://github.com/Byron/dua-cli/commit/48cbe0919da1dd6aa8c933b5d156e7f0ce5997a8))
@@ -1006,6 +1052,7 @@ Full windows support!
 <csr-read-only-do-not-edit/>
 
  - 22 commits contributed to the release over the course of 4 calendar days.
+ - 4 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1017,7 +1064,9 @@ Full windows support!
 
  * **Uncategorized**
     - Cut new release: 2.9 ([`becae48`](https://github.com/Byron/dua-cli/commit/becae48c29aa2db036f097516959d60cc219bc03))
+    - add windows wildcard argument support (using `wild`) ([`2c73b4d`](https://github.com/Byron/dua-cli/commit/2c73b4d59603c12d31ded1a2f2ca9ef97a5ff0b3))
     - releases are working as expected ([`230bd1d`](https://github.com/Byron/dua-cli/commit/230bd1d338cae861f1390b4db0dc58c8ea1491d4))
+    - fix windows compiler warnings (unused_variables) ([`5a11216`](https://github.com/Byron/dua-cli/commit/5a11216b53af2644100fcfebe44b0b6eea2dbb78))
     - Skip one test on windows ([`fece423`](https://github.com/Byron/dua-cli/commit/fece4231cd24409b0772a820cee18c2922d45e5b))
     - fix release.yml ([`eac0702`](https://github.com/Byron/dua-cli/commit/eac07027c3e9baff2d73ebfa7cc3ce752c0a8303))
     - windows is nightly only right now ([`034c7ec`](https://github.com/Byron/dua-cli/commit/034c7ec6abbed58688d82a4e703fdb10864af58f))
@@ -1032,8 +1081,6 @@ Full windows support!
     - for a moment I thought 'colored' could be used, but… ([`86f16c3`](https://github.com/Byron/dua-cli/commit/86f16c3042d9f8ba400512c8f2916c3a40e2d1f8))
     - Always use crossterm for now just to test if it works and… ([`3e0d4b0`](https://github.com/Byron/dua-cli/commit/3e0d4b022ff8d6ce5115894f3b6ad68f01ff370f))
     - Use crosstermion to create a terminal with the corresponding backend ([`98f850a`](https://github.com/Byron/dua-cli/commit/98f850a1ccd30618620a7d78999899c24463238a))
-    - add windows wildcard argument support (using `wild`) ([`2c73b4d`](https://github.com/Byron/dua-cli/commit/2c73b4d59603c12d31ded1a2f2ca9ef97a5ff0b3))
-    - fix windows compiler warnings (unused_variables) ([`5a11216`](https://github.com/Byron/dua-cli/commit/5a11216b53af2644100fcfebe44b0b6eea2dbb78))
     - Allow case-insensitivity with byte format variants ([`4b59c36`](https://github.com/Byron/dua-cli/commit/4b59c36ca8c53e63dd74fc0b3179a4ed9de2f60d))
     - convert input handling to crosstermion ([`388a134`](https://github.com/Byron/dua-cli/commit/388a1347580df120cead11f98516ceb911373316))
     - show possible variants of byte formats ([`fddc8cb`](https://github.com/Byron/dua-cli/commit/fddc8cbcadb50a6ad2bf06e883fe751f3bca55b3))
@@ -1126,6 +1173,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
 <csr-read-only-do-not-edit/>
 
  - 7 commits contributed to the release over the course of 29 calendar days.
+ - 31 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1155,6 +1203,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
 <csr-read-only-do-not-edit/>
 
  - 27 commits contributed to the release over the course of 11 calendar days.
+ - 26 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1204,6 +1253,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
 <csr-read-only-do-not-edit/>
 
  - 11 commits contributed to the release over the course of 22 calendar days.
+ - 29 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1236,6 +1286,7 @@ Much more nuanced percentage bars for a more precise visualization of space cons
 <csr-read-only-do-not-edit/>
 
  - 8 commits contributed to the release over the course of 5 calendar days.
+ - 6 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1293,6 +1344,7 @@ Full interaction during scanning phase; add inline-help for better UX.
 <csr-read-only-do-not-edit/>
 
  - 29 commits contributed to the release over the course of 2 calendar days.
+ - 2 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1346,6 +1398,7 @@ treat each cwd directory entry as individual root path.
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
+ - 1 day passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1370,6 +1423,7 @@ This is also the first release with github releases: https://github.com/Byron/du
 <csr-read-only-do-not-edit/>
 
  - 16 commits contributed to the release.
+ - 2 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1407,6 +1461,7 @@ Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
 <csr-read-only-do-not-edit/>
 
  - 3 commits contributed to the release over the course of 6 calendar days.
+ - 8 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1507,6 +1562,7 @@ YANKED - journey tests failed to changed method signature.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release over the course of 18 calendar days.
+ - 18 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1532,6 +1588,7 @@ Incude the license file in crate.
 <csr-read-only-do-not-edit/>
 
  - 1 commit contributed to the release.
+ - 2 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1596,8 +1653,8 @@ And of course, this has no noticable performance impact.
     - Rename 'count-links' to more descriptive 'count-hard-links' ([`db514fe`](https://github.com/Byron/dua-cli/commit/db514fe58c234ad312156814ba6f5ee7b7af0b60))
     - Merge branch 'Freaky-hardlink-tracking' ([`a6a4cf3`](https://github.com/Byron/dua-cli/commit/a6a4cf3705ba764ca0862fd3faaf0f7df31ac28d))
     - Remove short-comings from README, as they are not present anymore ([`93b9e12`](https://github.com/Byron/dua-cli/commit/93b9e12a1de090d1c07968144f6d21061e6de50a))
-    - cargo fmt ([`ba7b071`](https://github.com/Byron/dua-cli/commit/ba7b071af53444cf33ed6a11aae02b34bc26c82b))
     - (cargo-release) start next development iteration 2.2.1-alpha.0 ([`0c86b89`](https://github.com/Byron/dua-cli/commit/0c86b894caf99d3bee319c5af6f1dcf754b44011))
+    - cargo fmt ([`ba7b071`](https://github.com/Byron/dua-cli/commit/ba7b071af53444cf33ed6a11aae02b34bc26c82b))
 </details>
 
 ## v2.2.0 (2020-02-22)
@@ -1614,6 +1671,7 @@ To my pleasant surprise, this does not seem to affect performance at all - every
 <csr-read-only-do-not-edit/>
 
  - 9 commits contributed to the release over the course of 20 calendar days.
+ - 20 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1625,8 +1683,8 @@ To my pleasant surprise, this does not seem to affect performance at all - every
 
  * **Uncategorized**
     - dependency update, cut release ([`f2793b9`](https://github.com/Byron/dua-cli/commit/f2793b913b80744b4696024cb5e90e7f4f4f4627))
-    - Merge branch 'Freaky-apparent-size' ([`4db48ce`](https://github.com/Byron/dua-cli/commit/4db48ce218f12e11bbf6727fab6fb58c142b1a33))
     - Add hardlink tracking, and an option to disable it ([`5b52294`](https://github.com/Byron/dua-cli/commit/5b522946adb5bb71dd51068eee5f1136e6403b31))
+    - Merge branch 'Freaky-apparent-size' ([`4db48ce`](https://github.com/Byron/dua-cli/commit/4db48ce218f12e11bbf6727fab6fb58c142b1a33))
     - Add support for real/apparent size ([`d86e1e0`](https://github.com/Byron/dua-cli/commit/d86e1e0f66ac8bd031233a6a54e2a1694acf1142))
     - Upgrade tui-react ([`2495390`](https://github.com/Byron/dua-cli/commit/249539045e4dfb813723dff342c52a1ca92184ce))
     - New release of tui-react ([`8aec8c7`](https://github.com/Byron/dua-cli/commit/8aec8c7c9879c0bf29e82b89aab9202e2d117698))
@@ -1645,6 +1703,7 @@ Binaries for Linux and MacOS are now available on GitHub Releases.
 <csr-read-only-do-not-edit/>
 
  - 9 commits contributed to the release over the course of 87 calendar days.
+ - 100 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1679,6 +1738,7 @@ Now the color of the widget frame is changed to light gray, instead of remaining
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
+ - 89 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1706,6 +1766,7 @@ _Technical Notes_: Handling symbolic links properly is impossible without usage 
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 1 day passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1734,6 +1795,7 @@ Compatibility with light terminals.
 <csr-read-only-do-not-edit/>
 
  - 7 commits contributed to the release over the course of 2 calendar days.
+ - 3 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1766,6 +1828,7 @@ Improved handling of broken symlinks.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 6 calendar days.
+ - 6 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1799,6 +1862,7 @@ This is now fixed.
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
+ - 10 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -1889,6 +1953,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release over the course of 15 calendar days.
+ - 15 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -2051,7 +2116,8 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
 <csr-read-only-do-not-edit/>
 
  - 234 commits contributed to the release over the course of 13 calendar days.
- - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 13 days passed between releases.
+ - 16 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -2076,25 +2142,25 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
     - refactor ([`afdbc1d`](https://github.com/Byron/dua-cli/commit/afdbc1dadcf6c1f1e6384f65b2cac5325a5bcf17))
     - First rough version of the required pieces in MarkPane ([`f1bc4cd`](https://github.com/Byron/dua-cli/commit/f1bc4cd689b7db594ceef89aa31c48b4166d21a2))
     - first sketch of the delete-draw-loop ([`60ba3e7`](https://github.com/Byron/dua-cli/commit/60ba3e7f5216030e7dd4a12355de6ac78999d8e1))
-    - Xi'an/China: first test to fully verify deletion ([`c67abae`](https://github.com/Byron/dua-cli/commit/c67abaec3c573dbfaf31be22693220a49a67b262))
-    - Guangzhou/China: Move parts of the tests into their own files ([`a128eb4`](https://github.com/Byron/dua-cli/commit/a128eb4a6e675f148a203ac66de075ee0c0def1c))
+    - first test to fully verify deletion ([`c67abae`](https://github.com/Byron/dua-cli/commit/c67abaec3c573dbfaf31be22693220a49a67b262))
+    - Move parts of the tests into their own files ([`a128eb4`](https://github.com/Byron/dua-cli/commit/a128eb4a6e675f148a203ac66de075ee0c0def1c))
     - Somewhere over China: preparation for splitting tests into modules ([`82b0ced`](https://github.com/Byron/dua-cli/commit/82b0ced5c18ae8dbe3730434e2447a013bb35480))
     - Somewhere over China: refactor deletion - now with error handling ([`406435b`](https://github.com/Byron/dua-cli/commit/406435beff334d8f0ad62560176774ede2771ecd))
     - Somewhere over China: Let's not be quite so ignorant about errors during deletion ([`eb4f978`](https://github.com/Byron/dua-cli/commit/eb4f9780d69824b9ca389f42b2ec65077640cd54))
-    - Dehli/India: recursive deletion - tests can begin ([`ef8cf56`](https://github.com/Byron/dua-cli/commit/ef8cf5636f782024372f044af80f06ed030168b0))
-    - Dehli/India: simple recursive copy - deletion would like depth-first though ;) ([`dacb897`](https://github.com/Byron/dua-cli/commit/dacb897405c06f9468faa860e27f47d1d0e548bb))
-    - Dehli/India: Basic for test with writable directory ([`51ce1ed`](https://github.com/Byron/dua-cli/commit/51ce1ed159d59c6e221af4df9a3f7da41b1820cb))
-    - Dehli/India: Make marker selection feel right ([`6cbd486`](https://github.com/Byron/dua-cli/commit/6cbd4866b18de91d3702a55c45650615d67f5f30))
-    - Pune/India: Nicer colors for warn window in selection ([`7ad2130`](https://github.com/Byron/dua-cli/commit/7ad2130bada27098e2d24f06650873a53b159f87))
-    - Pune/India: Warning window follows user selection ([`49edb76`](https://github.com/Byron/dua-cli/commit/49edb7654ce3380bcde28630645af3740cf1a07a))
-    - Pune/India: Fix handling of deleting the first index in the mark list ([`984bf4f`](https://github.com/Byron/dua-cli/commit/984bf4fcce05cd5d495511123c2c3b6906b96f6d))
-    - Pune/India: more prominent selection in mark pane ([`b4a2e0e`](https://github.com/Byron/dua-cli/commit/b4a2e0ee8f267ee50f92433e826fa9e42ff618db))
-    - Pune/India: Rustic way of handling the mark panes disappearance ([`b4669c0`](https://github.com/Byron/dua-cli/commit/b4669c0214a1bc858cf437a65583af7e4b9ec277))
-    - Pune/India: don't show warning if nothing is marked anymore ([`fcde457`](https://github.com/Byron/dua-cli/commit/fcde45752a9b86ed606b78f522f6b6dd0de25457))
-    - Pune/India: Actually hook up spacebar in mark pane ([`01dd8e2`](https://github.com/Byron/dua-cli/commit/01dd8e284224e42b59f317cd922d388f23def829))
-    - Pune/India: Make help window pretty again ([`d42573e`](https://github.com/Byron/dua-cli/commit/d42573e63a120c8c5a253b7be52f9c68fb72274b))
-    - Pune/India: Better handling of what is selected after removing a marked entry ([`c0aa567`](https://github.com/Byron/dua-cli/commit/c0aa567e81b54913df464c9b500fe7a20ada0ea5))
-    - Pune/India: Don't try to go down as marked items are removed ([`f9a9cdf`](https://github.com/Byron/dua-cli/commit/f9a9cdf9f827a5e08b1bcc6035f908fdb971c9fd))
+    - recursive deletion - tests can begin ([`ef8cf56`](https://github.com/Byron/dua-cli/commit/ef8cf5636f782024372f044af80f06ed030168b0))
+    - simple recursive copy - deletion would like depth-first though ;) ([`dacb897`](https://github.com/Byron/dua-cli/commit/dacb897405c06f9468faa860e27f47d1d0e548bb))
+    - Basic for test with writable directory ([`51ce1ed`](https://github.com/Byron/dua-cli/commit/51ce1ed159d59c6e221af4df9a3f7da41b1820cb))
+    - Make marker selection feel right ([`6cbd486`](https://github.com/Byron/dua-cli/commit/6cbd4866b18de91d3702a55c45650615d67f5f30))
+    - Nicer colors for warn window in selection ([`7ad2130`](https://github.com/Byron/dua-cli/commit/7ad2130bada27098e2d24f06650873a53b159f87))
+    - Warning window follows user selection ([`49edb76`](https://github.com/Byron/dua-cli/commit/49edb7654ce3380bcde28630645af3740cf1a07a))
+    - Fix handling of deleting the first index in the mark list ([`984bf4f`](https://github.com/Byron/dua-cli/commit/984bf4fcce05cd5d495511123c2c3b6906b96f6d))
+    - more prominent selection in mark pane ([`b4a2e0e`](https://github.com/Byron/dua-cli/commit/b4a2e0ee8f267ee50f92433e826fa9e42ff618db))
+    - Rustic way of handling the mark panes disappearance ([`b4669c0`](https://github.com/Byron/dua-cli/commit/b4669c0214a1bc858cf437a65583af7e4b9ec277))
+    - don't show warning if nothing is marked anymore ([`fcde457`](https://github.com/Byron/dua-cli/commit/fcde45752a9b86ed606b78f522f6b6dd0de25457))
+    - Actually hook up spacebar in mark pane ([`01dd8e2`](https://github.com/Byron/dua-cli/commit/01dd8e284224e42b59f317cd922d388f23def829))
+    - Make help window pretty again ([`d42573e`](https://github.com/Byron/dua-cli/commit/d42573e63a120c8c5a253b7be52f9c68fb72274b))
+    - Better handling of what is selected after removing a marked entry ([`c0aa567`](https://github.com/Byron/dua-cli/commit/c0aa567e81b54913df464c9b500fe7a20ada0ea5))
+    - Don't try to go down as marked items are removed ([`f9a9cdf`](https://github.com/Byron/dua-cli/commit/f9a9cdf9f827a5e08b1bcc6035f908fdb971c9fd))
     - Fixed Up and Down key inputs and added Left and Right for Ascent and Descent navigation ([`eae992f`](https://github.com/Byron/dua-cli/commit/eae992fbf0b0f0adaf8feffcb0e4903deabc562e))
     - First version of removing marked items from the list ([`3b71763`](https://github.com/Byron/dua-cli/commit/3b717634364647139388dffd0d68ce6c9729eee9))
     - Only show hotkey for deletion when focus is on the mark pane ([`05ed8c4`](https://github.com/Byron/dua-cli/commit/05ed8c494a1201daa4daa1506455a52f8b2b5b8e))
