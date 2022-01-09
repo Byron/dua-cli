@@ -6,7 +6,7 @@ use std::{borrow::Cow, io, path::Path};
 #[cfg(feature = "aggregate-scan-progress")]
 use std::{
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
     thread,
@@ -37,7 +37,7 @@ pub fn aggregate(
     let mut inodes = InodeFilter::default();
 
     #[cfg(feature = "aggregate-scan-progress")]
-    let shared_count = Arc::new(AtomicU64::new(0));
+    let shared_count = Arc::new(AtomicUsize::new(0));
 
     #[cfg(feature = "aggregate-scan-progress")]
     if let Some(mut out) = err {
