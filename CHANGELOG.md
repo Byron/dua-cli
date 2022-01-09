@@ -5,12 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.16.0 (2022-01-09)
 
 ### New Features
 
  - <csr-id-26d65145650cc3aac4ad540fdf04e95e139812e3/> Add `--ignore-dirs` option, with useful default on linux.
-
+   
    On linux there are a few directories which shouldn't be traversed by
    default as they may cause hangs and blocking.
    
@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 60 calendar days.
+ - 8 commits contributed to the release over the course of 60 calendar days.
  - 74 days passed between releases.
  - 2 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#116](https://github.com/Byron/dua-cli/issues/116)
@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#116](https://github.com/Byron/dua-cli/issues/116)**
     - Add `--ignore-dirs` option, with useful default on linux ([`26d6514`](https://github.com/Byron/dua-cli/commit/26d65145650cc3aac4ad540fdf04e95e139812e3))
  * **Uncategorized**
+    - update changelog ([`7abddbf`](https://github.com/Byron/dua-cli/commit/7abddbfc74e65ecaf3aa1f2cf7506daf3ddb4bd9))
     - build on platforms without 64-bit atomics ([`756ca54`](https://github.com/Byron/dua-cli/commit/756ca542a73575df581433fdd84cee8f4bef99b5))
     - Release dua-cli v2.15.0 ([`4b71a56`](https://github.com/Byron/dua-cli/commit/4b71a56bc428663249b2f20dbf19507ad559967d))
     - update changelog ([`a226d1e`](https://github.com/Byron/dua-cli/commit/a226d1e8e4f0be2d9651950846424dda7e2c63b9))
