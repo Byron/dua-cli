@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.17.0 (2022-01-21)
+
+### New Features
+
+ - <csr-id-e2686952b4daf4c35303689c36bebc3dfe3faf29/> interactive mode learns 'toggle [a]ll' and 'remove [a]ll'.
+   In the mark pane, the 'a' key will now toggle all entries.
+   This is particularly interesting for selecting entries to
+   exclude by hande and then invert the selection by toggling [a]ll.
+   
+   In the mark pane, toggling all with the 'a' key means removing
+   all entries and closing the pane.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 12 days passed between releases.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - interactive mode learns 'toggle [a]ll' and 'remove [a]ll'. ([`e268695`](https://github.com/Byron/dua-cli/commit/e2686952b4daf4c35303689c36bebc3dfe3faf29))
+    - Add documentation ([`6dbaa57`](https://github.com/Byron/dua-cli/commit/6dbaa570014f27b20ca719f5a092e768e4c8289d))
+    - Add `a` key to toggle marked status of all entries ([`15d0597`](https://github.com/Byron/dua-cli/commit/15d0597a51b166e022ba2d41c377d515a878c1a2))
+</details>
+
 ## 2.16.0 (2022-01-09)
 
 ### New Features
@@ -26,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 8 commits contributed to the release over the course of 60 calendar days.
+ - 9 commits contributed to the release over the course of 60 calendar days.
  - 74 days passed between releases.
  - 2 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#116](https://github.com/Byron/dua-cli/issues/116)
@@ -40,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#116](https://github.com/Byron/dua-cli/issues/116)**
     - Add `--ignore-dirs` option, with useful default on linux ([`26d6514`](https://github.com/Byron/dua-cli/commit/26d65145650cc3aac4ad540fdf04e95e139812e3))
  * **Uncategorized**
+    - Release dua-cli v2.16.0 ([`a132acb`](https://github.com/Byron/dua-cli/commit/a132acb8fa342e3f16b5f6a4bb31f5962a1f53c2))
     - update changelog ([`7abddbf`](https://github.com/Byron/dua-cli/commit/7abddbfc74e65ecaf3aa1f2cf7506daf3ddb4bd9))
     - build on platforms without 64-bit atomics ([`756ca54`](https://github.com/Byron/dua-cli/commit/756ca542a73575df581433fdd84cee8f4bef99b5))
     - Release dua-cli v2.15.0 ([`4b71a56`](https://github.com/Byron/dua-cli/commit/4b71a56bc428663249b2f20dbf19507ad559967d))
