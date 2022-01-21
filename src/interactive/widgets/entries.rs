@@ -182,7 +182,7 @@ impl Entries {
                 );
             }
             let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-            let help_text = " mark-move = d | mark-toggle = space ";
+            let help_text = " mark-move = d | mark-toggle = space | toggle-all = a";
             let help_text_block_width = block_width(help_text);
             if help_text_block_width <= bound.width {
                 draw_text_nowrap_fn(

@@ -412,7 +412,7 @@ impl MarkPane {
                 );
             }
             let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-            let help_text = " mark-toggle = space|d";
+            let help_text = " mark-toggle = space,d | remove-all = a";
             let help_text_block_width = block_width(help_text);
             if help_text_block_width <= bound.width {
                 draw_text_nowrap_fn(
