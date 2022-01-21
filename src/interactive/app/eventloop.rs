@@ -136,6 +136,7 @@ impl AppState {
                         window,
                         traversal,
                     ),
+                    Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, traversal),
                     Char('u') | Char('h') | Backspace | Left => {
                         self.exit_node_with_traversal(traversal)
                     }

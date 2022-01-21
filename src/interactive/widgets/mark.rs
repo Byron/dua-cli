@@ -116,6 +116,7 @@ impl MarkPane {
             Char('x') | Char('d') | Char(' ') => {
                 return self.remove_selected().map(|s| (s, action))
             }
+            Char('a') => return None,
             Char('H') => self.change_selection(CursorDirection::ToTop),
             Char('G') => self.change_selection(CursorDirection::ToBottom),
             Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),

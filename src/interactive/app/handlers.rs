@@ -353,6 +353,31 @@ impl AppState {
             .map(|w| w.size);
     }
 
+    fn mark_entry_by_index(
+        &mut self,
+        index: TreeIndex,
+        mode: MarkEntryMode,
+        window: &mut MainWindow,
+        traversal: &Traversal,
+    ) {
+        let is_dir = self
+            .entries
+            .iter()
+            .find(|e| e.index == index)
+            .unwrap()
+            .is_dir;
+        let should_toggle = match mode {
+            MarkEntryMode::Toggle => true,
+            MarkEntryMode::MarkForDeletion => false,
+        };
+        if let Some(pane) = window.mark_pane.take() {
+            window.mark_pane = pane.toggle_index(index, &traversal.tree, is_dir, should_toggle);
+        } else {
+            window.mark_pane =
+                MarkPane::default().toggle_index(index, &traversal.tree, is_dir, should_toggle)
+        }
+    }
+
     pub fn mark_entry(
         &mut self,
         cursor: CursorMode,
@@ -361,25 +386,21 @@ impl AppState {
         traversal: &Traversal,
     ) {
         if let Some(index) = self.selected {
-            let is_dir = self
-                .entries
-                .iter()
-                .find(|e| e.index == index)
-                .unwrap()
-                .is_dir;
-            let should_toggle = match mode {
-                MarkEntryMode::Toggle => true,
-                MarkEntryMode::MarkForDeletion => false,
-            };
-            if let Some(pane) = window.mark_pane.take() {
-                window.mark_pane = pane.toggle_index(index, &traversal.tree, is_dir, should_toggle);
-            } else {
-                window.mark_pane =
-                    MarkPane::default().toggle_index(index, &traversal.tree, is_dir, should_toggle)
-            }
+            self.mark_entry_by_index(index, mode, window, traversal);
         };
         if let CursorMode::Advance = cursor {
             self.change_entry_selection(CursorDirection::Down)
+        }
+    }
+
+    pub fn mark_all_entries(
+        &mut self,
+        mode: MarkEntryMode,
+        window: &mut MainWindow,
+        traversal: &Traversal,
+    ) {
+        for index in self.entries.iter().map(|e| e.index).collect::<Vec<_>>() {
+            self.mark_entry_by_index(index, mode, window, traversal);
         }
     }
 }
