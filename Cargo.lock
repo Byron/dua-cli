@@ -197,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "crossterm"
-version = "0.20.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ebde6a9dd5e331cd6c6f48253254d117642c31653baa475e394657c59c1f7d"
+checksum = "c85525306c4291d1b73ce93c8acf9c339f9b213aef6c1d85c3830cbf1c16325c"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
@@ -213,18 +213,18 @@ dependencies = [
 
 [[package]]
 name = "crossterm_winapi"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a6966607622438301997d3dac0d2f6e9a90c68bb6bc1785ea98456ab93c0507"
+checksum = "2ae1b35a484aa10e07fe0638d02301c5ad24de82d310ccbd2f3693da5f09bf1c"
 dependencies = [
  "winapi",
 ]
 
 [[package]]
 name = "crosstermion"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a700b46e8d365e505990fc24a85c42b8e7d7eb3a4203a0cc922d92f4092e854"
+checksum = "a05e035b986ed55343b748f978fd8d2508dbab8492ef228aa7896735b1d51931"
 dependencies = [
  "crossterm",
  "termion",
@@ -839,9 +839,9 @@ dependencies = [
 
 [[package]]
 name = "tui"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39c8ce4e27049eed97cfa363a5048b09d995e209994634a0efc26a14ab6c0c23"
+checksum = "23ed0a32c88b039b73f1b6c5acbd0554bfa5b6be94467375fd947c4de3a02271"
 dependencies = [
  "bitflags",
  "cassowary",
@@ -853,9 +853,9 @@ dependencies = [
 
 [[package]]
 name = "tui-react"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3686f7bac8312ce35d7f332287c87c3b4f7de9a77dd35888f703b7e6d9b02b67"
+checksum = "4a0d3e9b9c7dfdad4919ee6fa65d3a13b742c7791f58e861f1d0b400648d43ed"
 dependencies = [
  "log",
  "tui",
