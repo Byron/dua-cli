@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     let threads = derive_default_threads(opt.threads);
     let walk_options = dua::WalkOptions {
         threads,
-        byte_format: opt.format.map(Into::into).unwrap_or(ByteFormat::Metric),
+        byte_format: opt.format.into(),
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,

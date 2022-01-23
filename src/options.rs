@@ -1,8 +1,7 @@
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
-use std::str::FromStr;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy, clap::ArgEnum)]
 pub enum ByteFormat {
     Metric,
     Binary,
@@ -11,28 +10,6 @@ pub enum ByteFormat {
     GiB,
     MB,
     MiB,
-}
-
-impl FromStr for ByteFormat {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "metric" | "Metric" => ByteFormat::Metric,
-            "binary" | "Binary" => ByteFormat::Binary,
-            "bytes" | "Bytes" => ByteFormat::Bytes,
-            "GB" | "Gb" | "gb" => ByteFormat::GB,
-            "GiB" | "gib" => ByteFormat::GiB,
-            "MB" | "Mb" | "mb" => ByteFormat::MB,
-            "MiB" | "mib" => ByteFormat::MiB,
-            _ => return Err(format!("Invalid byte format: {:?}", s)),
-        })
-    }
-}
-
-impl ByteFormat {
-    const VARIANTS: &'static [&'static str] =
-        &["metric", "binary", "bytes", "MB", "MiB", "GB", "GiB"];
 }
 
 impl From<ByteFormat> for LibraryByteFormat {
@@ -49,33 +26,37 @@ impl From<ByteFormat> for LibraryByteFormat {
     }
 }
 
+/// A tool to learn about disk usage, fast!
 #[derive(Debug, clap::Parser)]
-#[clap(name = "dua", about = "A tool to learn about disk usage, fast!", version = clap::crate_version!())]
-#[clap(override_usage = "dua [FLAGS] [OPTIONS] [SUBCOMMAND] [input]...")]
+#[clap(name = "dua", version)]
+#[clap(override_usage = "dua [FLAGS] [OPTIONS] [SUBCOMMAND] [INPUT]...")]
 pub struct Args {
     #[clap(subcommand)]
     pub command: Option<Command>,
 
     /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
     /// Set to 1 to use only a single thread.
-    #[clap(short = 't', long = "threads", default_value = "0")]
+    #[clap(short = 't', long = "threads", default_value_t = 0)]
     pub threads: usize,
 
-    /// The format with which to print byte counts.
-    /// Metric - uses 1000 as base (default)
-    /// Binary - uses 1024 as base
-    /// Bytes - plain bytes without any formatting
-    /// GB - only gigabytes
-    /// GiB - only gibibytes
-    /// MB - only megabytes
+    /// The format with which to print byte counts:
+    /// metric - uses 1000 as base (default),
+    /// binary - uses 1024 as base,
+    /// bytes - plain bytes without any formatting,
+    /// GB - only gigabytes,
+    /// GiB - only gibibytes,
+    /// MB - only megabytes,
     /// MiB - only mebibytes
     #[clap(
         short = 'f',
         long,
+        arg_enum,
+        default_value_t = ByteFormat::Metric,
         ignore_case = true,
-        possible_values(ByteFormat::VARIANTS)
+        hide_default_value = true,
+        hide_possible_values = true
     )]
-    pub format: Option<ByteFormat>,
+    pub format: ByteFormat,
 
     /// Display apparent size instead of disk usage.
     #[clap(short = 'A', long)]
@@ -101,12 +82,11 @@ pub struct Args {
     pub input: Vec<PathBuf>,
 }
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, clap::Subcommand)]
 pub enum Command {
     /// Launch the terminal user interface
     #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
     #[clap(name = "interactive", visible_alias = "i")]
-    #[clap(setting = clap::AppSettings::DisableVersionFlag)]
     Interactive {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[clap(parse(from_os_str))]
@@ -114,7 +94,6 @@ pub enum Command {
     },
     /// Aggregrate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
-    #[clap(setting = clap::AppSettings::DisableVersionFlag)]
     Aggregate {
         /// If set, print additional statistics about the file traversal to stderr
         #[clap(long = "stats")]
