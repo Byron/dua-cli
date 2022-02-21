@@ -1,4 +1,4 @@
-use crate::ByteFormat;
+use dua::ByteFormat;
 use std::borrow::Borrow;
 use tui::{
     buffer::Buffer,

@@ -7,9 +7,9 @@ pub enum ByteFormat {
     Binary,
     Bytes,
     GB,
-    GiB,
+    Gib,
     MB,
-    MiB,
+    Mib,
 }
 
 impl From<ByteFormat> for LibraryByteFormat {
@@ -19,9 +19,9 @@ impl From<ByteFormat> for LibraryByteFormat {
             ByteFormat::Binary => LibraryByteFormat::Binary,
             ByteFormat::Bytes => LibraryByteFormat::Bytes,
             ByteFormat::GB => LibraryByteFormat::GB,
-            ByteFormat::GiB => LibraryByteFormat::GiB,
+            ByteFormat::Gib => LibraryByteFormat::GiB,
             ByteFormat::MB => LibraryByteFormat::MB,
-            ByteFormat::MiB => LibraryByteFormat::MiB,
+            ByteFormat::Mib => LibraryByteFormat::MiB,
         }
     }
 }

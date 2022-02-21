@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 use anyhow::Result;
 use clap::Parser;
-use dua::{ByteFormat, TraversalSorting};
+use dua::TraversalSorting;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
 mod crossdev;
