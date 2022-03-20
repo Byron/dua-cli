@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Improvements to aggregate progress reporting
+
+Previously, aggregate mode progress reports were handled by an
+infinitely-looping thread carrying a 64-bit atomic of the current count,
+which it would print periodically.
+
+This resulted in #99 - breaking on platforms without 64-bit atomics,
+for which a feature was added to disable it.
+
+It also implied a race condition, where the "Enumerating ..." message
+could be printed after results had been gathered but before dua exited.
+
+Additionally, part of the status message could be left on the display if
+the first line of a report was too short to cover it.
+
+This commit should resolve these:
+
+* The 64-bit atomic counter is replaced with an 8-bit AtomicBool
+* All printing is controlled from the main thread
+* The first line is cleared prior to printing a report
+
+The only notable drawback I see with this approach is that progress
+reporting can sometimes be delayed, since the display is only evaluated
+for update during periods the aggregation loop makes progress. The
+practical difference appears relatively minor.
+
+Since this should resolve #99, the aggregate-scan-progress feature is
+removed.
+
+Special thanks to [@Freaky](https://github.com/Freaky) for the contribution!
+
+### BREAKING change for package maintainers
+
+The `aggregate-scan-progress` feature was removed as it shouldn't be required anymore.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 7 commits contributed to the release over the course of 56 calendar days.
+ - 57 days passed between releases.
+ - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Improve aggregate progress reporting ([`7d83f96`](https://github.com/Byron/dua-cli/commit/7d83f965d620ccebeda9a7451cdbb2e40ed88c24))
+    - update dependencies ([`9a1da6b`](https://github.com/Byron/dua-cli/commit/9a1da6bc4e964912a521b2f0de0bdf6124749ccd))
+    - upgrade sysinfo ([`0b6b52f`](https://github.com/Byron/dua-cli/commit/0b6b52f02b72641a4954838fd9e2ea4fd0447e2d))
+    - Adjust to changes in clap ([`f9df024`](https://github.com/Byron/dua-cli/commit/f9df02420d7bd4e492c4a9130833fdf31e739909))
+    - dependency update ([`0d9fbd3`](https://github.com/Byron/dua-cli/commit/0d9fbd386c51be1995aaee70d1a87a1217d9c550))
+    - Update clap to official release ([`b029dc5`](https://github.com/Byron/dua-cli/commit/b029dc5d190b23bf3e3fc95a3947f28f868e674e))
+    - Upgrade to TUI 0.17 ([`9ce96ac`](https://github.com/Byron/dua-cli/commit/9ce96ac7b89a1ee39cd85a7c18871309d5fe07af))
+</details>
+
 ## 2.17.0 (2022-01-21)
 
 ### New Features
@@ -21,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 12 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -33,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.17.0 ([`4025174`](https://github.com/Byron/dua-cli/commit/4025174e081c7820f8808262e67b96741bd44781))
     - interactive mode learns 'toggle [a]ll' and 'remove [a]ll'. ([`e268695`](https://github.com/Byron/dua-cli/commit/e2686952b4daf4c35303689c36bebc3dfe3faf29))
     - Add documentation ([`6dbaa57`](https://github.com/Byron/dua-cli/commit/6dbaa570014f27b20ca719f5a092e768e4c8289d))
     - Add `a` key to toggle marked status of all entries ([`15d0597`](https://github.com/Byron/dua-cli/commit/15d0597a51b166e022ba2d41c377d515a878c1a2))
@@ -445,6 +508,10 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 * Allow usage of the feature introduced in v2.13 by writing the TUI to stderr instead of stdout.
   That way the output can be redirected.
 
+### Other
+
+ - <csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/> deduplicate code
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -662,6 +729,10 @@ YANKED.
 * The `-x/--stay-on-filesystem` flag is now respected for multiple root paths, as in `dua -x
   path-FS1/ path-FS2/`, as such `dua` will stay in FS1 if the CWD is in FS1.
 
+### Other
+
+ - <csr-id-59315b7c63b7328fa70bfe5fc43fdbe9dc5f92e7/> add MacPorts install instructions
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -731,6 +802,10 @@ YANKED.
 Fix --version flag.
 It looks like the latest BETAs of clap removed setting the version implicitly.
 
+### Other
+
+ - <csr-id-9384cdb5b95e5260f46ccd23e7ca276304190a34/> fix typo
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -790,6 +865,10 @@ Fix build.
 
 A breaking change in jwalk can cause builds to fail. This prevents the issue from spreading at least
 with dua-cli.
+
+### Other
+
+ - <csr-id-dc100c8b4a838c92f39d5a67da7eea06e7dec9af/> bump itertools 0.9.0 -> 0.10.0
 
 ### Commit Statistics
 
@@ -1491,6 +1570,10 @@ This is also the first release with github releases: https://github.com/Byron/du
 
 Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
 
+### Other
+
+ - <csr-id-45d1ef31181cd9b430d855a4fe23550ea97e685e/> Update Fedora instructions
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -2141,6 +2224,34 @@ Bug fixes and improvements.
 
 Interactive visualization of directory sizes with an option to queue their deletion.
 A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all using the keyboard exclusively.
+
+### Other
+
+ - <csr-id-c67abaec3c573dbfaf31be22693220a49a67b262/> first test to fully verify deletion
+ - <csr-id-a128eb4a6e675f148a203ac66de075ee0c0def1c/> Move parts of the tests into their own files
+ - <csr-id-ef8cf5636f782024372f044af80f06ed030168b0/> recursive deletion - tests can begin
+ - <csr-id-dacb897405c06f9468faa860e27f47d1d0e548bb/> simple recursive copy - deletion would like depth-first though ;)
+ - <csr-id-51ce1ed159d59c6e221af4df9a3f7da41b1820cb/> Basic for test with writable directory
+   Would have loved to use a crate with basic utilities, but there is
+   no internet here :(
+ - <csr-id-6cbd4866b18de91d3702a55c45650615d67f5f30/> Make marker selection feel right
+ - <csr-id-7ad2130bada27098e2d24f06650873a53b159f87/> Nicer colors for warn window in selection
+ - <csr-id-49edb7654ce3380bcde28630645af3740cf1a07a/> Warning window follows user selection
+ - <csr-id-984bf4fcce05cd5d495511123c2c3b6906b96f6d/> Fix handling of deleting the first index in the mark list
+ - <csr-id-b4a2e0ee8f267ee50f92433e826fa9e42ff618db/> more prominent selection in mark pane
+ - <csr-id-b4669c0214a1bc858cf437a65583af7e4b9ec277/> Rustic way of handling the mark panes disappearance
+
+ - <csr-id-fcde45752a9b86ed606b78f522f6b6dd0de25457/> don't show warning if nothing is marked anymore
+   this can happen if the user removes all entries. The pane stays open
+   in this case, which is a little inconsistent, but not worth fixing
+   as it's certainly not the common case.
+   
+   If it should be fixed, the 'key()' function should become consuming
+   to possible delete the pane.
+ - <csr-id-01dd8e284224e42b59f317cd922d388f23def829/> Actually hook up spacebar in mark pane
+ - <csr-id-d42573e63a120c8c5a253b7be52f9c68fb72274b/> Make help window pretty again
+ - <csr-id-c0aa567e81b54913df464c9b500fe7a20ada0ea5/> Better handling of what is selected after removing a marked entry
+ - <csr-id-f9a9cdf9f827a5e08b1bcc6035f908fdb971c9fd/> Don't try to go down as marked items are removed
 
 ### Other Features
 
