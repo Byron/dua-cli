@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.17.1 (2022-03-20)
 
 ### Improvements to aggregate progress reporting
 
@@ -46,7 +46,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 56 calendar days.
+ - 8 commits contributed to the release over the course of 55 calendar days.
  - 57 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -58,6 +58,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - prepare changelog ([`fc1e10a`](https://github.com/Byron/dua-cli/commit/fc1e10a77da45d41c8243ddb07d7332ca8e23012))
     - Improve aggregate progress reporting ([`7d83f96`](https://github.com/Byron/dua-cli/commit/7d83f965d620ccebeda9a7451cdbb2e40ed88c24))
     - update dependencies ([`9a1da6b`](https://github.com/Byron/dua-cli/commit/9a1da6bc4e964912a521b2f0de0bdf6124749ccd))
     - upgrade sysinfo ([`0b6b52f`](https://github.com/Byron/dua-cli/commit/0b6b52f02b72641a4954838fd9e2ea4fd0447e2d))
@@ -505,6 +506,8 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 ## v2.13.1 (2021-06-09)
 
+<csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/>
+
 * Allow usage of the feature introduced in v2.13 by writing the TUI to stderr instead of stdout.
   That way the output can be redirected.
 
@@ -726,6 +729,8 @@ YANKED.
 
 ## v2.11.1 (2021-02-22)
 
+<csr-id-59315b7c63b7328fa70bfe5fc43fdbe9dc5f92e7/>
+
 * The `-x/--stay-on-filesystem` flag is now respected for multiple root paths, as in `dua -x
   path-FS1/ path-FS2/`, as such `dua` will stay in FS1 if the CWD is in FS1.
 
@@ -799,6 +804,8 @@ YANKED.
 
 ## v2.10.10 (2021-01-23)
 
+<csr-id-9384cdb5b95e5260f46ccd23e7ca276304190a34/>
+
 Fix --version flag.
 It looks like the latest BETAs of clap removed setting the version implicitly.
 
@@ -860,6 +867,8 @@ This is now fixed and hopefully permanently so thanks to using `jwalk` v0.6.
 </details>
 
 ## v2.10.8 (2021-01-04)
+
+<csr-id-dc100c8b4a838c92f39d5a67da7eea06e7dec9af/>
 
 Fix build.
 
@@ -1568,6 +1577,8 @@ This is also the first release with github releases: https://github.com/Byron/du
 
 ## v2.3.7 (2020-03-23)
 
+<csr-id-45d1ef31181cd9b430d855a4fe23550ea97e685e/>
+
 Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
 
 ### Other
@@ -2221,6 +2232,23 @@ Bug fixes and improvements.
 </details>
 
 ## v2.0.0 (2019-06-15)
+
+<csr-id-c67abaec3c573dbfaf31be22693220a49a67b262/>
+<csr-id-a128eb4a6e675f148a203ac66de075ee0c0def1c/>
+<csr-id-ef8cf5636f782024372f044af80f06ed030168b0/>
+<csr-id-dacb897405c06f9468faa860e27f47d1d0e548bb/>
+<csr-id-51ce1ed159d59c6e221af4df9a3f7da41b1820cb/>
+<csr-id-6cbd4866b18de91d3702a55c45650615d67f5f30/>
+<csr-id-7ad2130bada27098e2d24f06650873a53b159f87/>
+<csr-id-49edb7654ce3380bcde28630645af3740cf1a07a/>
+<csr-id-984bf4fcce05cd5d495511123c2c3b6906b96f6d/>
+<csr-id-b4a2e0ee8f267ee50f92433e826fa9e42ff618db/>
+<csr-id-b4669c0214a1bc858cf437a65583af7e4b9ec277/>
+<csr-id-fcde45752a9b86ed606b78f522f6b6dd0de25457/>
+<csr-id-01dd8e284224e42b59f317cd922d388f23def829/>
+<csr-id-d42573e63a120c8c5a253b7be52f9c68fb72274b/>
+<csr-id-c0aa567e81b54913df464c9b500fe7a20ada0ea5/>
+<csr-id-f9a9cdf9f827a5e08b1bcc6035f908fdb971c9fd/>
 
 Interactive visualization of directory sizes with an option to queue their deletion.
 A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all using the keyboard exclusively.
