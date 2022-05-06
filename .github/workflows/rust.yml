@@ -24,7 +24,7 @@ jobs:
     - name: Check crate package size (feat. 'cargo diet')
       run: |
         curl -LSfs https://raw.githubusercontent.com/the-lean-crate/cargo-diet/master/ci/install.sh | \
-         sh -s -- --git the-lean-crate/cargo-diet --target x86_64-unknown-linux-musl
+         sh -s -- --git the-lean-crate/cargo-diet --target x86_64-unknown-linux-musl --tag v1.2.4
 
         cargo diet -n --package-size-limit 75KB
 
