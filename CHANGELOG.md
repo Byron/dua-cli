@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A maintenance release that updates all dependencies. Most notably, `trash-rs` includes a fix for
+properly moving files into the trash that required parent directories to be created.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release over the course of 8 calendar days.
+ - 46 days passed between releases.
+ - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - dependency update ([`8f3e157`](https://github.com/Byron/dua-cli/commit/8f3e157b86e7dd7c9669623aea03d7c74340d187))
+    - update dependencies ([`d8eae6e`](https://github.com/Byron/dua-cli/commit/d8eae6e8cf788ea8d69b3e73e83027f2f0e44391))
+</details>
+
 ## 2.17.1 (2022-03-20)
 
 ### Improvements to aggregate progress reporting
@@ -46,7 +71,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
 
 <csr-read-only-do-not-edit/>
 
- - 8 commits contributed to the release over the course of 55 calendar days.
+ - 9 commits contributed to the release over the course of 55 calendar days.
  - 57 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -58,6 +83,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.17.1 ([`48c4462`](https://github.com/Byron/dua-cli/commit/48c446294e8ac6b620a2b7fc7c15a4cf9f839452))
     - prepare changelog ([`fc1e10a`](https://github.com/Byron/dua-cli/commit/fc1e10a77da45d41c8243ddb07d7332ca8e23012))
     - Improve aggregate progress reporting ([`7d83f96`](https://github.com/Byron/dua-cli/commit/7d83f965d620ccebeda9a7451cdbb2e40ed88c24))
     - update dependencies ([`9a1da6b`](https://github.com/Byron/dua-cli/commit/9a1da6bc4e964912a521b2f0de0bdf6124749ccd))
