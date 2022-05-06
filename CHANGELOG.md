@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.17.2 (2022-05-06)
 
 A maintenance release that updates all dependencies. Most notably, `trash-rs` includes a fix for
 properly moving files into the trash that required parent directories to be created.
@@ -14,7 +14,7 @@ properly moving files into the trash that required parent directories to be crea
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release over the course of 8 calendar days.
+ - 3 commits contributed to the release over the course of 8 calendar days.
  - 46 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -26,6 +26,7 @@ properly moving files into the trash that required parent directories to be crea
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - update changelog prior to release ([`70581b6`](https://github.com/Byron/dua-cli/commit/70581b6ff384309ddc56d2650c8fef1f41e88d28))
     - dependency update ([`8f3e157`](https://github.com/Byron/dua-cli/commit/8f3e157b86e7dd7c9669623aea03d7c74340d187))
     - update dependencies ([`d8eae6e`](https://github.com/Byron/dua-cli/commit/d8eae6e8cf788ea8d69b3e73e83027f2f0e44391))
 </details>
