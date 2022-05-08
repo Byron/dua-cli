@@ -8,13 +8,13 @@
 
 ### Installation
 
-### Binary Release (all but Windows)
+### Binary Release 
 
 #### MacOS
 
 ```sh
 curl -LSfs https://raw.githubusercontent.com/byron/dua-cli/master/ci/install.sh | \
-    sh -s -- --git byron/dua-cli --crate dua
+    sh -s -- --git byron/dua-cli --crate dua --tag v2.17.2
 ```
 
 #### MacOS via [MacPorts](https://www.macports.org):
