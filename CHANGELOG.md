@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.17.3 (2022-05-10)
+
+### Bug Fixes
+
+ - <csr-id-aa2646d5ae4d931ef15787a9723daa007add4a91/> dependency update; upgrade to trash v2.1.1 .
+   The trash upgrade makes sure that trashed items on mount points
+   on freedesktop are actually restorable.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release over the course of 3 calendar days.
+ - 3 days passed between releases.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#123](https://github.com/Byron/dua-cli/issues/123)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#123](https://github.com/Byron/dua-cli/issues/123)**
+    - update readme to reflect the changes in install.sh ([`086d0b2`](https://github.com/Byron/dua-cli/commit/086d0b257cc7488132f8c5ea1b550f352e30e828))
+ * **Uncategorized**
+    - dependency update; upgrade to trash v2.1.1 . ([`aa2646d`](https://github.com/Byron/dua-cli/commit/aa2646d5ae4d931ef15787a9723daa007add4a91))
+    - fix cargo-diet check on CI ([`129c511`](https://github.com/Byron/dua-cli/commit/129c5114b15f1f644fa0c65266f13bed188ac161))
+</details>
+
 ## 2.17.2 (2022-05-06)
 
 A maintenance release that updates all dependencies. Most notably, `trash-rs` includes a fix for
@@ -14,7 +44,7 @@ properly moving files into the trash that required parent directories to be crea
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release over the course of 8 calendar days.
+ - 4 commits contributed to the release over the course of 8 calendar days.
  - 46 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -26,6 +56,7 @@ properly moving files into the trash that required parent directories to be crea
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.17.2 ([`dd9f893`](https://github.com/Byron/dua-cli/commit/dd9f8933b75e052dbf3a13a9599061687690fcbe))
     - update changelog prior to release ([`70581b6`](https://github.com/Byron/dua-cli/commit/70581b6ff384309ddc56d2650c8fef1f41e88d28))
     - dependency update ([`8f3e157`](https://github.com/Byron/dua-cli/commit/8f3e157b86e7dd7c9669623aea03d7c74340d187))
     - update dependencies ([`d8eae6e`](https://github.com/Byron/dua-cli/commit/d8eae6e8cf788ea8d69b3e73e83027f2f0e44391))
