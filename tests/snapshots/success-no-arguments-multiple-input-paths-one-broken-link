@@ -1,0 +1,6 @@
+      0  B broken-link  <1 IO Error>
+ 258.05 KB ./dir/sub
+   1.27 MB dir
+   1.28 MB .
+   2.81 MB total  <1 IO Error>
+Statistics { entries_traversed: 25, smallest_file_in_bytes: 0, largest_file_in_bytes: 1003520 }

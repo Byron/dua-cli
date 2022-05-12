@@ -95,7 +95,13 @@ impl Traversal {
 
         for path in input.into_iter() {
             let mut last_seen_eid = 0;
-            let device_id = crossdev::init(path.as_ref())?;
+            let device_id = match crossdev::init(path.as_ref()) {
+                Ok(id) => id,
+                Err(_) => {
+                    t.io_errors += 1;
+                    continue;
+                }
+            };
             for (eid, entry) in walk_options
                 .iter_from_path(path.as_ref())
                 .into_iter()

@@ -65,6 +65,14 @@ WITH_FAILURE=1
               expect_run ${SUCCESSFULLY} "$exe" aggregate --stats . . dir ./dir/ ./dir/sub
             }
           )
+          (with "a broken link in multiple roots"
+            ln -s not-present broken-link
+            it "fails but lists valid paths" && {
+              WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-one-broken-link" \
+              expect_run ${WITH_FAILURE} "$exe" aggregate --stats . dir broken-link ./dir/sub
+            }
+            rm broken-link
+          )
         )
         (when "specifying no subcommand"
           it "produces a human-readable aggregate" && {
