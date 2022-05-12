@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Bug Fixes
+
+ - Show all possible information even if one input path could not be read. Previously it would fail
+   entirely without printing anything useful but a relatively non-descript error message.
+ - <csr-id-8742232a15c2bdd608c2e2c731a786c59c7d58dc/> Open interactive mode even if one of the input paths can't be read.
+   Note that there can still be improvements in indicating which path
+   failed.
+   Also it will happily show an empty user interface in case all input
+   paths are not readable.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 2 days passed between releases.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#124](https://github.com/Byron/dua-cli/issues/124)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#124](https://github.com/Byron/dua-cli/issues/124)**
+    - Open interactive mode even if one of the input paths can't be read. ([`8742232`](https://github.com/Byron/dua-cli/commit/8742232a15c2bdd608c2e2c731a786c59c7d58dc))
+ * **Uncategorized**
+    - Merge branch 'broken-link-handling' ([`157b43c`](https://github.com/Byron/dua-cli/commit/157b43c2cb203c067c66f499a9fd849e5f0e811c))
+</details>
+
 ## 2.17.3 (2022-05-10)
 
 ### Bug Fixes
@@ -12,15 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-aa2646d5ae4d931ef15787a9723daa007add4a91/> dependency update; upgrade to trash v2.1.1 .
    The trash upgrade makes sure that trashed items on mount points
    on freedesktop are actually restorable.
+ - <csr-id-75b3eed98f14d918f474f73caa3cdedd5af927ad/> broken or non-existing root path will still print the valid results.
+   Previously it would fail completely without printing anything.
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release over the course of 3 calendar days.
+ - 6 commits contributed to the release over the course of 3 calendar days.
  - 3 days passed between releases.
- - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
- - 1 unique issue was worked on: [#123](https://github.com/Byron/dua-cli/issues/123)
+ - 2 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 2 unique issues were worked on: [#123](https://github.com/Byron/dua-cli/issues/123), [#124](https://github.com/Byron/dua-cli/issues/124)
 
 ### Commit Details
 
@@ -30,7 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
  * **[#123](https://github.com/Byron/dua-cli/issues/123)**
     - update readme to reflect the changes in install.sh ([`086d0b2`](https://github.com/Byron/dua-cli/commit/086d0b257cc7488132f8c5ea1b550f352e30e828))
+ * **[#124](https://github.com/Byron/dua-cli/issues/124)**
+    - broken or non-existing root path will still print the valid results. ([`75b3eed`](https://github.com/Byron/dua-cli/commit/75b3eed98f14d918f474f73caa3cdedd5af927ad))
+    - record status quo ([`05e61a6`](https://github.com/Byron/dua-cli/commit/05e61a65e318694cfb2b98f9566bff817090d741))
  * **Uncategorized**
+    - Release dua-cli v2.17.3 ([`1f852ed`](https://github.com/Byron/dua-cli/commit/1f852ed5afd118d1f4804baf0574189f4d1f0b42))
     - dependency update; upgrade to trash v2.1.1 . ([`aa2646d`](https://github.com/Byron/dua-cli/commit/aa2646d5ae4d931ef15787a9723daa007add4a91))
     - fix cargo-diet check on CI ([`129c511`](https://github.com/Byron/dua-cli/commit/129c5114b15f1f644fa0c65266f13bed188ac161))
 </details>
