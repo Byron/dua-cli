@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.17.4 (2022-05-12)
 
 ### Bug Fixes
 
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 2 days passed between releases.
  - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#124](https://github.com/Byron/dua-cli/issues/124)
@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **[#124](https://github.com/Byron/dua-cli/issues/124)**
+    - update changelog prior to release ([`0348b7d`](https://github.com/Byron/dua-cli/commit/0348b7dedd99e079a73df5765bc3c4db4e1e6f07))
     - Open interactive mode even if one of the input paths can't be read. ([`8742232`](https://github.com/Byron/dua-cli/commit/8742232a15c2bdd608c2e2c731a786c59c7d58dc))
  * **Uncategorized**
     - Merge branch 'broken-link-handling' ([`157b43c`](https://github.com/Byron/dua-cli/commit/157b43c2cb203c067c66f499a9fd849e5f0e811c))
