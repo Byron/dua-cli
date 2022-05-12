@@ -88,7 +88,15 @@ pub fn aggregate(
         num_roots += 1;
         let mut num_bytes = 0u128;
         let mut num_errors = 0u64;
-        let device_id = crossdev::init(path.as_ref())?;
+        let device_id = match crossdev::init(path.as_ref()) {
+            Ok(id) => id,
+            Err(_) => {
+                num_errors += 1;
+                res.num_errors += 1;
+                aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
+                continue;
+            }
+        };
         for entry in walk_options.iter_from_path(path.as_ref()) {
             stats.entries_traversed += 1;
             progress.throttled(|out| {

@@ -71,6 +71,7 @@ WITH_FAILURE=1
               WITH_SNAPSHOT="$snapshot/success-no-arguments-multiple-input-paths-one-broken-link" \
               expect_run ${WITH_FAILURE} "$exe" aggregate --stats . dir broken-link ./dir/sub
             }
+            rm broken-link
           )
         )
         (when "specifying no subcommand"

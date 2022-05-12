@@ -1,1 +1,6 @@
-Error: No such file or directory (os error 2)
+      0  B foo  <1 IO Error>
+      0  B bar  <1 IO Error>
+      0  B baz  <1 IO Error>
+   1.28 MB .
+   1.28 MB .
+   2.56 MB total  <3 IO Errors>
