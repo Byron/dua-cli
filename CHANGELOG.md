@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.17.6 (2022-06-12)
 
 A maintenance release which should make the `ctrl + o` feature open files without blocking on linux
 thanks to an upgrade in the `open` crate which powers this feauture.
@@ -14,7 +14,7 @@ thanks to an upgrade in the `open` crate which powers this feauture.
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 29 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -26,6 +26,7 @@ thanks to an upgrade in the `open` crate which powers this feauture.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - update changelog prior to release ([`e20e9e0`](https://github.com/Byron/dua-cli/commit/e20e9e0bd3e3cd9525aa60655704df40bb8b448a))
     - upgrade 'open' to latest version ([`6806241`](https://github.com/Byron/dua-cli/commit/68062418a32e9e69c78c17e1b4c33703752a2a02))
     - dependency update ([`29a2abc`](https://github.com/Byron/dua-cli/commit/29a2abc33528ba9ddb8b62ad9dd98232bdf75aa9))
 </details>
@@ -631,6 +632,8 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 </details>
 
 ## v2.14.0 (2021-06-29)
+
+<csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/>
 
 ### Other
 
