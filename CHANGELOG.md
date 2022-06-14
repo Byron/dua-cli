@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixes
+
+- Improve readability of the currently visible path in light terminal color themes [(#129)](https://github.com/Byron/dua-cli/pull/129).
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 2 days passed between releases.
+ - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge branch 'show-path' ([`1beb7d7`](https://github.com/Byron/dua-cli/commit/1beb7d7870a308e4829caada7ba3147326ffe0d4))
+    - restyle for compatibility with 'light' color schemes ([`ed28cdb`](https://github.com/Byron/dua-cli/commit/ed28cdbe979cf1fa4a2eccfc3a851fd94f7f2695))
+</details>
+
 ## 2.17.6 (2022-06-12)
 
 A maintenance release which should make the `ctrl + o` feature open files without blocking on linux
@@ -14,7 +40,7 @@ thanks to an upgrade in the `open` crate which powers this feauture.
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 29 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -26,6 +52,7 @@ thanks to an upgrade in the `open` crate which powers this feauture.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.17.6 ([`4105a50`](https://github.com/Byron/dua-cli/commit/4105a50a2ffb38ae37b3e1a49e4d3a345cc59fab))
     - update changelog prior to release ([`e20e9e0`](https://github.com/Byron/dua-cli/commit/e20e9e0bd3e3cd9525aa60655704df40bb8b448a))
     - upgrade 'open' to latest version ([`6806241`](https://github.com/Byron/dua-cli/commit/68062418a32e9e69c78c17e1b4c33703752a2a02))
     - dependency update ([`29a2abc`](https://github.com/Byron/dua-cli/commit/29a2abc33528ba9ddb8b62ad9dd98232bdf75aa9))
