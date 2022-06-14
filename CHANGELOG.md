@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.17.7 (2022-06-14)
 
 ### Fixes
 
@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 2 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - update changelog prior to release ([`d437ba5`](https://github.com/Byron/dua-cli/commit/d437ba59ea04a264c8f715248969d3f9daef7b87))
     - Merge branch 'show-path' ([`1beb7d7`](https://github.com/Byron/dua-cli/commit/1beb7d7870a308e4829caada7ba3147326ffe0d4))
     - restyle for compatibility with 'light' color schemes ([`ed28cdb`](https://github.com/Byron/dua-cli/commit/ed28cdbe979cf1fa4a2eccfc3a851fd94f7f2695))
 </details>
