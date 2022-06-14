@@ -55,11 +55,7 @@ impl MainWindow {
                 add_modifier: Modifier::empty(),
                 ..Style::default()
             };
-            let bold = Style {
-                fg: Color::Rgb(230, 230, 230).into(),
-                add_modifier: Modifier::BOLD,
-                ..grey
-            };
+            let bold = Style::default().add_modifier(Modifier::BOLD);
             match state.focussed {
                 Main => (bold, grey, grey),
                 Help => (grey, bold, grey),
