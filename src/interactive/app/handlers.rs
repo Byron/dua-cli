@@ -50,7 +50,14 @@ impl CursorDirection {
 impl AppState {
     pub fn open_that(&self, traversal: &Traversal) {
         if let Some(idx) = self.selected {
-            open::that(path_of(&traversal.tree, idx)).ok();
+            let res = open::that(path_of(&traversal.tree, idx));
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("dua-open.dbg")
+                .and_then(|mut file| file.write_all(format!("{:?}", res).as_bytes()))
+                .ok();
         }
     }
 
