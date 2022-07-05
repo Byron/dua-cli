@@ -13,6 +13,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v1
     - name: Test compilation
       run: make check
     - name: Run tests
@@ -38,6 +39,7 @@ jobs:
           profile: default
           toolchain: nightly
           override: true
+      - uses: Swatinem/rust-cache@v1
       - name: "Check (crossterm)"
         uses: actions-rs/cargo@v1
         with:
