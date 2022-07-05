@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.17.8 (2022-07-05)
+
+### Bug Fixes
+
+ - <csr-id-280d5436979f28c00b267d092e01c9675d3be7be/> remove `chrono` from the dependency tree.
+   This assures there is no possibility for undefined behaviour to
+   to localtime support used by some of the `trash`-crate code otherwise.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 20 days passed between releases.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - speedup CI by adding a rust-cache ([`24df0b0`](https://github.com/Byron/dua-cli/commit/24df0b0fc24f5c6a4fe8a57a7023846309322d3f))
+    - remove `chrono` from the dependency tree. ([`280d543`](https://github.com/Byron/dua-cli/commit/280d5436979f28c00b267d092e01c9675d3be7be))
+    - dependency update ([`533b41d`](https://github.com/Byron/dua-cli/commit/533b41d22280450b883f6a2d340f5bb164e7221b))
+</details>
+
 ## 2.17.7 (2022-06-14)
 
 ### Fixes
@@ -15,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 2 days passed between releases.
  - 0 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
@@ -27,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.17.7 ([`c0e3678`](https://github.com/Byron/dua-cli/commit/c0e3678c9f0eb61885c259b34355b4fd0ae0e3f3))
     - update changelog prior to release ([`d437ba5`](https://github.com/Byron/dua-cli/commit/d437ba59ea04a264c8f715248969d3f9daef7b87))
     - Merge branch 'show-path' ([`1beb7d7`](https://github.com/Byron/dua-cli/commit/1beb7d7870a308e4829caada7ba3147326ffe0d4))
     - restyle for compatibility with 'light' color schemes ([`ed28cdb`](https://github.com/Byron/dua-cli/commit/ed28cdbe979cf1fa4a2eccfc3a851fd94f7f2695))
