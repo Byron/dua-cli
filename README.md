@@ -43,9 +43,9 @@ curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh 
 scoop install dua
 ```
 
-#### Others
+#### Pre-built Binaries
 
-See the [releases section][releases] for manual installation.
+See the [releases section][releases] for manual installation of a binary, pre-built for many platforms.
 
 [releases]: https://github.com/Byron/dua-cli/releases
 
