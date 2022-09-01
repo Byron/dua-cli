@@ -1,7 +1,7 @@
 use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
-use colored::{Color, Colorize};
 use filesize::PathExt;
+use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::{borrow::Cow, io, path::Path};
 use std::{
     sync::{
@@ -199,23 +199,19 @@ fn output_colored_path(
     path: impl AsRef<Path>,
     num_bytes: u128,
     num_errors: u64,
-    path_color: Option<colored::Color>,
+    path_color: Option<Color>,
 ) -> std::result::Result<(), io::Error> {
     writeln!(
         out,
         "{:>byte_column_width$} {}{}",
-        options
-            .byte_format
-            .display(num_bytes)
-            .to_string()
-            .as_str()
-            .green(),
+        options.byte_format.display(num_bytes).green(),
         {
-            let path = path.as_ref().display().to_string();
+            let path = path.as_ref().display();
             match path_color {
                 Some(color) => path.color(color),
-                None => path.normal(),
+                None => path.color(Color::Default),
             }
+            .to_string()
         },
         if num_errors == 0 {
             Cow::Borrowed("")
