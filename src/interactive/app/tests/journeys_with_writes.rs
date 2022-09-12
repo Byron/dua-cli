@@ -2,6 +2,8 @@ use crate::interactive::app::tests::utils::{
     initialized_app_and_terminal_from_paths, into_keys, WritableFixture,
 };
 use anyhow::Result;
+use crosstermion::input::Event;
+use crosstermion::input::Key;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -24,11 +26,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        vec![
-            crosstermion::input::Key::Char('\t'),
-            crosstermion::input::Key::Ctrl('r'),
-        ]
-        .into_iter(),
+        vec![Event::Key(Key::Char('\t')), Event::Key(Key::Ctrl('r'))].into_iter(),
     )?;
     assert!(
         app.window.mark_pane.is_none(),

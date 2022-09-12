@@ -5,7 +5,7 @@ use crate::interactive::{
     SortMode,
 };
 use anyhow::Result;
-use crosstermion::input::{key_input_channel, Key};
+use crosstermion::input::{input_channel, Event, Key};
 use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
@@ -69,7 +69,7 @@ impl AppState {
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = Key>,
+        events: impl Iterator<Item = Event>,
     ) -> Result<ProcessingResult>
     where
         B: Backend,
@@ -77,8 +77,12 @@ impl AppState {
         use crosstermion::input::Key::*;
         use FocussedPane::*;
 
-        self.draw(window, traversal, *display, terminal)?;
-        for key in keys {
+        for event in events {
+            let key = match event {
+                Event::Key(key) => key,
+                Event::Resize(_, _) => Alt('\r'),
+            };
+
             self.reset_message();
             match key {
                 Char('?') => self.toggle_help_pane(window),
@@ -106,17 +110,15 @@ impl AppState {
             }
 
             match self.focussed {
-                FocussedPane::Mark => {
-                    self.dispatch_to_mark_pane(key, window, traversal, *display, terminal)
-                }
-                FocussedPane::Help => {
+                Mark => self.dispatch_to_mark_pane(key, window, traversal, *display, terminal),
+                Help => {
                     window
                         .help_pane
                         .as_mut()
                         .expect("help pane")
                         .process_events(key);
                 }
-                FocussedPane::Main => match key {
+                Main => match key {
                     Char('O') => self.open_that(traversal),
                     Char(' ') => self.mark_entry(
                         CursorMode::KeepPosition,
@@ -184,7 +186,7 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
-type KeyboardInputAndApp = (std::sync::mpsc::Receiver<Key>, TerminalApp);
+type KeyboardInputAndApp = (std::sync::mpsc::Receiver<Event>, TerminalApp);
 
 impl TerminalApp {
     pub fn refresh_view<B>(&mut self, terminal: &mut Terminal<B>)
@@ -198,14 +200,14 @@ impl TerminalApp {
                 &mut self.traversal,
                 &mut self.display,
                 terminal,
-                std::iter::once(Key::Alt('\r')),
+                std::iter::once(Event::Key(Key::Alt('\r'))),
             )
             .ok();
     }
     pub fn process_events<B>(
         &mut self,
         terminal: &mut Terminal<B>,
-        keys: impl Iterator<Item = Key>,
+        events: impl Iterator<Item = Event>,
     ) -> Result<WalkResult>
     where
         B: Backend,
@@ -215,7 +217,7 @@ impl TerminalApp {
             &mut self.traversal,
             &mut self.display,
             terminal,
-            keys,
+            events,
         )? {
             ProcessingResult::Finished(res) | ProcessingResult::ExitRequested(res) => Ok(res),
         }
@@ -240,7 +242,7 @@ impl TerminalApp {
                 let (_, keys_rx) = std::sync::mpsc::channel();
                 keys_rx
             }
-            Interaction::Full => key_input_channel(),
+            Interaction::Full => input_channel(),
         };
 
         let fetch_buffered_key_events = || {
