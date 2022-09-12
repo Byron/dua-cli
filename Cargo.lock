@@ -213,7 +213,9 @@ dependencies = [
 
 [[package]]
 name = "crosstermion"
-version = "0.10.0"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99aabd9b02c2d5f72697f30ffb46f5a9ff4bd240d826049892cf62c31daeed04"
 dependencies = [
  "crossterm",
  "termion",
@@ -780,6 +782,8 @@ dependencies = [
 [[package]]
 name = "tui-react"
 version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "542c37309aaf01ddaea86891f7845a8b0124194c6ccae6dbae7d223752648f4d"
 dependencies = [
  "log",
  "tui",
