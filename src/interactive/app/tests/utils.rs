@@ -21,8 +21,12 @@ use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};
 
 pub fn into_keys<'a>(
     bytes: impl Iterator<Item = &'a u8> + 'a,
-) -> impl Iterator<Item = crosstermion::input::Key> + 'a {
-    bytes.map(|b| crosstermion::input::Key::Char(std::char::from_u32(*b as u32).unwrap()))
+) -> impl Iterator<Item = crosstermion::input::Event> + 'a {
+    bytes.map(|b| {
+        crosstermion::input::Event::Key(crosstermion::input::Key::Char(
+            std::char::from_u32(*b as u32).unwrap(),
+        ))
+    })
 }
 
 pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
