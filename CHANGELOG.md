@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.18.0 (2022-09-12)
 
 ### Fixes
 
@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release over the course of 54 calendar days.
+ - 9 commits contributed to the release over the course of 54 calendar days.
  - 68 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#28](https://github.com/Byron/dua-cli/issues/28)
@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#28](https://github.com/Byron/dua-cli/issues/28)**
     - Automatically resize if the terminal changes in size. ([`28f5ac9`](https://github.com/Byron/dua-cli/commit/28f5ac90cc1ba7d668ae8a83eb5cd899294a8301))
  * **Uncategorized**
+    - update changelog ([`8dc45ab`](https://github.com/Byron/dua-cli/commit/8dc45abd15857cb11ab5567b83d507e4e3474b9e))
+    - Make sure the correct version of `crosstermion` is used ([`ed0bfc7`](https://github.com/Byron/dua-cli/commit/ed0bfc750a59d45fad04cb3a39b73e6f70512cee))
+    - prepare changelog ([`50fd287`](https://github.com/Byron/dua-cli/commit/50fd2873257a17baa570d5f9826bcb0c83294059))
     - Merge branch 'dep-upgrade' ([`20b7672`](https://github.com/Byron/dua-cli/commit/20b76721939b77dc6c9a86d3c5f4c22cc7f1cf65))
     - upgrade dependencies to tui 0.19/crossterm 0.25 ([`e35baea`](https://github.com/Byron/dua-cli/commit/e35baeaf25176e94ccc352b623f5cfd4b6b95b7b))
     - Add Apple M2 to default thread derivation ([`b5ec900`](https://github.com/Byron/dua-cli/commit/b5ec90042dec10fef8a35c27c2f7dcdb97b92293))
