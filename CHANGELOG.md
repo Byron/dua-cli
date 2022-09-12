@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixes
+
+- Remove a duplicate draw call which would have doubled the time it takes to refresh on user input.
+  This might have been noticable when large amounts of files are displayed.
+
 ### New Features
 
  - <csr-id-28f5ac90cc1ba7d668ae8a83eb5cd899294a8301/> Automatically resize if the terminal changes in size.
