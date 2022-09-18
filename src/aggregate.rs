@@ -2,7 +2,7 @@ use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
-use std::{borrow::Cow, io, path::Path};
+use std::{io, path::Path};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -201,29 +201,24 @@ fn output_colored_path(
     num_errors: u64,
     path_color: Option<Color>,
 ) -> std::result::Result<(), io::Error> {
-    writeln!(
-        out,
-        "{:>byte_column_width$} {}{}",
-        options.byte_format.display(num_bytes).green(),
-        {
-            let path = path.as_ref().display();
-            match path_color {
-                Some(color) => path.color(color),
-                None => path.color(Color::Default),
-            }
-            .to_string()
-        },
-        if num_errors == 0 {
-            Cow::Borrowed("")
-        } else {
-            Cow::Owned(format!(
-                "  <{} IO Error{}>",
-                num_errors,
-                if num_errors > 1 { "s" } else { "" }
-            ))
-        },
-        byte_column_width = options.byte_format.width()
-    )
+    let size = options.byte_format.display(num_bytes).to_string();
+    let size = size.green();
+    let size_width = options.byte_format.width();
+
+    let path = path.as_ref().display();
+
+    let errors = if let 0 = num_errors {
+        String::new()
+    } else {
+        let s = if num_errors > 1 { "s" } else { "" };
+        format!("  <{num_errors} IO Error{s}>")
+    };
+
+    if let Some(color) = path_color {
+        writeln!(out, "{size:>size_width$} {}{errors}", path.color(color),)
+    } else {
+        writeln!(out, "{size:>size_width$} {path}{errors}",)
+    }
 }
 
 /// Statistics obtained during a filesystem walk
