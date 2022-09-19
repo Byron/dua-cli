@@ -1,6 +1,6 @@
-      0  B foo  <1 IO Error>
-      0  B bar  <1 IO Error>
-      0  B baz  <1 IO Error>
-   1.28 MB .
-   1.28 MB .
-   2.56 MB total  <3 IO Errors>
+[32m      0  B[39m [36mfoo[39m  <1 IO Error>
+[32m      0  B[39m [36mbar[39m  <1 IO Error>
+[32m      0  B[39m [36mbaz[39m  <1 IO Error>
+[32m   1.28 MB[39m [36m.[39m
+[32m   1.28 MB[39m [36m.[39m
+[32m   2.56 MB[39m total  <3 IO Errors>
