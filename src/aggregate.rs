@@ -186,11 +186,7 @@ pub fn aggregate(
 }
 
 fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
-    if path.as_ref().is_file() {
-        None
-    } else {
-        Some(Color::Cyan)
-    }
+    (!path.as_ref().is_file()).then(|| Color::Cyan)
 }
 
 fn output_colored_path(
@@ -204,20 +200,19 @@ fn output_colored_path(
     let size = options.byte_format.display(num_bytes).to_string();
     let size = size.green();
     let size_width = options.byte_format.width();
-
     let path = path.as_ref().display();
 
-    let errors = if let 0 = num_errors {
-        String::new()
-    } else {
-        let s = if num_errors > 1 { "s" } else { "" };
-        format!("  <{num_errors} IO Error{s}>")
-    };
+    let errors = (num_errors != 0)
+        .then(|| {
+            let plural_s = if num_errors > 1 { "s" } else { "" };
+            format!("  <{num_errors} IO Error{plural_s}>")
+        })
+        .unwrap_or_default();
 
     if let Some(color) = path_color {
-        writeln!(out, "{size:>size_width$} {}{errors}", path.color(color),)
+        writeln!(out, "{size:>size_width$} {}{errors}", path.color(color))
     } else {
-        writeln!(out, "{size:>size_width$} {path}{errors}",)
+        writeln!(out, "{size:>size_width$} {path}{errors}")
     }
 }
 
