@@ -1,8 +1,8 @@
 use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
 use anyhow::Result;
-use colored::{Color, Colorize};
 use filesize::PathExt;
-use std::{borrow::Cow, io, path::Path};
+use owo_colors::{AnsiColors as Color, OwoColorize};
+use std::{io, path::Path};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -186,11 +186,7 @@ pub fn aggregate(
 }
 
 fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
-    if path.as_ref().is_file() {
-        None
-    } else {
-        Some(Color::Cyan)
-    }
+    (!path.as_ref().is_file()).then(|| Color::Cyan)
 }
 
 fn output_colored_path(
@@ -199,35 +195,25 @@ fn output_colored_path(
     path: impl AsRef<Path>,
     num_bytes: u128,
     num_errors: u64,
-    path_color: Option<colored::Color>,
+    path_color: Option<Color>,
 ) -> std::result::Result<(), io::Error> {
-    writeln!(
-        out,
-        "{:>byte_column_width$} {}{}",
-        options
-            .byte_format
-            .display(num_bytes)
-            .to_string()
-            .as_str()
-            .green(),
-        {
-            let path = path.as_ref().display().to_string();
-            match path_color {
-                Some(color) => path.color(color),
-                None => path.normal(),
-            }
-        },
-        if num_errors == 0 {
-            Cow::Borrowed("")
-        } else {
-            Cow::Owned(format!(
-                "  <{} IO Error{}>",
-                num_errors,
-                if num_errors > 1 { "s" } else { "" }
-            ))
-        },
-        byte_column_width = options.byte_format.width()
-    )
+    let size = options.byte_format.display(num_bytes).to_string();
+    let size = size.green();
+    let size_width = options.byte_format.width();
+    let path = path.as_ref().display();
+
+    let errors = (num_errors != 0)
+        .then(|| {
+            let plural_s = if num_errors > 1 { "s" } else { "" };
+            format!("  <{num_errors} IO Error{plural_s}>")
+        })
+        .unwrap_or_default();
+
+    if let Some(color) = path_color {
+        writeln!(out, "{size:>size_width$} {}{errors}", path.color(color))
+    } else {
+        writeln!(out, "{size:>size_width$} {path}{errors}")
+    }
 }
 
 /// Statistics obtained during a filesystem walk

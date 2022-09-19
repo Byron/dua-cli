@@ -1,7 +1,7 @@
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
 
-#[derive(PartialEq, Debug, Clone, Copy, clap::ArgEnum)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, clap::ArgEnum)]
 pub enum ByteFormat {
     Metric,
     Binary,
