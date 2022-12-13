@@ -18,7 +18,7 @@ tui-shared = ["tui", "tui-react", "open", "unicode-segmentation"]
 trash-move = ["trash"]
 
 [dependencies]
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "4.0.29", features = ["derive"] }
 jwalk = "0.6.0"
 byte-unit = "4"
 atty = "0.2.11"

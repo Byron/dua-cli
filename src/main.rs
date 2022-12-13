@@ -57,7 +57,6 @@ fn main() -> Result<()> {
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
     let threads = derive_default_threads(opt.threads);
-    dbg!(threads);
     let walk_options = dua::WalkOptions {
         threads,
         byte_format: opt.format.into(),

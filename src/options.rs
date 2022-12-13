@@ -1,7 +1,7 @@
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy, clap::ArgEnum)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ByteFormat {
     Metric,
     Binary,
@@ -50,7 +50,7 @@ pub struct Args {
     #[clap(
         short = 'f',
         long,
-        arg_enum,
+        value_enum,
         default_value_t = ByteFormat::Metric,
         ignore_case = true,
         hide_default_value = true,
@@ -73,12 +73,12 @@ pub struct Args {
     /// One or more absolute directories to ignore. Note that these are not ignored if they are passed as input path.
     ///
     /// Hence, they will only be ignored if they are eventually reached as part of the traversal.
-    #[clap(long = "ignore-dirs", short = 'i', parse(from_os_str))]
+    #[clap(long = "ignore-dirs", short = 'i', value_parser)]
     #[cfg_attr(target_os = "linux", clap(default_values = &["/proc", "/dev", "/sys", "/run"]))]
     pub ignore_dirs: Vec<PathBuf>,
 
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-    #[clap(parse(from_os_str))]
+    #[clap(value_parser)]
     pub input: Vec<PathBuf>,
 }
 
@@ -89,7 +89,7 @@ pub enum Command {
     #[clap(name = "interactive", visible_alias = "i")]
     Interactive {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[clap(parse(from_os_str))]
+        #[clap(value_parser)]
         input: Vec<PathBuf>,
     },
     /// Aggregrate the consumed space of one or more directories or files
@@ -106,7 +106,7 @@ pub enum Command {
         #[clap(long)]
         no_total: bool,
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[clap(parse(from_os_str))]
+        #[clap(value_parser)]
         input: Vec<PathBuf>,
     },
 }
