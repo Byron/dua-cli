@@ -5,12 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+Update all dependencies to the latest version. This most notably changes the look of the CLI
+to something without color by default thanks to the upgrade to `clap` 4.
+
+### Chore
+
+ - <csr-id-946806e7390799807361562b038fb12eeb2ddf11/> replace `colored` dependency with `owo-colors`.
+   The latter provide zero-allocation coloring in the terminal and
+   may improve compile times a little.
+
+### Refactor
+
+ - <csr-id-d3fa946029ef44e5032762ff265180c23a629316/> colored path printing; fix size column format
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 11 commits contributed to the release over the course of 86 calendar days.
+ - 92 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 2 times to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - prepare changelog prior to release ([`8594faa`](https://github.com/Byron/dua-cli/commit/8594faa16f9eb71419ab09c0b64f834ba6f78239))
+    - upgrade to clap 4 ([`dd8b0ef`](https://github.com/Byron/dua-cli/commit/dd8b0ef8e12dfc8d7fb8f359f504c63034d60b9f))
+    - upgrade sysinfo and make thread detection work for all Apple M series for now. ([`bbd5c67`](https://github.com/Byron/dua-cli/commit/bbd5c67342f9e5b509b0ab6e9ca2319c3c7605e2))
+    - upgrade to trash v3.0 ([`bbd3a1c`](https://github.com/Byron/dua-cli/commit/bbd3a1ceaa15fb07c86ad9f4f5fcbaf991cb12af))
+    - thanks clippy ([`82dc467`](https://github.com/Byron/dua-cli/commit/82dc4670bd9b3b93ae949022ecdc58ead79cf905))
+    - update dependencies ([`0057c0d`](https://github.com/Byron/dua-cli/commit/0057c0d2ad0c1491ff1ffabc1aa5fea40539b942))
+    - adjust journey-test expectations according to difference in color encoding. ([`b0bacad`](https://github.com/Byron/dua-cli/commit/b0bacadbeec4ed91bb7a4ab2d783ed0824173274))
+    - replace `colored` dependency with `owo-colors`. ([`946806e`](https://github.com/Byron/dua-cli/commit/946806e7390799807361562b038fb12eeb2ddf11))
+    - refactor ([`a734efb`](https://github.com/Byron/dua-cli/commit/a734efb7e332de6a3bb4911e72463e4f6fc342e1))
+    - thanks clippy ([`44e19ee`](https://github.com/Byron/dua-cli/commit/44e19ee67924eb28b87698874d377a999cafceee))
+    - colored path printing; fix size column format ([`d3fa946`](https://github.com/Byron/dua-cli/commit/d3fa946029ef44e5032762ff265180c23a629316))
+</details>
+
 ## 2.18.0 (2022-09-12)
 
 ### Fixes
 
 - Remove a duplicate draw call which would have doubled the time it takes to refresh on user input.
   This might have been noticable when large amounts of files are displayed.
+
+### Other
+
+ - <csr-id-6a636d542594a76ef8b2faf2ec6347e4c8cb6b38/> switch from colored to owo-colors
+   owo-colors is well-maintained, zero-allocation, zero-dependencies crate
+   for terminal colors. Also it works on any type that implements Display trait,
+   not just on strings.
 
 ### New Features
 
@@ -20,9 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 9 commits contributed to the release over the course of 54 calendar days.
+ - 11 commits contributed to the release over the course of 54 calendar days.
  - 68 days passed between releases.
- - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#28](https://github.com/Byron/dua-cli/issues/28)
 
 ### Commit Details
@@ -34,11 +91,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#28](https://github.com/Byron/dua-cli/issues/28)**
     - Automatically resize if the terminal changes in size. ([`28f5ac9`](https://github.com/Byron/dua-cli/commit/28f5ac90cc1ba7d668ae8a83eb5cd899294a8301))
  * **Uncategorized**
+    - Release dua-cli v2.18.0 ([`7fe68ea`](https://github.com/Byron/dua-cli/commit/7fe68ead0222467092f67d49855655faf6d61ee4))
     - update changelog ([`8dc45ab`](https://github.com/Byron/dua-cli/commit/8dc45abd15857cb11ab5567b83d507e4e3474b9e))
     - Make sure the correct version of `crosstermion` is used ([`ed0bfc7`](https://github.com/Byron/dua-cli/commit/ed0bfc750a59d45fad04cb3a39b73e6f70512cee))
     - prepare changelog ([`50fd287`](https://github.com/Byron/dua-cli/commit/50fd2873257a17baa570d5f9826bcb0c83294059))
     - Merge branch 'dep-upgrade' ([`20b7672`](https://github.com/Byron/dua-cli/commit/20b76721939b77dc6c9a86d3c5f4c22cc7f1cf65))
     - upgrade dependencies to tui 0.19/crossterm 0.25 ([`e35baea`](https://github.com/Byron/dua-cli/commit/e35baeaf25176e94ccc352b623f5cfd4b6b95b7b))
+    - switch from colored to owo-colors ([`6a636d5`](https://github.com/Byron/dua-cli/commit/6a636d542594a76ef8b2faf2ec6347e4c8cb6b38))
     - Add Apple M2 to default thread derivation ([`b5ec900`](https://github.com/Byron/dua-cli/commit/b5ec90042dec10fef8a35c27c2f7dcdb97b92293))
     - 'Other' -> 'Pre-built binaries' for clarity ([`6bd4338`](https://github.com/Byron/dua-cli/commit/6bd433831850c2032674e440809ac86c0b8c6784))
     - Add Scoop installation for Windows ([`8c67198`](https://github.com/Byron/dua-cli/commit/8c67198f6cc55bbc1a493f7a0e9fb5e9139d5ff3))
@@ -59,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - 4 commits contributed to the release.
  - 20 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -87,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - 4 commits contributed to the release.
  - 2 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -114,7 +173,7 @@ thanks to an upgrade in the `open` crate which powers this feauture.
  - 4 commits contributed to the release.
  - 29 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -244,7 +303,7 @@ properly moving files into the trash that required parent directories to be crea
  - 4 commits contributed to the release over the course of 8 calendar days.
  - 46 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -303,7 +362,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
  - 9 commits contributed to the release over the course of 55 calendar days.
  - 57 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -342,7 +401,7 @@ The `aggregate-scan-progress` feature was removed as it shouldn't be required an
  - 4 commits contributed to the release.
  - 12 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -460,7 +519,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
  - 2 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -486,7 +545,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
  - 3 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -513,7 +572,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 4 commits contributed to the release.
  - 38 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -539,7 +598,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 3 commits contributed to the release.
  - 26 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -565,7 +624,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 8 commits contributed to the release over the course of 3 calendar days.
  - 5 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -595,7 +654,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 5 commits contributed to the release over the course of 11 calendar days.
  - 11 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -623,7 +682,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 3 commits contributed to the release over the course of 6 calendar days.
  - 11 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Thanks Clippy
 
@@ -654,7 +713,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 2 commits contributed to the release.
  - 11 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -680,7 +739,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 10 commits contributed to the release.
  - 14 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -713,7 +772,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
  - 5 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -744,7 +803,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 7 commits contributed to the release over the course of 2 calendar days.
  - 20 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Thanks Clippy
 
@@ -786,7 +845,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 3 commits contributed to the release.
  - 1 day passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -811,7 +870,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -837,7 +896,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 6 commits contributed to the release over the course of 1 calendar day.
  - 7 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -866,7 +925,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
  - 5 commits contributed to the release over the course of 1 calendar day.
  - 1 day passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -895,7 +954,7 @@ YANKED.
  - 5 commits contributed to the release.
  - 19 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Thanks Clippy
 
@@ -929,7 +988,7 @@ YANKED.
  - 4 commits contributed to the release.
  - 6 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -955,7 +1014,7 @@ YANKED.
  - 16 commits contributed to the release over the course of 40 calendar days.
  - 69 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Thanks Clippy
 
@@ -1006,7 +1065,7 @@ YANKED.
  - 5 commits contributed to the release over the course of 5 calendar days.
  - 6 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1040,7 +1099,7 @@ YANKED.
  - 6 commits contributed to the release.
  - 23 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Thanks Clippy
 
@@ -1081,7 +1140,7 @@ It looks like the latest BETAs of clap removed setting the version implicitly.
  - 4 commits contributed to the release over the course of 15 calendar days.
  - 15 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1112,7 +1171,7 @@ This is now fixed and hopefully permanently so thanks to using `jwalk` v0.6.
  - 4 commits contributed to the release over the course of 3 calendar days.
  - 3 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1147,7 +1206,7 @@ with dua-cli.
  - 5 commits contributed to the release over the course of 18 calendar days.
  - 18 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1181,7 +1240,7 @@ On all other systems, the default number of threads did not change.
  - 6 commits contributed to the release over the course of 9 calendar days.
  - 31 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1214,7 +1273,7 @@ Dependency update.
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1237,7 +1296,7 @@ Dependency update.
  - 8 commits contributed to the release over the course of 19 calendar days.
  - 30 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1268,7 +1327,7 @@ Should fix [this issue](https://github.com/Byron/dua-cli/issues/66)
  - 9 commits contributed to the release over the course of 42 calendar days.
  - 79 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1299,7 +1358,7 @@ Change light-grey color in command-line mode to Cyan to fix disappearing text.
  - 3 commits contributed to the release.
  - 3 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1326,7 +1385,7 @@ See [this PR](https://github.com/Byron/dua-cli/pull/62) for reference.
  - 4 commits contributed to the release.
  - 1 day passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1354,7 +1413,7 @@ Minor improvements of looks; improved windows support.
  - 33 commits contributed to the release over the course of 14 calendar days.
  - 15 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1410,7 +1469,7 @@ Globs for Windows; fixed handling of colors.
 
  - 5 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1440,7 +1499,7 @@ Full windows support!
  - 20 commits contributed to the release over the course of 4 calendar days.
  - 4 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1484,7 +1543,7 @@ for anyone who passes paths to their command-line tool.
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1508,7 +1567,7 @@ for anyone who passes paths to their command-line tool.
 
  - 2 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1531,7 +1590,7 @@ for anyone who passes paths to their command-line tool.
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1559,7 +1618,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
  - 7 commits contributed to the release over the course of 29 calendar days.
  - 31 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1589,7 +1648,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
  - 27 commits contributed to the release over the course of 11 calendar days.
  - 26 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1639,7 +1698,7 @@ Both changes were enabled by [@Freaky](https://github.com/Freaky) whom I hereby 
  - 11 commits contributed to the release over the course of 22 calendar days.
  - 29 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1672,7 +1731,7 @@ Much more nuanced percentage bars for a more precise visualization of space cons
  - 8 commits contributed to the release over the course of 5 calendar days.
  - 6 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1701,7 +1760,7 @@ Bugfix: Update currently visible entries when scanning.
 
  - 7 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1730,7 +1789,7 @@ Full interaction during scanning phase; add inline-help for better UX.
  - 29 commits contributed to the release over the course of 2 calendar days.
  - 2 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1784,7 +1843,7 @@ treat each cwd directory entry as individual root path.
  - 2 commits contributed to the release.
  - 1 day passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1809,7 +1868,7 @@ This is also the first release with github releases: https://github.com/Byron/du
  - 16 commits contributed to the release.
  - 2 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1853,7 +1912,7 @@ Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
  - 3 commits contributed to the release over the course of 6 calendar days.
  - 8 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1877,7 +1936,7 @@ Upgrade to jwalk 0.5 bringing better threading control and no symlink following 
 
  - 5 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1903,7 +1962,7 @@ Fast exit from interactive mode for a responsive exit; dependency updates (excep
 
  - 2 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1926,7 +1985,7 @@ YANKED - jwalk 0.5.0 wasn't used correctly which led to a performance regression
 
  - 6 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1954,7 +2013,7 @@ YANKED - journey tests failed to changed method signature.
  - 4 commits contributed to the release over the course of 18 calendar days.
  - 18 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -1980,7 +2039,7 @@ Incude the license file in crate.
  - 1 commit contributed to the release.
  - 2 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2002,7 +2061,7 @@ Include .md files in Crate, update dependencies.
 
  - 2 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2030,7 +2089,7 @@ And of course, this has no noticable performance impact.
 
  - 7 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2064,7 +2123,7 @@ To my pleasant surprise, this does not seem to affect performance at all - every
  - 8 commits contributed to the release over the course of 20 calendar days.
  - 20 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2095,7 +2154,7 @@ Binaries for Linux and MacOS are now available on GitHub Releases.
  - 9 commits contributed to the release over the course of 87 calendar days.
  - 100 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2130,7 +2189,7 @@ Now the color of the widget frame is changed to light gray, instead of remaining
  - 2 commits contributed to the release.
  - 89 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2158,7 +2217,7 @@ _Technical Notes_: Handling symbolic links properly is impossible without usage 
  - 4 commits contributed to the release.
  - 1 day passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2187,7 +2246,7 @@ Compatibility with light terminals.
  - 7 commits contributed to the release over the course of 2 calendar days.
  - 3 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2220,7 +2279,7 @@ Improved handling of broken symlinks.
  - 5 commits contributed to the release over the course of 6 calendar days.
  - 6 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2254,7 +2313,7 @@ This is now fixed.
  - 2 commits contributed to the release.
  - 10 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2282,7 +2341,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
 
  - 1 commit contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2302,7 +2361,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
 
  - 1 commit contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2324,7 +2383,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
 
  - 1 commit contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2345,7 +2404,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
  - 4 commits contributed to the release over the course of 15 calendar days.
  - 15 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2368,7 +2427,7 @@ Fixes [#14](https://github.com/Byron/dua-cli/issues/14)
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2395,7 +2454,7 @@ Bug fixes and improvements.
 
  - 1 commit contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2420,7 +2479,7 @@ Bug fixes and improvements.
 
  - 2 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2448,7 +2507,7 @@ Bug fixes and improvements.
 
  - 6 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2478,7 +2537,7 @@ Bug fixes and improvements.
 
  - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2553,7 +2612,7 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
  - 234 commits contributed to the release over the course of 13 calendar days.
  - 13 days passed between releases.
  - 16 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2812,7 +2871,7 @@ application and GUI state.
 
  - 1 commit contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
@@ -2834,7 +2893,7 @@ Simple CLI to list top-level directories similar to sn-sort, but faster and more
 
  - 27 commits contributed to the release over the course of 3 calendar days.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 0 issues like '(#ID)' where seen in commit messages
+ - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
 
