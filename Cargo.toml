@@ -19,7 +19,7 @@ trash-move = ["trash"]
 
 [dependencies]
 clap = { version = "4.0.29", features = ["derive"] }
-jwalk = "0.6.0"
+jwalk = "0.6.2"
 byte-unit = "4"
 atty = "0.2.11"
 petgraph = "0.6"
