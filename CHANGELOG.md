@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.18.1 (2022-12-13)
+
+<csr-id-946806e7390799807361562b038fb12eeb2ddf11/>
+<csr-id-d3fa946029ef44e5032762ff265180c23a629316/>
 
 Update all dependencies to the latest version. This most notably changes the look of the CLI
 to something without color by default thanks to the upgrade to `clap` 4.
@@ -42,7 +45,7 @@ to something without color by default thanks to the upgrade to `clap` 4.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - prepare changelog prior to release ([`8594faa`](https://github.com/Byron/dua-cli/commit/8594faa16f9eb71419ab09c0b64f834ba6f78239))
+    - prepare changelog prior to release ([`4f7915a`](https://github.com/Byron/dua-cli/commit/4f7915ac4226b98ca423cb2010a706379afe4cee))
     - upgrade to clap 4 ([`dd8b0ef`](https://github.com/Byron/dua-cli/commit/dd8b0ef8e12dfc8d7fb8f359f504c63034d60b9f))
     - upgrade sysinfo and make thread detection work for all Apple M series for now. ([`bbd5c67`](https://github.com/Byron/dua-cli/commit/bbd5c67342f9e5b509b0ab6e9ca2319c3c7605e2))
     - upgrade to trash v3.0 ([`bbd3a1c`](https://github.com/Byron/dua-cli/commit/bbd3a1ceaa15fb07c86ad9f4f5fcbaf991cb12af))
@@ -56,6 +59,8 @@ to something without color by default thanks to the upgrade to `clap` 4.
 </details>
 
 ## 2.18.0 (2022-09-12)
+
+<csr-id-6a636d542594a76ef8b2faf2ec6347e4c8cb6b38/>
 
 ### Fixes
 
