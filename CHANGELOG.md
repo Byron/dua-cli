@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.18.2 (2022-12-13)
+
+### Bug Fixes
+
+ - <csr-id-3420dd4e14f3510662b58ae95ae7919ce0a98c95/> downgrade `jwalk` to 0.6 - the latest version does not actually iterate but instead keeps everything in memory.
+   That's why `dua` didn't feel responsive anymore, was much slower and
+   built up a lot of memory.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - downgrade `jwalk` to 0.6 - the latest version does not actually iterate but instead keeps everything in memory. ([`3420dd4`](https://github.com/Byron/dua-cli/commit/3420dd4e14f3510662b58ae95ae7919ce0a98c95))
+    - adjust maximum package size ([`8a4d8c2`](https://github.com/Byron/dua-cli/commit/8a4d8c27a8c94de6b62fb9d9bd5ba9031f9d6681))
+</details>
+
 ## 2.18.1 (2022-12-13)
 
 <csr-id-946806e7390799807361562b038fb12eeb2ddf11/>
@@ -27,7 +54,7 @@ to something without color by default thanks to the upgrade to `clap` 4.
 
 <csr-read-only-do-not-edit/>
 
- - 11 commits contributed to the release over the course of 86 calendar days.
+ - 12 commits contributed to the release over the course of 86 calendar days.
  - 92 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -45,6 +72,7 @@ to something without color by default thanks to the upgrade to `clap` 4.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.18.1 ([`58b53ff`](https://github.com/Byron/dua-cli/commit/58b53ff46274646833a0c07cf89d36301c0eb103))
     - prepare changelog prior to release ([`4f7915a`](https://github.com/Byron/dua-cli/commit/4f7915ac4226b98ca423cb2010a706379afe4cee))
     - upgrade to clap 4 ([`dd8b0ef`](https://github.com/Byron/dua-cli/commit/dd8b0ef8e12dfc8d7fb8f359f504c63034d60b9f))
     - upgrade sysinfo and make thread detection work for all Apple M series for now. ([`bbd5c67`](https://github.com/Byron/dua-cli/commit/bbd5c67342f9e5b509b0ab6e9ca2319c3c7605e2))
