@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.19.0 (2022-12-13)
+
+### New Features
+
+ - <csr-id-f073375938f742db3259ec284c3c0d4a56fd0077/> Remove the handbrake on MacOS which can now deliver the expected performance.
+   Previously it would limit itself to only using 4 threads as it would
+   use a lot of time in user space. This has changed now, and the traversal
+   itself is much more efficient (even though it could definitely be more
+   efficient when comparing to `pdu`).
+   
+   In any case, counting performance should now greatly improve on M1
+   MacOS machines.
+
+### Bug Fixes
+
+ - <csr-id-d1cdfa1d682962deea5a0c48b90589becd6e19dc/> resolve stalling issue of previous version.
+   This way, this release is the working version of v2.8.1 .
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Remove the handbrake on MacOS which can now deliver the expected performance. ([`f073375`](https://github.com/Byron/dua-cli/commit/f073375938f742db3259ec284c3c0d4a56fd0077))
+    - resolve stalling issue of previous version. ([`d1cdfa1`](https://github.com/Byron/dua-cli/commit/d1cdfa1d682962deea5a0c48b90589becd6e19dc))
+</details>
+
 ## 2.18.2 (2022-12-13)
 
 ### Bug Fixes
@@ -17,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -28,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.18.2 ([`7633de4`](https://github.com/Byron/dua-cli/commit/7633de4956a5bd770b0db61f1e773b0cb6bfdfa8))
     - downgrade `jwalk` to 0.6 - the latest version does not actually iterate but instead keeps everything in memory. ([`3420dd4`](https://github.com/Byron/dua-cli/commit/3420dd4e14f3510662b58ae95ae7919ce0a98c95))
     - adjust maximum package size ([`8a4d8c2`](https://github.com/Byron/dua-cli/commit/8a4d8c27a8c94de6b62fb9d9bd5ba9031f9d6681))
 </details>
