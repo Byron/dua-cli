@@ -39,7 +39,7 @@ wild = "2.0.4"
 owo-colors = "3.5.0"
 
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
-sysinfo = { version = "0.23.2", default-features = false }
+sysinfo = { version = "0.27.0", default-features = false }
 
 [[bin]]
 name="dua"

@@ -32,21 +32,21 @@ fn derive_default_threads(threads: usize) -> usize {
 /// On everything else, it's usually a good idea to use as many threads as possible for noticeable speedups.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 fn derive_default_threads(threads: usize) -> usize {
-    use sysinfo::{ProcessorExt, RefreshKind, SystemExt};
+    use sysinfo::{CpuExt, CpuRefreshKind};
+    use sysinfo::{RefreshKind, SystemExt};
     if threads == 0 {
-        sysinfo::System::new_with_specifics(RefreshKind::new().with_cpu())
-            .processors()
-            .get(0)
-            .map_or(0, |p| match p.brand() {
-                "Apple M1"|"Apple M1 Pro"|"Apple M1 Max"|"Apple M2" => 4,
-                other => {
-                    eprintln!(
+        let system = sysinfo::System::new_with_specifics(
+            RefreshKind::new().with_cpu(CpuRefreshKind::default()),
+        );
+        if system.global_cpu_info().brand().starts_with("Apple M") {
+            4
+        } else {
+            eprintln!(
                         "Couldn't auto-configure correct amount of threads for {}. Create an issue here: https://github.com/byron/dua-cli/issues",
-                        other
+                        system.global_cpu_info().brand()
                     );
-                    0
-                }
-            })
+            0
+        }
     } else {
         threads
     }
@@ -57,6 +57,7 @@ fn main() -> Result<()> {
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
     let threads = derive_default_threads(opt.threads);
+    dbg!(threads);
     let walk_options = dua::WalkOptions {
         threads,
         byte_format: opt.format.into(),
