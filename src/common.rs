@@ -172,10 +172,6 @@ pub struct WalkResult {
 
 impl WalkResult {
     pub fn to_exit_code(&self) -> i32 {
-        if self.num_errors > 0 {
-            1
-        } else {
-            0
-        }
+        i32::from(self.num_errors > 0)
     }
 }

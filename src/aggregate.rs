@@ -186,7 +186,7 @@ pub fn aggregate(
 }
 
 fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
-    (!path.as_ref().is_file()).then(|| Color::Cyan)
+    (!path.as_ref().is_file()).then_some(Color::Cyan)
 }
 
 fn output_colored_path(
