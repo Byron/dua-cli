@@ -17,48 +17,12 @@ fn stderr_if_tty() -> Option<io::Stderr> {
     }
 }
 
-#[cfg(not(all(target_os = "macos", target_arch = "aarch64"),))]
-fn derive_default_threads(threads: usize) -> usize {
-    threads
-}
-
-/// On Apple Silicon, high-efficiency cores make file accesses slower over all, so avoid over committing for
-/// this one.
-///
-/// On macos with apple silicon, the IO subsystem is entirely different and one thread can mostly max it out.
-/// Thus using more threads just burns energy unnecessarily.
-/// It's notable that `du` is very fast even on a single core and more power efficient than dua with a single core.
-/// The default of '4' seems related to the amount of performance cores present in the system.
-/// On everything else, it's usually a good idea to use as many threads as possible for noticeable speedups.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-fn derive_default_threads(threads: usize) -> usize {
-    use sysinfo::{CpuExt, CpuRefreshKind};
-    use sysinfo::{RefreshKind, SystemExt};
-    if threads == 0 {
-        let system = sysinfo::System::new_with_specifics(
-            RefreshKind::new().with_cpu(CpuRefreshKind::default()),
-        );
-        if system.global_cpu_info().brand().starts_with("Apple M") {
-            4
-        } else {
-            eprintln!(
-                        "Couldn't auto-configure correct amount of threads for {}. Create an issue here: https://github.com/byron/dua-cli/issues",
-                        system.global_cpu_info().brand()
-                    );
-            0
-        }
-    } else {
-        threads
-    }
-}
-
 fn main() -> Result<()> {
     use options::Command::*;
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
-    let threads = derive_default_threads(opt.threads);
     let walk_options = dua::WalkOptions {
-        threads,
+        threads: opt.threads,
         byte_format: opt.format.into(),
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
