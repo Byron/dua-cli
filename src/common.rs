@@ -160,7 +160,16 @@ impl WalkOptions {
                     busy_timeout: std::time::Duration::from_secs(1),
                 },
                 1 => jwalk::Parallelism::Serial,
-                _ => jwalk::Parallelism::RayonNewPool(self.threads),
+                _ => jwalk::Parallelism::RayonExistingPool {
+                    pool: jwalk::rayon::ThreadPoolBuilder::new()
+                        .stack_size(128 * 1024)
+                        .num_threads(self.threads)
+                        .thread_name(|idx| format!("dua-fs-walk-{idx}"))
+                        .build()
+                        .expect("fields we set cannot fail")
+                        .into(),
+                    busy_timeout: None,
+                },
             })
     }
 }
