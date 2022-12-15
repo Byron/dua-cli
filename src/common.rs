@@ -156,7 +156,9 @@ impl WalkOptions {
                 }
             })
             .parallelism(match self.threads {
-                0 => jwalk::Parallelism::RayonDefaultPool,
+                0 => jwalk::Parallelism::RayonDefaultPool {
+                    busy_timeout: std::time::Duration::from_secs(1),
+                },
                 1 => jwalk::Parallelism::Serial,
                 _ => jwalk::Parallelism::RayonNewPool(self.threads),
             })
