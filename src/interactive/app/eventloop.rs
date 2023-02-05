@@ -77,6 +77,7 @@ impl AppState {
         use crosstermion::input::Key::*;
         use FocussedPane::*;
 
+        self.draw(window, traversal, *display, terminal)?;
         for event in events {
             let key = match event {
                 Event::Key(key) => key,
