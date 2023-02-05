@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.19.1 (2023-02-05)
+
+### Bug Fixes
+
+ - <csr-id-fb5a39ffb67fad80be0d2090efd34d259d439e98/> redraw window while gathering metadata in interactive mode.
+   This fixes a by now long-standing issue with interactive mode only updating
+   when keys are pressed, but not automatically.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release over the course of 52 calendar days.
+ - 53 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#143](https://github.com/Byron/dua-cli/issues/143)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#143](https://github.com/Byron/dua-cli/issues/143)**
+    - redraw window while gathering metadata in interactive mode. ([`fb5a39f`](https://github.com/Byron/dua-cli/commit/fb5a39ffb67fad80be0d2090efd34d259d439e98))
+ * **Uncategorized**
+    - update dependencies ([`662e754`](https://github.com/Byron/dua-cli/commit/662e7541d32f3d5628bfa76e1caa5978caef8bb7))
+    - Draw window before processing events, fixes #143 ([`d957a61`](https://github.com/Byron/dua-cli/commit/d957a61ac79b990fa3cf470a9b500b6f390e3a18))
+    - update dependencies ([`f7de1ab`](https://github.com/Byron/dua-cli/commit/f7de1abe9e023abfbc6c757b60085fa8e6ecb538))
+    - create our own threadpool with minimal stack instead of using the global one. ([`7802985`](https://github.com/Byron/dua-cli/commit/78029853ba687cabd37adbbdf41b2ee480bbcbf8))
+    - uprgade to latest `jwalk` version for more hang-safety ([`9bdf26a`](https://github.com/Byron/dua-cli/commit/9bdf26a7dbb7577ea10e0eac970c081a7bfa66a6))
+</details>
+
 ## 2.19.0 (2022-12-13)
 
 ### New Features
@@ -27,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -38,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.19.0 ([`53a7d15`](https://github.com/Byron/dua-cli/commit/53a7d15a1e7bb0efb70264e9bebcb08cccfdb74a))
     - Remove the handbrake on MacOS which can now deliver the expected performance. ([`f073375`](https://github.com/Byron/dua-cli/commit/f073375938f742db3259ec284c3c0d4a56fd0077))
     - resolve stalling issue of previous version. ([`d1cdfa1`](https://github.com/Byron/dua-cli/commit/d1cdfa1d682962deea5a0c48b90589becd6e19dc))
 </details>
