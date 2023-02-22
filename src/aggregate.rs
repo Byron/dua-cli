@@ -97,7 +97,7 @@ pub fn aggregate(
                 continue;
             }
         };
-        for entry in walk_options.iter_from_path(path.as_ref()) {
+        for entry in walk_options.iter_from_path(path.as_ref(), device_id) {
             stats.entries_traversed += 1;
             progress.throttled(|out| {
                 write!(out, "Enumerating {} entries\r", stats.entries_traversed).ok();

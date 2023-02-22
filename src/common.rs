@@ -1,3 +1,4 @@
+use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
 use std::path::PathBuf;
@@ -130,7 +131,7 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub(crate) fn iter_from_path(&self, path: &Path) -> WalkDir {
+    pub(crate) fn iter_from_path(&self, path: &Path, device_id: u64) -> WalkDir {
         WalkDir::new(path)
             .follow_links(false)
             .sort(match self.sorting {
@@ -140,16 +141,23 @@ impl WalkOptions {
             .skip_hidden(false)
             .process_read_dir({
                 let ignore_dirs = self.ignore_dirs.clone();
+                let cross_filesystems = self.cross_filesystems;
                 move |_, _, _, dir_entry_results| {
                     dir_entry_results.iter_mut().for_each(|dir_entry_result| {
                         if let Ok(dir_entry) = dir_entry_result {
+                            let metadata = dir_entry.metadata();
+
                             if dir_entry.file_type.is_file() || dir_entry.file_type().is_symlink() {
-                                dir_entry.client_state = Some(dir_entry.metadata());
-                            }
-                            if dir_entry.file_type.is_dir()
-                                && ignore_dirs.contains(&dir_entry.path())
-                            {
-                                dir_entry.read_children_path = None;
+                                dir_entry.client_state = Some(metadata);
+                            } else if dir_entry.file_type.is_dir() {
+                                let ok_for_fs = cross_filesystems
+                                    || metadata
+                                        .as_ref()
+                                        .map(|m| crossdev::is_same_device(device_id, m))
+                                        .unwrap_or(true);
+                                if !ok_for_fs || ignore_dirs.contains(&dir_entry.path()) {
+                                    dir_entry.read_children_path = None;
+                                }
                             }
                         }
                     })
