@@ -103,7 +103,7 @@ impl Traversal {
                 }
             };
             for (eid, entry) in walk_options
-                .iter_from_path(path.as_ref())
+                .iter_from_path(path.as_ref(), device_id)
                 .into_iter()
                 .enumerate()
             {
