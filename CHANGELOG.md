@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.19.2 (2023-02-23)
+
+### Bug Fixes
+
+ - <csr-id-31dacad6f723f379a2d12417d65177faccd67b76/> `-x` is applied to traversal as well.
+   Previously `dua` would cross filesystems for traversal and simply not
+   yield them, which somewhat defeated the purpose.
+   
+   Now it will avoid traversing into filesystem entries that are on a different
+   filesystem, which should improve its performance visibly whenever multiple
+   filesystems are involved.
+
+### Other
+
+ - <csr-id-fe956ca6f244613762bb48de79eac1f6fa399e1b/> don't recurse on cross-device filesystems
+   Like it says in the title. Right now, if you pass `-x`, dua doesn't
+   count files on other devices, but it still enumerates them. However, a
+   good reason to use `-x` is if you have network mounts that are slow, so
+   this fixes that.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 17 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - `-x` is applied to traversal as well. ([`31dacad`](https://github.com/Byron/dua-cli/commit/31dacad6f723f379a2d12417d65177faccd67b76))
+    - refactor ([`dbc9845`](https://github.com/Byron/dua-cli/commit/dbc9845c7d63d7c113f9f61b91da99ff0b249ad2))
+    - don't recurse on cross-device filesystems ([`fe956ca`](https://github.com/Byron/dua-cli/commit/fe956ca6f244613762bb48de79eac1f6fa399e1b))
+</details>
+
 ## 2.19.1 (2023-02-05)
 
 ### Bug Fixes
@@ -17,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release over the course of 52 calendar days.
+ - 7 commits contributed to the release over the course of 52 calendar days.
  - 53 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#143](https://github.com/Byron/dua-cli/issues/143)
@@ -31,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#143](https://github.com/Byron/dua-cli/issues/143)**
     - redraw window while gathering metadata in interactive mode. ([`fb5a39f`](https://github.com/Byron/dua-cli/commit/fb5a39ffb67fad80be0d2090efd34d259d439e98))
  * **Uncategorized**
+    - Release dua-cli v2.19.1 ([`e6c10c5`](https://github.com/Byron/dua-cli/commit/e6c10c5b311ad25d010f18d51f150d34bf62b815))
     - update dependencies ([`662e754`](https://github.com/Byron/dua-cli/commit/662e7541d32f3d5628bfa76e1caa5978caef8bb7))
     - Draw window before processing events, fixes #143 ([`d957a61`](https://github.com/Byron/dua-cli/commit/d957a61ac79b990fa3cf470a9b500b6f390e3a18))
     - update dependencies ([`f7de1ab`](https://github.com/Byron/dua-cli/commit/f7de1abe9e023abfbc6c757b60085fa8e6ecb538))
