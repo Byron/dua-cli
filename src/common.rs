@@ -131,8 +131,8 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub(crate) fn iter_from_path(&self, path: &Path, device_id: u64) -> WalkDir {
-        WalkDir::new(path)
+    pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+        WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
                 TraversalSorting::None => false,
@@ -153,7 +153,7 @@ impl WalkOptions {
                                 let ok_for_fs = cross_filesystems
                                     || metadata
                                         .as_ref()
-                                        .map(|m| crossdev::is_same_device(device_id, m))
+                                        .map(|m| crossdev::is_same_device(root_device_id, m))
                                         .unwrap_or(true);
                                 if !ok_for_fs || ignore_dirs.contains(&dir_entry.path()) {
                                     dir_entry.read_children_path = None;
