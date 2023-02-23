@@ -150,7 +150,7 @@ impl HelpPane {
                 );
                 hotkey(
                     "x",
-                    "Mark for the currently selected entry for deletion and move down",
+                    "Mark the currently selected entry for deletion and move down",
                     None,
                 );
                 hotkey("<Space>", "Toggle the currently selected entry", None);
