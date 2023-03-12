@@ -26,6 +26,14 @@ impl From<ByteFormat> for LibraryByteFormat {
     }
 }
 
+fn dft_format() -> ByteFormat {
+    if std::env::consts::OS == "macos" {
+        ByteFormat::Metric
+    } else {
+        ByteFormat::Binary
+    }
+}
+
 /// A tool to learn about disk usage, fast!
 #[derive(Debug, clap::Parser)]
 #[clap(name = "dua", version)]
@@ -51,7 +59,7 @@ pub struct Args {
         short = 'f',
         long,
         value_enum,
-        default_value_t = ByteFormat::Metric,
+        default_value_t = dft_format(),
         ignore_case = true,
         hide_default_value = true,
         hide_possible_values = true
