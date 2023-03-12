@@ -1,5 +1,5 @@
 use dua::ByteFormat as LibraryByteFormat;
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ByteFormat {
@@ -27,10 +27,10 @@ impl From<ByteFormat> for LibraryByteFormat {
 }
 
 fn dft_format() -> ByteFormat {
-    if env::consts::OS != "macos" {
-        ByteFormat::Binary
-    } else {
+    if std::env::consts::OS == "macos" {
         ByteFormat::Metric
+    } else {
+        ByteFormat::Binary
     }
 }
 
