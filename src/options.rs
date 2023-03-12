@@ -27,7 +27,7 @@ impl From<ByteFormat> for LibraryByteFormat {
 }
 
 fn dft_format() -> ByteFormat {
-    if std::env::consts::OS == "macos" {
+    if cfg!(target_vendor = "apple") {
         ByteFormat::Metric
     } else {
         ByteFormat::Binary
@@ -47,22 +47,13 @@ pub struct Args {
     #[clap(short = 't', long = "threads", default_value_t = 0)]
     pub threads: usize,
 
-    /// The format with which to print byte counts:
-    /// metric - uses 1000 as base (default),
-    /// binary - uses 1024 as base,
-    /// bytes - plain bytes without any formatting,
-    /// GB - only gigabytes,
-    /// GiB - only gibibytes,
-    /// MB - only megabytes,
-    /// MiB - only mebibytes
+    /// The format with which to print byte counts.
     #[clap(
         short = 'f',
         long,
         value_enum,
         default_value_t = dft_format(),
         ignore_case = true,
-        hide_default_value = true,
-        hide_possible_values = true
     )]
     pub format: ByteFormat,
 
