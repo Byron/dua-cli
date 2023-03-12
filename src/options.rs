@@ -1,5 +1,5 @@
 use dua::ByteFormat as LibraryByteFormat;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ByteFormat {
@@ -23,6 +23,14 @@ impl From<ByteFormat> for LibraryByteFormat {
             ByteFormat::MB => LibraryByteFormat::MB,
             ByteFormat::Mib => LibraryByteFormat::MiB,
         }
+    }
+}
+
+fn dft_format() -> ByteFormat {
+    if env::consts::OS != "macos" {
+        ByteFormat::Binary
+    } else {
+        ByteFormat::Metric
     }
 }
 
@@ -51,7 +59,7 @@ pub struct Args {
         short = 'f',
         long,
         value_enum,
-        default_value_t = ByteFormat::Metric,
+        default_value_t = dft_format(),
         ignore_case = true,
         hide_default_value = true,
         hide_possible_values = true
