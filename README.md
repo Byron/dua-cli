@@ -56,8 +56,11 @@ For _Unix_…
 ```
 cargo install dua-cli
 
-# And if you don't need a terminal user interface
+# And if you don't need a terminal user interface (most compatible)
 cargo install dua-cli --no-default-features
+
+# Compiles on most platforms, with terminal user interface
+cargo install dua-cli --no-default-features --features tui-crossplatform
 ```
 
 For _Windows_, nightly features are currently required.
