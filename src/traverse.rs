@@ -1,4 +1,4 @@
-use crate::{crossdev, get_size_or_panic, InodeFilter, WalkOptions};
+use crate::{crossdev, get_size_or_panic, InodeFilter, Throttle, WalkOptions};
 use anyhow::Result;
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
@@ -6,7 +6,7 @@ use std::{
     fs::Metadata,
     io,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 pub type TreeIndex = NodeIndex;
@@ -20,8 +20,6 @@ pub struct EntryData {
     /// If set, the item meta-data could not be obtained
     pub metadata_io_error: bool,
 }
-
-const REFRESH_RATE: Duration = Duration::from_millis(100);
 
 /// The result of the previous filesystem traversal
 #[derive(Default, Debug)]
@@ -74,10 +72,7 @@ impl Traversal {
         let mut previous_depth = 0;
         let mut inodes = InodeFilter::default();
 
-        let mut last_checked = Instant::now();
-
-        const INITIAL_CHECK_INTERVAL: usize = 500;
-        let mut check_instant_every = INITIAL_CHECK_INTERVAL;
+        let throttle = Throttle::new(Duration::from_millis(250), None);
         if walk_options.threads == 0 {
             // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
             // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
@@ -94,7 +89,6 @@ impl Traversal {
         }
 
         for path in input.into_iter() {
-            let mut last_seen_eid = 0;
             let device_id = match crossdev::init(path.as_ref()) {
                 Ok(id) => id,
                 Err(_) => {
@@ -102,10 +96,9 @@ impl Traversal {
                     continue;
                 }
             };
-            for (eid, entry) in walk_options
+            for entry in walk_options
                 .iter_from_path(path.as_ref(), device_id)
                 .into_iter()
-                .enumerate()
             {
                 t.entries_traversed += 1;
                 let mut data = EntryData::default();
@@ -191,19 +184,7 @@ impl Traversal {
                     }
                 }
 
-                if eid != 0
-                    && eid % check_instant_every == 0
-                    && last_checked.elapsed() >= REFRESH_RATE
-                {
-                    let now = Instant::now();
-                    let elapsed = (now - last_checked).as_millis() as f64;
-                    check_instant_every = (INITIAL_CHECK_INTERVAL as f64
-                        * ((eid - last_seen_eid) as f64 / INITIAL_CHECK_INTERVAL as f64)
-                        * (REFRESH_RATE.as_millis() as f64 / elapsed))
-                        .max(1.0) as usize;
-                    last_seen_eid = eid;
-                    last_checked = now;
-
+                if throttle.can_update() {
                     if update(&mut t)? {
                         return Ok(None);
                     }

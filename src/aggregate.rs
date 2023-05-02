@@ -25,7 +25,7 @@ pub fn aggregate(
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
-    let progress = Throttle::new(Duration::from_millis(100));
+    let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
 
     for path in paths.into_iter() {
         num_roots += 1;

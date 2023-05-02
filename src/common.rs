@@ -124,14 +124,16 @@ pub struct Throttle {
 }
 
 impl Throttle {
-    pub fn new(duration: Duration) -> Self {
+    pub fn new(duration: Duration, initial_sleep: Option<Duration>) -> Self {
         let instance = Self {
             trigger: Default::default(),
         };
 
         let trigger = Arc::downgrade(&instance.trigger);
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(1));
+            if let Some(duration) = initial_sleep {
+                std::thread::sleep(duration)
+            }
             while let Some(t) = trigger.upgrade() {
                 t.store(true, Ordering::Relaxed);
                 std::thread::sleep(duration);
@@ -145,9 +147,14 @@ impl Throttle {
     where
         F: FnOnce(),
     {
-        if self.trigger.swap(false, Ordering::Relaxed) {
+        if self.can_update() {
             f()
         }
+    }
+
+    /// Return `true` if we are not currently throttled.
+    pub fn can_update(&self) -> bool {
+        self.trigger.swap(false, Ordering::Relaxed)
     }
 }
 
