@@ -102,7 +102,11 @@ impl HelpPane {
                     "Close the current pane. Closes the program if no",
                     Some("pane is open"),
                 );
-                hotkey("<Tab>", "Cycle between all open panes", None);
+                hotkey(
+                    "<Tab>",
+                    "Cycle between all open panes.",
+                    Some("Activate 'Marked Items' pane to delete selected files."),
+                );
                 hotkey("?", "Show or hide the help pane", None);
                 spacer();
             }
