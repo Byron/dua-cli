@@ -2,6 +2,9 @@ use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use std::{fmt, path::Path};
 
 pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
@@ -112,6 +115,40 @@ impl fmt::Display for ByteFormatDisplay {
 pub enum TraversalSorting {
     None,
     AlphabeticalByFileName,
+}
+
+/// Throttle access to an optional `io::Write` to the specified `Duration`
+#[derive(Debug)]
+pub struct Throttle {
+    trigger: Arc<AtomicBool>,
+}
+
+impl Throttle {
+    pub fn new(duration: Duration) -> Self {
+        let instance = Self {
+            trigger: Default::default(),
+        };
+
+        let trigger = Arc::downgrade(&instance.trigger);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(1));
+            while let Some(t) = trigger.upgrade() {
+                t.store(true, Ordering::Relaxed);
+                std::thread::sleep(duration);
+            }
+        });
+
+        instance
+    }
+
+    pub fn throttled<F>(&self, f: F)
+    where
+        F: FnOnce(),
+    {
+        if self.trigger.swap(false, Ordering::Relaxed) {
+            f()
+        }
+    }
 }
 
 /// Configures a filesystem walk, including output and formatting options.

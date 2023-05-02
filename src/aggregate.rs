@@ -1,73 +1,16 @@
-use crate::{crossdev, InodeFilter, WalkOptions, WalkResult};
+use crate::{crossdev, InodeFilter, Throttle, WalkOptions, WalkResult};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
+use std::time::Duration;
 use std::{io, path::Path};
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
-
-/// Throttle access to an optional `io::Write` to the specified `Duration`
-#[derive(Debug)]
-struct ThrottleWriter<W> {
-    out: Option<W>,
-    trigger: Arc<AtomicBool>,
-}
-
-impl<W> ThrottleWriter<W>
-where
-    W: io::Write,
-{
-    fn new(out: Option<W>, duration: Duration) -> Self {
-        let writer = Self {
-            out,
-            trigger: Default::default(),
-        };
-
-        if writer.out.is_some() {
-            let trigger = Arc::downgrade(&writer.trigger);
-            thread::spawn(move || {
-                thread::sleep(Duration::from_secs(1));
-                while let Some(t) = trigger.upgrade() {
-                    t.store(true, Ordering::Relaxed);
-                    thread::sleep(duration);
-                }
-            });
-        }
-
-        writer
-    }
-
-    fn throttled<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut W),
-    {
-        if self.trigger.swap(false, Ordering::Relaxed) {
-            self.unthrottled(f);
-        }
-    }
-
-    fn unthrottled<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut W),
-    {
-        if let Some(ref mut out) = self.out {
-            f(out);
-        }
-    }
-}
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
     mut out: impl io::Write,
-    err: Option<impl io::Write>,
+    mut err: Option<impl io::Write>,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
@@ -82,7 +25,7 @@ pub fn aggregate(
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
-    let mut progress = ThrottleWriter::new(err, Duration::from_millis(100));
+    let progress = Throttle::new(Duration::from_millis(100));
 
     for path in paths.into_iter() {
         num_roots += 1;
@@ -99,8 +42,10 @@ pub fn aggregate(
         };
         for entry in walk_options.iter_from_path(path.as_ref(), device_id) {
             stats.entries_traversed += 1;
-            progress.throttled(|out| {
-                write!(out, "Enumerating {} entries\r", stats.entries_traversed).ok();
+            progress.throttled(|| {
+                if let Some(err) = err.as_mut() {
+                    write!(err, "Enumerating {} entries\r", stats.entries_traversed).ok();
+                }
             });
             match entry {
                 Ok(entry) => {
@@ -134,9 +79,10 @@ pub fn aggregate(
                 Err(_) => num_errors += 1,
             }
         }
-        progress.unthrottled(|out| {
-            write!(out, "\x1b[2K\r").ok();
-        });
+
+        if let Some(err) = err.as_mut() {
+            write!(err, "\x1b[2K\r").ok();
+        }
 
         if sort_by_size_in_bytes {
             aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
