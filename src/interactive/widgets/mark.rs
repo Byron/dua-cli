@@ -105,7 +105,7 @@ impl MarkPane {
         &self.marked
     }
     pub fn into_paths(self) -> impl Iterator<Item = PathBuf> {
-        self.marked.into_iter().map(|(_k, v)| v.path)
+        self.marked.into_values().map(|v| v.path)
     }
     pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         let action = None;

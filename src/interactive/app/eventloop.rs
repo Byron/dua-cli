@@ -14,17 +14,12 @@ use std::{collections::BTreeMap, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub enum FocussedPane {
+    #[default]
     Main,
     Help,
     Mark,
-}
-
-impl Default for FocussedPane {
-    fn default() -> Self {
-        FocussedPane::Main
-    }
 }
 
 #[derive(Default)]

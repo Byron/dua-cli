@@ -1,23 +1,18 @@
 use dua::{ByteFormat, WalkOptions};
 use std::fmt;
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub enum ByteVisualization {
     Percentage,
     Bar,
     LongBar,
+    #[default]
     PercentageAndBar,
 }
 
 pub struct DisplayByteVisualization {
     format: ByteVisualization,
     percentage: f32,
-}
-
-impl Default for ByteVisualization {
-    fn default() -> Self {
-        ByteVisualization::PercentageAndBar
-    }
 }
 
 impl ByteVisualization {

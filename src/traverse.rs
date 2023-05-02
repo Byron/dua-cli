@@ -184,10 +184,8 @@ impl Traversal {
                     }
                 }
 
-                if throttle.can_update() {
-                    if update(&mut t)? {
-                        return Ok(None);
-                    }
+                if throttle.can_update() && update(&mut t)? {
+                    return Ok(None);
                 }
             }
         }

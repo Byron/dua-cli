@@ -4,8 +4,9 @@ use itertools::Itertools;
 use petgraph::Direction;
 use unicode_segmentation::UnicodeSegmentation;
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum SortMode {
+    #[default]
     SizeDescending,
     SizeAscending,
 }
@@ -17,12 +18,6 @@ impl SortMode {
             SizeAscending => SizeDescending,
             SizeDescending => SizeAscending,
         }
-    }
-}
-
-impl Default for SortMode {
-    fn default() -> Self {
-        SortMode::SizeDescending
     }
 }
 
