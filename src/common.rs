@@ -12,7 +12,7 @@ pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
         .expect("node should always be retrievable with valid index")
 }
 
-pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u128 {
+pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u64 {
     get_entry_or_panic(tree, node_idx).size
 }
 
@@ -57,7 +57,7 @@ impl ByteFormat {
             }
             + THE_SPACE_BETWEEN_UNIT_AND_NUMBER
     }
-    pub fn display(self, bytes: u128) -> ByteFormatDisplay {
+    pub fn display(self, bytes: u64) -> ByteFormatDisplay {
         ByteFormatDisplay {
             format: self,
             bytes,
@@ -67,7 +67,7 @@ impl ByteFormat {
 
 pub struct ByteFormatDisplay {
     format: ByteFormat,
-    bytes: u128,
+    bytes: u64,
 }
 
 impl fmt::Display for ByteFormatDisplay {
@@ -89,7 +89,7 @@ impl fmt::Display for ByteFormatDisplay {
             (_, Some((divisor, unit))) => Byte::from_unit(self.bytes as f64 / divisor as f64, unit)
                 .expect("byte count > 0")
                 .get_adjusted_unit(unit),
-            (binary, None) => Byte::from_bytes(self.bytes).get_appropriate_unit(binary),
+            (binary, None) => Byte::from_bytes(self.bytes as u128).get_appropriate_unit(binary),
         }
         .format(2);
         let mut splits = b.split(' ');
@@ -175,7 +175,7 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+    pub fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
         WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
@@ -223,6 +223,130 @@ impl WalkOptions {
                     busy_timeout: None,
                 },
             })
+    }
+}
+
+pub enum FlowControl {
+    Continue,
+    Abort,
+}
+
+#[cfg(unix)]
+pub fn file_size_on_disk(meta: &::moonwalk::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    meta.blocks() * 512
+}
+
+#[cfg(windows)]
+pub fn file_size_on_disk(meta: &::moonwalk::Metadata) -> u64 {
+    // TODO: use `windows` crate, remove `filesize` crate
+    meta.len()
+}
+
+#[cfg(all(not(unix), not(windows)))]
+pub fn file_size_on_disk(meta: &::moonwalk::Metadata) -> u64 {
+    meta.len()
+}
+
+mod moonwalk {
+    use crate::{crossdev, FlowControl, WalkOptions};
+    use moonwalk::{DirEntry, WalkState};
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+
+    impl WalkOptions {
+        /// Returns the amount of IO errors we encountered.
+        pub fn moonwalk_from_path(
+            &self,
+            root: &Path,
+            root_device_id: u64,
+            update: impl Fn(std::io::Result<&mut DirEntry<'_>>, Option<usize>) -> FlowControl
+                + Send
+                + Clone,
+            needs_depth: bool,
+        ) -> std::io::Result<()> {
+            let delegate = Delegate {
+                cb: update,
+                root_device_id,
+                storage: Default::default(),
+                needs_depth,
+                opts: self.clone(),
+            };
+
+            let mut builder = moonwalk::WalkBuilder::new();
+            builder.follow_links(false);
+            builder.run_parallel(root, self.threads, delegate, root.into())?;
+
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct Delegate<CB> {
+        cb: CB,
+        root_device_id: u64,
+        storage: PathBuf,
+        needs_depth: bool,
+        opts: WalkOptions,
+    }
+
+    impl<CB> moonwalk::VisitorParallel for Delegate<CB>
+    where
+        CB: for<'a> Fn(std::io::Result<&'a mut DirEntry>, Option<usize>) -> FlowControl
+            + Send
+            + Clone,
+    {
+        type State = OsString;
+
+        fn visit<'a>(
+            &mut self,
+            parents: impl Iterator<Item = &'a Self::State>,
+            dent: std::io::Result<&mut DirEntry<'_>>,
+        ) -> WalkState<Self::State> {
+            match dent {
+                Ok(dent) => {
+                    let is_dir = dent.file_type().is_dir();
+                    if is_dir {
+                        if let Ok(meta) = dent.metadata() {
+                            let ok_for_fs = self.opts.cross_filesystems
+                                || crossdev::is_same_device_moonwalk(self.root_device_id, meta);
+                            if !ok_for_fs {
+                                return WalkState::Skip;
+                            } else if !self.opts.ignore_dirs.is_empty() {
+                                let is_ignored = {
+                                    let p = &mut self.storage;
+                                    p.clear();
+                                    p.extend(parents);
+                                    p.push(dent.file_name());
+                                    self.opts.ignore_dirs.contains(&p)
+                                };
+
+                                if is_ignored {
+                                    return WalkState::Skip;
+                                }
+                            }
+                        }
+                        WalkState::Continue(dent.file_name().to_owned())
+                    } else {
+                        match (self.cb)(Ok(dent), self.needs_depth.then(|| parents.count())) {
+                            FlowControl::Abort => WalkState::Quit,
+                            FlowControl::Continue => WalkState::Skip,
+                        }
+                    }
+                }
+                Err(err) => match (self.cb)(Err(err), self.needs_depth.then(|| parents.count())) {
+                    FlowControl::Abort => WalkState::Quit,
+                    FlowControl::Continue => WalkState::Skip,
+                },
+            }
+        }
+
+        fn pop_dir<'a>(
+            &mut self,
+            _state: Self::State,
+            _parents: impl Iterator<Item = &'a Self::State>,
+        ) {
+        }
     }
 }
 

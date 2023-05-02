@@ -9,14 +9,6 @@ mod crossdev;
 mod interactive;
 mod options;
 
-fn stderr_if_tty() -> Option<io::Stderr> {
-    if atty::is(atty::Stream::Stderr) {
-        Some(io::stderr())
-    } else {
-        None
-    }
-}
-
 fn main() -> Result<()> {
     use options::Command::*;
 
@@ -97,7 +89,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
                 stdout_locked,
-                stderr_if_tty(),
+                atty::is(atty::Stream::Stderr),
                 walk_options,
                 !no_total,
                 !no_sort,
@@ -113,7 +105,7 @@ fn main() -> Result<()> {
             let stdout_locked = stdout.lock();
             dua::aggregate(
                 stdout_locked,
-                stderr_if_tty(),
+                atty::is(atty::Stream::Stderr),
                 walk_options,
                 true,
                 true,

@@ -12,7 +12,7 @@ use tui::{
 pub struct Footer;
 
 pub struct FooterProps {
-    pub total_bytes: Option<u128>,
+    pub total_bytes: Option<u64>,
     pub entries_traversed: u64,
     pub traversal_start: std::time::Instant,
     pub elapsed: Option<std::time::Duration>,

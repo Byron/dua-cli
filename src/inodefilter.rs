@@ -33,7 +33,7 @@ impl InodeFilter {
         true
     }
 
-    pub fn add_dev_inode(&mut self, dev_inode: (u64, u64), nlinks: u64) -> bool {
+    pub(crate) fn add_dev_inode(&mut self, dev_inode: (u64, u64), nlinks: u64) -> bool {
         if nlinks <= 1 {
             return true;
         }

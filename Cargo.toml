@@ -20,6 +20,7 @@ trash-move = ["trash"]
 [dependencies]
 clap = { version = "4.0.29", features = ["derive"] }
 jwalk = "0.8.1"
+moonwalk = { version = "0.1.0", git = "https://github.com/pascalkuthe/moonwalk", branch = "parents-clone" }
 byte-unit = "4"
 atty = "0.2.11"
 petgraph = "0.6"

@@ -34,7 +34,7 @@ pub enum MarkMode {
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
 pub struct EntryMark {
-    pub size: u128,
+    pub size: u64,
     pub path: PathBuf,
     pub index: usize,
     pub num_errors_during_deletion: usize,
@@ -239,7 +239,7 @@ impl MarkPane {
         let title = format!(
             "Marked {} items ({}) ",
             marked.len(),
-            format.display(marked.iter().map(|(_k, v)| v.size).sum::<u128>())
+            format.display(marked.iter().map(|(_k, v)| v.size).sum::<u64>())
         );
         let selected = self.selected;
         let has_focus = self.has_focus;

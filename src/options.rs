@@ -57,11 +57,11 @@ pub struct Args {
     )]
     pub format: ByteFormat,
 
-    /// Display apparent size instead of disk usage.
+    /// Display apparent size instead of disk usage (faster)
     #[clap(short = 'A', long)]
     pub apparent_size: bool,
 
-    /// Count hard-linked files each time they are seen
+    /// Count hard-linked files each time they are seen (slower)
     #[clap(short = 'l', long)]
     pub count_hard_links: bool,
 
