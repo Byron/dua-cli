@@ -292,6 +292,7 @@ dependencies = [
  "num_cpus",
  "open",
  "owo-colors",
+ "parking_lot",
  "petgraph",
  "pretty_assertions",
  "trash",

@@ -121,7 +121,7 @@ fn main() -> Result<()> {
 fn paths_from(paths: Vec<PathBuf>, cross_filesystems: bool) -> Result<Vec<PathBuf>, io::Error> {
     let device_id = std::env::current_dir()
         .ok()
-        .and_then(|cwd| crossdev::init(&cwd).ok());
+        .and_then(|cwd| crossdev::init(&cwd).ok().map(|(id, _)| id));
 
     if paths.is_empty() {
         cwd_dirlist().map(|paths| match device_id {

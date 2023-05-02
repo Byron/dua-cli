@@ -78,7 +78,7 @@ impl Traversal {
         let mut sizes_per_depth_level = Vec::new();
         let mut current_size_at_depth: u64 = 0;
         let mut previous_depth = 0;
-        let mut inodes = InodeFilter::default();
+        let inodes = InodeFilter::default();
 
         let throttle = Throttle::new(Duration::from_millis(250), None);
         if walk_options.threads == 0 {
@@ -97,7 +97,7 @@ impl Traversal {
         }
 
         for path in input.into_iter() {
-            let device_id = match crossdev::init(path.as_ref()) {
+            let (device_id, _meta) = match crossdev::init(path.as_ref()) {
                 Ok(id) => id,
                 Err(_) => {
                     t.io_errors += 1;
@@ -120,7 +120,7 @@ impl Traversal {
                         let file_size = match &entry.client_state {
                             Some(Ok(ref m))
                                 if !m.is_dir()
-                                    && (walk_options.count_hard_links || inodes.add(m))
+                                    && (walk_options.count_hard_links || inodes.is_first(m))
                                     && (walk_options.cross_filesystems
                                         || crossdev::is_same_device(device_id, m)) =>
                             {

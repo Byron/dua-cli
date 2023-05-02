@@ -1,7 +1,9 @@
+use crate::inodefilter::InodeFilter;
 use crate::{crossdev, file_size_on_disk, FlowControl, Throttle, WalkOptions, WalkResult};
 use anyhow::Result;
 use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{io, path::Path};
 
@@ -24,7 +26,7 @@ pub fn aggregate(
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
-    // let mut inodes = InodeFilter::default();
+    let inodes = Arc::new(InodeFilter::default());
     let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
 
     for path in paths.into_iter() {
@@ -33,8 +35,7 @@ pub fn aggregate(
         let entries_traversed = AtomicU64::default();
         let largest_file_in_bytes = AtomicU64::new(0);
         let smallest_file_in_bytes = AtomicU64::new(u64::MAX);
-        let num_errors = AtomicU64::default();
-        let device_id = match crossdev::init(path.as_ref()) {
+        let (device_id, meta) = match crossdev::init(path.as_ref()) {
             Ok(id) => id,
             Err(_) => {
                 res.num_errors += 1;
@@ -46,46 +47,70 @@ pub fn aggregate(
                 continue;
             }
         };
-        walk_options.moonwalk_from_path(
-            path.as_ref(),
-            device_id,
-            |entry, _depth| {
+        let num_errors = AtomicU64::default();
+        let count_size = {
+            let inodes = inodes.clone();
+            let apparent_size = walk_options.apparent_size;
+            let count_hard_links = walk_options.count_hard_links;
+            let smallest_file_in_bytes = &smallest_file_in_bytes;
+            let largest_file_in_bytes = &largest_file_in_bytes;
+            let entries_traversed = &entries_traversed;
+            let num_bytes = &num_bytes;
+            move |meta: &moonwalk::Metadata| {
                 entries_traversed.fetch_add(1, Ordering::SeqCst);
-                progress.throttled(|| {
-                    if progress_to_stderr {
-                        eprint!(
-                            "Enumerating {} entries\r",
-                            entries_traversed.load(Ordering::Relaxed)
-                        );
+                let file_size = {
+                    if count_hard_links || inodes.is_first_moonwalk(meta) {
+                        if apparent_size {
+                            meta.len()
+                        } else {
+                            file_size_on_disk(meta)
+                        }
+                    } else {
+                        0
                     }
-                });
-                match entry {
-                    Ok(entry) => {
-                        let file_size = {
-                            let meta = entry
-                                .metadata()
-                                .expect("we are called only if this is cached");
-                            // TODO: count hard links, right now we may double-count
-                            // (walk_options.count_hard_links || inodes.add(m))
-                            if walk_options.apparent_size {
-                                meta.len()
-                            } else {
-                                file_size_on_disk(meta)
-                            }
-                        };
+                };
 
-                        largest_file_in_bytes.fetch_max(file_size, Ordering::SeqCst);
-                        smallest_file_in_bytes.fetch_min(file_size, Ordering::SeqCst);
-                        num_bytes.fetch_add(file_size, Ordering::SeqCst);
+                largest_file_in_bytes.fetch_max(file_size, Ordering::SeqCst);
+                smallest_file_in_bytes.fetch_min(file_size, Ordering::SeqCst);
+                num_bytes.fetch_add(file_size, Ordering::SeqCst);
+            }
+        };
+        if meta.is_dir() {
+            walk_options.moonwalk_from_path(
+                path.as_ref(),
+                device_id,
+                {
+                    let progress = &progress;
+                    let entries_traversed = &entries_traversed;
+                    let num_errors = &num_errors;
+                    move |entry, _depth| {
+                        match entry {
+                            Ok(entry) => {
+                                if let Ok(meta) = entry.metadata() {
+                                    count_size(meta);
+                                }
+
+                                progress.throttled(|| {
+                                    if progress_to_stderr {
+                                        eprint!(
+                                            "Enumerating {} entries\r",
+                                            entries_traversed.load(Ordering::Relaxed)
+                                        );
+                                    }
+                                });
+                            }
+                            Err(_err) => {
+                                num_errors.fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
+                        FlowControl::Continue
                     }
-                    Err(_err) => {
-                        num_errors.fetch_add(1, Ordering::SeqCst);
-                    }
-                }
-                FlowControl::Continue
-            },
-            false,
-        )?;
+                },
+                false,
+            )?;
+        } else {
+            count_size(&meta.into());
+        }
         stats.entries_traversed = entries_traversed.load(Ordering::Relaxed);
         stats.largest_file_in_bytes = largest_file_in_bytes.load(Ordering::Relaxed);
         stats.smallest_file_in_bytes = smallest_file_in_bytes.load(Ordering::Relaxed);

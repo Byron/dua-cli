@@ -1,10 +1,10 @@
 use std::{io, path::Path};
 
 #[cfg(unix)]
-pub fn init(path: &Path) -> io::Result<u64> {
+pub fn init(path: &Path) -> io::Result<(u64, std::fs::Metadata)> {
     use std::os::unix::fs::MetadataExt;
 
-    path.metadata().map(|m| m.dev())
+    path.metadata().map(|m| (m.dev(), m))
 }
 
 #[cfg(unix)]
@@ -20,8 +20,8 @@ pub fn is_same_device(_device_id: u64, _meta: &std::fs::Metadata) -> bool {
 }
 
 #[cfg(not(unix))]
-pub fn init(_path: &Path) -> io::Result<u64> {
-    Ok(0)
+pub fn init(path: &Path) -> io::Result<(u64, std::fs::Metadata)> {
+    path.metadata().map(|m| (0, m))
 }
 
 #[cfg(unix)]
