@@ -260,7 +260,7 @@ mod moonwalk {
             &self,
             root: &Path,
             root_device_id: u64,
-            update: impl Fn(std::io::Result<&mut DirEntry<'_>>, Option<usize>) -> FlowControl
+            update: impl FnMut(std::io::Result<&mut DirEntry<'_>>, Option<usize>) -> FlowControl
                 + Send
                 + Clone,
             needs_depth: bool,
@@ -292,7 +292,7 @@ mod moonwalk {
 
     impl<CB> moonwalk::VisitorParallel for Delegate<CB>
     where
-        CB: for<'a> Fn(std::io::Result<&'a mut DirEntry>, Option<usize>) -> FlowControl
+        CB: for<'a> FnMut(std::io::Result<&'a mut DirEntry>, Option<usize>) -> FlowControl
             + Send
             + Clone,
     {

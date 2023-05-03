@@ -6,6 +6,7 @@ use crate::interactive::{
 };
 use anyhow::Result;
 use crosstermion::input::{input_channel, Event, Key};
+use dua::traverse::ThreadSafeTraversal;
 use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
