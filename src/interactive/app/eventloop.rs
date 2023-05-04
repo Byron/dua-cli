@@ -6,7 +6,6 @@ use crate::interactive::{
 };
 use anyhow::Result;
 use crosstermion::input::{input_channel, Event, Key};
-use dua::traverse::ThreadSafeTraversal;
 use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
@@ -252,10 +251,10 @@ impl TerminalApp {
 
         let mut state = None::<AppState>;
         let mut received_events = false;
-        let traversal = Traversal::from_walk(options, input_paths, |traversal| {
+        let traversal = Traversal::from_moonwalk(options, input_paths, |traversal| {
             let s = match state.as_mut() {
                 Some(s) => {
-                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
+                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting);
                     if !received_events {
                         s.selected = s.entries.get(0).map(|b| b.index);
                     }
@@ -265,7 +264,7 @@ impl TerminalApp {
                     state = Some({
                         let sorting = Default::default();
                         let entries =
-                            sorted_entries(&traversal.tree, traversal.root_index, sorting);
+                            sorted_entries(&traversal.tree.lock(), traversal.root_index, sorting);
                         AppState {
                             root: traversal.root_index,
                             sorting,
@@ -305,7 +304,7 @@ impl TerminalApp {
                     let mut s = state.unwrap_or_else(|| {
                         let sorting = Default::default();
                         let root = traversal.root_index;
-                        let entries = sorted_entries(&traversal.tree, root, sorting);
+                        let entries = sorted_entries(&traversal.tree.lock(), root, sorting);
                         AppState {
                             root,
                             entries,
@@ -314,7 +313,7 @@ impl TerminalApp {
                         }
                     });
                     s.is_scanning = false;
-                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
+                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting);
                     s.selected = if received_events {
                         s.selected.or_else(|| s.entries.get(0).map(|b| b.index))
                     } else {

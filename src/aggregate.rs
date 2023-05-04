@@ -76,38 +76,33 @@ pub fn aggregate(
             }
         };
         if meta.is_dir() {
-            walk_options.moonwalk_from_path(
-                path.as_ref(),
-                device_id,
-                {
-                    let progress = &progress;
-                    let entries_traversed = &entries_traversed;
-                    let num_errors = &num_errors;
-                    move |entry, _depth| {
-                        match entry {
-                            Ok(entry) => {
-                                if let Ok(meta) = entry.metadata() {
-                                    count_size(meta);
-                                }
+            walk_options.moonwalk_from_path(path.as_ref(), device_id, {
+                let progress = &progress;
+                let entries_traversed = &entries_traversed;
+                let num_errors = &num_errors;
+                move |entry| {
+                    match entry {
+                        Ok(entry) => {
+                            if let Ok(meta) = entry.metadata() {
+                                count_size(meta);
+                            }
 
-                                progress.throttled(|| {
-                                    if progress_to_stderr {
-                                        eprint!(
-                                            "Enumerating {} entries\r",
-                                            entries_traversed.load(Ordering::Relaxed)
-                                        );
-                                    }
-                                });
-                            }
-                            Err(_err) => {
-                                num_errors.fetch_add(1, Ordering::SeqCst);
-                            }
+                            progress.throttled(|| {
+                                if progress_to_stderr {
+                                    eprint!(
+                                        "Enumerating {} entries\r",
+                                        entries_traversed.load(Ordering::Relaxed)
+                                    );
+                                }
+                            });
                         }
-                        FlowControl::Continue
+                        Err(_err) => {
+                            num_errors.fetch_add(1, Ordering::SeqCst);
+                        }
                     }
-                },
-                false,
-            )?;
+                    FlowControl::Continue
+                }
+            })?;
         } else {
             count_size(&meta.into());
         }

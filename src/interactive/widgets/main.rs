@@ -41,9 +41,9 @@ impl MainWindow {
                 Traversal {
                     tree,
                     entries_traversed,
-                    total_bytes,
                     start,
                     elapsed,
+                    total_bytes,
                     ..
                 },
             display,
@@ -123,7 +123,7 @@ impl MainWindow {
 
         let marked = self.mark_pane.as_ref().map(|p| p.marked());
         let props = EntriesProps {
-            tree,
+            tree: &tree.lock(),
             root: state.root,
             display: *display,
             entries: &state.entries,
@@ -139,9 +139,9 @@ impl MainWindow {
                 total_bytes: *total_bytes,
                 format: display.byte_format,
                 entries_traversed: *entries_traversed,
-                message: state.message.clone(),
-                traversal_start: *start,
                 elapsed: *elapsed,
+                traversal_start: *start,
+                message: state.message.clone(),
             },
             footer_area,
             buf,

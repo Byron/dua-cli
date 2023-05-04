@@ -6,14 +6,7 @@ pub struct InodeFilter {
 }
 
 impl InodeFilter {
-    #[cfg(unix)]
-    pub fn is_first(&self, metadata: &std::fs::Metadata) -> bool {
-        use std::os::unix::fs::MetadataExt;
-
-        self.add_dev_inode((metadata.dev(), metadata.ino()), metadata.nlink())
-    }
-
-    #[cfg(windows)]
+    #[cfg(not(any(unix, windows)))]
     pub fn is_first(&self, metadata: &std::fs::Metadata) -> bool {
         use std::os::windows::fs::MetadataExt;
 
@@ -26,11 +19,6 @@ impl InodeFilter {
         } else {
             true
         }
-    }
-
-    #[cfg(not(any(unix, windows)))]
-    pub fn is_first(&self, metadata: &std::fs::Metadata) -> bool {
-        true
     }
 
     #[cfg(unix)]

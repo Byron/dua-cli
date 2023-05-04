@@ -260,16 +260,12 @@ mod moonwalk {
             &self,
             root: &Path,
             root_device_id: u64,
-            update: impl FnMut(std::io::Result<&mut DirEntry<'_>>, Option<usize>) -> FlowControl
-                + Send
-                + Clone,
-            needs_depth: bool,
+            update: impl FnMut(std::io::Result<&mut DirEntry<'_>>) -> FlowControl + Send + Clone,
         ) -> std::io::Result<()> {
             let delegate = Delegate {
                 cb: update,
                 root_device_id,
                 storage: Default::default(),
-                needs_depth,
                 opts: self.clone(),
             };
 
@@ -286,15 +282,12 @@ mod moonwalk {
         cb: CB,
         root_device_id: u64,
         storage: PathBuf,
-        needs_depth: bool,
         opts: WalkOptions,
     }
 
     impl<CB> moonwalk::VisitorParallel for Delegate<CB>
     where
-        CB: for<'a> FnMut(std::io::Result<&'a mut DirEntry>, Option<usize>) -> FlowControl
-            + Send
-            + Clone,
+        CB: for<'a> FnMut(std::io::Result<&'a mut DirEntry>) -> FlowControl + Send + Clone,
     {
         type State = OsString;
 
@@ -328,13 +321,13 @@ mod moonwalk {
                         }
                         WalkState::Continue(dent.file_name().to_owned())
                     } else {
-                        match (self.cb)(Ok(dent), self.needs_depth.then(|| parents.count())) {
+                        match (self.cb)(Ok(dent)) {
                             FlowControl::Abort => WalkState::Quit,
                             FlowControl::Continue => WalkState::Skip,
                         }
                     }
                 }
-                Err(err) => match (self.cb)(Err(err), self.needs_depth.then(|| parents.count())) {
+                Err(err) => match (self.cb)(Err(err)) {
                     FlowControl::Abort => WalkState::Quit,
                     FlowControl::Continue => WalkState::Skip,
                 },
