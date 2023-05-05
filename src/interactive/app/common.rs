@@ -9,14 +9,16 @@ pub enum SortMode {
     #[default]
     SizeDescending,
     SizeAscending,
+    Alphabetically,
 }
 
 impl SortMode {
     pub fn toggle_size(&mut self) {
         use SortMode::*;
         *self = match self {
-            SizeAscending => SizeDescending,
+            SizeAscending => Alphabetically,
             SizeDescending => SizeAscending,
+            Alphabetically => SizeDescending,
         }
     }
 }
@@ -60,6 +62,7 @@ pub fn sorted_entries(
         .sorted_by(|l, r| match sorting {
             SizeDescending => r.data.size.cmp(&l.data.size),
             SizeAscending => l.data.size.cmp(&r.data.size),
+            Alphabetically => l.data.name.cmp(&r.data.name),
         })
         .collect()
 }

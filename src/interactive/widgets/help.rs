@@ -132,7 +132,11 @@ impl HelpPane {
             }
             title("Keys for display");
             {
-                hotkey("s", "toggle sort by size ascending/descending", None);
+                hotkey(
+                    "s",
+                    "toggle sort by size through ascending, descending, and alphabetical",
+                    None,
+                );
                 hotkey(
                     "g",
                     "cycle through percentage display and bar options",
