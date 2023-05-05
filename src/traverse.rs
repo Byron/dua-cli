@@ -38,6 +38,9 @@ pub struct Traversal {
 }
 
 impl Traversal {
+    pub fn is_done(&self) -> bool {
+        self.elapsed.is_some()
+    }
     fn recompute_size_by_aggregating_children(&self, index: TreeIndex) -> u64 {
         let guard = self.tree.lock();
         guard
@@ -170,7 +173,7 @@ impl Traversal {
 
         let inodes = Arc::new(InodeFilter::default());
         let io_errors = Arc::new(AtomicU64::default());
-        let throttle = Throttle::new(Duration::from_millis(100), None);
+        let throttle = Throttle::new(Duration::from_millis(50), None);
 
         if walk_options.threads == 0 {
             // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.

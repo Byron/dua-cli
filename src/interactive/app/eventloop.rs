@@ -254,7 +254,7 @@ impl TerminalApp {
         let traversal = Traversal::from_moonwalk(options, input_paths, |traversal| {
             let s = match state.as_mut() {
                 Some(s) => {
-                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting);
+                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting, false);
                     if !received_events {
                         s.selected = s.entries.get(0).map(|b| b.index);
                     }
@@ -263,8 +263,12 @@ impl TerminalApp {
                 None => {
                     state = Some({
                         let sorting = Default::default();
-                        let entries =
-                            sorted_entries(&traversal.tree.lock(), traversal.root_index, sorting);
+                        let entries = sorted_entries(
+                            &traversal.tree.lock(),
+                            traversal.root_index,
+                            sorting,
+                            false,
+                        );
                         AppState {
                             root: traversal.root_index,
                             sorting,
@@ -304,7 +308,7 @@ impl TerminalApp {
                     let mut s = state.unwrap_or_else(|| {
                         let sorting = Default::default();
                         let root = traversal.root_index;
-                        let entries = sorted_entries(&traversal.tree.lock(), root, sorting);
+                        let entries = sorted_entries(&traversal.tree.lock(), root, sorting, true);
                         AppState {
                             root,
                             entries,
@@ -313,7 +317,7 @@ impl TerminalApp {
                         }
                     });
                     s.is_scanning = false;
-                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting);
+                    s.entries = sorted_entries(&traversal.tree.lock(), s.root, s.sorting, true);
                     s.selected = if received_events {
                         s.selected.or_else(|| s.entries.get(0).map(|b| b.index))
                     } else {

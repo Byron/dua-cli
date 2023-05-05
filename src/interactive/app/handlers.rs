@@ -66,7 +66,12 @@ impl AppState {
         let tree = traversal.tree.lock();
         tree.neighbors_directed(self.root, Direction::Incoming)
             .next()
-            .map(|parent_idx| (parent_idx, sorted_entries(&tree, parent_idx, self.sorting)))
+            .map(|parent_idx| {
+                (
+                    parent_idx,
+                    sorted_entries(&tree, parent_idx, self.sorting, traversal.is_done()),
+                )
+            })
     }
 
     pub fn exit_node(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
@@ -91,7 +96,12 @@ impl AppState {
         self.selected.map(|previously_selected| {
             (
                 previously_selected,
-                sorted_entries(&traversal.tree.lock(), previously_selected, self.sorting),
+                sorted_entries(
+                    &traversal.tree.lock(),
+                    previously_selected,
+                    self.sorting,
+                    traversal.is_done(),
+                ),
             )
         })
     }
@@ -147,7 +157,12 @@ impl AppState {
 
     pub fn cycle_sorting(&mut self, traversal: &Traversal) {
         self.sorting.toggle_size();
-        self.entries = sorted_entries(&traversal.tree.lock(), self.root, self.sorting);
+        self.entries = sorted_entries(
+            &traversal.tree.lock(),
+            self.root,
+            self.sorting,
+            traversal.is_done(),
+        );
     }
 
     pub fn reset_message(&mut self) {
@@ -306,7 +321,7 @@ impl AppState {
                 traversal.entries_traversed -= 1;
                 entries_deleted += 1;
             }
-            self.entries = sorted_entries(&tree, self.root, self.sorting);
+            self.entries = sorted_entries(&tree, self.root, self.sorting, traversal.is_done());
             if tree.node_weight(self.root).is_none() {
                 self.set_root(traversal.root_index, traversal);
             }
@@ -325,7 +340,12 @@ impl AppState {
 
     fn set_root(&mut self, root: TreeIndex, traversal: &Traversal) {
         self.root = root;
-        self.entries = sorted_entries(&traversal.tree.lock(), root, self.sorting);
+        self.entries = sorted_entries(
+            &traversal.tree.lock(),
+            root,
+            self.sorting,
+            traversal.is_done(),
+        );
     }
 
     fn recompute_sizes_recursively(&mut self, mut index: TreeIndex, traversal: &mut Traversal) {

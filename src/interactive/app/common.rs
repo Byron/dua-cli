@@ -28,18 +28,32 @@ pub struct EntryDataBundle {
     pub exists: bool,
 }
 
-pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
+pub fn sorted_entries(
+    tree: &Tree,
+    node_idx: TreeIndex,
+    sorting: SortMode,
+    allow_disk_access: bool,
+) -> Vec<EntryDataBundle> {
     use SortMode::*;
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|w| {
                 let p = path_of(tree, idx);
-                let pm = p.symlink_metadata();
+                let pm = allow_disk_access
+                    .then(|| p.symlink_metadata().ok())
+                    .flatten();
                 EntryDataBundle {
                     index: idx,
                     data: w.clone(),
-                    exists: pm.is_ok(),
-                    is_dir: pm.ok().map_or(false, |m| m.is_dir()),
+                    exists: !allow_disk_access || pm.is_some(),
+                    is_dir: pm.map_or_else(
+                        || {
+                            tree.neighbors_directed(idx, Direction::Outgoing)
+                                .next()
+                                .is_some()
+                        },
+                        |m| m.is_dir(),
+                    ),
                 }
             })
         })
