@@ -79,11 +79,11 @@ jobs:
         build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
         include:
           - build: linux
-            os: ubuntu-18.04
+            os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-musl
           - build: linux-arm
-            os: ubuntu-18.04
+            os: ubuntu-latest
             rust: nightly
             target: arm-unknown-linux-gnueabihf
           - build: macos
@@ -110,7 +110,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install packages (Ubuntu)
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           ci/ubuntu-install-packages
 
