@@ -22,7 +22,7 @@ pub struct EntryData {
 }
 
 /// The result of the previous filesystem traversal
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Traversal {
     /// A tree representing the entire filestem traversal
     pub tree: Tree,
@@ -30,6 +30,10 @@ pub struct Traversal {
     pub root_index: TreeIndex,
     /// Amount of files or directories we have seen during the filesystem traversal
     pub entries_traversed: u64,
+    /// The time at which the traversal started.
+    pub start: std::time::Instant,
+    /// The amount of time it took to finish the traversal. Set only once done.
+    pub elapsed: Option<std::time::Duration>,
     /// Total amount of IO errors encountered when traversing the filesystem
     pub io_errors: u64,
     /// Total amount of bytes seen during the traversal
@@ -62,7 +66,11 @@ impl Traversal {
             Traversal {
                 tree,
                 root_index,
-                ..Default::default()
+                entries_traversed: 0,
+                start: std::time::Instant::now(),
+                elapsed: None,
+                io_errors: 0,
+                total_bytes: None,
             }
         };
 
@@ -201,6 +209,7 @@ impl Traversal {
         set_size_or_panic(&mut t.tree, t.root_index, root_size);
         t.total_bytes = Some(root_size);
 
+        t.elapsed = Some(t.start.elapsed());
         Ok(Some(t))
     }
 

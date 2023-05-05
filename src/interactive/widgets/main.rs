@@ -42,6 +42,8 @@ impl MainWindow {
                     tree,
                     entries_traversed,
                     total_bytes,
+                    start,
+                    elapsed,
                     ..
                 },
             display,
@@ -138,6 +140,8 @@ impl MainWindow {
                 format: display.byte_format,
                 entries_traversed: *entries_traversed,
                 message: state.message.clone(),
+                traversal_start: *start,
+                elapsed: *elapsed,
             },
             footer_area,
             buf,
