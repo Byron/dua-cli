@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.20.1 (2023-05-05)
+
+### Bug Fixes
+
+ - <csr-id-3e8509d31291cbcaa0501b5ec4abf7f26a226836/> release definition to use a more recent ubuntu, to get linux binaries.
+   Otherwise there are no linux runners who can satisfy the request, and they hang forever,
+   instead of saying something useful.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#160](https://github.com/Byron/dua-cli/issues/160)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#160](https://github.com/Byron/dua-cli/issues/160)**
+    - Release definition to use a more recent ubuntu, to get linux binaries. ([`3e8509d`](https://github.com/Byron/dua-cli/commit/3e8509d31291cbcaa0501b5ec4abf7f26a226836))
+</details>
+
 ## 2.20.0 (2023-05-05)
 
 ### New Features
@@ -27,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 13 commits contributed to the release over the course of 71 calendar days.
+ - 14 commits contributed to the release over the course of 71 calendar days.
  - 71 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 3 unique issues were worked on: [#157](https://github.com/Byron/dua-cli/issues/157), [#33](https://github.com/Byron/dua-cli/issues/33), [#85](https://github.com/Byron/dua-cli/issues/85)
@@ -51,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#85](https://github.com/Byron/dua-cli/issues/85)**
     - Use metric byte format only on MacOS. ([`22f54dd`](https://github.com/Byron/dua-cli/commit/22f54dd7c0e83b55e0acc2fb1a10ab487bdeb9fb))
  * **Uncategorized**
+    - Release dua-cli v2.20.0 ([`9c07301`](https://github.com/Byron/dua-cli/commit/9c07301b5ee7cb290dd1df2297184d29fc43fd67))
     - TUI now shows performance metrics while scanning and after. ([`13bfe45`](https://github.com/Byron/dua-cli/commit/13bfe4582f8cbf6f8f12e7ee8acaae710e8a87d2))
     - Thanks clippy ([`565581f`](https://github.com/Byron/dua-cli/commit/565581fc11faf7512c27fe9095090f482a8d32f0))
     - Simplify GUI refreshes by using a throttle ([`c921dc7`](https://github.com/Byron/dua-cli/commit/c921dc72d3008179e72df9d85f0e0c21c998e199))
