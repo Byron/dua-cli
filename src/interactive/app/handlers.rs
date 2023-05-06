@@ -310,19 +310,22 @@ impl AppState {
     ) -> usize {
         let mut entries_deleted = 0;
         let parent_idx = {
-            let tree = &mut traversal.tree.lock();
-            let parent_idx = tree
-                .neighbors_directed(index, Direction::Incoming)
-                .next()
-                .expect("us being unable to delete the root index");
-            let mut bfs = Bfs::new(&**tree, index);
-            while let Some(nx) = bfs.next(&**tree) {
-                tree.remove_node(nx);
-                traversal.entries_traversed -= 1;
-                entries_deleted += 1;
-            }
-            self.entries = sorted_entries(&tree, self.root, self.sorting, traversal.is_done());
-            if tree.node_weight(self.root).is_none() {
+            let parent_idx = {
+                let tree = &mut traversal.tree.lock();
+                let parent_idx = tree
+                    .neighbors_directed(index, Direction::Incoming)
+                    .next()
+                    .expect("us being unable to delete the root index");
+                let mut bfs = Bfs::new(&**tree, index);
+                while let Some(nx) = bfs.next(&**tree) {
+                    tree.remove_node(nx);
+                    traversal.entries_traversed = traversal.entries_traversed.saturating_sub(1);
+                    entries_deleted += 1;
+                }
+                self.entries = sorted_entries(&tree, self.root, self.sorting, traversal.is_done());
+                parent_idx
+            };
+            if traversal.tree.lock().node_weight(self.root).is_none() {
                 self.set_root(traversal.root_index, traversal);
             }
             if self

@@ -29,25 +29,28 @@ pub fn into_keys<'a>(
     })
 }
 
-pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
-    app.traversal.tree.node_weight(id).unwrap()
+pub fn node_by_index(tree: &Tree, id: TreeIndex) -> &EntryData {
+    tree.node_weight(id).unwrap()
 }
 
-pub fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> &EntryData {
-    node_by_index(app, index_by_name(app, name))
+pub fn node_by_index_app(app: &TerminalApp, id: TreeIndex) -> EntryData {
+    app.traversal.tree.lock().node_weight(id).unwrap().clone()
+}
+
+pub fn node_by_name_app(app: &TerminalApp, name: impl AsRef<OsStr>) -> EntryData {
+    let tree = app.traversal.tree.lock();
+    node_by_index(&tree, index_by_name(&tree, name)).clone()
 }
 
 pub fn index_by_name_and_size(
-    app: &TerminalApp,
+    tree: &Tree,
     name: impl AsRef<OsStr>,
     size: Option<u64>,
 ) -> TreeIndex {
     let name = name.as_ref();
-    let t: Vec<_> = app
-        .traversal
-        .tree
+    let t: Vec<_> = tree
         .node_indices()
-        .map(|idx| (idx, node_by_index(app, idx)))
+        .map(|idx| (idx, node_by_index(&tree, idx)))
         .filter_map(|(idx, e)| {
             if e.name == name && size.map(|s| s == e.size).unwrap_or(true) {
                 Some(idx)
@@ -63,8 +66,13 @@ pub fn index_by_name_and_size(
     }
 }
 
-pub fn index_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
-    index_by_name_and_size(app, name, None)
+pub fn index_by_name(tree: &Tree, name: impl AsRef<OsStr>) -> TreeIndex {
+    index_by_name_and_size(tree, name, None)
+}
+
+pub fn index_by_name_app(app: &TerminalApp, name: impl AsRef<OsStr>) -> TreeIndex {
+    let tree = app.traversal.tree.lock();
+    index_by_name_and_size(&tree, name, None)
 }
 
 pub struct WritableFixture {

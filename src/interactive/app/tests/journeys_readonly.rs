@@ -2,12 +2,12 @@ use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 
+use crate::interactive::app::tests::utils::{
+    index_by_name_app, node_by_index_app, node_by_name_app,
+};
 use crate::interactive::{
     app::tests::{
-        utils::{
-            fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
-            node_by_index, node_by_name,
-        },
+        utils::{fixture_str, initialized_app_and_terminal_from_fixture, into_keys},
         FIXTURE_PATH,
     },
     SortMode,
@@ -44,14 +44,14 @@ fn simple_user_journey_read_only() -> Result<()> {
 
         let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
         assert_eq!(
-            node_by_name(&app, &first_selected_path).name,
+            node_by_name_app(&app, &first_selected_path).name,
             first_selected_path,
             "the roots are always listed with the given (possibly long) names",
         );
 
         assert_eq!(
-            node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_name_app(&app, fixture_str(short_root)),
+            node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
             "it selects the first node in the list",
         );
 
@@ -71,20 +71,20 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it sets the sort mode to ascending by size"
         );
         assert_eq!(
-            node_by_index(&app, app.state.entries[0].index),
-            node_by_name(&app, fixture_str(long_root)),
+            node_by_index_app(&app, app.state.entries[0].index),
+            node_by_name_app(&app, fixture_str(long_root)),
             "it recomputes the cached entries"
         );
         // when hitting the S key again
-        app.process_events(&mut terminal, into_keys(b"s".iter()))?;
+        app.process_events(&mut terminal, into_keys(b"ss".iter()))?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
             "it sets the sort mode to descending by size"
         );
         assert_eq!(
-            node_by_index(&app, app.state.entries[0].index),
-            node_by_name(&app, fixture_str(short_root)),
+            node_by_index_app(&app, app.state.entries[0].index),
+            node_by_name_app(&app, fixture_str(short_root)),
             "it recomputes the cached entries"
         );
     }
@@ -94,41 +94,41 @@ fn simple_user_journey_read_only() -> Result<()> {
         // when hitting the j key
         app.process_events(&mut terminal, into_keys(b"j".iter()))?;
         assert_eq!(
-            node_by_name(&app, fixture_str(long_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_name_app(&app, fixture_str(long_root)),
+            node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
             "it moves the cursor down and selects the next entry based on the current sort mode"
         );
         // when hitting it while there is nowhere to go
         app.process_events(&mut terminal, into_keys(b"j".iter()))?;
         assert_eq!(
-            node_by_name(&app, fixture_str(long_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_name_app(&app, fixture_str(long_root)),
+            node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
             "it stays at the previous position"
         );
         // when hitting the k key
         app.process_events(&mut terminal, into_keys(b"k".iter()))?;
         assert_eq!(
-            node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_name_app(&app, fixture_str(short_root)),
+            node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
             "it moves the cursor up and selects the next entry based on the current sort mode"
         );
         // when hitting the k key again
         app.process_events(&mut terminal, into_keys(b"k".iter()))?;
         assert_eq!(
-            node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_name_app(&app, fixture_str(short_root)),
+            node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
             "it stays at the current cursor position as there is nowhere to go"
         );
         // when hitting the o key with a directory selected
         app.process_events(&mut terminal, into_keys(b"o".iter()))?;
         {
-            let new_root_idx = index_by_name(&app, fixture_str(short_root));
+            let new_root_idx = index_by_name_app(&app, fixture_str(short_root));
             assert_eq!(
                 new_root_idx, app.state.root,
                 "it enters the entry if it is a directory, changing the root"
             );
             assert_eq!(
-                index_by_name(&app, "dir"),
+                index_by_name_app(&app, "dir"),
                 *app.state.selected.as_ref().unwrap(),
                 "it selects the first entry in the directory"
             );
@@ -141,8 +141,8 @@ fn simple_user_journey_read_only() -> Result<()> {
                     "it sets the root to be the (roots) parent directory, being the virtual root"
                 );
                 assert_eq!(
-                    node_by_name(&app, fixture_str(short_root)),
-                    node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                    node_by_name_app(&app, fixture_str(short_root)),
+                    node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
                     "changes the selection to the first item in the list of entries"
                 );
             }
@@ -156,8 +156,8 @@ fn simple_user_journey_read_only() -> Result<()> {
                 "it keeps the root - it can't go further up"
             );
             assert_eq!(
-                node_by_name(&app, fixture_str(long_root)),
-                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                node_by_name_app(&app, fixture_str(long_root)),
+                node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
                 "keeps the previous selection"
             );
         }
@@ -233,8 +233,8 @@ fn simple_user_journey_read_only() -> Result<()> {
             );
 
             assert_eq!(
-                node_by_index(&app, previously_selected_index),
-                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                node_by_index_app(&app, previously_selected_index),
+                node_by_index_app(&app, *app.state.selected.as_ref().unwrap()),
                 "it does not advance the selection"
             );
         }
