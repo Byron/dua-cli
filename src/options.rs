@@ -63,7 +63,7 @@ pub struct Args {
 
     /// Count hard-linked files each time they are seen (slower)
     #[clap(short = 'l', long)]
-    pub count_hard_links: bool,
+    pub count_links: bool,
 
     /// If set, we will not cross filesystems or traverse mount points
     #[clap(short = 'x', long)]

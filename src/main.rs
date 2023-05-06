@@ -17,7 +17,7 @@ fn main() -> Result<()> {
         threads: opt.threads,
         byte_format: opt.format.into(),
         apparent_size: opt.apparent_size,
-        count_hard_links: opt.count_hard_links,
+        count_hard_links: opt.count_links,
         sorting: TraversalSorting::None,
         cross_filesystems: !opt.stay_on_filesystem,
         ignore_dirs: opt.ignore_dirs,
