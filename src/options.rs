@@ -67,7 +67,7 @@ pub struct Args {
 
     /// If set, we will not cross filesystems or traverse mount points
     #[clap(short = 'x', long)]
-    pub stay_on_filesystem: bool,
+    pub one_file_system: bool,
 
     /// One or more absolute directories to ignore. Note that these are not ignored if they are passed as input path.
     ///

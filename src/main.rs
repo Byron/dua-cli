@@ -19,7 +19,7 @@ fn main() -> Result<()> {
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_links,
         sorting: TraversalSorting::None,
-        cross_filesystems: !opt.stay_on_filesystem,
+        cross_filesystems: !opt.one_file_system,
         ignore_dirs: opt.ignore_dirs,
     };
     let res = match opt.command {
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
             let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
-                paths_from(input, !opt.stay_on_filesystem)?,
+                paths_from(input, !opt.one_file_system)?,
                 Interaction::Full,
             )?
             .map(|(keys_rx, mut app)| {
@@ -93,7 +93,7 @@ fn main() -> Result<()> {
                 walk_options,
                 !no_total,
                 !no_sort,
-                paths_from(input, !opt.stay_on_filesystem)?,
+                paths_from(input, !opt.one_file_system)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{:?}", stats).ok();
@@ -109,7 +109,7 @@ fn main() -> Result<()> {
                 walk_options,
                 true,
                 true,
-                paths_from(opt.input, !opt.stay_on_filesystem)?,
+                paths_from(opt.input, !opt.one_file_system)?,
             )?
             .0
         }
