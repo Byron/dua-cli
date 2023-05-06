@@ -311,7 +311,7 @@ mod moonwalk {
                                     p.clear();
                                     p.extend(parents);
                                     p.push(dent.file_name());
-                                    self.opts.ignore_dirs.contains(&p)
+                                    self.opts.ignore_dirs.contains(p)
                                 };
 
                                 if is_ignored {

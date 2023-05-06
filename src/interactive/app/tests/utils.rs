@@ -50,7 +50,7 @@ pub fn index_by_name_and_size(
     let name = name.as_ref();
     let t: Vec<_> = tree
         .node_indices()
-        .map(|idx| (idx, node_by_index(&tree, idx)))
+        .map(|idx| (idx, node_by_index(tree, idx)))
         .filter_map(|(idx, e)| {
             if e.name == name && size.map(|s| s == e.size).unwrap_or(true) {
                 Some(idx)

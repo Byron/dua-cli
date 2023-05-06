@@ -112,8 +112,10 @@ impl Traversal {
                     Ok(dent) => {
                         let (parent_idx, parent_size) =
                             parents.next().expect("always the root node");
-                        let mut data = EntryData::default();
-                        data.name = dent.file_name().into();
+                        let mut data = EntryData {
+                            name: dent.file_name().into(),
+                            ..Default::default()
+                        };
 
                         let file_size = match dent.metadata() {
                             Ok(m) => compute_file_size(
@@ -146,12 +148,10 @@ impl Traversal {
 
                         if self.results.send(()).is_err() {
                             WalkState::Quit
+                        } else if dent.file_type().is_dir() {
+                            WalkState::Continue((node_idx, Default::default()))
                         } else {
-                            if dent.file_type().is_dir() {
-                                WalkState::Continue((node_idx, Default::default()))
-                            } else {
-                                WalkState::Skip
-                            }
+                            WalkState::Skip
                         }
                     }
                     Err(_err) => {
@@ -329,7 +329,7 @@ mod moonwalk {
                                 p.clear();
                                 p.extend(parents.clone().map(|t| &t.0));
                                 p.push(dent.file_name());
-                                self.opts.ignore_dirs.contains(&p)
+                                self.opts.ignore_dirs.contains(p)
                             };
 
                             if is_ignored {

@@ -322,7 +322,7 @@ impl AppState {
                     traversal.entries_traversed = traversal.entries_traversed.saturating_sub(1);
                     entries_deleted += 1;
                 }
-                self.entries = sorted_entries(&tree, self.root, self.sorting, traversal.is_done());
+                self.entries = sorted_entries(tree, self.root, self.sorting, traversal.is_done());
                 parent_idx
             };
             if traversal.tree.lock().node_weight(self.root).is_none() {
