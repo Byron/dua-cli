@@ -3,7 +3,6 @@ use crate::{crossdev, file_size_on_disk, FlowControl, Throttle, WalkOptions, Wal
 use anyhow::Result;
 use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use std::{io, path::Path};
 
@@ -26,7 +25,7 @@ pub fn aggregate(
     let mut total = 0;
     let mut num_roots = 0;
     let mut aggregates = Vec::new();
-    let inodes = Arc::new(InodeFilter::default());
+    let inodes = &InodeFilter::default();
     let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
 
     for path in paths.into_iter() {
@@ -49,7 +48,7 @@ pub fn aggregate(
         };
         let num_errors = AtomicU64::default();
         let count_size = {
-            let inodes = inodes.clone();
+            let inodes = &inodes;
             let apparent_size = walk_options.apparent_size;
             let count_hard_links = walk_options.count_hard_links;
             let smallest_file_in_bytes = &smallest_file_in_bytes;

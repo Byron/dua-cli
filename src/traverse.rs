@@ -1,4 +1,6 @@
-use crate::{crossdev, file_size_on_disk, get_size_or_panic, InodeFilter, Throttle, WalkOptions};
+use crate::{
+    crossdev, file_size_on_disk, get_size_or_panic, FlowControl, InodeFilter, Throttle, WalkOptions,
+};
 use ::moonwalk::{DirEntry, WalkState};
 use parking_lot::Mutex;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
@@ -74,13 +76,13 @@ impl Traversal {
         };
 
         #[derive(Clone)]
-        struct Delegate {
+        struct Delegate<'a> {
             tree: Arc<Mutex<Tree>>,
-            io_errors: Arc<AtomicU64>,
+            io_errors: &'a AtomicU64,
             results: std::sync::mpsc::Sender<()>,
             count_hard_links: bool,
             apparent_size: bool,
-            inodes: Arc<InodeFilter>,
+            inodes: &'a InodeFilter,
         }
 
         fn compute_file_size(
@@ -100,7 +102,7 @@ impl Traversal {
             }
         }
 
-        impl ::moonwalk::VisitorParallel for Delegate {
+        impl<'b> ::moonwalk::VisitorParallel for Delegate<'b> {
             type State = (TreeIndex, AtomicU64);
 
             fn visit<'a>(
@@ -122,7 +124,7 @@ impl Traversal {
                                 m,
                                 self.count_hard_links,
                                 self.apparent_size,
-                                &self.inodes,
+                                self.inodes,
                             ),
                             Err(_) => {
                                 self.io_errors.fetch_add(1, Ordering::SeqCst);
@@ -171,8 +173,8 @@ impl Traversal {
             }
         }
 
-        let inodes = Arc::new(InodeFilter::default());
-        let io_errors = Arc::new(AtomicU64::default());
+        let inodes = InodeFilter::default();
+        let io_errors = AtomicU64::default();
         let throttle = Throttle::new(Duration::from_millis(50), None);
 
         if walk_options.threads == 0 {
@@ -189,65 +191,70 @@ impl Traversal {
                     continue;
                 }
             };
+            let flow = std::thread::scope(|scope| -> anyhow::Result<_> {
+                let (rx, traversal_root_idx) = {
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    if !meta.is_dir() {
+                        // moonwalk will fail to traverse non-dirs, so we have to fill in what it would do.
+                        tx.send(()).ok();
+                    }
+                    let traversal_root_idx = {
+                        let tree = &mut t.tree.lock();
+                        let traversal_root_idx = tree.add_node(EntryData {
+                            name: path.clone(),
+                            size: compute_file_size(
+                                &meta.into(),
+                                walk_options.count_hard_links,
+                                walk_options.apparent_size,
+                                &inodes,
+                            ),
+                            ..Default::default()
+                        });
+                        tree.add_edge(t.root_index, traversal_root_idx, ());
+                        traversal_root_idx
+                    };
 
-            let (rx, traversal_root_idx) = {
-                let (tx, rx) = std::sync::mpsc::channel();
-                if !meta.is_dir() {
-                    // moonwalk will fail to traverse non-dirs, so we have to fill in what it would do.
-                    tx.send(()).ok();
-                }
-                let traversal_root_idx = {
-                    let tree = &mut t.tree.lock();
-                    let traversal_root_idx = tree.add_node(EntryData {
-                        name: path.clone(),
-                        size: compute_file_size(
-                            &meta.into(),
-                            walk_options.count_hard_links,
-                            walk_options.apparent_size,
-                            &inodes,
-                        ),
-                        ..Default::default()
+                    scope.spawn({
+                        let walk_options = walk_options.clone();
+                        let path = path.clone();
+                        let tree = t.tree.clone();
+                        let io_errors = &io_errors;
+                        let inodes = &inodes;
+                        move || {
+                            walk_options.moonwalk_from_path_2(
+                                path.as_ref(),
+                                device_id,
+                                Delegate {
+                                    tree,
+                                    io_errors,
+                                    results: tx,
+                                    apparent_size: walk_options.apparent_size,
+                                    count_hard_links: walk_options.count_hard_links,
+                                    inodes,
+                                },
+                                (traversal_root_idx, 0.into()),
+                            )
+                        }
                     });
-                    tree.add_edge(t.root_index, traversal_root_idx, ());
-                    traversal_root_idx
+                    (rx, traversal_root_idx)
                 };
 
-                std::thread::spawn({
-                    let walk_options = walk_options.clone();
-                    let tx = tx.clone();
-                    let path = path.clone();
-                    let tree = t.tree.clone();
-                    let io_errors = io_errors.clone();
-                    let inodes = inodes.clone();
-                    move || {
-                        walk_options.moonwalk_from_path_2(
-                            path.as_ref(),
-                            device_id,
-                            Delegate {
-                                tree,
-                                io_errors,
-                                results: tx,
-                                apparent_size: walk_options.apparent_size,
-                                count_hard_links: walk_options.count_hard_links,
-                                inodes: inodes.clone(),
-                            },
-                            (traversal_root_idx, 0.into()),
-                        )
+                for () in rx {
+                    t.entries_traversed += 1;
+                    if throttle.can_update() && update(&mut t)? {
+                        return Ok(FlowControl::Abort);
                     }
-                });
-                (rx, traversal_root_idx)
-            };
-
-            for () in rx {
-                t.entries_traversed += 1;
-                if throttle.can_update() && update(&mut t)? {
-                    return Ok(None);
                 }
-            }
 
-            let root_size = t.recompute_size_by_aggregating_children(traversal_root_idx);
-            if root_size != 0 {
-                set_size_or_panic(&mut t.tree.lock(), traversal_root_idx, root_size);
+                let root_size = t.recompute_size_by_aggregating_children(traversal_root_idx);
+                if root_size != 0 {
+                    set_size_or_panic(&mut t.tree.lock(), traversal_root_idx, root_size);
+                }
+
+                Ok(FlowControl::Continue)
+            })?;
+            if matches!(flow, FlowControl::Abort) {
+                return Ok(None);
             }
         }
 

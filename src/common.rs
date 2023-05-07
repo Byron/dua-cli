@@ -1,11 +1,10 @@
-use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fmt, path::Path};
 
 pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
     tree.node_weight(node_idx)
@@ -170,60 +169,6 @@ pub struct WalkOptions {
     pub sorting: TraversalSorting,
     pub cross_filesystems: bool,
     pub ignore_dirs: Vec<PathBuf>,
-}
-
-type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
-
-impl WalkOptions {
-    pub fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
-        WalkDir::new(root)
-            .follow_links(false)
-            .sort(match self.sorting {
-                TraversalSorting::None => false,
-                TraversalSorting::AlphabeticalByFileName => true,
-            })
-            .skip_hidden(false)
-            .process_read_dir({
-                let ignore_dirs = self.ignore_dirs.clone();
-                let cross_filesystems = self.cross_filesystems;
-                move |_, _, _, dir_entry_results| {
-                    dir_entry_results.iter_mut().for_each(|dir_entry_result| {
-                        if let Ok(dir_entry) = dir_entry_result {
-                            let metadata = dir_entry.metadata();
-
-                            if dir_entry.file_type.is_file() || dir_entry.file_type().is_symlink() {
-                                dir_entry.client_state = Some(metadata);
-                            } else if dir_entry.file_type.is_dir() {
-                                let ok_for_fs = cross_filesystems
-                                    || metadata
-                                        .as_ref()
-                                        .map(|m| crossdev::is_same_device(root_device_id, m))
-                                        .unwrap_or(true);
-                                if !ok_for_fs || ignore_dirs.contains(&dir_entry.path()) {
-                                    dir_entry.read_children_path = None;
-                                }
-                            }
-                        }
-                    })
-                }
-            })
-            .parallelism(match self.threads {
-                0 => jwalk::Parallelism::RayonDefaultPool {
-                    busy_timeout: std::time::Duration::from_secs(1),
-                },
-                1 => jwalk::Parallelism::Serial,
-                _ => jwalk::Parallelism::RayonExistingPool {
-                    pool: jwalk::rayon::ThreadPoolBuilder::new()
-                        .stack_size(128 * 1024)
-                        .num_threads(self.threads)
-                        .thread_name(|idx| format!("dua-fs-walk-{idx}"))
-                        .build()
-                        .expect("fields we set cannot fail")
-                        .into(),
-                    busy_timeout: None,
-                },
-            })
-    }
 }
 
 pub enum FlowControl {
