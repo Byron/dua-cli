@@ -225,9 +225,9 @@ dependencies = [
 
 [[package]]
 name = "crossterm"
-version = "0.25.0"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64e6c0fbe2c17357405f7c758c1ef960fce08bdfb2c03d88d2a18d7e09c4b67"
+checksum = "a84cda67535339806297f1b331d6dd6320470d2a0fe65381e79ee9e156dd3d13"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
@@ -251,12 +251,11 @@ dependencies = [
 [[package]]
 name = "crosstermion"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99aabd9b02c2d5f72697f30ffb46f5a9ff4bd240d826049892cf62c31daeed04"
+source = "git+https://github.com/joshka/tui-crates?branch=ratatui#78e6a5924349cd3b86e3de98d5b2baf47e9d8991"
 dependencies = [
  "crossterm",
+ "ratatui",
  "termion",
- "tui",
  "tui-react",
 ]
 
@@ -293,8 +292,8 @@ dependencies = [
  "owo-colors",
  "petgraph",
  "pretty_assertions",
+ "ratatui",
  "trash",
- "tui",
  "tui-react",
  "unicode-segmentation",
  "wild",
@@ -648,6 +647,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcc0d032bccba900ee32151ec0265667535c230169f5a011154cdcd984e16829"
+dependencies = [
+ "bitflags",
+ "cassowary",
+ "crossterm",
+ "termion",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "rayon"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,9 +792,9 @@ dependencies = [
 
 [[package]]
 name = "termion"
-version = "1.5.6"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077185e2eac69c3f8379a4298e1e07cd36beb962290d4a51199acf0fdc10607e"
+checksum = "659c1f379f3408c7e5e84c7d0da6d93404e3800b6b9d063ba24436419302ec90"
 dependencies = [
  "libc",
  "numtoa",
@@ -820,27 +833,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccdd26cbd674007e649a272da4475fb666d3aa0ad0531da7136db6fab0e5bad1"
-dependencies = [
- "bitflags",
- "cassowary",
- "crossterm",
- "termion",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "tui-react"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "542c37309aaf01ddaea86891f7845a8b0124194c6ccae6dbae7d223752648f4d"
+source = "git+https://github.com/joshka/tui-crates?branch=ratatui#78e6a5924349cd3b86e3de98d5b2baf47e9d8991"
 dependencies = [
  "log",
- "tui",
+ "ratatui",
  "unicode-segmentation",
  "unicode-width",
 ]

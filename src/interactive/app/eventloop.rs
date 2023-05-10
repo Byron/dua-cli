@@ -10,8 +10,8 @@ use dua::{
     traverse::{Traversal, TreeIndex},
     WalkOptions, WalkResult,
 };
+use ratatui::backend::Backend;
 use std::{collections::BTreeMap, path::PathBuf};
-use tui::backend::Backend;
 use tui_react::Terminal;
 
 #[derive(Default, Copy, Clone)]

@@ -6,6 +6,7 @@ use dua::{
 use itertools::Itertools;
 use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
+use ratatui::backend::TestBackend;
 use std::{
     env::temp_dir,
     ffi::OsStr,
@@ -14,7 +15,6 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
-use tui::backend::TestBackend;
 use tui_react::Terminal;
 
 use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};

@@ -8,7 +8,7 @@
 
 ### Installation
 
-### Binary Release 
+### Binary Release
 
 #### MacOS
 
@@ -17,13 +17,15 @@ curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh 
     sh -s -- --git Byron/dua-cli --crate dua --tag v2.17.4
 ```
 
-#### MacOS via [MacPorts](https://www.macports.org):
+#### MacOS via [MacPorts](https://www.macports.org)
+
 ```sh
 sudo port selfupdate
 sudo port install dua-cli
 ```
 
 #### MacOS via [Homebrew](https://brew.sh)
+
 ```sh
 brew update
 brew install dua-cli
@@ -39,6 +41,7 @@ curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh 
 ```
 
 #### Windows via [Scoop](https://scoop.sh/)
+
 ```sh
 scoop install dua
 ```
@@ -50,9 +53,11 @@ See the [releases section][releases] for manual installation of a binary, pre-bu
 [releases]: https://github.com/Byron/dua-cli/releases
 
 #### Cargo
+
 Via `cargo`, which can be obtained using [rustup][rustup]
 
 For _Unix_…
+
 ```
 cargo install dua-cli
 
@@ -64,11 +69,13 @@ cargo install dua-cli --no-default-features --features tui-crossplatform
 ```
 
 For _Windows_, nightly features are currently required.
+
 ```
 cargo +nightly install dua-cli
 ```
 
 #### VoidLinux
+
 Via `xbps` on your VoidLinux system.
 
 ```
@@ -76,6 +83,7 @@ xbps-install dua-cli
 ```
 
 #### Fedora
+
 Via `dnf` on your Fedora system.
 
 ```
@@ -83,6 +91,7 @@ sudo dnf install dua-cli
 ```
 
 #### Arch Linux
+
 Via `pacman` on your ArchLinux system.
 
 ```
@@ -90,6 +99,7 @@ sudo pacman -S dua-cli
 ```
 
 #### NetBSD
+
 Via `pkgin` on your NetBSD system.
 
 ```
@@ -155,7 +165,7 @@ make
 
 #### But why is…
 
-#### …there two available backends? `crossterm` works everywhere!
+#### …there two available backends? `crossterm` works everywhere
 
 Why add complexity to support `termion` if `crossterm` works everywhere? The answer is compile time and binary size, which both are larger
 when using `crossterm`. Thus on Unix we still build with `termion`, but there is no reason to stop supporting it once `crossterm` has no
@@ -179,15 +189,15 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
   column sizes are not correctly computed, leading to certain columns not being shown.
   In other cases, the terminal gets things wrong - I use alacritty, and with certain characaters it
   performs worse than, say iTerm3.
-  See https://github.com/minimaxir/big-list-of-naughty-strings/blob/master/blns.txt for the source.
+  See <https://github.com/minimaxir/big-list-of-naughty-strings/blob/master/blns.txt> for the source.
 * In interactive mode, you will need about 60MB of memory for 1 million entries in the graph.
 * In interactive mode, the maximum amount of files is limited to 2^32 - 1 (`u32::max_value() - 1`) entries.
   * One node is used as to 'virtual' root
   * The actual amount of nodes stored might be lower, as there might be more edges than nodes, which are also limited by a `u32` (I guess)
   * The limitation is imposed by the underlying [`petgraph`][petgraph] crate, which declares it as `unsafe` to use u64 for instance.
-  * It's possibly *UB* when that limit is reached, however, it was never observed either.
+  * It's possibly _UB_ when that limit is reached, however, it was never observed either.
 
-### Similar Programs 
+### Similar Programs
 
 * **CLI:**
   * `du`
@@ -205,5 +215,3 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
-[termion]: https://crates.io/crates/termion
-[tui]: https://github.com/fdehau/tui-rs

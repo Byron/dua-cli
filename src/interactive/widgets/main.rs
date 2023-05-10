@@ -6,13 +6,13 @@ use crate::interactive::{
     AppState, DisplayOptions, FocussedPane,
 };
 use dua::traverse::Traversal;
-use std::borrow::Borrow;
-use tui::{
+use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     style::{Color, Style},
 };
+use std::borrow::Borrow;
 use Constraint::*;
 use FocussedPane::*;
 

@@ -7,17 +7,17 @@ use dua::{
     ByteFormat,
 };
 use itertools::Itertools;
-use std::{
-    borrow::Borrow,
-    collections::{btree_map::Entry, BTreeMap},
-    path::PathBuf,
-};
-use tui::{
+use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, Paragraph, Widget},
+};
+use std::{
+    borrow::Borrow,
+    collections::{btree_map::Entry, BTreeMap},
+    path::PathBuf,
 };
 use tui_react::{
     draw_text_nowrap_fn,

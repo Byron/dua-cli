@@ -1,13 +1,13 @@
 use crate::interactive::CursorDirection;
 use crosstermion::{input::Key, input::Key::*};
-use std::{borrow::Borrow, cell::RefCell};
-use tui::{
+use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+use std::{borrow::Borrow, cell::RefCell};
 use tui_react::{
     draw_text_nowrap_fn,
     util::{block_width, rect},

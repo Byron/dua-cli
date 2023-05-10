@@ -1,6 +1,5 @@
 use dua::ByteFormat;
-use std::borrow::Borrow;
-use tui::{
+use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Modifier,
@@ -8,6 +7,7 @@ use tui::{
     text::{Span, Spans, Text},
     widgets::{Paragraph, Widget},
 };
+use std::borrow::Borrow;
 
 pub struct Footer;
 

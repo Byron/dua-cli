@@ -5,14 +5,14 @@ use crate::interactive::{
 };
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
-use std::{borrow::Borrow, path::Path};
-use tui::{
+use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::Span,
     widgets::{Block, Borders},
 };
+use std::{borrow::Borrow, path::Path};
 use tui_react::util::rect::line_bound;
 use tui_react::{
     draw_text_nowrap_fn, fill_background_to_right,

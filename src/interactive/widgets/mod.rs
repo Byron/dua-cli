@@ -12,7 +12,7 @@ pub use help::*;
 pub use main::*;
 pub use mark::*;
 
-use tui::style::Color;
+use ratatui::style::Color;
 
 pub const COLOR_MARKED: Color = Color::Yellow;
 pub const COLOR_MARKED_DARK: Color = Color::Rgb(176, 126, 0);
