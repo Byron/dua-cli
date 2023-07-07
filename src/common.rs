@@ -96,11 +96,12 @@ impl fmt::Display for ByteFormatDisplay {
         match (splits.next(), splits.next()) {
             (Some(bytes), Some(unit)) => write!(
                 f,
-                "{} {:>unit_width$}",
+                "{:>width_left$} {:>width_right$}",
                 bytes,
                 unit,
-                unit_width = match self.format {
-                    Binary => 3,
+                width_left = self.format.width(),
+                width_right = match self.format {
+                    Binary => 4,
                     Metric => 2,
                     _ => 2,
                 }
