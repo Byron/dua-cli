@@ -30,7 +30,7 @@ jobs:
         cargo diet -n --package-size-limit 80KB
 
   build-and-test-on-windows:
-    name: Windows
+    name: Windows (nightly)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v1
