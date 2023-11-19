@@ -39,7 +39,8 @@ impl ByteFormat {
     pub fn width(self) -> usize {
         use ByteFormat::*;
         match self {
-            Metric | Binary => 10,
+            Metric => 10,
+            Binary => 11,
             Bytes => 12,
             MiB | MB => 12,
             _ => 10,
