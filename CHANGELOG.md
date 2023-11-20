@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.20.2 (2023-11-20)
+
+### Bug Fixes
+
+ - <csr-id-49c3e3d02ad0c14c4123fe1a7fea1f2a5e7a990f/> alignment when in interactive mode and -f binary
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 8 commits contributed to the release over the course of 32 calendar days.
+ - 198 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#177](https://github.com/Byron/dua-cli/issues/177)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#177](https://github.com/Byron/dua-cli/issues/177)**
+    - Alignment when in interactive mode and -f binary ([`49c3e3d`](https://github.com/Byron/dua-cli/commit/49c3e3d02ad0c14c4123fe1a7fea1f2a5e7a990f))
+ * **Uncategorized**
+    - Update dependencies ([`12fa54a`](https://github.com/Byron/dua-cli/commit/12fa54a5c6af7720b27cffcc4c89e0728ec4cfda))
+    - Upgrade journey-test expectations (doesn't run on CI for some reason) ([`5498040`](https://github.com/Byron/dua-cli/commit/54980406b72e9b633fec632e015da378e5d5a49d))
+    - Upgrade `itertools` ([`0c8b6f2`](https://github.com/Byron/dua-cli/commit/0c8b6f2465c48b554faaa06bf0438cfff9df8a7f))
+    - Upgrade `open` ([`192420e`](https://github.com/Byron/dua-cli/commit/192420ededd19779754d51d690ecdf7588d62441))
+    - Fixes alignment when in interactive mode and -f binary ([`b3bb851`](https://github.com/Byron/dua-cli/commit/b3bb85177d2fc4b299a9d82313832be96b34c3b6))
+    - Make clear which windows toolchain is used on CI ([`8c02612`](https://github.com/Byron/dua-cli/commit/8c02612887a49d72244327c9bf7940ff8fa507e6))
+    - Update all dependencies ([`1bbee14`](https://github.com/Byron/dua-cli/commit/1bbee14695866294771d9113d9bab4d369b6401b))
+</details>
+
 ## 2.20.1 (2023-05-05)
 
 ### Bug Fixes
@@ -17,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#160](https://github.com/Byron/dua-cli/issues/160)
 
@@ -29,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
  * **[#160](https://github.com/Byron/dua-cli/issues/160)**
     - Release definition to use a more recent ubuntu, to get linux binaries. ([`3e8509d`](https://github.com/Byron/dua-cli/commit/3e8509d31291cbcaa0501b5ec4abf7f26a226836))
+ * **Uncategorized**
+    - Release dua-cli v2.20.1 ([`bf51db2`](https://github.com/Byron/dua-cli/commit/bf51db20de49dc1c240fcbbe1ddea3a4a6537873))
 </details>
 
 ## 2.20.0 (2023-05-05)
