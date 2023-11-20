@@ -33,6 +33,8 @@ pub enum MarkMode {
 }
 
 pub type EntryMarkMap = BTreeMap<TreeIndex, EntryMark>;
+
+#[derive(Default)]
 pub struct EntryMark {
     pub size: u128,
     pub path: PathBuf,
@@ -48,6 +50,7 @@ pub struct MarkPane {
     list: List,
     has_focus: bool,
     last_sorting_index: usize,
+    total_size: u128,
 }
 
 pub struct MarkPaneProps {
@@ -98,6 +101,7 @@ impl MarkPane {
         if self.marked.is_empty() {
             None
         } else {
+            self.total_size = calculate_size(&self.marked);
             Some(self)
         }
     }
@@ -239,7 +243,7 @@ impl MarkPane {
         let title = format!(
             "Marked {} items ({}) ",
             marked.len(),
-            format.display(marked.iter().map(|(_k, v)| v.size).sum::<u128>())
+            format.display(self.total_size)
         );
         let selected = self.selected;
         let has_focus = self.has_focus;
@@ -423,5 +427,74 @@ impl MarkPane {
                 );
             }
         }
+    }
+}
+
+pub fn calculate_size(marked: &EntryMarkMap) -> u128 {
+    let entries: Vec<&EntryMark> = marked
+        .iter()
+        .map(|(_k, v)| v)
+        .sorted_by(|a, b| Ord::cmp(&a.path, &b.path))
+        .collect();
+
+    let mut size = 0u128;
+    for (idx, entry) in entries.iter().enumerate() {
+        let mut is_subdirectory = false;
+        for other in &entries[0..idx] {
+            if other.is_dir && entry.path.starts_with(&other.path) {
+                is_subdirectory = true;
+                break;
+            }
+        }
+        if !is_subdirectory {
+            size += entry.size;
+        }
+    }
+    size
+}
+
+#[cfg(test)]
+mod mark_pane_tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_size() {
+        let mut marked = EntryMarkMap::new();
+
+        marked.insert(
+            TreeIndex::new(0),
+            EntryMark {
+                size: 2,
+                path: PathBuf::from("root/test1"),
+                ..Default::default()
+            },
+        );
+        marked.insert(
+            TreeIndex::new(1),
+            EntryMark {
+                size: 10,
+                path: PathBuf::from("root"),
+                is_dir: true,
+                ..Default::default()
+            },
+        );
+        marked.insert(
+            TreeIndex::new(2),
+            EntryMark {
+                size: 5,
+                path: PathBuf::from("root1"),
+                ..Default::default()
+            },
+        );
+        marked.insert(
+            TreeIndex::new(3),
+            EntryMark {
+                size: 2,
+                path: PathBuf::from("root/test2"),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(calculate_size(&marked), 15u128);
     }
 }
