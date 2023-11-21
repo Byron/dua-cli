@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.20.3 (2023-11-21)
+
+### Bug Fixes
+
+ - <csr-id-7ab0070dcfda573cfbdc8451ddba5fcf15067132/> mark-pane now doesn't double-count sizes anymore.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Mark-pane now doesn't double-count sizes anymore. ([`7ab0070`](https://github.com/Byron/dua-cli/commit/7ab0070dcfda573cfbdc8451ddba5fcf15067132))
+    - Fixes marking parent directory for deletion counts children twice ([`f7086cc`](https://github.com/Byron/dua-cli/commit/f7086cc0836bd091552a83d8faabf937fb4c6cf8))
+</details>
+
 ## 2.20.2 (2023-11-20)
 
 ### Bug Fixes
@@ -15,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 8 commits contributed to the release over the course of 32 calendar days.
+ - 9 commits contributed to the release over the course of 32 calendar days.
  - 198 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#177](https://github.com/Byron/dua-cli/issues/177)
@@ -29,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#177](https://github.com/Byron/dua-cli/issues/177)**
     - Alignment when in interactive mode and -f binary ([`49c3e3d`](https://github.com/Byron/dua-cli/commit/49c3e3d02ad0c14c4123fe1a7fea1f2a5e7a990f))
  * **Uncategorized**
+    - Release dua-cli v2.20.2 ([`28fa9dd`](https://github.com/Byron/dua-cli/commit/28fa9ddd7ee30e228d1660dde95ad076e378fba7))
     - Update dependencies ([`12fa54a`](https://github.com/Byron/dua-cli/commit/12fa54a5c6af7720b27cffcc4c89e0728ec4cfda))
     - Upgrade journey-test expectations (doesn't run on CI for some reason) ([`5498040`](https://github.com/Byron/dua-cli/commit/54980406b72e9b633fec632e015da378e5d5a49d))
     - Upgrade `itertools` ([`0c8b6f2`](https://github.com/Byron/dua-cli/commit/0c8b6f2465c48b554faaa06bf0438cfff9df8a7f))
