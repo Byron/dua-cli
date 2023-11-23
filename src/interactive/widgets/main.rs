@@ -131,6 +131,7 @@ impl MainWindow {
             selected: state.selected,
             border_style: entries_style,
             is_focussed: matches!(state.focussed, Main),
+            sort_mode: state.sorting,
         };
         self.entries_pane.render(props, entries_area, buf);
 
@@ -142,6 +143,7 @@ impl MainWindow {
                 message: state.message.clone(),
                 traversal_start: *start,
                 elapsed: *elapsed,
+                sort_mode: state.sorting,
             },
             footer_area,
             buf,

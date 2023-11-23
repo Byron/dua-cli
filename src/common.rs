@@ -192,9 +192,7 @@ impl WalkOptions {
                         if let Ok(dir_entry) = dir_entry_result {
                             let metadata = dir_entry.metadata();
 
-                            if dir_entry.file_type.is_file() || dir_entry.file_type().is_symlink() {
-                                dir_entry.client_state = Some(metadata);
-                            } else if dir_entry.file_type.is_dir() {
+                            if dir_entry.file_type.is_dir() {
                                 let ok_for_fs = cross_filesystems
                                     || metadata
                                         .as_ref()
@@ -204,6 +202,8 @@ impl WalkOptions {
                                     dir_entry.read_children_path = None;
                                 }
                             }
+
+                            dir_entry.client_state = Some(metadata);
                         }
                     })
                 }

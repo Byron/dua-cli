@@ -9,14 +9,28 @@ pub enum SortMode {
     #[default]
     SizeDescending,
     SizeAscending,
+    MTimeAscending,
+    MTimeDescending,
 }
 
 impl SortMode {
     pub fn toggle_size(&mut self) {
         use SortMode::*;
         *self = match self {
-            SizeAscending => SizeDescending,
             SizeDescending => SizeAscending,
+            SizeAscending => SizeDescending,
+            MTimeAscending => SizeAscending,
+            MTimeDescending => SizeDescending,
+        }
+    }
+
+    pub fn toggle_mtime(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            SizeDescending => MTimeDescending,
+            SizeAscending => MTimeAscending,
+            MTimeAscending => MTimeDescending,
+            MTimeDescending => MTimeAscending,
         }
     }
 }
@@ -46,6 +60,8 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
         .sorted_by(|l, r| match sorting {
             SizeDescending => r.data.size.cmp(&l.data.size),
             SizeAscending => l.data.size.cmp(&r.data.size),
+            MTimeAscending => l.data.mtime.cmp(&r.data.mtime),
+            MTimeDescending => r.data.mtime.cmp(&l.data.mtime),
         })
         .collect()
 }

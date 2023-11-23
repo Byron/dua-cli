@@ -3,22 +3,46 @@ use anyhow::Result;
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{
+    fmt,
     fs::Metadata,
     io,
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 pub type TreeIndex = NodeIndex;
 pub type Tree = StableGraph<EntryData, (), Directed>;
 
-#[derive(Eq, PartialEq, Debug, Default, Clone)]
+#[derive(Eq, PartialEq, Clone)]
 pub struct EntryData {
     pub name: PathBuf,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
     pub size: u128,
+    pub mtime: SystemTime,
     /// If set, the item meta-data could not be obtained
     pub metadata_io_error: bool,
+}
+
+impl EntryData {
+    pub fn default() -> EntryData {
+        EntryData {
+            name: PathBuf::default(),
+            size: u128::default(),
+            mtime: UNIX_EPOCH,
+            metadata_io_error: bool::default(),
+        }
+    }
+}
+
+impl fmt::Debug for EntryData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EntryData")
+            .field("name", &self.name)
+            .field("size", &self.size)
+            // Skip mtime
+            .field("metadata_io_error", &self.metadata_io_error)
+            .finish()
+    }
 }
 
 /// The result of the previous filesystem traversal
@@ -117,33 +141,45 @@ impl Traversal {
                         } else {
                             entry.file_name.into()
                         };
-                        let file_size = match &entry.client_state {
-                            Some(Ok(ref m))
+
+                        let mut file_size = 0u128;
+                        let mut mtime: SystemTime = UNIX_EPOCH;
+                        match &entry.client_state {
+                            Some(Ok(ref m)) => {
                                 if !m.is_dir()
                                     && (walk_options.count_hard_links || inodes.add(m))
                                     && (walk_options.cross_filesystems
-                                        || crossdev::is_same_device(device_id, m)) =>
-                            {
-                                if walk_options.apparent_size {
-                                    m.len()
-                                } else {
-                                    size_on_disk(&entry.parent_path, &data.name, m).unwrap_or_else(
-                                        |_| {
-                                            t.io_errors += 1;
-                                            data.metadata_io_error = true;
-                                            0
-                                        },
-                                    )
+                                        || crossdev::is_same_device(device_id, m))
+                                {
+                                    if walk_options.apparent_size {
+                                        file_size = m.len() as u128;
+                                    } else {
+                                        file_size = size_on_disk(&entry.parent_path, &data.name, m)
+                                            .unwrap_or_else(|_| {
+                                                t.io_errors += 1;
+                                                data.metadata_io_error = true;
+                                                0
+                                            })
+                                            as u128;
+                                    }
+                                }
+
+                                match m.modified() {
+                                    Ok(modified) => {
+                                        mtime = modified;
+                                    }
+                                    Err(_) => {
+                                        t.io_errors += 1;
+                                        data.metadata_io_error = true;
+                                    }
                                 }
                             }
-                            Some(Ok(_)) => 0,
                             Some(Err(_)) => {
                                 t.io_errors += 1;
                                 data.metadata_io_error = true;
-                                0
                             }
-                            None => 0, // a directory
-                        } as u128;
+                            None => {}
+                        }
 
                         match (entry.depth, previous_depth) {
                             (n, p) if n > p => {
@@ -174,6 +210,7 @@ impl Traversal {
                             }
                         };
 
+                        data.mtime = mtime;
                         data.size = file_size;
                         let entry_index = t.tree.add_node(data);
 

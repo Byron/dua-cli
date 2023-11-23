@@ -148,6 +148,7 @@ impl AppState {
                     Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
                     Ctrl('d') | PageDown => self.change_entry_selection(CursorDirection::PageDown),
                     Char('s') => self.cycle_sorting(traversal),
+                    Char('m') => self.cycle_mtime_sorting(traversal),
                     Char('g') => display.byte_vis.cycle(),
                     _ => {}
                 },

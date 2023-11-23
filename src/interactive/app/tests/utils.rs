@@ -13,6 +13,7 @@ use std::{
     fs::{copy, create_dir_all, remove_dir, remove_file},
     io::ErrorKind,
     path::{Path, PathBuf},
+    time::UNIX_EPOCH,
 };
 use tui::backend::TestBackend;
 use tui_react::Terminal;
@@ -294,6 +295,7 @@ pub fn make_add_node(t: &mut Tree) -> impl FnMut(&str, u128, Option<NodeIndex>) 
         let n = t.add_node(EntryData {
             name: PathBuf::from(name),
             size,
+            mtime: UNIX_EPOCH,
             metadata_io_error: false,
         });
         if let Some(from) = maybe_from_idx {
