@@ -220,3 +220,17 @@ impl Traversal {
             .sum()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn size_of_entry_data() {
+        assert_eq!(
+            std::mem::size_of::<EntryData>(),
+            if cfg!(windows) { 56 } else { 48 },
+            "the size of this should not change unexpectedly as it affects overall memory consumption"
+        );
+    }
+}
