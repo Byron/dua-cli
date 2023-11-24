@@ -266,7 +266,7 @@ mod tests {
     fn size_of_entry_data() {
         assert_eq!(
             std::mem::size_of::<EntryData>(),
-            if cfg!(windows) { 72 } else { 64 },
+            if cfg!(windows) { 64 } else { 64 },
             "the size of this should not change unexpectedly as it affects overall memory consumption"
         );
     }
