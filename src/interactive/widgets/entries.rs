@@ -186,7 +186,12 @@ impl Entries {
                         Style { fg, ..style }
                     },
                 );
-                vec![mtime, bar, bytes, left_bar, percentage, right_bar, name]
+
+                if should_show_mtime_column(sort_mode) {
+                    vec![mtime, bar, bytes, left_bar, percentage, right_bar, name]
+                } else {
+                    vec![bytes, left_bar, percentage, right_bar, name]
+                }
             },
         );
 
@@ -219,5 +224,12 @@ impl Entries {
                 );
             }
         }
+    }
+}
+
+fn should_show_mtime_column(sort_mode: &SortMode) -> bool {
+    match sort_mode {
+        SortMode::MTimeAscending | SortMode::MTimeDescending => true,
+        _ => false,
     }
 }
