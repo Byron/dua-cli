@@ -9,6 +9,8 @@ use tui::{
     widgets::{Paragraph, Widget},
 };
 
+use crate::interactive::SortMode;
+
 pub struct Footer;
 
 pub struct FooterProps {
@@ -18,6 +20,7 @@ pub struct FooterProps {
     pub elapsed: Option<std::time::Duration>,
     pub format: ByteFormat,
     pub message: Option<String>,
+    pub sort_mode: SortMode,
 }
 
 impl Footer {
@@ -29,11 +32,18 @@ impl Footer {
             traversal_start,
             format,
             message,
+            sort_mode,
         } = props.borrow();
 
         let spans = vec![
             Span::from(format!(
-                " Total disk usage: {}  Entries: {} {progress}  ",
+                "Sort mode: {}  Total disk usage: {}  Entries: {} {progress}  ",
+                match sort_mode {
+                    SortMode::SizeAscending => "size ascending",
+                    SortMode::SizeDescending => "size descending",
+                    SortMode::MTimeAscending => "modified ascending",
+                    SortMode::MTimeDescending => "modified descending",
+                },
                 match total_bytes {
                     Some(b) => format!("{}", format.display(*b)),
                     None => "-".to_owned(),

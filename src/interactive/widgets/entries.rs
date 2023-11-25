@@ -1,8 +1,9 @@
 use crate::interactive::{
     path_of,
     widgets::{entry_color, EntryMarkMap},
-    DisplayOptions, EntryDataBundle,
+    DisplayOptions, EntryDataBundle, SortMode,
 };
+use chrono::DateTime;
 use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use std::{borrow::Borrow, path::Path};
@@ -29,6 +30,7 @@ pub struct EntriesProps<'a> {
     pub marked: Option<&'a EntryMarkMap>,
     pub border_style: Style,
     pub is_focussed: bool,
+    pub sort_mode: SortMode,
 }
 
 #[derive(Default)]
@@ -52,6 +54,7 @@ impl Entries {
             marked,
             border_style,
             is_focussed,
+            sort_mode,
         } = props.borrow();
         let list = &mut self.list;
 
@@ -114,17 +117,6 @@ impl Entries {
                     style.add_modifier.insert(Modifier::BOLD);
                 }
 
-                let bytes = Span::styled(
-                    format!(
-                        "{:>byte_column_width$}",
-                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
-                        byte_column_width = display.byte_format.width()
-                    ),
-                    Style {
-                        fg: Color::Green.into(),
-                        ..style
-                    },
-                );
                 let fraction = w.size as f32 / total as f32;
                 let should_avoid_showing_a_big_reversed_bar = fraction > 0.9;
                 let local_style = if should_avoid_showing_a_big_reversed_bar {
@@ -132,6 +124,40 @@ impl Entries {
                 } else {
                     style
                 };
+
+                let datetime = DateTime::<chrono::Utc>::from(w.mtime);
+                let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
+                let mtime = Span::styled(
+                    format!("{:>20}", formatted_time),
+                    Style {
+                        fg: match sort_mode {
+                            SortMode::SizeAscending | SortMode::SizeDescending => style.fg,
+                            SortMode::MTimeAscending | SortMode::MTimeDescending => {
+                                Color::Green.into()
+                            }
+                        },
+                        ..style
+                    },
+                );
+
+                let bar = Span::styled(" | ", local_style);
+
+                let bytes = Span::styled(
+                    format!(
+                        "{:>byte_column_width$}",
+                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+                        byte_column_width = display.byte_format.width()
+                    ),
+                    Style {
+                        fg: match sort_mode {
+                            SortMode::SizeAscending | SortMode::SizeDescending => {
+                                Color::Green.into()
+                            }
+                            SortMode::MTimeAscending | SortMode::MTimeDescending => style.fg,
+                        },
+                        ..style
+                    },
+                );
 
                 let left_bar = Span::styled(" |", local_style);
                 let percentage = Span::styled(
@@ -160,7 +186,12 @@ impl Entries {
                         Style { fg, ..style }
                     },
                 );
-                vec![bytes, left_bar, percentage, right_bar, name]
+
+                if should_show_mtime_column(sort_mode) {
+                    vec![mtime, bar, bytes, left_bar, percentage, right_bar, name]
+                } else {
+                    vec![bytes, left_bar, percentage, right_bar, name]
+                }
             },
         );
 
@@ -193,5 +224,12 @@ impl Entries {
                 );
             }
         }
+    }
+}
+
+fn should_show_mtime_column(sort_mode: &SortMode) -> bool {
+    match sort_mode {
+        SortMode::MTimeAscending | SortMode::MTimeDescending => true,
+        _ => false,
     }
 }
