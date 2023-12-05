@@ -52,7 +52,7 @@ incremental = false
 overflow-checks = false
 lto = "fat"
 codegen-units = 1
-build-override = { opt-level = 0 }
+build-override = { opt-level = 3 }
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
