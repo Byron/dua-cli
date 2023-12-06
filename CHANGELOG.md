@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.21.0 (2023-12-06)
 
 ### New Features
 
@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 11 commits contributed to the release over the course of 11 calendar days.
+ - 13 commits contributed to the release over the course of 11 calendar days.
  - 14 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 5 unique issues were worked on: [#110](https://github.com/Byron/dua-cli/issues/110), [#141](https://github.com/Byron/dua-cli/issues/141), [#179](https://github.com/Byron/dua-cli/issues/179), [#185](https://github.com/Byron/dua-cli/issues/185), [#186](https://github.com/Byron/dua-cli/issues/186)
@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#186](https://github.com/Byron/dua-cli/issues/186)**
     - Assure `device_id` is taken from the final CWD ([`74e6d42`](https://github.com/Byron/dua-cli/commit/74e6d4222a7f70253f1d69eb8e7cf94114827852))
  * **Uncategorized**
+    - Manually set the desired version as `cargo smart-release` fails to see that 2.20.3 is available ([`f5bd870`](https://github.com/Byron/dua-cli/commit/f5bd870621779711ef8ba03812f097716f52d349))
+    - Prepare changelog ([`6ff009a`](https://github.com/Byron/dua-cli/commit/6ff009a3082c2c4dbe90b8188bf943df83f596d0))
     - Thanks clippy ([`0c4d31b`](https://github.com/Byron/dua-cli/commit/0c4d31b406b2c988af3f17fc79b0cf3d7364a910))
     - Skip through single root directory ([`e9fb2fd`](https://github.com/Byron/dua-cli/commit/e9fb2fda3478fefa38bdb9d176380bae5545dbc6))
     - Increase optimization level ([`3d270bd`](https://github.com/Byron/dua-cli/commit/3d270bd2bdd8e83486140c96d7e9c12988c93405))
