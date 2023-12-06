@@ -228,8 +228,8 @@ impl Entries {
 }
 
 fn should_show_mtime_column(sort_mode: &SortMode) -> bool {
-    match sort_mode {
-        SortMode::MTimeAscending | SortMode::MTimeDescending => true,
-        _ => false,
-    }
+    matches!(
+        sort_mode,
+        SortMode::MTimeAscending | SortMode::MTimeDescending
+    )
 }
