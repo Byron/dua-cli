@@ -126,10 +126,15 @@ fn main() -> Result<()> {
     process::exit(res.to_exit_code());
 }
 
-fn paths_from(paths: Vec<PathBuf>, cross_filesystems: bool) -> Result<Vec<PathBuf>, io::Error> {
+fn paths_from(mut paths: Vec<PathBuf>, cross_filesystems: bool) -> Result<Vec<PathBuf>, io::Error> {
     let device_id = std::env::current_dir()
         .ok()
         .and_then(|cwd| crossdev::init(&cwd).ok());
+
+    if paths.len() == 1 {
+        std::env::set_current_dir(&paths[0])?;
+        paths.remove(0);
+    }
 
     if paths.is_empty() {
         cwd_dirlist().map(|paths| match device_id {
