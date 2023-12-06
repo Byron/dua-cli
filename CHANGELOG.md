@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### New Features
+
+ - <csr-id-de4c2b3bd368fd032319b606b84fa488299bc9e1/> With a single path provided as root, pretend it's the current working dir
+   This makes it seem like the user started the directory walk directly in the given directory,
+   which is more intuitive than the previous approach only showed the given directory as
+   top-level directory.
+   
+   Note that this change only affects invocations like `dua <dir>` or `dua i <dir>`.
+ - <csr-id-dd523e389bcc940a5d3e72099bb0c76f40371164/> press `m` to sort by modification date, ascending and descending.
+
+### Bug Fixes
+
+ - <csr-id-72fd6d1936efa508aeb63e729cf75739a49acdb4/> slightly faster (0.5ms) startup times of the binary on MacOS and maybe Linux.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 11 commits contributed to the release over the course of 11 calendar days.
+ - 14 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 5 unique issues were worked on: [#110](https://github.com/Byron/dua-cli/issues/110), [#141](https://github.com/Byron/dua-cli/issues/141), [#179](https://github.com/Byron/dua-cli/issues/179), [#185](https://github.com/Byron/dua-cli/issues/185), [#186](https://github.com/Byron/dua-cli/issues/186)
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#110](https://github.com/Byron/dua-cli/issues/110)**
+    - With a single path provided as root, pretend it's the current working dir ([`de4c2b3`](https://github.com/Byron/dua-cli/commit/de4c2b3bd368fd032319b606b84fa488299bc9e1))
+    - Assure `device_id` is taken from the final CWD ([`74e6d42`](https://github.com/Byron/dua-cli/commit/74e6d4222a7f70253f1d69eb8e7cf94114827852))
+ * **[#141](https://github.com/Byron/dua-cli/issues/141)**
+    - Press `m` to sort by modification date, ascending and descending. ([`dd523e3`](https://github.com/Byron/dua-cli/commit/dd523e389bcc940a5d3e72099bb0c76f40371164))
+ * **[#179](https://github.com/Byron/dua-cli/issues/179)**
+    - Press `m` to sort by modification date, ascending and descending. ([`dd523e3`](https://github.com/Byron/dua-cli/commit/dd523e389bcc940a5d3e72099bb0c76f40371164))
+ * **[#185](https://github.com/Byron/dua-cli/issues/185)**
+    - Slightly faster (0.5ms) startup times of the binary on MacOS and maybe Linux. ([`72fd6d1`](https://github.com/Byron/dua-cli/commit/72fd6d1936efa508aeb63e729cf75739a49acdb4))
+ * **[#186](https://github.com/Byron/dua-cli/issues/186)**
+    - Assure `device_id` is taken from the final CWD ([`74e6d42`](https://github.com/Byron/dua-cli/commit/74e6d4222a7f70253f1d69eb8e7cf94114827852))
+ * **Uncategorized**
+    - Thanks clippy ([`0c4d31b`](https://github.com/Byron/dua-cli/commit/0c4d31b406b2c988af3f17fc79b0cf3d7364a910))
+    - Skip through single root directory ([`e9fb2fd`](https://github.com/Byron/dua-cli/commit/e9fb2fda3478fefa38bdb9d176380bae5545dbc6))
+    - Increase optimization level ([`3d270bd`](https://github.com/Byron/dua-cli/commit/3d270bd2bdd8e83486140c96d7e9c12988c93405))
+    - Fix tests on Windows ([`1b7457e`](https://github.com/Byron/dua-cli/commit/1b7457e0301db3029e1b4beb52acfb99fe408174))
+    - Hide mtime column by default, unless enabled ([`0f8377a`](https://github.com/Byron/dua-cli/commit/0f8377a450b02bad317eed59d1593007aa5c0bed))
+    - Adds keybinding 'm' to toggle sorting by modified time ([`2bd06be`](https://github.com/Byron/dua-cli/commit/2bd06be9ee5ad8e1a747544899b299a53a950940))
+    - Add test to assure memory consumption of EntryData doesn't change unexpectedly. ([`adebd00`](https://github.com/Byron/dua-cli/commit/adebd00daa409da67d2f252b966e2dba632acda3))
+</details>
+
 ## 2.20.3 (2023-11-21)
 
 ### Bug Fixes
@@ -15,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -27,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.20.3 ([`bb41fd5`](https://github.com/Byron/dua-cli/commit/bb41fd55cc476008342be9238568eb8f32dd40c4))
     - Mark-pane now doesn't double-count sizes anymore. ([`7ab0070`](https://github.com/Byron/dua-cli/commit/7ab0070dcfda573cfbdc8451ddba5fcf15067132))
     - Fixes marking parent directory for deletion counts children twice ([`f7086cc`](https://github.com/Byron/dua-cli/commit/f7086cc0836bd091552a83d8faabf937fb4c6cf8))
 </details>
