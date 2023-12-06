@@ -49,7 +49,7 @@ fn main() -> Result<()> {
             let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
-                paths_from(input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
                 Interaction::Full,
             )?
             .map(|(keys_rx, mut app)| {
@@ -101,7 +101,7 @@ fn main() -> Result<()> {
                 walk_options,
                 !no_total,
                 !no_sort,
-                paths_from(input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{:?}", stats).ok();
@@ -117,7 +117,7 @@ fn main() -> Result<()> {
                 walk_options,
                 true,
                 true,
-                paths_from(opt.input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(opt.input, !opt.stay_on_filesystem)?,
             )?
             .0
         }
@@ -126,7 +126,14 @@ fn main() -> Result<()> {
     process::exit(res.to_exit_code());
 }
 
-fn paths_from(paths: Vec<PathBuf>, cross_filesystems: bool) -> Result<Vec<PathBuf>, io::Error> {
+fn extract_paths_maybe_set_cwd(
+    mut paths: Vec<PathBuf>,
+    cross_filesystems: bool,
+) -> Result<Vec<PathBuf>, io::Error> {
+    if paths.len() == 1 {
+        std::env::set_current_dir(&paths[0])?;
+        paths.clear();
+    }
     let device_id = std::env::current_dir()
         .ok()
         .and_then(|cwd| crossdev::init(&cwd).ok());
