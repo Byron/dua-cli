@@ -11,6 +11,8 @@ pub enum SortMode {
     SizeAscending,
     MTimeAscending,
     MTimeDescending,
+    CountAscending,
+    CountDescending,
 }
 
 impl SortMode {
@@ -19,18 +21,25 @@ impl SortMode {
         *self = match self {
             SizeDescending => SizeAscending,
             SizeAscending => SizeDescending,
-            MTimeAscending => SizeAscending,
-            MTimeDescending => SizeDescending,
+            _ => SizeAscending,
         }
     }
 
     pub fn toggle_mtime(&mut self) {
         use SortMode::*;
         *self = match self {
-            SizeDescending => MTimeDescending,
-            SizeAscending => MTimeAscending,
             MTimeAscending => MTimeDescending,
             MTimeDescending => MTimeAscending,
+            _ => MTimeAscending,
+        }
+    }
+
+    pub fn toggle_count(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            CountAscending => CountDescending,
+            CountDescending => CountAscending,
+            _ => CountAscending,
         }
     }
 }
@@ -62,6 +71,8 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
             SizeAscending => l.data.size.cmp(&r.data.size),
             MTimeAscending => l.data.mtime.cmp(&r.data.mtime),
             MTimeDescending => r.data.mtime.cmp(&l.data.mtime),
+            CountAscending => l.data.entry_count.cmp(&r.data.entry_count),
+            CountDescending => r.data.entry_count.cmp(&l.data.entry_count),
         })
         .collect()
 }

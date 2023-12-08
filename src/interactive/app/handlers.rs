@@ -161,6 +161,11 @@ impl AppState {
         self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
     }
 
+    pub fn cycle_count_sorting(&mut self, traversal: &Traversal) {
+        self.sorting.toggle_count();
+        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
+    }
+
     pub fn reset_message(&mut self) {
         if self.is_scanning {
             self.message = Some("-> scanning <-".into());

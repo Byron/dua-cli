@@ -224,32 +224,32 @@ pub fn sample_01_tree() -> Tree {
         let root_size = 1259070;
         #[cfg(windows)]
         let root_size = 1259069;
-        let rn = add_node("", root_size, None);
+        let rn = add_node("", root_size, 14, None);
         {
-            let sn = add_node(&fixture_str("sample-01"), root_size, Some(rn));
+            let sn = add_node(&fixture_str("sample-01"), root_size, 13, Some(rn));
             {
-                add_node(".hidden.666", 666, Some(sn));
-                add_node("a", 256, Some(sn));
-                add_node("b.empty", 0, Some(sn));
+                add_node(".hidden.666", 666, 0, Some(sn));
+                add_node("a", 256, 0, Some(sn));
+                add_node("b.empty", 0, 0, Some(sn));
                 #[cfg(not(windows))]
-                add_node("c.lnk", 1, Some(sn));
+                add_node("c.lnk", 1, 0, Some(sn));
                 #[cfg(windows)]
-                add_node("c.lnk", 0, Some(sn));
-                let dn = add_node("dir", 1258024, Some(sn));
+                add_node("c.lnk", 0, 0, Some(sn));
+                let dn = add_node("dir", 1258024, 7, Some(sn));
                 {
-                    add_node("1000bytes", 1000, Some(dn));
-                    add_node("dir-a.1mb", 1_000_000, Some(dn));
-                    add_node("dir-a.kb", 1024, Some(dn));
-                    let en = add_node("empty-dir", 0, Some(dn));
+                    add_node("1000bytes", 1000, 0, Some(dn));
+                    add_node("dir-a.1mb", 1_000_000, 0, Some(dn));
+                    add_node("dir-a.kb", 1024, 0, Some(dn));
+                    let en = add_node("empty-dir", 0, 1, Some(dn));
                     {
-                        add_node(".gitkeep", 0, Some(en));
+                        add_node(".gitkeep", 0, 0, Some(en));
                     }
-                    let sub = add_node("sub", 256_000, Some(dn));
+                    let sub = add_node("sub", 256_000, 1, Some(dn));
                     {
-                        add_node("dir-sub-a.256kb", 256_000, Some(sub));
+                        add_node("dir-sub-a.256kb", 256_000, 0, Some(sub));
                     }
                 }
-                add_node("z123.b", 123, Some(sn));
+                add_node("z123.b", 123, 0, Some(sn));
             }
         }
     }
@@ -261,27 +261,28 @@ pub fn sample_02_tree() -> Tree {
     {
         let mut add_node = make_add_node(&mut tree);
         let root_size = 1540;
-        let rn = add_node("", root_size, None);
+        let rn = add_node("", root_size, 10, None);
         {
             let sn = add_node(
                 Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
                 root_size,
+                9,
                 Some(rn),
             );
             {
-                add_node("a", 256, Some(sn));
-                add_node("b", 1, Some(sn));
-                let dn = add_node("dir", 1283, Some(sn));
+                add_node("a", 256, 0, Some(sn));
+                add_node("b", 1, 0, Some(sn));
+                let dn = add_node("dir", 1283, 6, Some(sn));
                 {
-                    add_node("c", 257, Some(dn));
-                    add_node("d", 2, Some(dn));
-                    let en = add_node("empty-dir", 0, Some(dn));
+                    add_node("c", 257, 0, Some(dn));
+                    add_node("d", 2, 0, Some(dn));
+                    let en = add_node("empty-dir", 0, 1, Some(dn));
                     {
-                        add_node(".gitkeep", 0, Some(en));
+                        add_node(".gitkeep", 0, 0, Some(en));
                     }
-                    let sub = add_node("sub", 1024, Some(dn));
+                    let sub = add_node("sub", 1024, 1, Some(dn));
                     {
-                        add_node("e", 1024, Some(sub));
+                        add_node("e", 1024, 0, Some(sub));
                     }
                 }
             }
@@ -290,13 +291,15 @@ pub fn sample_02_tree() -> Tree {
     tree
 }
 
-pub fn make_add_node(t: &mut Tree) -> impl FnMut(&str, u128, Option<NodeIndex>) -> NodeIndex + '_ {
-    move |name, size, maybe_from_idx| {
+pub fn make_add_node(
+    t: &mut Tree,
+) -> impl FnMut(&str, u128, u64, Option<NodeIndex>) -> NodeIndex + '_ {
+    move |name, size, entry_count, maybe_from_idx| {
         let n = t.add_node(EntryData {
             name: PathBuf::from(name),
             size,
-            mtime: UNIX_EPOCH,
-            metadata_io_error: false,
+            entry_count,
+            ..Default::default()
         });
         if let Some(from) = maybe_from_idx {
             t.add_edge(from, n, ());

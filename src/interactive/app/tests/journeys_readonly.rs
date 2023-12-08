@@ -67,14 +67,14 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_keys(b"m".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::MTimeDescending,
+            SortMode::MTimeAscending,
             "it sets the sort mode to descending by mtime"
         );
         // when hitting the M key again
         app.process_events(&mut terminal, into_keys(b"m".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::MTimeAscending,
+            SortMode::MTimeDescending,
             "it sets the sort mode to ascending by mtime"
         );
         // when hitting the S key

@@ -134,6 +134,7 @@ impl HelpPane {
             {
                 hotkey("s", "toggle sort by size ascending/descending", None);
                 hotkey("m", "toggle sort by mtime ascending/descending", None);
+                hotkey("c", "toggle sort by items ascending/descending", None);
                 hotkey(
                     "g",
                     "cycle through percentage display and bar options",
