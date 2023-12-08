@@ -2,7 +2,7 @@
 name = "dua-cli"
 version = "2.21.0"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/Byron/dua-cli"
 readme = "README.md"
 description = "A tool to conveniently learn about the disk usage of directories, fast!"

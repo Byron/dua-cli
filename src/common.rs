@@ -72,7 +72,7 @@ pub struct ByteFormatDisplay {
 }
 
 impl fmt::Display for ByteFormatDisplay {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use byte_unit::Byte;
         use ByteFormat::*;
 

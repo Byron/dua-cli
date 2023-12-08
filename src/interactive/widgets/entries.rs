@@ -6,6 +6,7 @@ use crate::interactive::{
 use chrono::DateTime;
 use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
+use std::time::SystemTime;
 use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
@@ -65,9 +66,9 @@ impl Entries {
         };
 
         let total: u128 = entries.iter().map(|b| b.data.size).sum();
-        let title = title(&current_path(tree, root), entries.len());
-        let title_block = title_block(&title, border_style);
-        let entry_in_view = entry_in_view(selected.as_ref(), entries);
+        let title = title(&current_path(tree, *root), entries.len());
+        let title_block = title_block(&title, *border_style);
+        let entry_in_view = entry_in_view(*selected, entries);
 
         let props = ListProps {
             block: Some(title_block),
@@ -80,28 +81,33 @@ impl Entries {
                  is_dir,
                  exists,
              }| {
-                let is_marked = is_marked(marked.as_deref(), node_idx);
-                let is_selected = is_selected(selected, node_idx);
+                let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+                let is_selected = selected.map_or(false, |idx| idx == *node_idx);
                 let fraction = entry_data.size as f32 / total as f32;
-                let style = style(is_selected, is_focussed);
-                let local_style = local_style(fraction, style);
+                let text_style = style(is_selected, *is_focussed);
+                let percentage_style = percentage_style(fraction, text_style);
 
                 let mut columns = Vec::new();
                 if should_show_mtime_column(sort_mode) {
-                    columns.push(mtime_column(entry_data, sort_mode, style));
+                    columns.push(mtime_column(entry_data.mtime, *sort_mode, text_style));
                 }
-                columns.push(bytes_column(display, entry_data, sort_mode, style));
-                columns.push(percentage_column(display, fraction, local_style));
+                columns.push(bytes_column(
+                    *display,
+                    entry_data.size,
+                    *sort_mode,
+                    text_style,
+                ));
+                columns.push(percentage_column(*display, fraction, percentage_style));
                 columns.push(name_column(
-                    entry_data,
-                    is_dir,
+                    &entry_data.name,
+                    *is_dir,
                     is_top,
-                    root,
+                    *root,
                     area,
-                    name_style(is_marked, *exists, *is_dir, style),
+                    name_style(is_marked, *exists, *is_dir, text_style),
                 ));
 
-                columns_with_separators(columns, local_style)
+                columns_with_separators(columns, percentage_style)
             },
         );
 
@@ -115,27 +121,27 @@ impl Entries {
 }
 
 fn entry_in_view(
-    selected: Option<&petgraph::stable_graph::NodeIndex>,
+    selected: Option<petgraph::stable_graph::NodeIndex>,
     entries: &[EntryDataBundle],
 ) -> Option<usize> {
     selected.map(|selected| {
         entries
             .iter()
-            .find_position(|b| b.index == *selected)
+            .find_position(|b| b.index == selected)
             .map(|(idx, _)| idx)
             .unwrap_or(0)
     })
 }
 
-fn title_block<'a>(title: &'a str, border_style: &'a Style) -> Block<'a> {
+fn title_block(title: &str, border_style: Style) -> Block<'_> {
     Block::default()
         .title(title)
-        .border_style(*border_style)
+        .border_style(border_style)
         .borders(Borders::ALL)
 }
 
 fn title(current_path: &str, item_count: usize) -> String {
-    let title = format!(
+    format!(
         " {} ({} item{}) ",
         current_path,
         item_count,
@@ -143,15 +149,14 @@ fn title(current_path: &str, item_count: usize) -> String {
             1 => "",
             _ => "s",
         }
-    );
-    title
+    )
 }
 
 fn current_path(
     tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
-    root: &petgraph::stable_graph::NodeIndex,
+    root: petgraph::stable_graph::NodeIndex,
 ) -> String {
-    match path_of(tree, *root).to_string_lossy().to_string() {
+    match path_of(tree, root).to_string_lossy().to_string() {
         ref p if p.is_empty() => Path::new(".")
             .canonicalize()
             .map(|p| p.to_string_lossy().to_string())
@@ -192,40 +197,20 @@ fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
     bound
 }
 
-fn is_marked(
-    marked: Option<
-        &std::collections::BTreeMap<petgraph::stable_graph::NodeIndex, super::EntryMark>,
-    >,
-    node_idx: &petgraph::stable_graph::NodeIndex,
-) -> bool {
-    marked.map(|m| m.contains_key(node_idx)).unwrap_or(false)
-}
-
-fn is_selected(
-    selected: &Option<petgraph::stable_graph::NodeIndex>,
-    node_idx: &petgraph::stable_graph::NodeIndex,
-) -> bool {
-    if let Some(idx) = selected {
-        *idx == *node_idx
-    } else {
-        false
-    }
-}
-
-fn style(is_selected: bool, is_focussed: &bool) -> Style {
+fn style(is_selected: bool, is_focussed: bool) -> Style {
     let mut style = Style::default();
     if is_selected {
         style.add_modifier.insert(Modifier::REVERSED);
     }
-    if *is_focussed & is_selected {
+    if is_focussed & is_selected {
         style.add_modifier.insert(Modifier::BOLD);
     }
     style
 }
 
-fn local_style(fraction: f32, style: Style) -> Style {
-    let should_avoid_showing_a_big_reversed_bar = fraction > 0.9;
-    if should_avoid_showing_a_big_reversed_bar {
+fn percentage_style(fraction: f32, style: Style) -> Style {
+    let avoid_big_reversed_bar = fraction > 0.9;
+    if avoid_big_reversed_bar {
         style.remove_modifier(Modifier::REVERSED)
     } else {
         style
@@ -244,8 +229,8 @@ fn columns_with_separators(columns: Vec<Span<'_>>, style: Style) -> Vec<Span<'_>
     columns_with_separators
 }
 
-fn mtime_column<'a>(entry_data: &'a EntryData, sort_mode: &'a SortMode, style: Style) -> Span<'a> {
-    let datetime = DateTime::<chrono::Utc>::from(entry_data.mtime);
+fn mtime_column(entry_mtime: SystemTime, sort_mode: SortMode, style: Style) -> Span<'static> {
+    let datetime = DateTime::<chrono::Utc>::from(entry_mtime);
     let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
     Span::styled(
         format!("{:>20}", formatted_time),
@@ -259,20 +244,20 @@ fn mtime_column<'a>(entry_data: &'a EntryData, sort_mode: &'a SortMode, style: S
     )
 }
 
-fn name_column<'a>(
-    entry_data: &'a dua::traverse::EntryData,
-    is_dir: &'a bool,
+fn name_column(
+    entry_name: &Path,
+    is_dir: bool,
     is_top: impl Fn(petgraph::stable_graph::NodeIndex) -> bool,
-    root: &'a petgraph::stable_graph::NodeIndex,
+    root: petgraph::stable_graph::NodeIndex,
     area: Rect,
     style: Style,
-) -> Span<'a> {
+) -> Span<'static> {
     Span::styled(
         fill_background_to_right(
             format!(
                 "{prefix}{}",
-                entry_data.name.to_string_lossy(),
-                prefix = if *is_dir && !is_top(*root) { "/" } else { " " }
+                entry_name.to_string_lossy(),
+                prefix = if is_dir && !is_top(root) { "/" } else { " " }
             ),
             area.width,
         ),
@@ -290,20 +275,20 @@ fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Styl
     Style { fg, ..style }
 }
 
-fn percentage_column(display: &DisplayOptions, fraction: f32, style: Style) -> Span {
+fn percentage_column(display: DisplayOptions, fraction: f32, style: Style) -> Span<'static> {
     Span::styled(format!("{}", display.byte_vis.display(fraction)), style)
 }
 
-fn bytes_column<'a>(
-    display: &'a DisplayOptions,
-    entry_data: &'a dua::traverse::EntryData,
-    sort_mode: &'a SortMode,
+fn bytes_column(
+    display: DisplayOptions,
+    entry_size: u128,
+    sort_mode: SortMode,
     style: Style,
-) -> Span<'a> {
+) -> Span<'static> {
     Span::styled(
         format!(
             "{:>byte_column_width$}",
-            display.byte_format.display(entry_data.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+            display.byte_format.display(entry_size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
             byte_column_width = display.byte_format.width()
         ),
         Style {
