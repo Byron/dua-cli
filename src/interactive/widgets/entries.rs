@@ -4,8 +4,9 @@ use crate::interactive::{
     DisplayOptions, EntryDataBundle, SortMode,
 };
 use chrono::DateTime;
-use dua::traverse::{Tree, TreeIndex};
+use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
+use std::time::SystemTime;
 use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
@@ -65,166 +66,239 @@ impl Entries {
         };
 
         let total: u128 = entries.iter().map(|b| b.data.size).sum();
-        let title = match path_of(tree, *root).to_string_lossy().to_string() {
-            ref p if p.is_empty() => Path::new(".")
-                .canonicalize()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| String::from(".")),
-            p => p,
-        };
-        let title = format!(
-            " {} ({} item{}) ",
-            title,
-            entries.len(),
-            match entries.len() {
-                1 => "",
-                _ => "s",
-            }
-        );
-        let block = Block::default()
-            .title(title.as_str())
-            .border_style(*border_style)
-            .borders(Borders::ALL);
-        let entry_in_view = selected.map(|selected| {
-            entries
-                .iter()
-                .find_position(|b| b.index == selected)
-                .map(|(idx, _)| idx)
-                .unwrap_or(0)
-        });
+        let title = title(&current_path(tree, *root), entries.len());
+        let title_block = title_block(&title, *border_style);
+        let entry_in_view = entry_in_view(*selected, entries);
 
         let props = ListProps {
-            block: Some(block),
+            block: Some(title_block),
             entry_in_view,
         };
         let lines = entries.iter().map(
             |EntryDataBundle {
                  index: node_idx,
-                 data: w,
+                 data: entry_data,
                  is_dir,
                  exists,
              }| {
-                let mut style = Style::default();
-                let is_selected = if let Some(idx) = selected {
-                    *idx == *node_idx
-                } else {
-                    false
-                };
-                if is_selected {
-                    style.add_modifier.insert(Modifier::REVERSED);
-                }
-                if *is_focussed & is_selected {
-                    style.add_modifier.insert(Modifier::BOLD);
-                }
+                let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+                let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+                let fraction = entry_data.size as f32 / total as f32;
+                let text_style = style(is_selected, *is_focussed);
+                let percentage_style = percentage_style(fraction, text_style);
 
-                let fraction = w.size as f32 / total as f32;
-                let should_avoid_showing_a_big_reversed_bar = fraction > 0.9;
-                let local_style = if should_avoid_showing_a_big_reversed_bar {
-                    style.remove_modifier(Modifier::REVERSED)
-                } else {
-                    style
-                };
-
-                let datetime = DateTime::<chrono::Utc>::from(w.mtime);
-                let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
-                let mtime = Span::styled(
-                    format!("{:>20}", formatted_time),
-                    Style {
-                        fg: match sort_mode {
-                            SortMode::SizeAscending | SortMode::SizeDescending => style.fg,
-                            SortMode::MTimeAscending | SortMode::MTimeDescending => {
-                                Color::Green.into()
-                            }
-                        },
-                        ..style
-                    },
-                );
-
-                let bar = Span::styled(" | ", local_style);
-
-                let bytes = Span::styled(
-                    format!(
-                        "{:>byte_column_width$}",
-                        display.byte_format.display(w.size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
-                        byte_column_width = display.byte_format.width()
-                    ),
-                    Style {
-                        fg: match sort_mode {
-                            SortMode::SizeAscending | SortMode::SizeDescending => {
-                                Color::Green.into()
-                            }
-                            SortMode::MTimeAscending | SortMode::MTimeDescending => style.fg,
-                        },
-                        ..style
-                    },
-                );
-
-                let left_bar = Span::styled(" |", local_style);
-                let percentage = Span::styled(
-                    format!("{}", display.byte_vis.display(fraction)),
-                    local_style,
-                );
-                let right_bar = Span::styled("| ", local_style);
-
-                let name = Span::styled(
-                    fill_background_to_right(
-                        format!(
-                            "{prefix}{}",
-                            w.name.to_string_lossy(),
-                            prefix = if *is_dir && !is_top(*root) { "/" } else { " " }
-                        ),
-                        area.width,
-                    ),
-                    {
-                        let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-                        let fg = if !exists {
-                            // non-existing - always red!
-                            Some(Color::Red)
-                        } else {
-                            entry_color(style.fg, !*is_dir, is_marked)
-                        };
-                        Style { fg, ..style }
-                    },
-                );
-
+                let mut columns = Vec::new();
                 if should_show_mtime_column(sort_mode) {
-                    vec![mtime, bar, bytes, left_bar, percentage, right_bar, name]
-                } else {
-                    vec![bytes, left_bar, percentage, right_bar, name]
+                    columns.push(mtime_column(entry_data.mtime, *sort_mode, text_style));
                 }
+                columns.push(bytes_column(
+                    *display,
+                    entry_data.size,
+                    *sort_mode,
+                    text_style,
+                ));
+                columns.push(percentage_column(*display, fraction, percentage_style));
+                columns.push(name_column(
+                    &entry_data.name,
+                    *is_dir,
+                    is_top,
+                    *root,
+                    area,
+                    name_style(is_marked, *exists, *is_dir, text_style),
+                ));
+
+                columns_with_separators(columns, percentage_style)
             },
         );
 
         list.render(props, lines, area, buf);
 
         if *is_focussed {
-            let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
-            let help_text_block_width = block_width(help_text);
-            let bound = Rect {
-                width: area.width.saturating_sub(1),
-                ..area
-            };
-            if block_width(&title) + help_text_block_width <= bound.width {
-                draw_text_nowrap_fn(
-                    rect::snap_to_right(bound, help_text_block_width),
-                    buf,
-                    help_text,
-                    |_, _, _| Style::default(),
-                );
-            }
-            let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-            let help_text = " mark-move = d | mark-toggle = space | toggle-all = a";
-            let help_text_block_width = block_width(help_text);
-            if help_text_block_width <= bound.width {
-                draw_text_nowrap_fn(
-                    rect::snap_to_right(bound, help_text_block_width),
-                    buf,
-                    help_text,
-                    |_, _, _| Style::default(),
-                );
-            }
+            let bound = draw_top_right_help(area, &title, buf);
+            draw_bottom_right_help(bound, buf);
         }
     }
+}
+
+fn entry_in_view(
+    selected: Option<petgraph::stable_graph::NodeIndex>,
+    entries: &[EntryDataBundle],
+) -> Option<usize> {
+    selected.map(|selected| {
+        entries
+            .iter()
+            .find_position(|b| b.index == selected)
+            .map(|(idx, _)| idx)
+            .unwrap_or(0)
+    })
+}
+
+fn title_block(title: &str, border_style: Style) -> Block<'_> {
+    Block::default()
+        .title(title)
+        .border_style(border_style)
+        .borders(Borders::ALL)
+}
+
+fn title(current_path: &str, item_count: usize) -> String {
+    format!(
+        " {} ({} item{}) ",
+        current_path,
+        item_count,
+        match item_count {
+            1 => "",
+            _ => "s",
+        }
+    )
+}
+
+fn current_path(
+    tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
+    root: petgraph::stable_graph::NodeIndex,
+) -> String {
+    match path_of(tree, root).to_string_lossy().to_string() {
+        ref p if p.is_empty() => Path::new(".")
+            .canonicalize()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| String::from(".")),
+        p => p,
+    }
+}
+
+fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
+    let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
+    let help_text = " mark-move = d | mark-toggle = space | toggle-all = a";
+    let help_text_block_width = block_width(help_text);
+    if help_text_block_width <= bound.width {
+        draw_text_nowrap_fn(
+            rect::snap_to_right(bound, help_text_block_width),
+            buf,
+            help_text,
+            |_, _, _| Style::default(),
+        );
+    }
+}
+
+fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
+    let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
+    let help_text_block_width = block_width(help_text);
+    let bound = Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    };
+    if block_width(title) + help_text_block_width <= bound.width {
+        draw_text_nowrap_fn(
+            rect::snap_to_right(bound, help_text_block_width),
+            buf,
+            help_text,
+            |_, _, _| Style::default(),
+        );
+    }
+    bound
+}
+
+fn style(is_selected: bool, is_focussed: bool) -> Style {
+    let mut style = Style::default();
+    if is_selected {
+        style.add_modifier.insert(Modifier::REVERSED);
+    }
+    if is_focussed & is_selected {
+        style.add_modifier.insert(Modifier::BOLD);
+    }
+    style
+}
+
+fn percentage_style(fraction: f32, style: Style) -> Style {
+    let avoid_big_reversed_bar = fraction > 0.9;
+    if avoid_big_reversed_bar {
+        style.remove_modifier(Modifier::REVERSED)
+    } else {
+        style
+    }
+}
+
+fn columns_with_separators(columns: Vec<Span<'_>>, style: Style) -> Vec<Span<'_>> {
+    let mut columns_with_separators = Vec::new();
+    let column_count = columns.len();
+    for (idx, column) in columns.into_iter().enumerate() {
+        columns_with_separators.push(column);
+        if idx != column_count - 1 {
+            columns_with_separators.push(Span::styled(" | ", style))
+        }
+    }
+    columns_with_separators
+}
+
+fn mtime_column(entry_mtime: SystemTime, sort_mode: SortMode, style: Style) -> Span<'static> {
+    let datetime = DateTime::<chrono::Utc>::from(entry_mtime);
+    let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
+    Span::styled(
+        format!("{:>20}", formatted_time),
+        Style {
+            fg: match sort_mode {
+                SortMode::SizeAscending | SortMode::SizeDescending => style.fg,
+                SortMode::MTimeAscending | SortMode::MTimeDescending => Color::Green.into(),
+            },
+            ..style
+        },
+    )
+}
+
+fn name_column(
+    entry_name: &Path,
+    is_dir: bool,
+    is_top: impl Fn(petgraph::stable_graph::NodeIndex) -> bool,
+    root: petgraph::stable_graph::NodeIndex,
+    area: Rect,
+    style: Style,
+) -> Span<'static> {
+    Span::styled(
+        fill_background_to_right(
+            format!(
+                "{prefix}{}",
+                entry_name.to_string_lossy(),
+                prefix = if is_dir && !is_top(root) { "/" } else { " " }
+            ),
+            area.width,
+        ),
+        style,
+    )
+}
+
+fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Style {
+    let fg = if !exists {
+        // non-existing - always red!
+        Some(Color::Red)
+    } else {
+        entry_color(style.fg, !is_dir, is_marked)
+    };
+    Style { fg, ..style }
+}
+
+fn percentage_column(display: DisplayOptions, fraction: f32, style: Style) -> Span<'static> {
+    Span::styled(format!("{}", display.byte_vis.display(fraction)), style)
+}
+
+fn bytes_column(
+    display: DisplayOptions,
+    entry_size: u128,
+    sort_mode: SortMode,
+    style: Style,
+) -> Span<'static> {
+    Span::styled(
+        format!(
+            "{:>byte_column_width$}",
+            display.byte_format.display(entry_size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
+            byte_column_width = display.byte_format.width()
+        ),
+        Style {
+            fg: match sort_mode {
+                SortMode::SizeAscending | SortMode::SizeDescending => Color::Green.into(),
+                SortMode::MTimeAscending | SortMode::MTimeDescending => style.fg,
+            },
+            ..style
+        },
+    )
 }
 
 fn should_show_mtime_column(sort_mode: &SortMode) -> bool {

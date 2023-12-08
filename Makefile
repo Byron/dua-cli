@@ -19,8 +19,8 @@ target/debug/dua: always
 target/release/dua: always
 	cargo build --release
 
-lint: ## Run lints with clippy
-	cargo clippy
+clippy: ## Run lints with clippy
+	cargo clippy -- -D warnings
 
 profile: target/release/dua ## run callgrind and annotate its output - linux only
 	valgrind --callgrind-out-file=callgrind.profile --tool=callgrind  $< >/dev/null

@@ -1,7 +1,5 @@
 #![cfg_attr(windows, feature(windows_by_handle))]
-#![forbid(unsafe_code)]
-
-extern crate jwalk;
+#![forbid(unsafe_code, rust_2018_idioms)]
 
 mod aggregate;
 mod common;

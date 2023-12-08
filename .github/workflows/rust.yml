@@ -21,7 +21,7 @@ jobs:
     - name: fmt
       run: cargo fmt --all -- --check
     - name: clippy
-      run: cargo clippy
+      run: cargo clippy -- -D warnings
     - name: Check crate package size (feat. 'cargo diet')
       continue-on-error: true
       run: |
