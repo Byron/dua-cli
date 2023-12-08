@@ -257,7 +257,7 @@ impl TerminalApp {
                 Some(s) => {
                     s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
                     if !received_events {
-                        s.selected = s.entries.get(0).map(|b| b.index);
+                        s.selected = s.entries.first().map(|b| b.index);
                     }
                     s
                 }
@@ -269,7 +269,7 @@ impl TerminalApp {
                         AppState {
                             root: traversal.root_index,
                             sorting,
-                            selected: entries.get(0).map(|b| b.index),
+                            selected: entries.first().map(|b| b.index),
                             entries,
                             is_scanning: true,
                             ..Default::default()
@@ -316,9 +316,9 @@ impl TerminalApp {
                     s.is_scanning = false;
                     s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
                     s.selected = if received_events {
-                        s.selected.or_else(|| s.entries.get(0).map(|b| b.index))
+                        s.selected.or_else(|| s.entries.first().map(|b| b.index))
                     } else {
-                        s.entries.get(0).map(|b| b.index)
+                        s.entries.first().map(|b| b.index)
                     };
                     s
                 },

@@ -84,7 +84,7 @@ impl AppState {
                     .bookmarks
                     .get(&parent_idx)
                     .copied()
-                    .or_else(|| self.entries.get(0).map(|b| b.index));
+                    .or_else(|| self.entries.first().map(|b| b.index));
             }
             None => self.message = Some("Top level reached".into()),
         }
@@ -321,7 +321,7 @@ impl AppState {
             .and_then(|selected| self.entries.iter().find(|e| e.index == selected))
             .is_none()
         {
-            self.selected = self.entries.get(0).map(|e| e.index);
+            self.selected = self.entries.first().map(|e| e.index);
         }
         self.recompute_sizes_recursively(parent_idx, traversal);
         entries_deleted
