@@ -38,6 +38,7 @@ tui-react = { version = "0.19.0", optional = true }
 open = { version = "5.0", optional = true }
 wild = "2.0.4"
 owo-colors = "3.5.0"
+human_format = "1.0.3"
 
 [[bin]]
 name="dua"

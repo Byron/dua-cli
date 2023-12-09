@@ -5,6 +5,7 @@ use crate::interactive::{
 };
 use chrono::DateTime;
 use dua::traverse::{EntryData, Tree, TreeIndex};
+use human_format;
 use itertools::Itertools;
 use std::time::SystemTime;
 use std::{borrow::Borrow, path::Path};
@@ -88,16 +89,24 @@ impl Entries {
                 let percentage_style = percentage_style(fraction, text_style);
 
                 let mut columns = Vec::new();
-                if should_show_mtime_column(sort_mode) {
-                    columns.push(mtime_column(entry_data.mtime, *sort_mode, text_style));
+                if show_mtime_column(sort_mode) {
+                    columns.push(mtime_column(
+                        entry_data.mtime,
+                        column_style(Column::MTime, *sort_mode, text_style),
+                    ));
                 }
                 columns.push(bytes_column(
                     *display,
                     entry_data.size,
-                    *sort_mode,
-                    text_style,
+                    column_style(Column::Bytes, *sort_mode, text_style),
                 ));
                 columns.push(percentage_column(*display, fraction, percentage_style));
+                if show_count_column(sort_mode) {
+                    columns.push(count_column(
+                        entry_data.entry_count,
+                        column_style(Column::Count, *sort_mode, text_style),
+                    ));
+                }
                 columns.push(name_column(
                     &entry_data.name,
                     *is_dir,
@@ -229,18 +238,27 @@ fn columns_with_separators(columns: Vec<Span<'_>>, style: Style) -> Vec<Span<'_>
     columns_with_separators
 }
 
-fn mtime_column(entry_mtime: SystemTime, sort_mode: SortMode, style: Style) -> Span<'static> {
+fn mtime_column(entry_mtime: SystemTime, style: Style) -> Span<'static> {
     let datetime = DateTime::<chrono::Utc>::from(entry_mtime);
     let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
+    Span::styled(format!("{:>20}", formatted_time), style)
+}
+
+fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     Span::styled(
-        format!("{:>20}", formatted_time),
-        Style {
-            fg: match sort_mode {
-                SortMode::SizeAscending | SortMode::SizeDescending => style.fg,
-                SortMode::MTimeAscending | SortMode::MTimeDescending => Color::Green.into(),
-            },
-            ..style
-        },
+        format!(
+            "{:>4}",
+            match entry_count {
+                Some(count) => {
+                    human_format::Formatter::new()
+                        .with_decimals(0)
+                        .with_separator("")
+                        .format(count as f64)
+                }
+                None => "".to_string(),
+            }
+        ),
+        style,
     )
 }
 
@@ -279,31 +297,48 @@ fn percentage_column(display: DisplayOptions, fraction: f32, style: Style) -> Sp
     Span::styled(format!("{}", display.byte_vis.display(fraction)), style)
 }
 
-fn bytes_column(
-    display: DisplayOptions,
-    entry_size: u128,
-    sort_mode: SortMode,
-    style: Style,
-) -> Span<'static> {
+fn bytes_column(display: DisplayOptions, entry_size: u128, style: Style) -> Span<'static> {
     Span::styled(
         format!(
             "{:>byte_column_width$}",
             display.byte_format.display(entry_size).to_string(), // we would have to impl alignment/padding ourselves otherwise...
             byte_column_width = display.byte_format.width()
         ),
-        Style {
-            fg: match sort_mode {
-                SortMode::SizeAscending | SortMode::SizeDescending => Color::Green.into(),
-                SortMode::MTimeAscending | SortMode::MTimeDescending => style.fg,
-            },
-            ..style
-        },
+        style,
     )
 }
 
-fn should_show_mtime_column(sort_mode: &SortMode) -> bool {
+#[derive(PartialEq)]
+enum Column {
+    Bytes,
+    MTime,
+    Count,
+}
+
+fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
+    Style {
+        fg: match (sort_mode, column) {
+            (SortMode::SizeAscending | SortMode::SizeDescending, Column::Bytes)
+            | (SortMode::MTimeAscending | SortMode::MTimeDescending, Column::MTime)
+            | (SortMode::CountAscending | SortMode::CountDescending, Column::Count) => {
+                Color::Green.into()
+            }
+            _ => style.fg,
+        },
+        ..style
+    }
+}
+
+fn show_mtime_column(sort_mode: &SortMode) -> bool {
     matches!(
         sort_mode,
         SortMode::MTimeAscending | SortMode::MTimeDescending
+    )
+}
+
+fn show_count_column(sort_mode: &SortMode) -> bool {
+    matches!(
+        sort_mode,
+        SortMode::CountAscending | SortMode::CountDescending
     )
 }

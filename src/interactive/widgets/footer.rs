@@ -43,6 +43,8 @@ impl Footer {
                     SortMode::SizeDescending => "size descending",
                     SortMode::MTimeAscending => "modified ascending",
                     SortMode::MTimeDescending => "modified descending",
+                    SortMode::CountAscending => "items ascending",
+                    SortMode::CountDescending => "items descending",
                 },
                 match total_bytes {
                     Some(b) => format!("{}", format.display(*b)),
