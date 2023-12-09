@@ -73,7 +73,7 @@ impl Traversal {
         input: Vec<PathBuf>,
         mut update: impl FnMut(&mut Traversal) -> Result<bool>,
     ) -> Result<Option<Traversal>> {
-        #[derive(Default)]
+        #[derive(Default, Copy, Clone)]
         struct DirectoryInfo {
             size: u128,
             entries_count: u64,
@@ -81,13 +81,16 @@ impl Traversal {
         fn set_directory_info_or_panic(
             tree: &mut Tree,
             node_idx: TreeIndex,
-            current_directory_at_depth: &DirectoryInfo,
+            DirectoryInfo {
+                size,
+                entries_count,
+            }: DirectoryInfo,
         ) {
             let node = tree
                 .node_weight_mut(node_idx)
                 .expect("node for parent index we just retrieved");
-            node.size = current_directory_at_depth.size;
-            node.entry_count = current_directory_at_depth.entries_count;
+            node.size = size;
+            node.entry_count = entries_count;
         }
         fn parent_or_panic(tree: &mut Tree, parent_node_idx: TreeIndex) -> TreeIndex {
             tree.neighbors_directed(parent_node_idx, Direction::Incoming)
@@ -209,7 +212,7 @@ impl Traversal {
                                     set_directory_info_or_panic(
                                         &mut t.tree,
                                         parent_node_idx,
-                                        &current_directory_at_depth,
+                                        current_directory_at_depth,
                                     );
                                     let dir_info =
                                         pop_or_panic(&mut directory_info_per_depth_level);
@@ -224,7 +227,7 @@ impl Traversal {
                                 set_directory_info_or_panic(
                                     &mut t.tree,
                                     parent_node_idx,
-                                    &current_directory_at_depth,
+                                    current_directory_at_depth,
                                 );
                             }
                             _ => {
@@ -265,14 +268,14 @@ impl Traversal {
             current_directory_at_depth.size += dir_info.size;
             current_directory_at_depth.entries_count += dir_info.entries_count;
 
-            set_directory_info_or_panic(&mut t.tree, parent_node_idx, &current_directory_at_depth);
+            set_directory_info_or_panic(&mut t.tree, parent_node_idx, current_directory_at_depth);
             parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
         }
         let root_size = t.recompute_root_size();
         set_directory_info_or_panic(
             &mut t.tree,
             t.root_index,
-            &DirectoryInfo {
+            DirectoryInfo {
                 size: root_size,
                 entries_count: t.entries_traversed,
             },

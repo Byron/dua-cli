@@ -67,25 +67,44 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_keys(b"m".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::MTimeAscending,
+            SortMode::MTimeDescending,
             "it sets the sort mode to descending by mtime"
         );
         // when hitting the M key again
         app.process_events(&mut terminal, into_keys(b"m".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::MTimeDescending,
+            SortMode::MTimeAscending,
             "it sets the sort mode to ascending by mtime"
+        );
+        // when hitting the C key
+        app.process_events(&mut terminal, into_keys(b"c".iter()))?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::CountDescending,
+            "it sets the sort mode to descending by count"
+        );
+        // when hitting the C key again
+        app.process_events(&mut terminal, into_keys(b"c".iter()))?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::CountAscending,
+            "it sets the sort mode to ascending by count"
+        );
+        assert_eq!(
+            node_by_index(&app, app.state.entries[0].index),
+            node_by_name(&app, fixture_str(long_root)),
+            "it recomputes the cached entries"
         );
         // when hitting the S key
         app.process_events(&mut terminal, into_keys(b"s".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::SizeAscending,
-            "it sets the sort mode to ascending by size"
+            SortMode::SizeDescending,
+            "it sets the sort mode to descending by size"
         );
         assert_eq!(
-            node_by_index(&app, app.state.entries[0].index),
+            node_by_index(&app, app.state.entries[1].index),
             node_by_name(&app, fixture_str(long_root)),
             "it recomputes the cached entries"
         );
@@ -93,9 +112,13 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_keys(b"s".iter()))?;
         assert_eq!(
             app.state.sorting,
-            SortMode::SizeDescending,
-            "it sets the sort mode to descending by size"
+            SortMode::SizeAscending,
+            "it sets the sort mode to ascending by size"
         );
+        // hit the S key again to get Descending - the rest depends on it
+        app.process_events(&mut terminal, into_keys(b"s".iter()))?;
+        assert_eq!(app.state.sorting, SortMode::SizeDescending,);
+
         assert_eq!(
             node_by_index(&app, app.state.entries[0].index),
             node_by_name(&app, fixture_str(short_root)),

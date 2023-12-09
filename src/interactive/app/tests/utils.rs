@@ -13,7 +13,6 @@ use std::{
     fs::{copy, create_dir_all, remove_dir, remove_file},
     io::ErrorKind,
     path::{Path, PathBuf},
-    time::UNIX_EPOCH,
 };
 use tui::backend::TestBackend;
 use tui_react::Terminal;

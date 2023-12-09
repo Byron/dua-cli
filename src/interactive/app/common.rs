@@ -9,10 +9,10 @@ pub enum SortMode {
     #[default]
     SizeDescending,
     SizeAscending,
-    MTimeAscending,
     MTimeDescending,
-    CountAscending,
+    MTimeAscending,
     CountDescending,
+    CountAscending,
 }
 
 impl SortMode {
@@ -21,7 +21,7 @@ impl SortMode {
         *self = match self {
             SizeDescending => SizeAscending,
             SizeAscending => SizeDescending,
-            _ => SizeAscending,
+            _ => SizeDescending,
         }
     }
 
@@ -30,7 +30,7 @@ impl SortMode {
         *self = match self {
             MTimeAscending => MTimeDescending,
             MTimeDescending => MTimeAscending,
-            _ => MTimeAscending,
+            _ => MTimeDescending,
         }
     }
 
@@ -39,7 +39,7 @@ impl SortMode {
         *self = match self {
             CountAscending => CountDescending,
             CountDescending => CountAscending,
-            _ => CountAscending,
+            _ => CountDescending,
         }
     }
 }

@@ -89,7 +89,7 @@ impl Entries {
                 let percentage_style = percentage_style(fraction, text_style);
 
                 let mut columns = Vec::new();
-                if should_show_mtime_column(sort_mode) {
+                if show_mtime_column(sort_mode) {
                     columns.push(mtime_column(
                         entry_data.mtime,
                         column_style(Column::MTime, *sort_mode, text_style),
@@ -101,7 +101,7 @@ impl Entries {
                     column_style(Column::Bytes, *sort_mode, text_style),
                 ));
                 columns.push(percentage_column(*display, fraction, percentage_style));
-                if should_show_count_column(sort_mode) {
+                if show_count_column(sort_mode) {
                     columns.push(count_column(
                         entry_data.entry_count,
                         *is_dir,
@@ -330,14 +330,14 @@ fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
     }
 }
 
-fn should_show_mtime_column(sort_mode: &SortMode) -> bool {
+fn show_mtime_column(sort_mode: &SortMode) -> bool {
     matches!(
         sort_mode,
         SortMode::MTimeAscending | SortMode::MTimeDescending
     )
 }
 
-fn should_show_count_column(sort_mode: &SortMode) -> bool {
+fn show_count_column(sort_mode: &SortMode) -> bool {
     matches!(
         sort_mode,
         SortMode::CountAscending | SortMode::CountDescending
