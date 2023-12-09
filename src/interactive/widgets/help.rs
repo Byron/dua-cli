@@ -5,7 +5,7 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_react::{
@@ -50,16 +50,16 @@ impl HelpPane {
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let lines = {
-            let lines = RefCell::new(Vec::<Spans>::with_capacity(30));
+            let lines = RefCell::new(Vec::<Line>::with_capacity(30));
             let add_newlines = |n| {
                 for _ in 0..n {
-                    lines.borrow_mut().push(Spans::from(Span::raw("")))
+                    lines.borrow_mut().push(Line::from(Span::raw("")))
                 }
             };
 
             let spacer = || add_newlines(2);
             let title = |name: &str| {
-                lines.borrow_mut().push(Spans::from(Span::styled(
+                lines.borrow_mut().push(Line::from(Span::styled(
                     name.to_string(),
                     Style {
                         add_modifier: Modifier::BOLD | Modifier::UNDERLINED,
@@ -71,7 +71,7 @@ impl HelpPane {
             let hotkey = |keys, description, other_line: Option<&str>| {
                 let separator_size = 3;
                 let column_size = 11 + separator_size;
-                lines.borrow_mut().push(Spans::from(vec![
+                lines.borrow_mut().push(Line::from(vec![
                     Span::styled(
                         format!(
                             "{:>column_size$}",
@@ -86,7 +86,7 @@ impl HelpPane {
                     Span::from(format!(" => {}", description)),
                 ]));
                 if let Some(second_line) = other_line {
-                    lines.borrow_mut().push(Spans::from(Span::from(format!(
+                    lines.borrow_mut().push(Line::from(Span::from(format!(
                         "{:>column_size$}{}",
                         "",
                         second_line,

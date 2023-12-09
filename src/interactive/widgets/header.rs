@@ -2,7 +2,7 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Paragraph, Widget},
 };
 
@@ -42,7 +42,7 @@ impl Header {
             modified("?", Modifier::BOLD | Modifier::UNDERLINED),
             italic(" for help)"),
         ];
-        Paragraph::new(Text::from(Spans::from(spans)))
+        Paragraph::new(Text::from(Line::from(spans)))
             .style(Style {
                 bg: bg_color.into(),
                 ..Default::default()
