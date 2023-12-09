@@ -39,6 +39,11 @@ check:## run cargo-check with various features
 	cargo check --no-default-features --features tui-crossplatform
 	cargo check --no-default-features --features trash-move
 
+fmt:
+	cargo fmt
+
+ready: fmt clippy tests
+
 unit-tests: ## run all unit tests
 	cargo test --all
 	cargo test --all --no-default-features --features trash-move
