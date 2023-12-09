@@ -67,7 +67,11 @@ impl Entries {
         };
 
         let total: u128 = entries.iter().map(|b| b.data.size).sum();
-        let title = title(&current_path(tree, *root), entries.len());
+        let item_count: u64 = entries
+            .iter()
+            .map(|f| f.data.entry_count.unwrap_or(1))
+            .sum();
+        let title = title(&current_path(tree, *root), item_count);
         let title_block = title_block(&title, *border_style);
         let entry_in_view = entry_in_view(*selected, entries);
 
@@ -149,7 +153,7 @@ fn title_block(title: &str, border_style: Style) -> Block<'_> {
         .borders(Borders::ALL)
 }
 
-fn title(current_path: &str, item_count: usize) -> String {
+fn title(current_path: &str, item_count: u64) -> String {
     format!(
         " {} ({} item{}) ",
         current_path,
