@@ -16,7 +16,7 @@ use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_react::{
@@ -364,7 +364,7 @@ impl MarkPane {
                 add_modifier: Modifier::BOLD,
                 sub_modifier: Modifier::empty(),
             };
-            Paragraph::new(Text::from(Spans::from(vec![
+            Paragraph::new(Text::from(Line::from(vec![
                 #[cfg(feature = "trash-move")]
                 Span::styled(
                     " Ctrl + t ",

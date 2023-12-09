@@ -5,7 +5,7 @@ use tui::{
     layout::Rect,
     style::Modifier,
     style::{Color, Style},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Paragraph, Widget},
 };
 
@@ -76,7 +76,7 @@ impl Footer {
                 )
             }),
         ];
-        Paragraph::new(Text::from(Spans::from(
+        Paragraph::new(Text::from(Line::from(
             spans.into_iter().flatten().collect::<Vec<_>>(),
         )))
         .style(Style::default().add_modifier(Modifier::REVERSED))
