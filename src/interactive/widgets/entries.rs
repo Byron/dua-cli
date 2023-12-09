@@ -104,7 +104,6 @@ impl Entries {
                 if show_count_column(sort_mode) {
                     columns.push(count_column(
                         entry_data.entry_count,
-                        *is_dir,
                         column_style(Column::Count, *sort_mode, text_style),
                     ));
                 }
@@ -245,18 +244,18 @@ fn mtime_column(entry_mtime: SystemTime, style: Style) -> Span<'static> {
     Span::styled(format!("{:>20}", formatted_time), style)
 }
 
-fn count_column(entry_count: u64, is_dir: bool, style: Style) -> Span<'static> {
-    let count_in_units = human_format::Formatter::new()
-        .with_decimals(0)
-        .with_separator("")
-        .format(entry_count as f64);
+fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     Span::styled(
         format!(
             "{:>4}",
-            if is_dir {
-                count_in_units
-            } else {
-                "".to_string()
+            match entry_count {
+                Some(count) => {
+                    human_format::Formatter::new()
+                        .with_decimals(0)
+                        .with_separator("")
+                        .format(count as f64)
+                }
+                None => "".to_string(),
             }
         ),
         style,

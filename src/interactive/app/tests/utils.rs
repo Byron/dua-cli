@@ -297,7 +297,7 @@ pub fn make_add_node(
         let n = t.add_node(EntryData {
             name: PathBuf::from(name),
             size,
-            entry_count,
+            entry_count: (entry_count > 0).then_some(entry_count),
             ..Default::default()
         });
         if let Some(from) = maybe_from_idx {

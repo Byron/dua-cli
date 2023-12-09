@@ -2,6 +2,7 @@ use crate::interactive::path_of;
 use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;
+use std::cmp::Ordering;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
@@ -53,6 +54,12 @@ pub struct EntryDataBundle {
 
 pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
     use SortMode::*;
+    fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
+        l.data
+            .entry_count
+            .cmp(&r.data.entry_count)
+            .then_with(|| l.data.name.cmp(&r.data.name))
+    }
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|w| {
@@ -71,8 +78,8 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
             SizeAscending => l.data.size.cmp(&r.data.size),
             MTimeAscending => l.data.mtime.cmp(&r.data.mtime),
             MTimeDescending => r.data.mtime.cmp(&l.data.mtime),
-            CountAscending => l.data.entry_count.cmp(&r.data.entry_count),
-            CountDescending => r.data.entry_count.cmp(&l.data.entry_count),
+            CountAscending => cmp_count(l, r),
+            CountDescending => cmp_count(l, r).reverse(),
         })
         .collect()
 }

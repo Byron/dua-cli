@@ -19,7 +19,7 @@ pub struct EntryData {
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
     pub size: u128,
     pub mtime: SystemTime,
-    pub entry_count: u64,
+    pub entry_count: Option<u64>,
     /// If set, the item meta-data could not be obtained
     pub metadata_io_error: bool,
 }
@@ -30,7 +30,7 @@ impl Default for EntryData {
             name: PathBuf::default(),
             size: u128::default(),
             mtime: UNIX_EPOCH,
-            entry_count: u64::default(),
+            entry_count: None,
             metadata_io_error: bool::default(),
         }
     }
@@ -74,17 +74,27 @@ impl Traversal {
         mut update: impl FnMut(&mut Traversal) -> Result<bool>,
     ) -> Result<Option<Traversal>> {
         #[derive(Default, Copy, Clone)]
-        struct DirectoryInfo {
+        struct EntryInfo {
             size: u128,
-            entries_count: u64,
+            entries_count: Option<u64>,
         }
-        fn set_directory_info_or_panic(
+        impl EntryInfo {
+            fn add_count(&mut self, other: &Self) {
+                self.entries_count = match (self.entries_count, other.entries_count) {
+                    (Some(a), Some(b)) => Some(a + b),
+                    (None, Some(b)) => Some(b),
+                    (Some(a), None) => Some(a),
+                    (None, None) => None,
+                };
+            }
+        }
+        fn set_entry_info_or_panic(
             tree: &mut Tree,
             node_idx: TreeIndex,
-            DirectoryInfo {
+            EntryInfo {
                 size,
                 entries_count,
-            }: DirectoryInfo,
+            }: EntryInfo,
         ) {
             let node = tree
                 .node_weight_mut(node_idx)
@@ -97,7 +107,7 @@ impl Traversal {
                 .next()
                 .expect("every node in the iteration has a parent")
         }
-        fn pop_or_panic(v: &mut Vec<DirectoryInfo>) -> DirectoryInfo {
+        fn pop_or_panic(v: &mut Vec<EntryInfo>) -> EntryInfo {
             v.pop().expect("sizes per level to be in sync with graph")
         }
 
@@ -117,7 +127,7 @@ impl Traversal {
 
         let (mut previous_node_idx, mut parent_node_idx) = (t.root_index, t.root_index);
         let mut directory_info_per_depth_level = Vec::new();
-        let mut current_directory_at_depth = DirectoryInfo::default();
+        let mut current_directory_at_depth = EntryInfo::default();
         let mut previous_depth = 0;
         let mut inodes = InodeFilter::default();
 
@@ -179,6 +189,8 @@ impl Traversal {
                                             })
                                             as u128;
                                     }
+                                } else {
+                                    data.entry_count = Some(0);
                                 }
 
                                 match m.modified() {
@@ -201,30 +213,30 @@ impl Traversal {
                         match (entry.depth, previous_depth) {
                             (n, p) if n > p => {
                                 directory_info_per_depth_level.push(current_directory_at_depth);
-                                current_directory_at_depth = DirectoryInfo {
+                                current_directory_at_depth = EntryInfo {
                                     size: file_size,
-                                    entries_count: 1,
+                                    entries_count: Some(1),
                                 };
                                 parent_node_idx = previous_node_idx;
                             }
                             (n, p) if n < p => {
                                 for _ in n..p {
-                                    set_directory_info_or_panic(
+                                    set_entry_info_or_panic(
                                         &mut t.tree,
                                         parent_node_idx,
                                         current_directory_at_depth,
                                     );
                                     let dir_info =
                                         pop_or_panic(&mut directory_info_per_depth_level);
+
                                     current_directory_at_depth.size += dir_info.size;
-                                    current_directory_at_depth.entries_count +=
-                                        dir_info.entries_count;
+                                    current_directory_at_depth.add_count(&dir_info);
 
                                     parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
                                 }
                                 current_directory_at_depth.size += file_size;
-                                current_directory_at_depth.entries_count += 1;
-                                set_directory_info_or_panic(
+                                *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                                set_entry_info_or_panic(
                                     &mut t.tree,
                                     parent_node_idx,
                                     current_directory_at_depth,
@@ -232,7 +244,7 @@ impl Traversal {
                             }
                             _ => {
                                 current_directory_at_depth.size += file_size;
-                                current_directory_at_depth.entries_count += 1;
+                                *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
                             }
                         };
 
@@ -262,22 +274,22 @@ impl Traversal {
         }
 
         directory_info_per_depth_level.push(current_directory_at_depth);
-        current_directory_at_depth = DirectoryInfo::default();
+        current_directory_at_depth = EntryInfo::default();
         for _ in 0..previous_depth {
             let dir_info = pop_or_panic(&mut directory_info_per_depth_level);
             current_directory_at_depth.size += dir_info.size;
-            current_directory_at_depth.entries_count += dir_info.entries_count;
+            current_directory_at_depth.add_count(&dir_info);
 
-            set_directory_info_or_panic(&mut t.tree, parent_node_idx, current_directory_at_depth);
+            set_entry_info_or_panic(&mut t.tree, parent_node_idx, current_directory_at_depth);
             parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
         }
         let root_size = t.recompute_root_size();
-        set_directory_info_or_panic(
+        set_entry_info_or_panic(
             &mut t.tree,
             t.root_index,
-            DirectoryInfo {
+            EntryInfo {
                 size: root_size,
-                entries_count: t.entries_traversed,
+                entries_count: (t.entries_traversed > 0).then_some(t.entries_traversed),
             },
         );
         t.total_bytes = Some(root_size);
@@ -302,7 +314,7 @@ mod tests {
     fn size_of_entry_data() {
         assert_eq!(
             std::mem::size_of::<EntryData>(),
-            if cfg!(target_os = "macos") { 80 } else { 72 },
+            80,
             "the size of this should not change unexpectedly as it affects overall memory consumption"
         );
     }
