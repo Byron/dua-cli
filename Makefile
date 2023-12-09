@@ -22,6 +22,9 @@ target/release/dua: always
 clippy: ## Run lints with clippy
 	cargo clippy -- -D warnings
 
+check-fmt: ## Validate that the codebase is formatted correctly (but do not format it)
+	cargo fmt --check
+
 profile: target/release/dua ## run callgrind and annotate its output - linux only
 	valgrind --callgrind-out-file=callgrind.profile --tool=callgrind  $< >/dev/null
 	callgrind_annotate --auto=yes callgrind.profile
@@ -51,4 +54,6 @@ journey-tests: target/debug/dua ## run stateless journey tests
 
 continuous-journey-tests: ## run stateless journey tests whenever something changes
 	watchexec $(MAKE) journey-tests
+
+check-pre-push: check-fmt clippy tests ## Run this before pushing for a good chance that CI will be green
 
