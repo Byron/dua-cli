@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.22.0 (2023-12-09)
+
+### New Features
+
+ - <csr-id-45ccb7cb5a4765190ea6b8d02e0b29f63b1bd702/> Press `c` to sort by count of entries in a directory.
+   That way it's easy to spot places that have a lot of (possibly small) files,
+   which otherwise would remain under the radar when sorting by size.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 14 commits contributed to the release over the course of 3 calendar days.
+ - 3 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Press `c` to sort by count of entries in a directory. ([`45ccb7c`](https://github.com/Byron/dua-cli/commit/45ccb7cb5a4765190ea6b8d02e0b29f63b1bd702))
+    - Assure sorting of entry-counts takes files into consideration. ([`8439ba7`](https://github.com/Byron/dua-cli/commit/8439ba703d7f16b2a8f5bd0348b63b26a5fbe689))
+    - Refactor ([`9fb3113`](https://github.com/Byron/dua-cli/commit/9fb3113d788ff746873bd67f6ed508ec1fcf1b02))
+    - Adds keybinding for 'c' to toggle sorting by number of items ([`8df0b4c`](https://github.com/Byron/dua-cli/commit/8df0b4c5dc5ee3f512f8812dff709a77cfb18f2f))
+    - Merge branch 'column_render' ([`bf4da4e`](https://github.com/Byron/dua-cli/commit/bf4da4e1c4444fb490f85516efc518bb238e1652))
+    - Run clippy locally just like on CI ([`645474c`](https://github.com/Byron/dua-cli/commit/645474cfc6de5456a9ae7c0b50ee0302ca950cd2))
+    - Refactor ([`bbcd308`](https://github.com/Byron/dua-cli/commit/bbcd30886f71fcb6e804d3f4170c5ae332c181ea))
+    - Fix visual changes ([`b8ad16b`](https://github.com/Byron/dua-cli/commit/b8ad16b493c29c56d94f6ec01a9dc790687a1bdb))
+    - Make clippy warnings fatal ([`1a46d8f`](https://github.com/Byron/dua-cli/commit/1a46d8f4ab64c78c6ff6495225872f28e58f309d))
+    - Refactors entries panel by moving code to separate functions ([`b5b6aba`](https://github.com/Byron/dua-cli/commit/b5b6abae35a5f205cd57e172c7aa4e9dd16d2053))
+    - Put release-build optimization back to level 3; remove windows GNU build. ([`917339f`](https://github.com/Byron/dua-cli/commit/917339ff02e52cc3d258a350f5cb078e152f439a))
+    - Change optimization level back to 0 for hopefully more stable release builds. ([`2dced34`](https://github.com/Byron/dua-cli/commit/2dced34aef9b7beba3201e6a8b24d9a10a7b9a16))
+    - Assure package-size check isn't fatal anymore ([`3e509db`](https://github.com/Byron/dua-cli/commit/3e509db11228b93e11e8a06895dcb7d167fc8399))
+    - Pacify the package size checkf or a while. ([`09fd59f`](https://github.com/Byron/dua-cli/commit/09fd59febbf7fefe93d064718d640290b2957b21))
+</details>
+
 ## 2.21.0 (2023-12-06)
 
 ### New Features
@@ -25,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 13 commits contributed to the release over the course of 11 calendar days.
+ - 14 commits contributed to the release over the course of 11 calendar days.
  - 14 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 5 unique issues were worked on: [#110](https://github.com/Byron/dua-cli/issues/110), [#141](https://github.com/Byron/dua-cli/issues/141), [#179](https://github.com/Byron/dua-cli/issues/179), [#185](https://github.com/Byron/dua-cli/issues/185), [#186](https://github.com/Byron/dua-cli/issues/186)
@@ -54,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#186](https://github.com/Byron/dua-cli/issues/186)**
     - Assure `device_id` is taken from the final CWD ([`74e6d42`](https://github.com/Byron/dua-cli/commit/74e6d4222a7f70253f1d69eb8e7cf94114827852))
  * **Uncategorized**
+    - Release dua-cli v2.21.0 ([`7e3e290`](https://github.com/Byron/dua-cli/commit/7e3e290940e3229efce69baabab7d169d8a6793a))
     - Manually set the desired version as `cargo smart-release` fails to see that 2.20.3 is available ([`f5bd870`](https://github.com/Byron/dua-cli/commit/f5bd870621779711ef8ba03812f097716f52d349))
     - Prepare changelog ([`6ff009a`](https://github.com/Byron/dua-cli/commit/6ff009a3082c2c4dbe90b8188bf943df83f596d0))
     - Thanks clippy ([`0c4d31b`](https://github.com/Byron/dua-cli/commit/0c4d31b406b2c988af3f17fc79b0cf3d7364a910))
