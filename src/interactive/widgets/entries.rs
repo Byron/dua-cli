@@ -1,3 +1,4 @@
+use crate::interactive::widgets::COUNT;
 use crate::interactive::{
     path_of,
     widgets::{entry_color, EntryMarkMap},
@@ -5,9 +6,7 @@ use crate::interactive::{
 };
 use chrono::DateTime;
 use dua::traverse::{EntryData, Tree, TreeIndex};
-use human_format;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use std::time::SystemTime;
 use std::{borrow::Borrow, path::Path};
 use tui::{
@@ -23,12 +22,6 @@ use tui_react::{
     util::{block_width, rect},
     List, ListProps,
 };
-
-static COUNT: Lazy<human_format::Formatter> = Lazy::new(|| {
-    let mut formatter = human_format::Formatter::new();
-    formatter.with_decimals(0).with_separator("");
-    formatter
-});
 
 pub struct EntriesProps<'a> {
     pub tree: &'a Tree,

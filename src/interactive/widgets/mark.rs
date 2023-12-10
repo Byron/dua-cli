@@ -1,3 +1,4 @@
+use crate::interactive::widgets::COUNT;
 use crate::interactive::{
     fit_string_graphemes_with_ellipsis, path_of, widgets::entry_color, CursorDirection,
 };
@@ -6,9 +7,7 @@ use dua::{
     traverse::{Tree, TreeIndex},
     ByteFormat,
 };
-use human_format;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use std::{
     borrow::Borrow,
     collections::{btree_map::Entry, BTreeMap},
@@ -27,12 +26,6 @@ use tui_react::{
     List, ListProps,
 };
 use unicode_segmentation::UnicodeSegmentation;
-
-static COUNT: Lazy<human_format::Formatter> = Lazy::new(|| {
-    let mut formatter = human_format::Formatter::new();
-    formatter.with_decimals(0).with_separator("");
-    formatter
-});
 
 pub enum MarkMode {
     Delete,
