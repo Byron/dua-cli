@@ -6,7 +6,9 @@ use dua::{
     traverse::{Tree, TreeIndex},
     ByteFormat,
 };
+use human_format;
 use itertools::Itertools;
+use once_cell::sync::Lazy;
 use std::{
     borrow::Borrow,
     collections::{btree_map::Entry, BTreeMap},
@@ -26,6 +28,12 @@ use tui_react::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+static COUNT: Lazy<human_format::Formatter> = Lazy::new(|| {
+    let mut formatter = human_format::Formatter::new();
+    formatter.with_decimals(0).with_separator("");
+    formatter
+});
+
 pub enum MarkMode {
     Delete,
     #[cfg(feature = "trash-move")]
@@ -41,6 +49,7 @@ pub struct EntryMark {
     pub index: usize,
     pub num_errors_during_deletion: usize,
     pub is_dir: bool,
+    pub entry_count: Option<u64>,
 }
 
 #[derive(Default)]
@@ -51,6 +60,7 @@ pub struct MarkPane {
     has_focus: bool,
     last_sorting_index: usize,
     total_size: u128,
+    item_count: u64,
 }
 
 pub struct MarkPaneProps {
@@ -89,6 +99,7 @@ impl MarkPane {
                         index: sorting_index,
                         num_errors_during_deletion: 0,
                         is_dir,
+                        entry_count: e.entry_count,
                     });
                 }
             }
@@ -101,7 +112,7 @@ impl MarkPane {
         if self.marked.is_empty() {
             None
         } else {
-            self.total_size = calculate_size(&self.marked);
+            (self.total_size, self.item_count) = calculate_size_and_count(&self.marked);
             Some(self)
         }
     }
@@ -242,7 +253,7 @@ impl MarkPane {
         let marked: &_ = &self.marked;
         let title = format!(
             "Marked {} items ({}) ",
-            marked.len(),
+            COUNT.format(self.item_count as f64),
             format.display(self.total_size)
         );
         let selected = self.selected;
@@ -430,7 +441,7 @@ impl MarkPane {
     }
 }
 
-pub fn calculate_size(marked: &EntryMarkMap) -> u128 {
+pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
     let entries: Vec<&EntryMark> = marked
         .iter()
         .map(|(_k, v)| v)
@@ -438,6 +449,7 @@ pub fn calculate_size(marked: &EntryMarkMap) -> u128 {
         .collect();
 
     let mut size = 0u128;
+    let mut item_count = 0u64;
     for (idx, entry) in entries.iter().enumerate() {
         let mut is_subdirectory = false;
         for other in &entries[0..idx] {
@@ -448,9 +460,10 @@ pub fn calculate_size(marked: &EntryMarkMap) -> u128 {
         }
         if !is_subdirectory {
             size += entry.size;
+            item_count += entry.entry_count.unwrap_or(1);
         }
     }
-    size
+    (size, item_count)
 }
 
 #[cfg(test)]
@@ -475,6 +488,7 @@ mod mark_pane_tests {
                 size: 10,
                 path: PathBuf::from("root"),
                 is_dir: true,
+                entry_count: Some(2),
                 ..Default::default()
             },
         );
@@ -495,6 +509,6 @@ mod mark_pane_tests {
             },
         );
 
-        assert_eq!(calculate_size(&marked), 15u128);
+        assert_eq!(calculate_size_and_count(&marked), (15u128, 3u64));
     }
 }
