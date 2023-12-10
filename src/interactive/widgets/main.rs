@@ -140,7 +140,7 @@ fn content_layout(content_area: Rect) -> (Rect, Rect) {
 
 fn header_background_color(is_marked: bool, focused_pane: FocussedPane) -> Color {
     match (is_marked, focused_pane) {
-        (false, FocussedPane::Mark) => Color::LightRed,
+        (false, Mark) => Color::LightRed,
         (false, _) => COLOR_MARKED,
         (_, _) => Color::White,
     }
