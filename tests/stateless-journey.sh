@@ -31,6 +31,12 @@ WITH_FAILURE=1
               expect_run ${SUCCESSFULLY} "$exe" aggregate
             }
           )
+          (with "a single file argument"
+            it "produces a human-readable (metric) size display of that file" && {
+              WITH_SNAPSHOT="$snapshot/success-single-file" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate a
+            }
+          )
           (with "sorting disabled"
             it "produces a human-readable (metric) aggregate of everything within the current directory, alphabetically sorted, with total" && {
               WITH_SNAPSHOT="$snapshot/success-no-arguments-no-sort" \

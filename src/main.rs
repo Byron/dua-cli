@@ -130,7 +130,7 @@ fn extract_paths_maybe_set_cwd(
     mut paths: Vec<PathBuf>,
     cross_filesystems: bool,
 ) -> Result<Vec<PathBuf>, io::Error> {
-    if paths.len() == 1 {
+    if paths.len() == 1 && paths[0].is_dir() {
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
     }
