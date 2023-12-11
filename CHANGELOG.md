@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.23.0 (2023-12-11)
+
+### New Features
+
+ - <csr-id-98d5b5a2728e640f9d553648812df379c5534395/> display the total count of entries-to-be-deleted in the mark pane.
+   This allows to better estimate how much work will be needed to perform
+   the deletion.
+   
+   For example, when marking 3 items for deletion, previously one would see
+   `3 items marked`, but now one will see all items and sub-items, like
+   `120k`items marked`, which reflects the work that will be done much more
+   precisely.
+ - <csr-id-3241022a730dab89f13cbefbefdb583fd6a00994/> Add total size to header bar and change to aggregate, human-readable item count.
+   This changes the display from `(2034 items)` to
+   `(2k items, 213 MB)`, providing an overview of the total amount
+   of storage used along with the total amount of files on a particular
+   hiearchy level.
+
+### Bug Fixes
+
+ - <csr-id-192460e5bc72781be1d238912c5d590bfed706cf/> single files will not cause IO error
+   Running `dua <filename>` will once again provide size information
+   about that filename.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 16 commits contributed to the release over the course of 1 calendar day.
+ - 2 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#194](https://github.com/Byron/dua-cli/issues/194)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#194](https://github.com/Byron/dua-cli/issues/194)**
+    - Single files will not cause IO error ([`192460e`](https://github.com/Byron/dua-cli/commit/192460e5bc72781be1d238912c5d590bfed706cf))
+ * **Uncategorized**
+    - Merge branch 'main_windows_render_refactor' ([`2da2e2e`](https://github.com/Byron/dua-cli/commit/2da2e2e7d264d19cc67ccee6bd8658f7a87901c1))
+    - Refactor ([`49772d1`](https://github.com/Byron/dua-cli/commit/49772d17dca72006e602f8707121b3378f948981))
+    - Display the total count of entries-to-be-deleted in the mark pane. ([`98d5b5a`](https://github.com/Byron/dua-cli/commit/98d5b5a2728e640f9d553648812df379c5534395))
+    - Refactor ([`81eadf8`](https://github.com/Byron/dua-cli/commit/81eadf8cdfcfa964401b5cf5d1e80cc21ec4441f))
+    - Calculates mark pane item count consistently with the rest of the app ([`2c69ea1`](https://github.com/Byron/dua-cli/commit/2c69ea1faf40499431616e632e02351a22bac249))
+    - Refactors MainWindow render to make it more readable ([`8740d4b`](https://github.com/Byron/dua-cli/commit/8740d4b332290b7fa661b157ed190df9f40ad349))
+    - Merge branch 'upgrades' ([`a9dd549`](https://github.com/Byron/dua-cli/commit/a9dd549dc85faf17ce211ff0ab5be4c9863440ed))
+    - Upgrade to latest crossterm; switch to `ratatui` from `tui` ([`af2aa61`](https://github.com/Byron/dua-cli/commit/af2aa61813578ecc9f6ccaba5e94049fc6ddf727))
+    - Update all dependencies ([`852ee28`](https://github.com/Byron/dua-cli/commit/852ee281ca89cb58cf404e8179d4e590f6da87b7))
+    - Merge branch 'total_item_count' ([`ba2efe4`](https://github.com/Byron/dua-cli/commit/ba2efe48f327c92c021879cded7651d83cf99cec))
+    - Add total size to header bar and change to aggregate, human-readable item count. ([`3241022`](https://github.com/Byron/dua-cli/commit/3241022a730dab89f13cbefbefdb583fd6a00994))
+    - Merge branch 'make_ready_pre_pr_checks' ([`606d60f`](https://github.com/Byron/dua-cli/commit/606d60fa96654e030d1f82331c54f3dfa45e06b3))
+    - Adjust names of `make fmt` and `make ready`; `fmt` now only checks ([`9135c18`](https://github.com/Byron/dua-cli/commit/9135c18e27a75b23921f9bba4281af9543017a66))
+    - Adds new target that runs all the checks (to be used before creating a PR) ([`7fbc136`](https://github.com/Byron/dua-cli/commit/7fbc136f8d61676a89cd19c6035ec02a8bd14147))
+    - Displays total item count ([`7b7bad5`](https://github.com/Byron/dua-cli/commit/7b7bad5564d0e87eea4b4bd2d32066063a13b554))
+</details>
+
 ## 2.22.0 (2023-12-09)
 
 ### New Features
@@ -17,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 14 commits contributed to the release over the course of 3 calendar days.
+ - 15 commits contributed to the release over the course of 3 calendar days.
  - 3 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -29,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.22.0 ([`949baf3`](https://github.com/Byron/dua-cli/commit/949baf39c53060d1e5ef6df572b1cdc43a8a5cce))
     - Press `c` to sort by count of entries in a directory. ([`45ccb7c`](https://github.com/Byron/dua-cli/commit/45ccb7cb5a4765190ea6b8d02e0b29f63b1bd702))
     - Assure sorting of entry-counts takes files into consideration. ([`8439ba7`](https://github.com/Byron/dua-cli/commit/8439ba703d7f16b2a8f5bd0348b63b26a5fbe689))
     - Refactor ([`9fb3113`](https://github.com/Byron/dua-cli/commit/9fb3113d788ff746873bd67f6ed508ec1fcf1b02))
