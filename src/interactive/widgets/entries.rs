@@ -1,11 +1,10 @@
 use crate::interactive::widgets::COUNT;
 use crate::interactive::{
-    path_of,
     widgets::{entry_color, EntryMarkMap},
     DisplayOptions, EntryDataBundle, SortMode,
 };
 use chrono::DateTime;
-use dua::traverse::{EntryData, Tree, TreeIndex};
+use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::time::SystemTime;
 use std::{borrow::Borrow, path::Path};
@@ -24,8 +23,7 @@ use tui_react::{
 };
 
 pub struct EntriesProps<'a> {
-    pub tree: &'a Tree,
-    pub root: TreeIndex,
+    pub current_path: String,
     pub display: DisplayOptions,
     pub selected: Option<TreeIndex>,
     pub entries: &'a [EntryDataBundle],
@@ -48,8 +46,7 @@ impl Entries {
         buf: &mut Buffer,
     ) {
         let EntriesProps {
-            tree,
-            root,
+            current_path,
             display,
             entries,
             selected,
@@ -66,7 +63,7 @@ impl Entries {
             .map(|f| (f.data.entry_count.unwrap_or(1), f.data.size))
             .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
             .unwrap_or_default();
-        let title = title(&current_path(tree, *root), item_count, *display, item_size);
+        let title = title(current_path, item_count, *display, item_size);
         let title_block = title_block(&title, *border_style);
         let entry_in_view = entry_in_view(*selected, entries);
 
@@ -74,48 +71,47 @@ impl Entries {
             block: Some(title_block),
             entry_in_view,
         };
-        let lines = entries.iter().map(
-            |EntryDataBundle {
-                 index: node_idx,
-                 data: entry_data,
-                 is_dir,
-                 exists,
-             }| {
-                let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-                let is_selected = selected.map_or(false, |idx| idx == *node_idx);
-                let fraction = entry_data.size as f32 / total as f32;
-                let text_style = style(is_selected, *is_focussed);
-                let percentage_style = percentage_style(fraction, text_style);
+        let lines = entries.iter().map(|bundle| {
+            let node_idx = &bundle.index;
+            let entry_data = &bundle.data;
+            let is_dir = &bundle.is_dir;
+            let exists = &bundle.exists;
+            let name = bundle.name();
 
-                let mut columns = Vec::new();
-                if show_mtime_column(sort_mode) {
-                    columns.push(mtime_column(
-                        entry_data.mtime,
-                        column_style(Column::MTime, *sort_mode, text_style),
-                    ));
-                }
-                columns.push(bytes_column(
-                    *display,
-                    entry_data.size,
-                    column_style(Column::Bytes, *sort_mode, text_style),
-                ));
-                columns.push(percentage_column(*display, fraction, percentage_style));
-                if show_count_column(sort_mode) {
-                    columns.push(count_column(
-                        entry_data.entry_count,
-                        column_style(Column::Count, *sort_mode, text_style),
-                    ));
-                }
-                columns.push(name_column(
-                    &entry_data.name,
-                    *is_dir,
-                    area,
-                    name_style(is_marked, *exists, *is_dir, text_style),
-                ));
+            let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+            let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+            let fraction = entry_data.size as f32 / total as f32;
+            let text_style = style(is_selected, *is_focussed);
+            let percentage_style = percentage_style(fraction, text_style);
 
-                columns_with_separators(columns, percentage_style)
-            },
-        );
+            let mut columns = Vec::new();
+            if show_mtime_column(sort_mode) {
+                columns.push(mtime_column(
+                    entry_data.mtime,
+                    column_style(Column::MTime, *sort_mode, text_style),
+                ));
+            }
+            columns.push(bytes_column(
+                *display,
+                entry_data.size,
+                column_style(Column::Bytes, *sort_mode, text_style),
+            ));
+            columns.push(percentage_column(*display, fraction, percentage_style));
+            if show_count_column(sort_mode) {
+                columns.push(count_column(
+                    entry_data.entry_count,
+                    column_style(Column::Count, *sort_mode, text_style),
+                ));
+            }
+            columns.push(name_column(
+                name,
+                *is_dir,
+                area,
+                name_style(is_marked, *exists, *is_dir, text_style),
+            ));
+
+            columns_with_separators(columns, percentage_style)
+        });
 
         list.render(props, lines, area, buf);
 
@@ -157,19 +153,6 @@ fn title(current_path: &str, item_count: u64, display: DisplayOptions, size: u12
         },
         display.byte_format.display(size)
     )
-}
-
-fn current_path(
-    tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
-    root: petgraph::stable_graph::NodeIndex,
-) -> String {
-    match path_of(tree, root).to_string_lossy().to_string() {
-        ref p if p.is_empty() => Path::new(".")
-            .canonicalize()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| String::from(".")),
-        p => p,
-    }
 }
 
 fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {

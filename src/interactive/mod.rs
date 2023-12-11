@@ -10,13 +10,20 @@ mod utils {
     };
     use std::path::PathBuf;
 
-    pub fn path_of(tree: &Tree, mut node_idx: TreeIndex) -> PathBuf {
+    pub fn path_of(tree: &Tree, mut node_idx: TreeIndex, glob_root: Option<TreeIndex>) -> PathBuf {
         const THE_ROOT: usize = 1;
         let mut entries = Vec::new();
 
-        while let Some(parent_idx) = tree.neighbors_directed(node_idx, petgraph::Incoming).next() {
+        let mut iter = tree.neighbors_directed(node_idx, petgraph::Incoming);
+        while let Some(parent_idx) = iter.next() {
+            if let Some(glob_root) = glob_root {
+                if glob_root == parent_idx {
+                    continue;
+                }
+            }
             entries.push(get_entry_or_panic(tree, node_idx));
             node_idx = parent_idx;
+            iter = tree.neighbors_directed(node_idx, petgraph::Incoming);
         }
         entries.push(get_entry_or_panic(tree, node_idx));
         entries
@@ -30,3 +37,4 @@ mod utils {
     }
 }
 pub use utils::path_of;
+// pub use utils::glob_path_of;

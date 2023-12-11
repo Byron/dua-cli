@@ -255,18 +255,19 @@ pub fn sample_01_tree() -> Tree {
     tree
 }
 
-pub fn sample_02_tree() -> Tree {
+pub fn sample_02_tree() -> (Tree, TreeIndex) {
     let mut tree = Tree::new();
+    let root_index: TreeIndex;
     {
         let mut add_node = make_add_node(&mut tree);
         let root_size = 1540;
-        let rn = add_node("", root_size, 10, None);
+        root_index = add_node("", root_size, 10, None);
         {
             let sn = add_node(
                 Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
                 root_size,
                 9,
-                Some(rn),
+                Some(root_index),
             );
             {
                 add_node("a", 256, 0, Some(sn));
@@ -287,7 +288,7 @@ pub fn sample_02_tree() -> Tree {
             }
         }
     }
-    tree
+    (tree, root_index)
 }
 
 pub fn make_add_node(

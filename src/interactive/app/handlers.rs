@@ -1,13 +1,11 @@
 use crate::interactive::{
+    app::tree_view::TreeView,
     app::FocussedPane::*,
-    path_of, sorted_entries,
-    widgets::{HelpPane, MainWindow, MarkMode, MarkPane},
+    widgets::{GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
     AppState, DisplayOptions, EntryDataBundle,
 };
 use crosstermion::input::Key;
-use dua::traverse::{Traversal, TreeIndex};
-use itertools::Itertools;
-use petgraph::{visit::Bfs, Direction};
+use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
@@ -48,29 +46,27 @@ impl CursorDirection {
 }
 
 impl AppState {
-    pub fn open_that(&self, traversal: &Traversal) {
-        if let Some(idx) = self.selected {
-            open::that(path_of(&traversal.tree, idx)).ok();
+    pub fn open_that(&self, tree_view: &dyn TreeView) {
+        if let Some(idx) = self.navigation().selected {
+            open::that(tree_view.path_of(idx)).ok();
         }
     }
 
-    pub fn exit_node_with_traversal(&mut self, traversal: &Traversal) {
-        let entries = self.entries_for_exit_node(traversal);
+    pub fn exit_node_with_traversal(&mut self, tree_view: &dyn TreeView) {
+        let entries = self.entries_for_exit_node(tree_view);
         self.exit_node(entries);
     }
 
     fn entries_for_exit_node(
         &self,
-        traversal: &Traversal,
+        tree_view: &dyn TreeView,
     ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
-        traversal
-            .tree
-            .neighbors_directed(self.root, Direction::Incoming)
-            .next()
+        tree_view
+            .view_parent_of(self.navigation().view_root)
             .map(|parent_idx| {
                 (
                     parent_idx,
-                    sorted_entries(&traversal.tree, parent_idx, self.sorting),
+                    tree_view.sorted_entries(parent_idx, self.sorting),
                 )
             })
     }
@@ -78,13 +74,8 @@ impl AppState {
     pub fn exit_node(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
         match entries {
             Some((parent_idx, entries)) => {
-                self.root = parent_idx;
+                self.navigation_mut().exit_node(parent_idx, &entries);
                 self.entries = entries;
-                self.selected = self
-                    .bookmarks
-                    .get(&parent_idx)
-                    .copied()
-                    .or_else(|| self.entries.first().map(|b| b.index));
             }
             None => self.message = Some("Top level reached".into()),
         }
@@ -92,38 +83,30 @@ impl AppState {
 
     fn entries_for_enter_node(
         &self,
-        traversal: &Traversal,
+        tree_view: &dyn TreeView,
     ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
-        self.selected.map(|previously_selected| {
+        self.navigation().selected.map(|previously_selected| {
             (
                 previously_selected,
-                sorted_entries(&traversal.tree, previously_selected, self.sorting),
+                tree_view.sorted_entries(previously_selected, self.sorting),
             )
         })
     }
 
-    pub fn enter_node_with_traversal(&mut self, traversal: &Traversal) {
-        let new_entries = self.entries_for_enter_node(traversal);
+    pub fn enter_node_with_traversal(&mut self, tree_view: &dyn TreeView) {
+        let new_entries = self.entries_for_enter_node(tree_view);
         self.enter_node(new_entries)
     }
 
     pub fn enter_node(&mut self, entries_at_selected: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
         if let Some((previously_selected, new_entries)) = entries_at_selected {
-            match new_entries.get(
-                self.bookmarks
-                    .get(&previously_selected)
-                    .and_then(|selected| {
-                        new_entries
-                            .iter()
-                            .find_position(|b| b.index == *selected)
-                            .map(|(pos, _)| pos)
-                    })
-                    .unwrap_or(0),
-            ) {
-                Some(b) => {
-                    self.bookmarks.insert(self.root, previously_selected);
-                    self.root = previously_selected;
-                    self.selected = Some(b.index);
+            match self
+                .navigation()
+                .get_previously_selected_index(previously_selected, &new_entries)
+            {
+                Some(selected) => {
+                    self.navigation_mut()
+                        .enter_node(previously_selected, selected);
                     self.entries = new_entries;
                 }
                 None => self.message = Some("Entry is a file or an empty directory".into()),
@@ -132,38 +115,36 @@ impl AppState {
     }
 
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let entries = &self.entries;
-        let next_selected_pos = match self.selected {
-            Some(ref selected) => entries
-                .iter()
-                .find_position(|b| b.index == *selected)
-                .map(|(idx, _)| direction.move_cursor(idx))
-                .unwrap_or(0),
-            None => 0,
-        };
-        self.selected = entries
-            .get(next_selected_pos)
-            .or_else(|| entries.last())
-            .map(|b| b.index)
-            .or(self.selected);
-        if let Some(selected) = self.selected {
-            self.bookmarks.insert(self.root, selected);
-        }
+        let nex_index = self.navigation().get_next_index(direction, &self.entries);
+        self.navigation_mut().select(nex_index);
     }
 
-    pub fn cycle_sorting(&mut self, traversal: &Traversal) {
+    pub fn cycle_sorting(&mut self, tree_view: &dyn TreeView) {
         self.sorting.toggle_size();
-        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
+        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 
-    pub fn cycle_mtime_sorting(&mut self, traversal: &Traversal) {
+    pub fn cycle_mtime_sorting(&mut self, tree_view: &dyn TreeView) {
         self.sorting.toggle_mtime();
-        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
+        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 
-    pub fn cycle_count_sorting(&mut self, traversal: &Traversal) {
+    pub fn cycle_count_sorting(&mut self, tree_view: &dyn TreeView) {
         self.sorting.toggle_count();
-        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
+        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+    }
+
+    pub fn toggle_glob_search(&mut self, window: &mut MainWindow) {
+        self.focussed = match self.focussed {
+            Main | Mark | Help => {
+                window.glob_pane = Some(GlobPane::default());
+                Glob
+            }
+            Glob => {
+                window.glob_pane = None;
+                Main
+            }
+        }
     }
 
     pub fn reset_message(&mut self) {
@@ -176,7 +157,7 @@ impl AppState {
 
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {
         self.focussed = match self.focussed {
-            Main | Mark => {
+            Main | Mark | Glob => {
                 window.help_pane = Some(HelpPane::default());
                 Help
             }
@@ -190,19 +171,28 @@ impl AppState {
         if let Some(p) = window.mark_pane.as_mut() {
             p.set_focus(false)
         };
-        self.focussed = match (self.focussed, &window.help_pane, &mut window.mark_pane) {
-            (Main, Some(_), _) => Help,
-            (Help, _, Some(ref mut pane)) => {
+        self.focussed = match (
+            self.focussed,
+            &window.help_pane,
+            &mut window.mark_pane,
+            &mut window.glob_pane,
+        ) {
+            (Main, Some(_), _, _) => Help,
+            (Help, _, Some(ref mut pane), _) => {
                 pane.set_focus(true);
                 Mark
             }
-            (Help, _, None) => Main,
-            (Mark, _, _) => Main,
-            (Main, None, None) => Main,
-            (Main, None, Some(ref mut pane)) => {
+            (Help, _, _, Some(_)) => Glob,
+            (Help, _, None, None) => Main,
+            (Mark, _, _, Some(_)) => Glob,
+            (Mark, _, _, _) => Main,
+            (Main, None, None, None) => Main,
+            (Main, None, Some(ref mut pane), _) => {
                 pane.set_focus(true);
                 Mark
             }
+            (Main, None, None, Some(_)) => Glob,
+            (Glob, _, _, _) => Main,
         };
     }
 
@@ -210,7 +200,7 @@ impl AppState {
         &mut self,
         key: Key,
         window: &mut MainWindow,
-        traversal: &mut Traversal,
+        tree_view: &mut dyn TreeView,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
     ) where
@@ -224,9 +214,9 @@ impl AppState {
                     let mut entries_deleted = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_delete| {
                         window.mark_pane = Some(pane);
-                        self.draw(window, traversal, display, terminal).ok();
+                        self.draw(window, tree_view, display, terminal).ok();
                         pane = window.mark_pane.take().expect("option to be filled");
-                        match self.delete_entry(entry_to_delete, traversal) {
+                        match self.delete_entry(entry_to_delete, tree_view) {
                             Ok(ed) => {
                                 entries_deleted += ed;
                                 self.message =
@@ -245,9 +235,9 @@ impl AppState {
                     let mut entries_trashed = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_trash| {
                         window.mark_pane = Some(pane);
-                        self.draw(window, traversal, display, terminal).ok();
+                        self.draw(window, tree_view, display, terminal).ok();
                         pane = window.mark_pane.take().expect("option to be filled");
-                        match self.trash_entry(entry_to_trash, traversal) {
+                        match self.trash_entry(entry_to_trash, tree_view) {
                             Ok(ed) => {
                                 entries_trashed += ed;
                                 self.message =
@@ -272,13 +262,13 @@ impl AppState {
     pub fn delete_entry(
         &mut self,
         index: TreeIndex,
-        traversal: &mut Traversal,
+        tree_view: &mut dyn TreeView,
     ) -> Result<usize, usize> {
         let mut entries_deleted = 0;
-        if let Some(_entry) = traversal.tree.node_weight(index) {
-            let path_to_delete = path_of(&traversal.tree, index);
+        if tree_view.exists(index) {
+            let path_to_delete = tree_view.path_of(index);
             delete_directory_recursively(path_to_delete)?;
-            entries_deleted = self.delete_entries_in_traversal(index, traversal);
+            entries_deleted = self.delete_entries_in_traversal(index, tree_view);
         }
         Ok(entries_deleted)
     }
@@ -287,15 +277,15 @@ impl AppState {
     pub fn trash_entry(
         &mut self,
         index: TreeIndex,
-        traversal: &mut Traversal,
+        tree_view: &mut dyn TreeView,
     ) -> Result<usize, usize> {
         let mut entries_deleted = 0;
-        if let Some(_entry) = traversal.tree.node_weight(index) {
-            let path_to_delete = path_of(&traversal.tree, index);
+        if tree_view.exists(index) {
+            let path_to_delete = tree_view.path_of(index);
             if trash::delete(path_to_delete).is_err() {
                 return Err(1);
             }
-            entries_deleted = self.delete_entries_in_traversal(index, traversal);
+            entries_deleted = self.delete_entries_in_traversal(index, tree_view);
         }
         Ok(entries_deleted)
     }
@@ -303,64 +293,43 @@ impl AppState {
     pub fn delete_entries_in_traversal(
         &mut self,
         index: TreeIndex,
-        traversal: &mut Traversal,
+        tree_view: &mut dyn TreeView,
     ) -> usize {
-        let mut entries_deleted = 0;
-        let parent_idx = traversal
-            .tree
-            .neighbors_directed(index, Direction::Incoming)
-            .next()
+        let parent_idx = tree_view
+            .fs_parent_of(index)
             .expect("us being unable to delete the root index");
-        let mut bfs = Bfs::new(&traversal.tree, index);
-        while let Some(nx) = bfs.next(&traversal.tree) {
-            traversal.tree.remove_node(nx);
-            traversal.entries_traversed -= 1;
-            entries_deleted += 1;
+        let entries_deleted = tree_view.remove_entries(index);
+
+        if !tree_view.exists(self.navigation().view_root) {
+            self.go_to_root(tree_view);
+        } else {
+            self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
         }
-        self.entries = sorted_entries(&traversal.tree, self.root, self.sorting);
-        if traversal.tree.node_weight(self.root).is_none() {
-            self.set_root(traversal.root_index, traversal);
-        }
+
         if self
+            .navigation()
             .selected
             .and_then(|selected| self.entries.iter().find(|e| e.index == selected))
             .is_none()
         {
-            self.selected = self.entries.first().map(|e| e.index);
+            let idx = self.entries.first().map(|e| e.index);
+            self.navigation_mut().select(idx);
         }
-        self.recompute_sizes_recursively(parent_idx, traversal);
+
+        tree_view.recompute_sizes_recursively(parent_idx);
+
         entries_deleted
     }
 
-    fn set_root(&mut self, root: TreeIndex, traversal: &Traversal) {
-        self.root = root;
-        self.entries = sorted_entries(&traversal.tree, root, self.sorting);
+    fn go_to_root(&mut self, tree_view: &dyn TreeView) {
+        let root = self.navigation().tree_root;
+        let entries = tree_view.sorted_entries(root, self.sorting);
+        self.navigation_mut().exit_node(root, &entries);
+        self.entries = entries;
     }
 
-    fn recompute_sizes_recursively(&mut self, mut index: TreeIndex, traversal: &mut Traversal) {
-        loop {
-            traversal
-                .tree
-                .node_weight_mut(index)
-                .expect("valid index")
-                .size = traversal
-                .tree
-                .neighbors_directed(index, Direction::Outgoing)
-                .filter_map(|idx| traversal.tree.node_weight(idx).map(|w| w.size))
-                .sum();
-            match traversal
-                .tree
-                .neighbors_directed(index, Direction::Incoming)
-                .next()
-            {
-                None => break,
-                Some(parent) => index = parent,
-            }
-        }
-        traversal.total_bytes = traversal
-            .tree
-            .node_weight(traversal.root_index)
-            .map(|w| w.size);
+    pub fn glob_root(&self) -> Option<TreeIndex> {
+        self.glob_mode.as_ref().map(|e| e.tree_root)
     }
 
     fn mark_entry_by_index(
@@ -368,7 +337,7 @@ impl AppState {
         index: TreeIndex,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        traversal: &Traversal,
+        tree_view: &dyn TreeView,
     ) {
         let is_dir = self
             .entries
@@ -381,10 +350,10 @@ impl AppState {
             MarkEntryMode::MarkForDeletion => false,
         };
         if let Some(pane) = window.mark_pane.take() {
-            window.mark_pane = pane.toggle_index(index, &traversal.tree, is_dir, should_toggle);
+            window.mark_pane = pane.toggle_index(index, tree_view, is_dir, should_toggle);
         } else {
             window.mark_pane =
-                MarkPane::default().toggle_index(index, &traversal.tree, is_dir, should_toggle)
+                MarkPane::default().toggle_index(index, tree_view, is_dir, should_toggle)
         }
     }
 
@@ -393,10 +362,10 @@ impl AppState {
         cursor: CursorMode,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        traversal: &Traversal,
+        tree_view: &dyn TreeView,
     ) {
-        if let Some(index) = self.selected {
-            self.mark_entry_by_index(index, mode, window, traversal);
+        if let Some(index) = self.navigation().selected {
+            self.mark_entry_by_index(index, mode, window, tree_view);
         };
         if let CursorMode::Advance = cursor {
             self.change_entry_selection(CursorDirection::Down)
@@ -407,10 +376,10 @@ impl AppState {
         &mut self,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        traversal: &Traversal,
+        tree_view: &dyn TreeView,
     ) {
         for index in self.entries.iter().map(|e| e.index).collect::<Vec<_>>() {
-            self.mark_entry_by_index(index, mode, window, traversal);
+            self.mark_entry_by_index(index, mode, window, tree_view);
         }
     }
 }

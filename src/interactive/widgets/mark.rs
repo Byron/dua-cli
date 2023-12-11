@@ -1,12 +1,10 @@
 use crate::interactive::widgets::COUNT;
 use crate::interactive::{
-    fit_string_graphemes_with_ellipsis, path_of, widgets::entry_color, CursorDirection,
+    app::tree_view::TreeView, fit_string_graphemes_with_ellipsis, widgets::entry_color,
+    CursorDirection,
 };
 use crosstermion::{input::Key, input::Key::*};
-use dua::{
-    traverse::{Tree, TreeIndex},
-    ByteFormat,
-};
+use dua::{traverse::TreeIndex, ByteFormat};
 use itertools::Itertools;
 use std::{
     borrow::Borrow,
@@ -77,18 +75,18 @@ impl MarkPane {
     pub fn toggle_index(
         mut self,
         index: TreeIndex,
-        tree: &Tree,
+        tree_view: &dyn TreeView,
         is_dir: bool,
         toggle: bool,
     ) -> Option<Self> {
         match self.marked.entry(index) {
             Entry::Vacant(entry) => {
-                if let Some(e) = tree.node_weight(index) {
+                if let Some(e) = tree_view.tree().node_weight(index) {
                     let sorting_index = self.last_sorting_index + 1;
                     self.last_sorting_index = sorting_index;
                     entry.insert(EntryMark {
                         size: e.size,
-                        path: path_of(tree, index),
+                        path: tree_view.path_of(index),
                         index: sorting_index,
                         num_errors_during_deletion: 0,
                         is_dir,

@@ -2,7 +2,8 @@ use crate::interactive::path_of;
 use dua::traverse::{EntryData, Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;
-use std::cmp::Ordering;
+use std::path::Path;
+use std::{cmp::Ordering, path::PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
@@ -50,9 +51,21 @@ pub struct EntryDataBundle {
     pub data: EntryData,
     pub is_dir: bool,
     pub exists: bool,
+    pub glob_name: Option<PathBuf>,
 }
 
-pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
+impl EntryDataBundle {
+    pub fn name(&self) -> &Path {
+        self.glob_name.as_deref().unwrap_or(&self.data.name)
+    }
+}
+
+pub fn sorted_entries(
+    tree: &Tree,
+    node_idx: TreeIndex,
+    sorting: SortMode,
+    glob_root: Option<TreeIndex>,
+) -> Vec<EntryDataBundle> {
     use SortMode::*;
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
         l.data
@@ -63,13 +76,18 @@ pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Ve
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|w| {
-                let p = path_of(tree, idx);
+                let mut use_glob_path = false;
+                if let Some(glob_root) = glob_root {
+                    use_glob_path = node_idx == glob_root;
+                }
+                let p = path_of(tree, idx, glob_root);
                 let pm = p.symlink_metadata();
                 EntryDataBundle {
                     index: idx,
                     data: w.clone(),
                     exists: pm.is_ok(),
                     is_dir: pm.ok().map_or(false, |m| m.is_dir()),
+                    glob_name: if use_glob_path { Some(p) } else { None },
                 }
             })
         })
