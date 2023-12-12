@@ -60,12 +60,6 @@ impl Entries {
         } = props.borrow();
         let list = &mut self.list;
 
-        let is_top = |node_idx| {
-            tree.neighbors_directed(node_idx, petgraph::Incoming)
-                .next()
-                .is_none()
-        };
-
         let total: u128 = entries.iter().map(|b| b.data.size).sum();
         let (item_count, item_size): (u64, u128) = entries
             .iter()
@@ -115,8 +109,6 @@ impl Entries {
                 columns.push(name_column(
                     &entry_data.name,
                     *is_dir,
-                    is_top,
-                    *root,
                     area,
                     name_style(is_marked, *exists, *is_dir, text_style),
                 ));
@@ -265,20 +257,13 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     )
 }
 
-fn name_column(
-    entry_name: &Path,
-    is_dir: bool,
-    is_top: impl Fn(petgraph::stable_graph::NodeIndex) -> bool,
-    root: petgraph::stable_graph::NodeIndex,
-    area: Rect,
-    style: Style,
-) -> Span<'static> {
+fn name_column(entry_name: &Path, is_dir: bool, area: Rect, style: Style) -> Span<'static> {
     Span::styled(
         fill_background_to_right(
             format!(
                 "{prefix}{}",
                 entry_name.to_string_lossy(),
-                prefix = if is_dir && !is_top(root) { "/" } else { " " }
+                prefix = if is_dir { "/" } else { " " }
             ),
             area.width,
         ),
