@@ -60,12 +60,6 @@ impl Entries {
         } = props.borrow();
         let list = &mut self.list;
 
-        let is_top = |node_idx| {
-            tree.neighbors_directed(node_idx, petgraph::Incoming)
-                .next()
-                .is_none()
-        };
-
         let total: u128 = entries.iter().map(|b| b.data.size).sum();
         let (item_count, item_size): (u64, u128) = entries
             .iter()
@@ -115,8 +109,6 @@ impl Entries {
                 columns.push(name_column(
                     &entry_data.name,
                     *is_dir,
-                    is_top,
-                    *root,
                     area,
                     name_style(is_marked, *exists, *is_dir, text_style),
                 ));
@@ -265,20 +257,32 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     )
 }
 
-fn name_column(
-    entry_name: &Path,
-    is_dir: bool,
-    is_top: impl Fn(petgraph::stable_graph::NodeIndex) -> bool,
-    root: petgraph::stable_graph::NodeIndex,
-    area: Rect,
-    style: Style,
-) -> Span<'static> {
+fn name_column(entry_name: &Path, is_dir: bool, area: Rect, style: Style) -> Span<'static> {
+    let name = entry_name.to_string_lossy();
     Span::styled(
         fill_background_to_right(
             format!(
-                "{prefix}{}",
-                entry_name.to_string_lossy(),
-                prefix = if is_dir && !is_top(root) { "/" } else { " " }
+                "{prefix}{name}",
+                prefix = if is_dir {
+                    // Note that these names never happen on non-root items, so this is a root-item special case.
+                    // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
+                    // `main()` cwd' into the one path that was provided by the user.
+                    // The idea was to keep explicit roots as specified without adjustment, which works with this
+                    // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
+                    // Overall, this logic makes the folder display more consistent.
+                    if name == "."
+                        || name == ".."
+                        || name.starts_with('/')
+                        || name.starts_with("./")
+                        || name.starts_with("../")
+                    {
+                        ""
+                    } else {
+                        "/"
+                    }
+                } else {
+                    " "
+                }
             ),
             area.width,
         ),
