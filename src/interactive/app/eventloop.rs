@@ -292,13 +292,10 @@ impl TerminalApp {
             state.root = traversal.root_index;
         }
         state.entries = sorted_entries(&traversal.tree, state.root, state.sorting);
-        state.selected = if received_events {
-            state
-                .selected
-                .or_else(|| state.entries.first().map(|b| b.index))
-        } else {
-            state.entries.first().map(|b| b.index)
-        };
+        state.selected = state
+            .selected
+            .filter(|_| received_events)
+            .or_else(|| state.entries.first().map(|b| b.index));
 
         let mut app = TerminalApp {
             state,
