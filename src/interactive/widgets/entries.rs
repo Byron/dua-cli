@@ -258,12 +258,31 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
 }
 
 fn name_column(entry_name: &Path, is_dir: bool, area: Rect, style: Style) -> Span<'static> {
+    let name = entry_name.to_string_lossy();
     Span::styled(
         fill_background_to_right(
             format!(
-                "{prefix}{}",
-                entry_name.to_string_lossy(),
-                prefix = if is_dir { "/" } else { " " }
+                "{prefix}{name}",
+                prefix = if is_dir {
+                    // Note that these names never happen on non-root items, so this is a root-item special case.
+                    // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
+                    // `main()` cwd' into the one path that was provided by the user.
+                    // The idea was to keep explicit roots as specified without adjustment, which works with this
+                    // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
+                    // Overall, this logic makes the folder display more consistent.
+                    if name == "."
+                        || name == ".."
+                        || name.starts_with('/')
+                        || name.starts_with("./")
+                        || name.starts_with("../")
+                    {
+                        ""
+                    } else {
+                        "/"
+                    }
+                } else {
+                    " "
+                }
             ),
             area.width,
         ),
