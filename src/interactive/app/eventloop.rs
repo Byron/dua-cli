@@ -251,39 +251,25 @@ impl TerminalApp {
             keys
         };
 
-        let mut state = None::<AppState>;
+        let mut state = AppState {
+            is_scanning: true,
+            ..Default::default()
+        };
         let mut received_events = false;
         let traversal = Traversal::from_walk(options, input_paths, |traversal| {
-            let s = match state.as_mut() {
-                Some(s) => {
-                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
-                    if !received_events {
-                        s.selected = s.entries.first().map(|b| b.index);
-                    }
-                    s
-                }
-                None => {
-                    state = Some({
-                        let sorting = Default::default();
-                        let entries =
-                            sorted_entries(&traversal.tree, traversal.root_index, sorting);
-                        AppState {
-                            root: traversal.root_index,
-                            sorting,
-                            selected: entries.first().map(|b| b.index),
-                            entries,
-                            is_scanning: true,
-                            ..Default::default()
-                        }
-                    });
-                    state.as_mut().expect("state to be present, we just set it")
-                }
-            };
-            s.reset_message(); // force "scanning" to appear
+            if !received_events {
+                state.root = traversal.root_index;
+            }
+            state.entries = sorted_entries(&traversal.tree, state.root, state.sorting);
+            if !received_events {
+                state.selected = state.entries.first().map(|b| b.index);
+            }
+            state.reset_message(); // force "scanning" to appear
+
             let events = fetch_buffered_key_events();
             received_events |= !events.is_empty();
 
-            let should_exit = match s.process_events(
+            let should_exit = match state.process_events(
                 &mut window,
                 traversal,
                 &mut display,
@@ -295,41 +281,31 @@ impl TerminalApp {
             };
             Ok(should_exit)
         })?;
+
         let traversal = match traversal {
             Some(t) => t,
             None => return Ok(None),
         };
 
-        Ok(Some((keys_rx, {
-            let mut app = TerminalApp {
-                state: {
-                    let mut s = state.unwrap_or_else(|| {
-                        let sorting = Default::default();
-                        let root = traversal.root_index;
-                        let entries = sorted_entries(&traversal.tree, root, sorting);
-                        AppState {
-                            root,
-                            entries,
-                            sorting,
-                            ..Default::default()
-                        }
-                    });
-                    s.is_scanning = false;
-                    s.entries = sorted_entries(&traversal.tree, s.root, s.sorting);
-                    s.selected = if received_events {
-                        s.selected.or_else(|| s.entries.first().map(|b| b.index))
-                    } else {
-                        s.entries.first().map(|b| b.index)
-                    };
-                    s
-                },
-                display,
-                traversal,
-                window,
-            };
-            app.refresh_view(terminal);
-            app
-        })))
+        state.is_scanning = false;
+        if !received_events {
+            state.root = traversal.root_index;
+        }
+        state.entries = sorted_entries(&traversal.tree, state.root, state.sorting);
+        state.selected = state
+            .selected
+            .filter(|_| received_events)
+            .or_else(|| state.entries.first().map(|b| b.index));
+
+        let mut app = TerminalApp {
+            state,
+            display,
+            traversal,
+            window,
+        };
+        app.refresh_view(terminal);
+
+        Ok(Some((keys_rx, app)))
     }
 }
 
