@@ -33,7 +33,7 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
 }
 
 #[test]
-fn glob_pattern() {
+fn it_can_do_a_glob_search() {
     let (tree, root_index) = sample_02_tree();
     let result = glob_search(&tree, root_index, "tests/fixtures/sample-02").unwrap();
     let expected = vec![TreeIndex::from(1)];

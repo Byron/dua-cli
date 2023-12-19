@@ -115,8 +115,8 @@ impl AppState {
     }
 
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let nex_index = self.navigation().get_next_index(direction, &self.entries);
-        self.navigation_mut().select(nex_index);
+        let next_index = self.navigation().get_next_index(direction, &self.entries);
+        self.navigation_mut().select(next_index);
     }
 
     pub fn cycle_sorting(&mut self, tree_view: &dyn TreeView) {
