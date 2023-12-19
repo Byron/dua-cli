@@ -57,10 +57,10 @@ impl Entries {
         } = props.borrow();
         let list = &mut self.list;
 
-        let total: u128 = entries.iter().map(|b| b.data.size).sum();
+        let total: u128 = entries.iter().map(|b| b.size).sum();
         let (item_count, item_size): (u64, u128) = entries
             .iter()
-            .map(|f| (f.data.entry_count.unwrap_or(1), f.data.size))
+            .map(|f| (f.entry_count.unwrap_or(1), f.size))
             .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
             .unwrap_or_default();
         let title = title(current_path, item_count, *display, item_size);
@@ -73,33 +73,32 @@ impl Entries {
         };
         let lines = entries.iter().map(|bundle| {
             let node_idx = &bundle.index;
-            let entry_data = &bundle.data;
             let is_dir = &bundle.is_dir;
             let exists = &bundle.exists;
-            let name = bundle.name();
+            let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
             let is_selected = selected.map_or(false, |idx| idx == *node_idx);
-            let fraction = entry_data.size as f32 / total as f32;
+            let fraction = bundle.size as f32 / total as f32;
             let text_style = style(is_selected, *is_focussed);
             let percentage_style = percentage_style(fraction, text_style);
 
             let mut columns = Vec::new();
             if show_mtime_column(sort_mode) {
                 columns.push(mtime_column(
-                    entry_data.mtime,
+                    bundle.mtime,
                     column_style(Column::MTime, *sort_mode, text_style),
                 ));
             }
             columns.push(bytes_column(
                 *display,
-                entry_data.size,
+                bundle.size,
                 column_style(Column::Bytes, *sort_mode, text_style),
             ));
             columns.push(percentage_column(*display, fraction, percentage_style));
             if show_count_column(sort_mode) {
                 columns.push(count_column(
-                    entry_data.entry_count,
+                    bundle.entry_count,
                     column_style(Column::Count, *sort_mode, text_style),
                 ));
             }

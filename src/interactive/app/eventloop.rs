@@ -297,7 +297,12 @@ impl AppState {
         let new_entries = self.navigation().selected.map(|previously_selected| {
             (
                 previously_selected,
-                tree_view.sorted_entries(self.navigation().view_root, self.sorting),
+                sorted_entries(
+                    tree_view.tree(),
+                    self.navigation().view_root,
+                    self.sorting,
+                    None,
+                ),
             )
         });
         self.enter_node(new_entries);

@@ -1,8 +1,8 @@
 use crate::interactive::path_of;
-use dua::traverse::{EntryData, Tree, TreeIndex};
+use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;
-use std::path::Path;
+use std::time::SystemTime;
 use std::{cmp::Ordering, path::PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -48,16 +48,12 @@ impl SortMode {
 
 pub struct EntryDataBundle {
     pub index: TreeIndex,
-    pub data: EntryData,
+    pub name: PathBuf,
+    pub size: u128,
+    pub mtime: SystemTime,
+    pub entry_count: Option<u64>,
     pub is_dir: bool,
     pub exists: bool,
-    pub glob_name: Option<PathBuf>,
-}
-
-impl EntryDataBundle {
-    pub fn name(&self) -> &Path {
-        self.glob_name.as_deref().unwrap_or(&self.data.name)
-    }
 }
 
 pub fn sorted_entries(
@@ -68,10 +64,9 @@ pub fn sorted_entries(
 ) -> Vec<EntryDataBundle> {
     use SortMode::*;
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
-        l.data
-            .entry_count
-            .cmp(&r.data.entry_count)
-            .then_with(|| l.data.name.cmp(&r.data.name))
+        l.entry_count
+            .cmp(&r.entry_count)
+            .then_with(|| l.name.cmp(&r.name))
     }
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
@@ -84,18 +79,20 @@ pub fn sorted_entries(
                 let pm = p.symlink_metadata();
                 EntryDataBundle {
                     index: idx,
-                    data: w.clone(),
+                    name: if use_glob_path { p } else { w.name.clone() },
+                    size: w.size,
+                    mtime: w.mtime,
+                    entry_count: w.entry_count,
                     exists: pm.is_ok(),
                     is_dir: pm.ok().map_or(false, |m| m.is_dir()),
-                    glob_name: if use_glob_path { Some(p) } else { None },
                 }
             })
         })
         .sorted_by(|l, r| match sorting {
-            SizeDescending => r.data.size.cmp(&l.data.size),
-            SizeAscending => l.data.size.cmp(&r.data.size),
-            MTimeAscending => l.data.mtime.cmp(&r.data.mtime),
-            MTimeDescending => r.data.mtime.cmp(&l.data.mtime),
+            SizeDescending => r.size.cmp(&l.size),
+            SizeAscending => l.size.cmp(&r.size),
+            MTimeAscending => l.mtime.cmp(&r.mtime),
+            MTimeDescending => r.mtime.cmp(&l.mtime),
             CountAscending => cmp_count(l, r),
             CountDescending => cmp_count(l, r).reverse(),
         })
