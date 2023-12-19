@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 pub trait TreeView {
     fn traversal(&self) -> &Traversal;
+    fn traversal_as_mut(&mut self) -> &mut Traversal;
 
     fn tree(&self) -> &Tree;
     fn tree_as_mut(&mut self) -> &mut Tree;
@@ -60,6 +61,10 @@ impl<'a> TreeView for NormalTreeView<'a> {
     }
 
     fn traversal(&self) -> &Traversal {
+        self.traversal
+    }
+
+    fn traversal_as_mut(&mut self) -> &mut Traversal {
         self.traversal
     }
 
@@ -152,6 +157,10 @@ impl<'a> TreeView for GlobTreeView<'a> {
     }
 
     fn traversal(&self) -> &Traversal {
+        self.traversal
+    }
+
+    fn traversal_as_mut(&mut self) -> &mut Traversal {
         self.traversal
     }
 

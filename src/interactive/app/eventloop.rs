@@ -242,8 +242,13 @@ impl AppState {
                     tree_view.tree_as_mut().add_edge(tree_root, idx, ());
                 }
 
+                let glob_tree_view = GlobTreeView {
+                    traversal: tree_view.traversal_as_mut(),
+                    glob_tree_root: tree_root
+                };
+
                 let new_entries =
-                    sorted_entries(tree_view.tree(), tree_root, self.sorting, Some(tree_root));
+                    glob_tree_view.sorted_entries(tree_root, self.sorting);
 
                 let new_entries = self
                     .navigation_mut()
@@ -294,15 +299,16 @@ impl AppState {
         self.glob_mode = None;
         window.glob_pane = None;
 
+        let normal_tree_view = NormalTreeView {
+            traversal: tree_view.traversal_as_mut()
+        };
+
         let new_entries = self.navigation().selected.map(|previously_selected| {
             (
                 previously_selected,
-                sorted_entries(
-                    tree_view.tree(),
+                normal_tree_view.sorted_entries(
                     self.navigation().view_root,
-                    self.sorting,
-                    None,
-                ),
+                    self.sorting),
             )
         });
         self.enter_node(new_entries);
