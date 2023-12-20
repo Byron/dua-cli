@@ -6,13 +6,15 @@ use petgraph::Direction;
 use std::borrow::Borrow;
 use std::path::PathBuf;
 use tui::backend::Backend;
+use tui::prelude::Buffer;
 use tui::{
     layout::Rect,
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
-use tui_react::Terminal;
+use tui_react::util::{block_width, rect};
+use tui_react::{draw_text_nowrap_fn, Terminal};
 
 use crate::interactive::Cursor;
 
@@ -121,6 +123,8 @@ impl GlobPane {
             );
 
         if *has_focus {
+            draw_top_right_help(area, title, terminal.current_buffer_mut());
+
             cursor.show = true;
             cursor.x = inner_block_area.x + self.cursor_position as u16 + 1;
             cursor.y = inner_block_area.y;
@@ -128,6 +132,24 @@ impl GlobPane {
             cursor.show = false;
         }
     }
+}
+
+fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
+    let help_text = " search = enter | cancel = esc ";
+    let help_text_block_width = block_width(help_text);
+    let bound = Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    };
+    if block_width(title) + help_text_block_width <= bound.width {
+        draw_text_nowrap_fn(
+            rect::snap_to_right(bound, help_text_block_width),
+            buf,
+            help_text,
+            |_, _, _| Style::default(),
+        );
+    }
+    bound
 }
 
 fn margin_left_right(r: Rect, margin: u16) -> Rect {
