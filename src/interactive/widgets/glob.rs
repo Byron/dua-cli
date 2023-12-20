@@ -14,6 +14,8 @@ use tui::{
 };
 use tui_react::Terminal;
 
+use crate::interactive::Cursor;
+
 pub struct GlobPaneProps {
     pub border_style: Style,
     pub has_focus: bool,
@@ -73,13 +75,13 @@ impl GlobPane {
             let from_left_to_current_index = current_index - 1;
 
             // // Getting all characters before the selected character.
-            // let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
+            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
             // // Getting all characters after selected character.
-            // let after_char_to_delete = self.input.chars().skip(current_index);
+            let after_char_to_delete = self.input.chars().skip(current_index);
 
             // Put all characters together except the selected one.
             // By leaving the selected one out, it is forgotten and therefore deleted.
-            self.input = self.input[0..from_left_to_current_index].to_string();
+            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
             self.move_cursor_left();
         }
     }
@@ -93,6 +95,7 @@ impl GlobPane {
         props: impl Borrow<GlobPaneProps>,
         area: Rect,
         terminal: &mut Terminal<B>,
+        cursor: &mut Cursor,
     ) where
         B: Backend,
     {
@@ -118,16 +121,11 @@ impl GlobPane {
             );
 
         if *has_focus {
-            _ = terminal.show_cursor();
-            _ = terminal.set_cursor(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                inner_block_area.x + self.cursor_position as u16 + 1,
-                // Move one line down, from the border to the input line
-                inner_block_area.y,
-            );
+            cursor.show = true;
+            cursor.x = inner_block_area.x + self.cursor_position as u16 + 1;
+            cursor.y = inner_block_area.y;
         } else {
-            _ = terminal.hide_cursor();
+            cursor.show = false;
         }
     }
 }

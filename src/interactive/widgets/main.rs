@@ -3,7 +3,7 @@ use crate::interactive::{
         Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header, HelpPane,
         HelpPaneProps, MarkPane, MarkPaneProps, COLOR_MARKED,
     },
-    AppState, DisplayOptions, FocussedPane,
+    AppState, Cursor, DisplayOptions, FocussedPane,
 };
 use std::borrow::Borrow;
 use tui::backend::Backend;
@@ -40,6 +40,7 @@ impl MainWindow {
         props: impl Borrow<MainWindowProps<'a>>,
         area: Rect,
         terminal: &mut Terminal<B>,
+        cursor: &mut Cursor,
     ) where
         B: Backend,
     {
@@ -118,7 +119,7 @@ impl MainWindow {
                 border_style: glob_style,
                 has_focus: matches!(state.focussed, Glob),
             };
-            pane.render(props, glob_area, terminal);
+            pane.render(props, glob_area, terminal, cursor);
         }
 
         Footer.render(

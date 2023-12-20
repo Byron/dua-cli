@@ -27,6 +27,13 @@ pub enum FocussedPane {
 }
 
 #[derive(Default)]
+pub struct Cursor {
+    pub show: bool,
+    pub x: u16,
+    pub y: u16,
+}
+
+#[derive(Default)]
 pub struct AppState {
     pub normal_mode: NavigationState,
     pub glob_mode: Option<NavigationState>,
@@ -70,7 +77,18 @@ impl AppState {
             display,
             state: self,
         };
-        draw_window(window, props, terminal)
+        let mut cursor = Cursor::default();
+
+        let result = draw_window(window, props, terminal, &mut cursor);
+
+        if cursor.show {
+            _ = terminal.show_cursor();
+        } else {
+            _ = terminal.hide_cursor();
+        }
+        _ = terminal.set_cursor(cursor.x, cursor.y);
+
+        result
     }
 
     pub fn process_events<B>(
@@ -316,13 +334,15 @@ pub fn draw_window<B>(
     window: &mut MainWindow,
     props: MainWindowProps,
     terminal: &mut Terminal<B>,
+    cursor: &mut Cursor,
 ) -> Result<()>
 where
     B: Backend,
 {
     let area = terminal.pre_render()?;
-    window.render(props, area, terminal);
+    window.render(props, area, terminal, cursor);
     terminal.post_render()?;
+
     Ok(())
 }
 
