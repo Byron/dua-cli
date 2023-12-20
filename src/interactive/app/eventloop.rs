@@ -243,39 +243,43 @@ impl AppState {
             glob_search(tree_view.tree(), self.normal_mode.view_root, glob_pattern);
         match search_results {
             Ok(search_results) => {
-                if let Some(glob_source) = &self.glob_mode {
-                    tree_view.tree_as_mut().remove_node(glob_source.tree_root);
+                if search_results.is_empty() {
+                    self.message = Some("Not found".into());
+                } else {
+                    if let Some(glob_source) = &self.glob_mode {
+                        tree_view.tree_as_mut().remove_node(glob_source.tree_root);
+                    }
+
+                    let tree_root = tree_view.tree_as_mut().add_node(EntryData::default());
+                    let glob_source = NavigationState {
+                        tree_root,
+                        view_root: tree_root,
+                        selected: Some(tree_root),
+                        ..Default::default()
+                    };
+                    self.glob_mode = Some(glob_source);
+
+                    for idx in search_results {
+                        tree_view.tree_as_mut().add_edge(tree_root, idx, ());
+                    }
+
+                    let glob_tree_view = GlobTreeView {
+                        traversal: tree_view.traversal_as_mut(),
+                        glob_tree_root: tree_root,
+                    };
+
+                    let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
+
+                    let new_entries = self
+                        .navigation_mut()
+                        .selected
+                        .map(|previously_selected| (previously_selected, new_entries));
+
+                    self.enter_node(new_entries);
+                    self.focussed = Main;
                 }
-
-                let tree_root = tree_view.tree_as_mut().add_node(EntryData::default());
-                let glob_source = NavigationState {
-                    tree_root,
-                    view_root: tree_root,
-                    selected: Some(tree_root),
-                    ..Default::default()
-                };
-                self.glob_mode = Some(glob_source);
-
-                for idx in search_results {
-                    tree_view.tree_as_mut().add_edge(tree_root, idx, ());
-                }
-
-                let glob_tree_view = GlobTreeView {
-                    traversal: tree_view.traversal_as_mut(),
-                    glob_tree_root: tree_root,
-                };
-
-                let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
-
-                let new_entries = self
-                    .navigation_mut()
-                    .selected
-                    .map(|previously_selected| (previously_selected, new_entries));
-
-                self.enter_node(new_entries);
-                self.focussed = Main;
             }
-            _ => self.message = Some("Glob search error!".into()),
+            _ => self.message = Some("Search error, try again".into()),
         }
     }
 
@@ -320,13 +324,7 @@ impl AppState {
             traversal: tree_view.traversal_as_mut(),
         };
 
-        let new_entries = self.navigation().selected.map(|previously_selected| {
-            (
-                previously_selected,
-                normal_tree_view.sorted_entries(self.navigation().view_root, self.sorting),
-            )
-        });
-        self.enter_node(new_entries);
+        self.entries = normal_tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 }
 
