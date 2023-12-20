@@ -6,8 +6,9 @@ use crate::interactive::{
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
+use std::borrow::Borrow;
+use std::ops::Deref;
 use std::time::SystemTime;
-use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -65,6 +66,7 @@ impl Entries {
             .unwrap_or_default();
         let title = title(current_path, item_count, *display, item_size);
         let title_block = title_block(&title, *border_style);
+        let inner_area = title_block.inner(area);
         let entry_in_view = entry_in_view(*selected, entries);
 
         let props = ListProps {
@@ -102,14 +104,26 @@ impl Entries {
                     column_style(Column::Count, *sort_mode, text_style),
                 ));
             }
+
+            let available_width = inner_area.width.saturating_sub(
+                columns_with_separators(columns.clone(), percentage_style, true)
+                    .iter()
+                    .map(|f| f.width() as u16)
+                    .sum(),
+            ) as usize;
+
+            let shorten_name = shorten_string_middle(
+                name_with_prefix(name.to_string_lossy().deref(), *is_dir).as_str(),
+                available_width,
+            );
+
             columns.push(name_column(
-                name,
-                *is_dir,
+                &shorten_name,
                 area,
                 name_style(is_marked, *exists, *is_dir, text_style),
             ));
 
-            columns_with_separators(columns, percentage_style)
+            columns_with_separators(columns, percentage_style, false)
         });
 
         list.render(props, lines, area, buf);
@@ -206,12 +220,16 @@ fn percentage_style(fraction: f32, style: Style) -> Style {
     }
 }
 
-fn columns_with_separators(columns: Vec<Span<'_>>, style: Style) -> Vec<Span<'_>> {
+fn columns_with_separators(
+    columns: Vec<Span<'_>>,
+    style: Style,
+    insert_last_separator: bool,
+) -> Vec<Span<'_>> {
     let mut columns_with_separators = Vec::new();
     let column_count = columns.len();
     for (idx, column) in columns.into_iter().enumerate() {
         columns_with_separators.push(column);
-        if idx != column_count - 1 {
+        if insert_last_separator || idx != column_count - 1 {
             columns_with_separators.push(Span::styled(" | ", style))
         }
     }
@@ -239,36 +257,33 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     )
 }
 
-fn name_column(entry_name: &Path, is_dir: bool, area: Rect, style: Style) -> Span<'static> {
-    let name = entry_name.to_string_lossy();
-    Span::styled(
-        fill_background_to_right(
-            format!(
-                "{prefix}{name}",
-                prefix = if is_dir {
-                    // Note that these names never happen on non-root items, so this is a root-item special case.
-                    // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
-                    // `main()` cwd' into the one path that was provided by the user.
-                    // The idea was to keep explicit roots as specified without adjustment, which works with this
-                    // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
-                    // Overall, this logic makes the folder display more consistent.
-                    if name == "."
-                        || name == ".."
-                        || name.starts_with('/')
-                        || name.starts_with("./")
-                        || name.starts_with("../")
-                    {
-                        ""
-                    } else {
-                        "/"
-                    }
-                } else {
-                    " "
-                }
-            ),
-            area.width,
-        ),
-        style,
+fn name_column(name: &str, area: Rect, style: Style) -> Span<'static> {
+    Span::styled(fill_background_to_right(name.into(), area.width), style)
+}
+
+fn name_with_prefix(name: &str, is_dir: bool) -> String {
+    format!(
+        "{prefix}{name}",
+        prefix = if is_dir {
+            // Note that these names never happen on non-root items, so this is a root-item special case.
+            // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
+            // `main()` cwd' into the one path that was provided by the user.
+            // The idea was to keep explicit roots as specified without adjustment, which works with this
+            // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
+            // Overall, this logic makes the folder display more consistent.
+            if name == "."
+                || name == ".."
+                || name.starts_with('/')
+                || name.starts_with("./")
+                || name.starts_with("../")
+            {
+                ""
+            } else {
+                "/"
+            }
+        } else {
+            " "
+        }
     )
 }
 
@@ -330,4 +345,43 @@ fn show_count_column(sort_mode: &SortMode) -> bool {
         sort_mode,
         SortMode::CountAscending | SortMode::CountDescending
     )
+}
+
+fn shorten_string_middle(input: &str, width: usize) -> String {
+    let ellipsis = "...";
+    let ellipsis_len = ellipsis.chars().count();
+
+    if input.chars().count() <= width {
+        return input.to_string();
+    }
+
+    if ellipsis.chars().count() > width {
+        return "".to_string();
+    }
+
+    let chars_per_half = (width - ellipsis_len) / 2;
+
+    let first_half: String = input.chars().take(chars_per_half).collect();
+    let second_half_start = input.chars().count() - chars_per_half;
+    let second_half: String = input.chars().skip(second_half_start).collect();
+
+    first_half + ellipsis + &second_half
+}
+
+#[cfg(test)]
+mod entries_test {
+    use super::shorten_string_middle;
+
+    #[test]
+    fn test_shorten_string_middle() {
+        assert_eq!(
+            shorten_string_middle("12345678".into(), 7),
+            "12...78".to_string()
+        );
+        assert_eq!(
+            shorten_string_middle("12345678".into(), 3),
+            "...".to_string()
+        );
+        assert_eq!(shorten_string_middle("12345678".into(), 2), "".to_string());
+    }
 }
