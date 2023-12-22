@@ -7,7 +7,6 @@ use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::{Borrow, Cow};
-use std::ops::Deref;
 use std::time::SystemTime;
 use tui::{
     buffer::Buffer,
@@ -18,7 +17,7 @@ use tui::{
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
-    draw_text_nowrap_fn, fill_background_to_right,
+    draw_text_nowrap_fn,
     util::{block_width, rect},
     List, ListProps,
 };
@@ -114,16 +113,12 @@ impl Entries {
                     .sum(),
             ) as usize;
 
-            let shorten_name = shorten_input(
-                name_with_prefix(name.to_string_lossy().deref(), *is_dir).into(),
+            let name = shorten_input(
+                name_with_prefix(name.to_string_lossy(), *is_dir),
                 available_width,
             );
-
-            columns.push(name_column(
-                &shorten_name,
-                area,
-                name_style(is_marked, *exists, *is_dir, text_style),
-            ));
+            let style = name_style(is_marked, *exists, *is_dir, text_style);
+            columns.push(name_column(name, area, style));
 
             columns_with_separators(columns, percentage_style, false)
         });
@@ -259,34 +254,48 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     )
 }
 
-fn name_column(name: &str, area: Rect, style: Style) -> Span<'static> {
-    Span::styled(fill_background_to_right(name.into(), area.width), style)
+fn name_column(name: Cow<'_, str>, area: Rect, style: Style) -> Span<'_> {
+    Span::styled(fill_background_to_right(name, area.width), style)
 }
 
-fn name_with_prefix(name: &str, is_dir: bool) -> String {
-    format!(
-        "{prefix}{name}",
-        prefix = if is_dir {
-            // Note that these names never happen on non-root items, so this is a root-item special case.
-            // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
-            // `main()` cwd' into the one path that was provided by the user.
-            // The idea was to keep explicit roots as specified without adjustment, which works with this
-            // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
-            // Overall, this logic makes the folder display more consistent.
-            if name == "."
-                || name == ".."
-                || name.starts_with('/')
-                || name.starts_with("./")
-                || name.starts_with("../")
-            {
-                ""
-            } else {
-                "/"
-            }
-        } else {
-            " "
+fn fill_background_to_right(mut s: Cow<'_, str>, entire_width: u16) -> Cow<'_, str> {
+    match (s.len(), entire_width as usize) {
+        (x, y) if x >= y => s,
+        (x, y) => {
+            s.to_mut().extend(std::iter::repeat(' ').take(y - x));
+            s
         }
-    )
+    }
+}
+
+fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
+    let prefix = if is_dir {
+        // Note that these names never happen on non-root items, so this is a root-item special case.
+        // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
+        // `main()` cwd' into the one path that was provided by the user.
+        // The idea was to keep explicit roots as specified without adjustment, which works with this
+        // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
+        // Overall, this logic makes the folder display more consistent.
+        if name == "."
+            || name == ".."
+            || name.starts_with('/')
+            || name.starts_with("./")
+            || name.starts_with("../")
+        {
+            None
+        } else {
+            Some("/")
+        }
+    } else {
+        Some(" ")
+    };
+    match prefix {
+        None => name,
+        Some(prefix) => {
+            name.to_mut().insert_str(0, prefix);
+            name
+        }
+    }
 }
 
 fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Style {
