@@ -5,14 +5,14 @@ use std::collections::BTreeMap;
 use super::{CursorDirection, EntryDataBundle};
 
 #[derive(Default)]
-pub struct NavigationState {
+pub struct Navigation {
     pub tree_root: TreeIndex,
     pub view_root: TreeIndex,
     pub selected: Option<TreeIndex>,
     pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
 }
 
-impl NavigationState {
+impl Navigation {
     pub fn get_previously_selected_index(
         &self,
         view_root: TreeIndex,
@@ -61,19 +61,17 @@ impl NavigationState {
             None => 0,
         };
 
-        let selected = entries
+        entries
             .get(next_selected_pos)
             .or_else(|| entries.last())
-            .map(|b| b.index);
-
-        selected.or(self.selected)
+            .map(|b| b.index)
+            .or(self.selected)
     }
 
     pub fn select(&mut self, selected: Option<TreeIndex>) {
         self.selected = selected;
         if let Some(selected) = selected {
-            let view_root = self.view_root;
-            self.bookmarks.insert(view_root, selected);
+            self.bookmarks.insert(self.view_root, selected);
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::interactive::{
-    app::navigation::NavigationState,
+    app::navigation::Navigation,
     sorted_entries,
     widgets::{glob_search, MainWindow, MainWindowProps},
     ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
@@ -35,8 +35,8 @@ pub struct Cursor {
 
 #[derive(Default)]
 pub struct AppState {
-    pub normal_mode: NavigationState,
-    pub glob_mode: Option<NavigationState>,
+    pub navigation: Navigation,
+    pub glob_navigation: Option<Navigation>,
     pub entries: Vec<EntryDataBundle>,
     pub sorting: SortMode,
     pub message: Option<String>,
@@ -50,12 +50,14 @@ pub enum ProcessingResult {
 }
 
 impl AppState {
-    pub fn navigation_mut(&mut self) -> &mut NavigationState {
-        self.glob_mode.as_mut().unwrap_or(&mut self.normal_mode)
+    pub fn navigation_mut(&mut self) -> &mut Navigation {
+        self.glob_navigation
+            .as_mut()
+            .unwrap_or(&mut self.navigation)
     }
 
-    pub fn navigation(&self) -> &NavigationState {
-        self.glob_mode.as_ref().unwrap_or(&self.normal_mode)
+    pub fn navigation(&self) -> &Navigation {
+        self.glob_navigation.as_ref().unwrap_or(&self.navigation)
     }
 
     pub fn draw<B>(
@@ -77,16 +79,16 @@ impl AppState {
             display,
             state: self,
         };
-        let mut cursor = Cursor::default();
 
+        let mut cursor = Cursor::default();
         let result = draw_window(window, props, terminal, &mut cursor);
 
         if cursor.show {
             _ = terminal.show_cursor();
+            _ = terminal.set_cursor(cursor.x, cursor.y);
         } else {
             _ = terminal.hide_cursor();
         }
-        _ = terminal.set_cursor(cursor.x, cursor.y);
 
         result
     }
@@ -119,26 +121,28 @@ impl AppState {
             let mut tree_view = self.tree_view(traversal);
 
             self.reset_message();
+
+            let glob_focussed = self.focussed == Glob;
             let mut handled = true;
             match key {
-                Char('?') if self.focussed != FocussedPane::Glob => self.toggle_help_pane(window),
-                Char('/') if self.focussed != FocussedPane::Glob => {
-                    self.toggle_glob_search(window);
-                }
-                Char('\t') => {
-                    self.cycle_focus(window);
-                }
-                Ctrl('c') if self.focussed != FocussedPane::Glob => {
-                    return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: tree_view.traversal().io_errors,
-                    }))
-                }
-                Char('q') if self.focussed != FocussedPane::Glob => {
+                Esc => {
                     if let Some(value) = self.handle_quit(tree_view.as_mut(), window) {
                         return value;
                     }
                 }
-                Esc => {
+                Char('\t') => {
+                    self.cycle_focus(window);
+                }
+                Char('/') if !glob_focussed => {
+                    self.toggle_glob_search(window);
+                }
+                Char('?') if !glob_focussed => self.toggle_help_pane(window),
+                Ctrl('c') if !glob_focussed => {
+                    return Ok(ProcessingResult::ExitRequested(WalkResult {
+                        num_errors: tree_view.traversal().io_errors,
+                    }))
+                }
+                Char('q') if !glob_focussed => {
                     if let Some(value) = self.handle_quit(tree_view.as_mut(), window) {
                         return value;
                     }
@@ -226,7 +230,7 @@ impl AppState {
     }
 
     fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> Box<dyn TreeView + 'a> {
-        let tree_view: Box<dyn TreeView> = if let Some(glob_source) = &self.glob_mode {
+        let tree_view: Box<dyn TreeView> = if let Some(glob_source) = &self.glob_navigation {
             Box::new(GlobTreeView {
                 traversal,
                 glob_tree_root: glob_source.tree_root,
@@ -239,47 +243,43 @@ impl AppState {
 
     fn search_glob_pattern(&mut self, tree_view: &mut dyn TreeView, glob_pattern: &str) {
         use FocussedPane::*;
-        let search_results =
-            glob_search(tree_view.tree(), self.normal_mode.view_root, glob_pattern);
-        match search_results {
-            Ok(search_results) => {
-                if search_results.is_empty() {
-                    self.message = Some("Not found".into());
-                } else {
-                    if let Some(glob_source) = &self.glob_mode {
-                        tree_view.tree_as_mut().remove_node(glob_source.tree_root);
-                    }
-
-                    let tree_root = tree_view.tree_as_mut().add_node(EntryData::default());
-                    let glob_source = NavigationState {
-                        tree_root,
-                        view_root: tree_root,
-                        selected: Some(tree_root),
-                        ..Default::default()
-                    };
-                    self.glob_mode = Some(glob_source);
-
-                    for idx in search_results {
-                        tree_view.tree_as_mut().add_edge(tree_root, idx, ());
-                    }
-
-                    let glob_tree_view = GlobTreeView {
-                        traversal: tree_view.traversal_as_mut(),
-                        glob_tree_root: tree_root,
-                    };
-
-                    let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
-
-                    let new_entries = self
-                        .navigation_mut()
-                        .selected
-                        .map(|previously_selected| (previously_selected, new_entries));
-
-                    self.enter_node(new_entries);
-                    self.focussed = Main;
-                }
+        match glob_search(tree_view.tree(), self.navigation.view_root, glob_pattern) {
+            Ok(matches) if matches.is_empty() => {
+                self.message = Some("No match found".into());
             }
-            _ => self.message = Some("Search error, try again".into()),
+            Ok(matches) => {
+                if let Some(glob_source) = &self.glob_navigation {
+                    tree_view.tree_as_mut().remove_node(glob_source.tree_root);
+                }
+
+                let tree_root = tree_view.tree_as_mut().add_node(EntryData::default());
+                let glob_source = Navigation {
+                    tree_root,
+                    view_root: tree_root,
+                    selected: Some(tree_root),
+                    ..Default::default()
+                };
+                self.glob_navigation = Some(glob_source);
+
+                for idx in matches {
+                    tree_view.tree_as_mut().add_edge(tree_root, idx, ());
+                }
+
+                let glob_tree_view = GlobTreeView {
+                    traversal: tree_view.traversal_as_mut(),
+                    glob_tree_root: tree_root,
+                };
+                let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
+
+                let new_entries = self
+                    .navigation_mut()
+                    .selected
+                    .map(|previously_selected| (previously_selected, new_entries));
+
+                self.enter_node(new_entries);
+                self.focussed = Main;
+            }
+            Err(err) => self.message = Some(err.to_string()),
         }
     }
 
@@ -291,7 +291,7 @@ impl AppState {
         use FocussedPane::*;
         match self.focussed {
             Main => {
-                if self.glob_mode.is_some() {
+                if self.glob_navigation.is_some() {
                     self.handle_glob_quit(tree_view, window);
                 } else {
                     return Some(Ok(ProcessingResult::ExitRequested(WalkResult {
@@ -314,17 +314,16 @@ impl AppState {
     fn handle_glob_quit(&mut self, tree_view: &mut dyn TreeView, window: &mut MainWindow) {
         use FocussedPane::*;
         self.focussed = Main;
-        if let Some(glob_source) = &self.glob_mode {
+        if let Some(glob_source) = &self.glob_navigation {
             tree_view.tree_as_mut().remove_node(glob_source.tree_root);
         }
-        self.glob_mode = None;
+        self.glob_navigation = None;
         window.glob_pane = None;
 
-        let normal_tree_view = NormalTreeView {
+        let tree_view = NormalTreeView {
             traversal: tree_view.traversal_as_mut(),
         };
-
-        self.entries = normal_tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 }
 

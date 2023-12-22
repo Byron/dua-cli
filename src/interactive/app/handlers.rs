@@ -140,10 +140,7 @@ impl AppState {
                 window.glob_pane = Some(GlobPane::default());
                 Glob
             }
-            Glob => {
-                window.glob_pane = None;
-                Main
-            }
+            Glob => unreachable!("BUG: glob pane must catch the input leading here"),
         }
     }
 
@@ -329,7 +326,7 @@ impl AppState {
     }
 
     pub fn glob_root(&self) -> Option<TreeIndex> {
-        self.glob_mode.as_ref().map(|e| e.tree_root)
+        self.glob_navigation.as_ref().map(|e| e.tree_root)
     }
 
     fn mark_entry_by_index(

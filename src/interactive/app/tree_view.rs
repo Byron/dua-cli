@@ -41,6 +41,14 @@ pub struct NormalTreeView<'a> {
 }
 
 impl<'a> TreeView for NormalTreeView<'a> {
+    fn traversal(&self) -> &Traversal {
+        self.traversal
+    }
+
+    fn traversal_as_mut(&mut self) -> &mut Traversal {
+        self.traversal
+    }
+
     fn tree(&self) -> &Tree {
         &self.traversal.tree
     }
@@ -58,14 +66,6 @@ impl<'a> TreeView for NormalTreeView<'a> {
 
     fn remove_entries(&mut self, index: TreeIndex) -> usize {
         remove_entries(self.traversal, index)
-    }
-
-    fn traversal(&self) -> &Traversal {
-        self.traversal
-    }
-
-    fn traversal_as_mut(&mut self) -> &mut Traversal {
-        self.traversal
     }
 
     fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
@@ -95,6 +95,14 @@ pub struct GlobTreeView<'a> {
 }
 
 impl<'a> TreeView for GlobTreeView<'a> {
+    fn traversal(&self) -> &Traversal {
+        self.traversal
+    }
+
+    fn traversal_as_mut(&mut self) -> &mut Traversal {
+        self.traversal
+    }
+
     fn tree(&self) -> &Tree {
         &self.traversal.tree
     }
@@ -135,10 +143,6 @@ impl<'a> TreeView for GlobTreeView<'a> {
         parent
     }
 
-    fn remove_entries(&mut self, index: TreeIndex) -> usize {
-        remove_entries(self.traversal, index)
-    }
-
     fn path_of(&self, node_idx: TreeIndex) -> PathBuf {
         path_of(&self.traversal.tree, node_idx, Some(self.glob_tree_root))
     }
@@ -156,12 +160,8 @@ impl<'a> TreeView for GlobTreeView<'a> {
         current_path(&self.traversal.tree, view_root, Some(self.glob_tree_root))
     }
 
-    fn traversal(&self) -> &Traversal {
-        self.traversal
-    }
-
-    fn traversal_as_mut(&mut self) -> &mut Traversal {
-        self.traversal
+    fn remove_entries(&mut self, index: TreeIndex) -> usize {
+        remove_entries(self.traversal, index)
     }
 
     fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
