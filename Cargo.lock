@@ -334,6 +334,7 @@ dependencies = [
  "trash",
  "tui-react",
  "unicode-segmentation",
+ "unicode-width",
  "wild",
 ]
 

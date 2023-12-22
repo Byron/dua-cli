@@ -6,7 +6,7 @@ use crate::interactive::{
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::ops::Deref;
 use std::time::SystemTime;
 use tui::{
@@ -22,6 +22,8 @@ use tui_react::{
     util::{block_width, rect},
     List, ListProps,
 };
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub struct EntriesProps<'a> {
     pub current_path: String,
@@ -112,8 +114,8 @@ impl Entries {
                     .sum(),
             ) as usize;
 
-            let shorten_name = shorten_string_middle(
-                name_with_prefix(name.to_string_lossy().deref(), *is_dir).as_str(),
+            let shorten_name = shorten_input(
+                name_with_prefix(name.to_string_lossy().deref(), *is_dir).into(),
                 available_width,
             );
 
@@ -347,35 +349,62 @@ fn show_count_column(sort_mode: &SortMode) -> bool {
     )
 }
 
-fn shorten_string_middle(input: &str, width: usize) -> String {
-    let ellipsis = "...";
-    let ellipsis_len = ellipsis.chars().count();
+/// Note that this implementation isn't correct as `width` is the amount of blocks to display,
+/// which is not what we are actually counting when adding graphemes to the output string.
+fn shorten_input(input: Cow<'_, str>, width: usize) -> Cow<'_, str> {
+    const ELLIPSIS: char = '…';
+    const ELLIPSIS_LEN: usize = 1;
+    const EXTENDED: bool = true;
 
-    if input.chars().count() <= width {
-        return input.to_string();
+    let total_count = input.width();
+    if total_count <= width {
+        return input;
     }
 
-    if ellipsis.chars().count() > width {
-        return "".to_string();
+    if ELLIPSIS_LEN > width {
+        return Cow::Borrowed("");
     }
 
-    let chars_per_half = (width - ellipsis_len) / 2;
+    let graphemes_per_half = (width - ELLIPSIS_LEN) / 2;
 
-    let first_half: String = input.chars().take(chars_per_half).collect();
-    let second_half_start = input.chars().count() - chars_per_half;
-    let second_half: String = input.chars().skip(second_half_start).collect();
+    let mut out = String::with_capacity(width);
+    let mut g = input.graphemes(EXTENDED);
 
-    first_half + ellipsis + &second_half
+    out.extend(g.by_ref().take(graphemes_per_half));
+    out.push(ELLIPSIS);
+    out.extend(g.skip(total_count - graphemes_per_half * 2));
+
+    Cow::Owned(out)
 }
 
 #[cfg(test)]
 mod entries_test {
-    use super::shorten_string_middle;
+    use super::shorten_input;
 
     #[test]
     fn test_shorten_string_middle() {
-        assert_eq!(shorten_string_middle("12345678", 7), "12...78".to_string());
-        assert_eq!(shorten_string_middle("12345678", 3), "...".to_string());
-        assert_eq!(shorten_string_middle("12345678", 2), "".to_string());
+        let numbers = "12345678";
+        let graphemes = "你好😁你好";
+        for (input, target_length, expected) in [
+            (numbers, 8, numbers),
+            (numbers, 7, "123…678"),
+            (numbers, 3, "1…8"),
+            (numbers, 2, "…"),
+            (numbers, 1, "…"),
+            (numbers, 0, ""),
+            // multi-block strings are handled incorrectly, but at least it doesn't crash.
+            (graphemes, 0, ""),
+            (graphemes, 1, "…"),
+            (graphemes, 3, "你…"),
+            (graphemes, 4, "你…"),
+            (graphemes, 5, "你好…"),
+            (graphemes, 6, "你好…"),
+            (graphemes, 7, "你好😁…"),
+            (graphemes, 8, "你好😁…"),
+            (graphemes, 9, "你好😁你…"),
+            (graphemes, 10, "你好😁你好"),
+        ] {
+            assert_eq!(shorten_input(input.into(), target_length), expected);
+        }
     }
 }
