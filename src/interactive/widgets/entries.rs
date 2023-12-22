@@ -374,14 +374,8 @@ mod entries_test {
 
     #[test]
     fn test_shorten_string_middle() {
-        assert_eq!(
-            shorten_string_middle("12345678".into(), 7),
-            "12...78".to_string()
-        );
-        assert_eq!(
-            shorten_string_middle("12345678".into(), 3),
-            "...".to_string()
-        );
-        assert_eq!(shorten_string_middle("12345678".into(), 2), "".to_string());
+        assert_eq!(shorten_string_middle("12345678", 7), "12...78".to_string());
+        assert_eq!(shorten_string_middle("12345678", 3), "...".to_string());
+        assert_eq!(shorten_string_middle("12345678", 2), "".to_string());
     }
 }
