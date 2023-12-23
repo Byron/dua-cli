@@ -13,7 +13,7 @@ pub struct Navigation {
 }
 
 impl Navigation {
-    pub fn get_previously_selected_index(
+    pub fn previously_selected_index(
         &self,
         view_root: TreeIndex,
         entries: &[EntryDataBundle],
@@ -47,7 +47,7 @@ impl Navigation {
             .or_else(|| entries.first().map(|b| b.index));
     }
 
-    pub fn get_next_index(
+    pub fn next_index(
         &self,
         direction: CursorDirection,
         entries: &[EntryDataBundle],

@@ -75,7 +75,7 @@ impl MarkPane {
     pub fn toggle_index(
         mut self,
         index: TreeIndex,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
         is_dir: bool,
         toggle: bool,
     ) -> Option<Self> {

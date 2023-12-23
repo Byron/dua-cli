@@ -70,21 +70,22 @@ pub fn sorted_entries(
     }
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
-            tree.node_weight(idx).map(|w| {
-                let mut use_glob_path = false;
-                if let Some(glob_root) = glob_root {
-                    use_glob_path = node_idx == glob_root;
-                }
-                let p = path_of(tree, idx, glob_root);
-                let pm = p.symlink_metadata();
+            tree.node_weight(idx).map(|entry| {
+                let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
+                let path = path_of(tree, idx, glob_root);
+                let meta = path.symlink_metadata();
                 EntryDataBundle {
                     index: idx,
-                    name: if use_glob_path { p } else { w.name.clone() },
-                    size: w.size,
-                    mtime: w.mtime,
-                    entry_count: w.entry_count,
-                    exists: pm.is_ok(),
-                    is_dir: pm.ok().map_or(false, |m| m.is_dir()),
+                    name: if use_glob_path {
+                        path
+                    } else {
+                        entry.name.clone()
+                    },
+                    size: entry.size,
+                    mtime: entry.mtime,
+                    entry_count: entry.entry_count,
+                    exists: meta.is_ok(),
+                    is_dir: meta.ok().map_or(false, |m| m.is_dir()),
                 }
             })
         })

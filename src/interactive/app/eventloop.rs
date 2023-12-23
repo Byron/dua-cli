@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::tree_view::{GlobTreeView, NormalTreeView, TreeView};
+use super::tree_view::TreeView;
 
 #[derive(Default, Copy, Clone, PartialEq)]
 pub enum FocussedPane {
@@ -63,7 +63,7 @@ impl AppState {
     pub fn draw<B>(
         &mut self,
         window: &mut MainWindow,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
     ) -> Result<()>
@@ -72,10 +72,10 @@ impl AppState {
     {
         let props = MainWindowProps {
             current_path: tree_view.current_path(self.navigation().view_root),
-            entries_traversed: tree_view.traversal().entries_traversed,
-            total_bytes: tree_view.traversal().total_bytes,
-            start: tree_view.traversal().start,
-            elapsed: tree_view.traversal().elapsed,
+            entries_traversed: tree_view.traversal.entries_traversed,
+            total_bytes: tree_view.traversal.total_bytes,
+            start: tree_view.traversal.start,
+            elapsed: tree_view.traversal.elapsed,
             display,
             state: self,
         };
@@ -109,7 +109,7 @@ impl AppState {
 
         {
             let tree_view = self.tree_view(traversal);
-            self.draw(window, tree_view.as_ref(), *display, terminal)?;
+            self.draw(window, &tree_view, *display, terminal)?;
         }
 
         for event in events {
@@ -118,15 +118,14 @@ impl AppState {
                 Event::Resize(_, _) => Alt('\r'),
             };
 
-            let mut tree_view = self.tree_view(traversal);
-
             self.reset_message();
 
             let glob_focussed = self.focussed == Glob;
+            let mut tree_view = self.tree_view(traversal);
             let mut handled = true;
             match key {
                 Esc => {
-                    if let Some(value) = self.handle_quit(tree_view.as_mut(), window) {
+                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
                         return value;
                     }
                 }
@@ -139,11 +138,11 @@ impl AppState {
                 Char('?') if !glob_focussed => self.toggle_help_pane(window),
                 Ctrl('c') if !glob_focussed => {
                     return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: tree_view.traversal().io_errors,
+                        num_errors: tree_view.traversal.io_errors,
                     }))
                 }
                 Char('q') if !glob_focussed => {
-                    if let Some(value) = self.handle_quit(tree_view.as_mut(), window) {
+                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
                         return value;
                     }
                 }
@@ -154,13 +153,9 @@ impl AppState {
 
             if !handled {
                 match self.focussed {
-                    Mark => self.dispatch_to_mark_pane(
-                        key,
-                        window,
-                        tree_view.as_mut(),
-                        *display,
-                        terminal,
-                    ),
+                    Mark => {
+                        self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal)
+                    }
                     Help => {
                         window
                             .help_pane
@@ -172,39 +167,39 @@ impl AppState {
                         let glob_pane = window.glob_pane.as_mut().expect("glob pane");
                         match key {
                             Char('\n') => {
-                                self.search_glob_pattern(tree_view.as_mut(), &glob_pane.input)
+                                self.search_glob_pattern(&mut tree_view, &glob_pane.input)
                             }
                             _ => glob_pane.process_events(key),
                         }
                     }
                     Main => match key {
-                        Char('O') => self.open_that(tree_view.as_ref()),
+                        Char('O') => self.open_that(&tree_view),
                         Char(' ') => self.mark_entry(
                             CursorMode::KeepPosition,
                             MarkEntryMode::Toggle,
                             window,
-                            tree_view.as_ref(),
+                            &tree_view,
                         ),
                         Char('d') => self.mark_entry(
                             CursorMode::Advance,
                             MarkEntryMode::Toggle,
                             window,
-                            tree_view.as_ref(),
+                            &tree_view,
                         ),
                         Char('x') => self.mark_entry(
                             CursorMode::Advance,
                             MarkEntryMode::MarkForDeletion,
                             window,
-                            tree_view.as_ref(),
+                            &tree_view,
                         ),
                         Char('a') => {
-                            self.mark_all_entries(MarkEntryMode::Toggle, window, tree_view.as_ref())
+                            self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
                         }
                         Char('u') | Char('h') | Backspace | Left => {
-                            self.exit_node_with_traversal(tree_view.as_ref())
+                            self.exit_node_with_traversal(&tree_view)
                         }
                         Char('o') | Char('l') | Char('\n') | Right => {
-                            self.enter_node_with_traversal(tree_view.as_ref())
+                            self.enter_node_with_traversal(&tree_view)
                         }
                         Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                         Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
@@ -214,34 +209,29 @@ impl AppState {
                         Ctrl('d') | PageDown => {
                             self.change_entry_selection(CursorDirection::PageDown)
                         }
-                        Char('s') => self.cycle_sorting(tree_view.as_ref()),
-                        Char('m') => self.cycle_mtime_sorting(tree_view.as_ref()),
-                        Char('c') => self.cycle_count_sorting(tree_view.as_ref()),
+                        Char('s') => self.cycle_sorting(&tree_view),
+                        Char('m') => self.cycle_mtime_sorting(&tree_view),
+                        Char('c') => self.cycle_count_sorting(&tree_view),
                         Char('g') => display.byte_vis.cycle(),
                         _ => {}
                     },
                 };
             }
-            self.draw(window, tree_view.as_ref(), *display, terminal)?;
+            self.draw(window, &tree_view, *display, terminal)?;
         }
         Ok(ProcessingResult::Finished(WalkResult {
             num_errors: traversal.io_errors,
         }))
     }
 
-    fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> Box<dyn TreeView + 'a> {
-        let tree_view: Box<dyn TreeView> = if let Some(glob_source) = &self.glob_navigation {
-            Box::new(GlobTreeView {
-                traversal,
-                glob_tree_root: glob_source.tree_root,
-            })
-        } else {
-            Box::new(NormalTreeView { traversal })
-        };
-        tree_view
+    fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {
+        TreeView {
+            traversal,
+            glob_tree_root: self.glob_navigation.as_ref().map(|n| n.tree_root),
+        }
     }
 
-    fn search_glob_pattern(&mut self, tree_view: &mut dyn TreeView, glob_pattern: &str) {
+    fn search_glob_pattern(&mut self, tree_view: &mut TreeView, glob_pattern: &str) {
         use FocussedPane::*;
         match glob_search(tree_view.tree(), self.navigation.view_root, glob_pattern) {
             Ok(matches) if matches.is_empty() => {
@@ -249,10 +239,10 @@ impl AppState {
             }
             Ok(matches) => {
                 if let Some(glob_source) = &self.glob_navigation {
-                    tree_view.tree_as_mut().remove_node(glob_source.tree_root);
+                    tree_view.tree_mut().remove_node(glob_source.tree_root);
                 }
 
-                let tree_root = tree_view.tree_as_mut().add_node(EntryData::default());
+                let tree_root = tree_view.tree_mut().add_node(EntryData::default());
                 let glob_source = Navigation {
                     tree_root,
                     view_root: tree_root,
@@ -262,12 +252,12 @@ impl AppState {
                 self.glob_navigation = Some(glob_source);
 
                 for idx in matches {
-                    tree_view.tree_as_mut().add_edge(tree_root, idx, ());
+                    tree_view.tree_mut().add_edge(tree_root, idx, ());
                 }
 
-                let glob_tree_view = GlobTreeView {
-                    traversal: tree_view.traversal_as_mut(),
-                    glob_tree_root: tree_root,
+                let glob_tree_view = TreeView {
+                    traversal: tree_view.traversal,
+                    glob_tree_root: Some(tree_root),
                 };
                 let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
 
@@ -285,7 +275,7 @@ impl AppState {
 
     fn handle_quit(
         &mut self,
-        tree_view: &mut dyn TreeView,
+        tree_view: &mut TreeView<'_>,
         window: &mut MainWindow,
     ) -> Option<std::result::Result<ProcessingResult, anyhow::Error>> {
         use FocussedPane::*;
@@ -295,7 +285,7 @@ impl AppState {
                     self.handle_glob_quit(tree_view, window);
                 } else {
                     return Some(Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: tree_view.traversal().io_errors,
+                        num_errors: tree_view.traversal.io_errors,
                     })));
                 }
             }
@@ -311,18 +301,16 @@ impl AppState {
         None
     }
 
-    fn handle_glob_quit(&mut self, tree_view: &mut dyn TreeView, window: &mut MainWindow) {
+    fn handle_glob_quit(&mut self, tree_view: &mut TreeView<'_>, window: &mut MainWindow) {
         use FocussedPane::*;
         self.focussed = Main;
         if let Some(glob_source) = &self.glob_navigation {
-            tree_view.tree_as_mut().remove_node(glob_source.tree_root);
+            tree_view.tree_mut().remove_node(glob_source.tree_root);
         }
         self.glob_navigation = None;
         window.glob_pane = None;
 
-        let tree_view = NormalTreeView {
-            traversal: tree_view.traversal_as_mut(),
-        };
+        tree_view.glob_tree_root.take();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 }

@@ -46,20 +46,20 @@ impl CursorDirection {
 }
 
 impl AppState {
-    pub fn open_that(&self, tree_view: &dyn TreeView) {
+    pub fn open_that(&self, tree_view: &TreeView<'_>) {
         if let Some(idx) = self.navigation().selected {
             open::that(tree_view.path_of(idx)).ok();
         }
     }
 
-    pub fn exit_node_with_traversal(&mut self, tree_view: &dyn TreeView) {
+    pub fn exit_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
         let entries = self.entries_for_exit_node(tree_view);
         self.exit_node(entries);
     }
 
     fn entries_for_exit_node(
         &self,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
     ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
         tree_view
             .view_parent_of(self.navigation().view_root)
@@ -83,7 +83,7 @@ impl AppState {
 
     fn entries_for_enter_node(
         &self,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
     ) -> Option<(TreeIndex, Vec<EntryDataBundle>)> {
         self.navigation().selected.map(|previously_selected| {
             (
@@ -93,7 +93,7 @@ impl AppState {
         })
     }
 
-    pub fn enter_node_with_traversal(&mut self, tree_view: &dyn TreeView) {
+    pub fn enter_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
         let new_entries = self.entries_for_enter_node(tree_view);
         self.enter_node(new_entries)
     }
@@ -102,7 +102,7 @@ impl AppState {
         if let Some((previously_selected, new_entries)) = entries_at_selected {
             match self
                 .navigation()
-                .get_previously_selected_index(previously_selected, &new_entries)
+                .previously_selected_index(previously_selected, &new_entries)
             {
                 Some(selected) => {
                     self.navigation_mut()
@@ -115,21 +115,21 @@ impl AppState {
     }
 
     pub fn change_entry_selection(&mut self, direction: CursorDirection) {
-        let next_index = self.navigation().get_next_index(direction, &self.entries);
+        let next_index = self.navigation().next_index(direction, &self.entries);
         self.navigation_mut().select(next_index);
     }
 
-    pub fn cycle_sorting(&mut self, tree_view: &dyn TreeView) {
+    pub fn cycle_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_size();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 
-    pub fn cycle_mtime_sorting(&mut self, tree_view: &dyn TreeView) {
+    pub fn cycle_mtime_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_mtime();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
 
-    pub fn cycle_count_sorting(&mut self, tree_view: &dyn TreeView) {
+    pub fn cycle_count_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_count();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
@@ -197,7 +197,7 @@ impl AppState {
         &mut self,
         key: Key,
         window: &mut MainWindow,
-        tree_view: &mut dyn TreeView,
+        tree_view: &mut TreeView<'_>,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
     ) where
@@ -259,7 +259,7 @@ impl AppState {
     pub fn delete_entry(
         &mut self,
         index: TreeIndex,
-        tree_view: &mut dyn TreeView,
+        tree_view: &mut TreeView<'_>,
     ) -> Result<usize, usize> {
         let mut entries_deleted = 0;
         if tree_view.exists(index) {
@@ -274,7 +274,7 @@ impl AppState {
     pub fn trash_entry(
         &mut self,
         index: TreeIndex,
-        tree_view: &mut dyn TreeView,
+        tree_view: &mut TreeView<'_>,
     ) -> Result<usize, usize> {
         let mut entries_deleted = 0;
         if tree_view.exists(index) {
@@ -290,7 +290,7 @@ impl AppState {
     pub fn delete_entries_in_traversal(
         &mut self,
         index: TreeIndex,
-        tree_view: &mut dyn TreeView,
+        tree_view: &mut TreeView<'_>,
     ) -> usize {
         let parent_idx = tree_view
             .fs_parent_of(index)
@@ -312,13 +312,12 @@ impl AppState {
             let idx = self.entries.first().map(|e| e.index);
             self.navigation_mut().select(idx);
         }
-
         tree_view.recompute_sizes_recursively(parent_idx);
 
         entries_deleted
     }
 
-    fn go_to_root(&mut self, tree_view: &dyn TreeView) {
+    fn go_to_root(&mut self, tree_view: &TreeView<'_>) {
         let root = self.navigation().tree_root;
         let entries = tree_view.sorted_entries(root, self.sorting);
         self.navigation_mut().exit_node(root, &entries);
@@ -334,7 +333,7 @@ impl AppState {
         index: TreeIndex,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
     ) {
         let is_dir = self
             .entries
@@ -359,7 +358,7 @@ impl AppState {
         cursor: CursorMode,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
     ) {
         if let Some(index) = self.navigation().selected {
             self.mark_entry_by_index(index, mode, window, tree_view);
@@ -373,7 +372,7 @@ impl AppState {
         &mut self,
         mode: MarkEntryMode,
         window: &mut MainWindow,
-        tree_view: &dyn TreeView,
+        tree_view: &TreeView<'_>,
     ) {
         for index in self.entries.iter().map(|e| e.index).collect::<Vec<_>>() {
             self.mark_entry_by_index(index, mode, window, tree_view);
