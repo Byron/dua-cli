@@ -1,10 +1,9 @@
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
+use bstr::BString;
 use crosstermion::input::Key;
 use dua::traverse::{Tree, TreeIndex};
-use globset::{Glob, GlobMatcher};
 use petgraph::Direction;
 use std::borrow::Borrow;
-use std::path::PathBuf;
 use tui::backend::Backend;
 use tui::prelude::Buffer;
 use tui::{
@@ -112,7 +111,7 @@ impl GlobPane {
             has_focus,
         } = props.borrow();
 
-        let title = "Glob search from top";
+        let title = "Git-Glob";
         let block = Block::default()
             .title(title)
             .border_style(*border_style)
@@ -178,26 +177,40 @@ fn glob_search_neighbours(
     results: &mut Vec<TreeIndex>,
     tree: &Tree,
     root_index: TreeIndex,
-    glob: &GlobMatcher,
-    path: &mut PathBuf,
+    glob: &gix_glob::Pattern,
+    path: &mut BString,
 ) {
     for node_index in tree.neighbors_directed(root_index, Direction::Outgoing) {
         if let Some(node) = tree.node_weight(node_index) {
-            path.push(&node.name);
-            if glob.is_match(&path) {
+            let previous_len = path.len();
+            let basename_start = if path.is_empty() {
+                None
+            } else {
+                path.push(b'/');
+                Some(previous_len + 1)
+            };
+            path.extend_from_slice(gix_path::into_bstr(&node.name).as_ref());
+            if glob.matches_repo_relative_path(
+                path.as_ref(),
+                basename_start,
+                Some(node.is_dir),
+                gix_glob::pattern::Case::Fold,
+                gix_glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
+            ) {
                 results.push(node_index);
             } else {
                 glob_search_neighbours(results, tree, node_index, glob, path);
             }
-            path.pop();
+            path.truncate(previous_len);
         }
     }
 }
 
 pub fn glob_search(tree: &Tree, root_index: TreeIndex, glob: &str) -> Result<Vec<TreeIndex>> {
-    let glob = Glob::new(glob)?.compile_matcher();
+    let glob = gix_glob::Pattern::from_bytes_without_negation(glob.as_bytes())
+        .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
     let mut results = Vec::new();
-    let mut path = PathBuf::new();
+    let mut path = Default::default();
     glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path);
     Ok(results)
 }

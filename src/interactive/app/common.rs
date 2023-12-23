@@ -56,6 +56,8 @@ pub struct EntryDataBundle {
     pub exists: bool,
 }
 
+/// Note that with `glob_root` present, we will not obtain metadata anymore as we might be seeing
+/// a lot of entries. That way, displaying 250k entries is no problem.
 pub fn sorted_entries(
     tree: &Tree,
     node_idx: TreeIndex,
@@ -72,8 +74,15 @@ pub fn sorted_entries(
         .filter_map(|idx| {
             tree.node_weight(idx).map(|entry| {
                 let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
-                let path = path_of(tree, idx, glob_root);
-                let meta = path.symlink_metadata();
+                let (path, exists, is_dir) = {
+                    let path = path_of(tree, idx, glob_root);
+                    if glob_root.is_some() {
+                        (path, true, entry.is_dir)
+                    } else {
+                        let meta = path.symlink_metadata();
+                        (path, meta.is_ok(), meta.ok().map_or(false, |m| m.is_dir()))
+                    }
+                };
                 EntryDataBundle {
                     index: idx,
                     name: if use_glob_path {
@@ -84,8 +93,8 @@ pub fn sorted_entries(
                     size: entry.size,
                     mtime: entry.mtime,
                     entry_count: entry.entry_count,
-                    exists: meta.is_ok(),
-                    is_dir: meta.ok().map_or(false, |m| m.is_dir()),
+                    exists,
+                    is_dir,
                 }
             })
         })

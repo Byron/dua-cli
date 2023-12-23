@@ -255,7 +255,7 @@ pub fn sample_01_tree() -> Tree {
     tree
 }
 
-pub fn sample_02_tree() -> (Tree, TreeIndex) {
+pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
     let mut tree = Tree::new();
     let root_index: TreeIndex;
     {
@@ -264,7 +264,15 @@ pub fn sample_02_tree() -> (Tree, TreeIndex) {
         root_index = add_node("", root_size, 10, None);
         {
             let sn = add_node(
-                Path::new(FIXTURE_PATH).join("sample-02").to_str().unwrap(),
+                format!(
+                    "{FIXTURE_PATH}{}sample-02",
+                    if use_native_separator {
+                        std::path::MAIN_SEPARATOR_STR
+                    } else {
+                        "/"
+                    }
+                )
+                .as_str(),
                 root_size,
                 9,
                 Some(root_index),

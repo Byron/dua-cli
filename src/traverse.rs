@@ -22,6 +22,7 @@ pub struct EntryData {
     pub entry_count: Option<u64>,
     /// If set, the item meta-data could not be obtained
     pub metadata_io_error: bool,
+    pub is_dir: bool,
 }
 
 impl Default for EntryData {
@@ -32,6 +33,7 @@ impl Default for EntryData {
             mtime: UNIX_EPOCH,
             entry_count: None,
             metadata_io_error: bool::default(),
+            is_dir: false,
         }
     }
 }
@@ -191,6 +193,7 @@ impl Traversal {
                                     }
                                 } else {
                                     data.entry_count = Some(0);
+                                    data.is_dir = true;
                                 }
 
                                 match m.modified() {
