@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+<csr-id-9123ee7e648fab654520c33df672c053d5797966/>
+
+This release adds long-awaited globbing support, just hit the `/` key to get started.
+
+You want to find the biggest `.git` directories? Just type `/.git/<enter>` and you are done. 
+What about all target directories? Just write `target/` to the glob search prompt and it's done. 
+What about all directories ending in `*.rs/`? 
+Oh, by accident you typed `*.rs` and now there is a list of a quarter million of entries? No problem, 
+it's near instant even with millions of files to search or hundreds of thousands to display.
+
+> Note that glob-mode can be exited only by pressing `ESC` when the glob prompt has focus.
+
+Special thanks go to [the contributor](https://github.com/gosuwachu) who made this feature happen,
+along with many other improvements. Now `dua` feels refreshed for 2024, and is much more versatile.
+
+Happy holidays!
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 26 commits contributed to the release over the course of 12 calendar days.
+ - 12 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#197](https://github.com/Byron/dua-cli/issues/197)
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#197](https://github.com/Byron/dua-cli/issues/197)**
+    - EntryData size test passes on 32-bit ([`9123ee7`](https://github.com/Byron/dua-cli/commit/9123ee7e648fab654520c33df672c053d5797966))
+ * **Uncategorized**
+    - Merge branch 'glob-review' ([`1c4d6a7`](https://github.com/Byron/dua-cli/commit/1c4d6a77c9f439782446d5d5f791fe9e809de0e7))
+    - Use `gix-glob` for matching; support for matching dirs only. ([`2e1858c`](https://github.com/Byron/dua-cli/commit/2e1858ca519fd2a6fbf4839a23abcf17588dcc32))
+    - Remove treeview abstraction in favor of something simpler ([`3804a1f`](https://github.com/Byron/dua-cli/commit/3804a1f8e70e1f64977d1fcac20d6541aa5956d7))
+    - Refactor glob widget ([`b945a1e`](https://github.com/Byron/dua-cli/commit/b945a1e2613b5b0b2eed85f7c9f34942ab3c4a29))
+    - More copy-on-write for entries ([`bc56664`](https://github.com/Byron/dua-cli/commit/bc566649e6941340c2bdbcd178ac73a6a6512f68))
+    - Refactor shortening ([`8fae939`](https://github.com/Byron/dua-cli/commit/8fae93966f916291bece3e5673ca83cefa702069))
+    - Thanks clippy ([`b431ec3`](https://github.com/Byron/dua-cli/commit/b431ec38f318a50a1b636e72ffed768e9ba1e4c5))
+    - Shorten long paths so that they fit on the screen ([`7660d64`](https://github.com/Byron/dua-cli/commit/7660d6497f3810856a65d203d2b6e97b708dc632))
+    - Show error message on empty search result ([`360a0d7`](https://github.com/Byron/dua-cli/commit/360a0d72302afb5b068525ef0cec18c21df1b46a))
+    - Glob most used keys ([`ff07f39`](https://github.com/Byron/dua-cli/commit/ff07f3935bc0a82e52bc169d2739a9bb603d86b8))
+    - Fix formatting ([`0a344fa`](https://github.com/Byron/dua-cli/commit/0a344fa063bdffe7165e8bab6b8a1b8adbac9dce))
+    - Fix cursor rendering ([`aaa27e8`](https://github.com/Byron/dua-cli/commit/aaa27e860508e564d82b43295baa4290b53eb87f))
+    - Small code review fixes ([`49aecb9`](https://github.com/Byron/dua-cli/commit/49aecb9245054446ac1b338ea1cc29831e72d5e0))
+    - Use appropriate tree view when listing entries ([`7244bac`](https://github.com/Byron/dua-cli/commit/7244bac0fc51697ed6be6597dee82a26da222c23))
+    - Replace EntryData in EntryDataBundle with individual properties ([`f3b5d00`](https://github.com/Byron/dua-cli/commit/f3b5d00549be57b5da03f3220057b887372ff254))
+    - Implements glob search mode ([`df6a02c`](https://github.com/Byron/dua-cli/commit/df6a02cd8fdbe693f507ab34a89227431d7c112e))
+    - Merge pull request #201 from Byron/dependabot/cargo/zerocopy-0.7.31 ([`b23e134`](https://github.com/Byron/dua-cli/commit/b23e13431dad1ed9efc6728f4c9ee8ab2254a42c))
+    - Bump zerocopy from 0.7.30 to 0.7.31 ([`3efc857`](https://github.com/Byron/dua-cli/commit/3efc85767a6f3274f6fe0f249554ec7af2c2500f))
+    - Merge branch 'add_missing_slash_in_root_dir' ([`9a15867`](https://github.com/Byron/dua-cli/commit/9a158676da9087cd734db6d401fcb98c0e98904c))
+    - Make clear why roots were special cased, and try to restore that behaviour. ([`94c008f`](https://github.com/Byron/dua-cli/commit/94c008fe8bd5ff836049f8d5d18478d41bfca9c3))
+    - Adds the missing '/' prefix for root directories ([`101a377`](https://github.com/Byron/dua-cli/commit/101a37761952f094a782fb34850c82070565125b))
+    - Merge branch 'app_state_init_refactor' ([`f23a57f`](https://github.com/Byron/dua-cli/commit/f23a57fa9c16276525c315c875729c9ef9920fdf))
+    - Minior refactor ([`6f09882`](https://github.com/Byron/dua-cli/commit/6f09882fddf8eddc0331671a3176b613d827d4e3))
+    - Refactors AppState initialization during app startup ([`238bc5f`](https://github.com/Byron/dua-cli/commit/238bc5f956d220f90197112c82ec71781cd0aa4d))
+    - Merge pull request #198 from cinerea0/fix-32bit-test ([`1b838f9`](https://github.com/Byron/dua-cli/commit/1b838f9a057782fd6f11d47d09ae3f77c6bf082d))
+</details>
+
 ## 2.23.0 (2023-12-11)
 
 ### New Features
@@ -33,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 16 commits contributed to the release over the course of 1 calendar day.
+ - 17 commits contributed to the release over the course of 1 calendar day.
  - 2 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#194](https://github.com/Byron/dua-cli/issues/194)
@@ -47,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#194](https://github.com/Byron/dua-cli/issues/194)**
     - Single files will not cause IO error ([`192460e`](https://github.com/Byron/dua-cli/commit/192460e5bc72781be1d238912c5d590bfed706cf))
  * **Uncategorized**
+    - Release dua-cli v2.23.0 ([`491b558`](https://github.com/Byron/dua-cli/commit/491b5587ca0e9d157b9a4f8907c35137d57983d5))
     - Merge branch 'main_windows_render_refactor' ([`2da2e2e`](https://github.com/Byron/dua-cli/commit/2da2e2e7d264d19cc67ccee6bd8658f7a87901c1))
     - Refactor ([`49772d1`](https://github.com/Byron/dua-cli/commit/49772d17dca72006e602f8707121b3378f948981))
     - Display the total count of entries-to-be-deleted in the mark pane. ([`98d5b5a`](https://github.com/Byron/dua-cli/commit/98d5b5a2728e640f9d553648812df379c5534395))
