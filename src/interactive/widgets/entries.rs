@@ -1,14 +1,13 @@
 use crate::interactive::widgets::COUNT;
 use crate::interactive::{
-    path_of,
     widgets::{entry_color, EntryMarkMap},
     DisplayOptions, EntryDataBundle, SortMode,
 };
 use chrono::DateTime;
-use dua::traverse::{EntryData, Tree, TreeIndex};
+use dua::traverse::TreeIndex;
 use itertools::Itertools;
+use std::borrow::{Borrow, Cow};
 use std::time::SystemTime;
-use std::{borrow::Borrow, path::Path};
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -18,14 +17,15 @@ use tui::{
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
-    draw_text_nowrap_fn, fill_background_to_right,
+    draw_text_nowrap_fn,
     util::{block_width, rect},
     List, ListProps,
 };
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub struct EntriesProps<'a> {
-    pub tree: &'a Tree,
-    pub root: TreeIndex,
+    pub current_path: String,
     pub display: DisplayOptions,
     pub selected: Option<TreeIndex>,
     pub entries: &'a [EntryDataBundle],
@@ -48,8 +48,7 @@ impl Entries {
         buf: &mut Buffer,
     ) {
         let EntriesProps {
-            tree,
-            root,
+            current_path,
             display,
             entries,
             selected,
@@ -60,62 +59,69 @@ impl Entries {
         } = props.borrow();
         let list = &mut self.list;
 
-        let total: u128 = entries.iter().map(|b| b.data.size).sum();
+        let total: u128 = entries.iter().map(|b| b.size).sum();
         let (item_count, item_size): (u64, u128) = entries
             .iter()
-            .map(|f| (f.data.entry_count.unwrap_or(1), f.data.size))
+            .map(|f| (f.entry_count.unwrap_or(1), f.size))
             .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
             .unwrap_or_default();
-        let title = title(&current_path(tree, *root), item_count, *display, item_size);
+        let title = title(current_path, item_count, *display, item_size);
         let title_block = title_block(&title, *border_style);
+        let inner_area = title_block.inner(area);
         let entry_in_view = entry_in_view(*selected, entries);
 
         let props = ListProps {
             block: Some(title_block),
             entry_in_view,
         };
-        let lines = entries.iter().map(
-            |EntryDataBundle {
-                 index: node_idx,
-                 data: entry_data,
-                 is_dir,
-                 exists,
-             }| {
-                let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-                let is_selected = selected.map_or(false, |idx| idx == *node_idx);
-                let fraction = entry_data.size as f32 / total as f32;
-                let text_style = style(is_selected, *is_focussed);
-                let percentage_style = percentage_style(fraction, text_style);
+        let lines = entries.iter().map(|bundle| {
+            let node_idx = &bundle.index;
+            let is_dir = &bundle.is_dir;
+            let exists = &bundle.exists;
+            let name = bundle.name.as_path();
 
-                let mut columns = Vec::new();
-                if show_mtime_column(sort_mode) {
-                    columns.push(mtime_column(
-                        entry_data.mtime,
-                        column_style(Column::MTime, *sort_mode, text_style),
-                    ));
-                }
-                columns.push(bytes_column(
-                    *display,
-                    entry_data.size,
-                    column_style(Column::Bytes, *sort_mode, text_style),
-                ));
-                columns.push(percentage_column(*display, fraction, percentage_style));
-                if show_count_column(sort_mode) {
-                    columns.push(count_column(
-                        entry_data.entry_count,
-                        column_style(Column::Count, *sort_mode, text_style),
-                    ));
-                }
-                columns.push(name_column(
-                    &entry_data.name,
-                    *is_dir,
-                    area,
-                    name_style(is_marked, *exists, *is_dir, text_style),
-                ));
+            let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+            let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+            let fraction = bundle.size as f32 / total as f32;
+            let text_style = style(is_selected, *is_focussed);
+            let percentage_style = percentage_style(fraction, text_style);
 
-                columns_with_separators(columns, percentage_style)
-            },
-        );
+            let mut columns = Vec::new();
+            if show_mtime_column(sort_mode) {
+                columns.push(mtime_column(
+                    bundle.mtime,
+                    column_style(Column::MTime, *sort_mode, text_style),
+                ));
+            }
+            columns.push(bytes_column(
+                *display,
+                bundle.size,
+                column_style(Column::Bytes, *sort_mode, text_style),
+            ));
+            columns.push(percentage_column(*display, fraction, percentage_style));
+            if show_count_column(sort_mode) {
+                columns.push(count_column(
+                    bundle.entry_count,
+                    column_style(Column::Count, *sort_mode, text_style),
+                ));
+            }
+
+            let available_width = inner_area.width.saturating_sub(
+                columns_with_separators(columns.clone(), percentage_style, true)
+                    .iter()
+                    .map(|f| f.width() as u16)
+                    .sum(),
+            ) as usize;
+
+            let name = shorten_input(
+                name_with_prefix(name.to_string_lossy(), *is_dir),
+                available_width,
+            );
+            let style = name_style(is_marked, *exists, *is_dir, text_style);
+            columns.push(name_column(name, area, style));
+
+            columns_with_separators(columns, percentage_style, false)
+        });
 
         list.render(props, lines, area, buf);
 
@@ -159,22 +165,9 @@ fn title(current_path: &str, item_count: u64, display: DisplayOptions, size: u12
     )
 }
 
-fn current_path(
-    tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
-    root: petgraph::stable_graph::NodeIndex,
-) -> String {
-    match path_of(tree, root).to_string_lossy().to_string() {
-        ref p if p.is_empty() => Path::new(".")
-            .canonicalize()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| String::from(".")),
-        p => p,
-    }
-}
-
 fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-    let help_text = " mark-move = d | mark-toggle = space | toggle-all = a";
+    let help_text = " mark-move = d | mark-toggle = space | toggle-all = a ";
     let help_text_block_width = block_width(help_text);
     if help_text_block_width <= bound.width {
         draw_text_nowrap_fn(
@@ -224,12 +217,16 @@ fn percentage_style(fraction: f32, style: Style) -> Style {
     }
 }
 
-fn columns_with_separators(columns: Vec<Span<'_>>, style: Style) -> Vec<Span<'_>> {
+fn columns_with_separators(
+    columns: Vec<Span<'_>>,
+    style: Style,
+    insert_last_separator: bool,
+) -> Vec<Span<'_>> {
     let mut columns_with_separators = Vec::new();
     let column_count = columns.len();
     for (idx, column) in columns.into_iter().enumerate() {
         columns_with_separators.push(column);
-        if idx != column_count - 1 {
+        if insert_last_separator || idx != column_count - 1 {
             columns_with_separators.push(Span::styled(" | ", style))
         }
     }
@@ -257,37 +254,48 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
     )
 }
 
-fn name_column(entry_name: &Path, is_dir: bool, area: Rect, style: Style) -> Span<'static> {
-    let name = entry_name.to_string_lossy();
-    Span::styled(
-        fill_background_to_right(
-            format!(
-                "{prefix}{name}",
-                prefix = if is_dir {
-                    // Note that these names never happen on non-root items, so this is a root-item special case.
-                    // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
-                    // `main()` cwd' into the one path that was provided by the user.
-                    // The idea was to keep explicit roots as specified without adjustment, which works with this
-                    // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
-                    // Overall, this logic makes the folder display more consistent.
-                    if name == "."
-                        || name == ".."
-                        || name.starts_with('/')
-                        || name.starts_with("./")
-                        || name.starts_with("../")
-                    {
-                        ""
-                    } else {
-                        "/"
-                    }
-                } else {
-                    " "
-                }
-            ),
-            area.width,
-        ),
-        style,
-    )
+fn name_column(name: Cow<'_, str>, area: Rect, style: Style) -> Span<'_> {
+    Span::styled(fill_background_to_right(name, area.width), style)
+}
+
+fn fill_background_to_right(mut s: Cow<'_, str>, entire_width: u16) -> Cow<'_, str> {
+    match (s.len(), entire_width as usize) {
+        (x, y) if x >= y => s,
+        (x, y) => {
+            s.to_mut().extend(std::iter::repeat(' ').take(y - x));
+            s
+        }
+    }
+}
+
+fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
+    let prefix = if is_dir {
+        // Note that these names never happen on non-root items, so this is a root-item special case.
+        // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
+        // `main()` cwd' into the one path that was provided by the user.
+        // The idea was to keep explicit roots as specified without adjustment, which works with this
+        // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
+        // Overall, this logic makes the folder display more consistent.
+        if name == "."
+            || name == ".."
+            || name.starts_with('/')
+            || name.starts_with("./")
+            || name.starts_with("../")
+        {
+            None
+        } else {
+            Some("/")
+        }
+    } else {
+        Some(" ")
+    };
+    match prefix {
+        None => name,
+        Some(prefix) => {
+            name.to_mut().insert_str(0, prefix);
+            name
+        }
+    }
 }
 
 fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Style {
@@ -348,4 +356,64 @@ fn show_count_column(sort_mode: &SortMode) -> bool {
         sort_mode,
         SortMode::CountAscending | SortMode::CountDescending
     )
+}
+
+/// Note that this implementation isn't correct as `width` is the amount of blocks to display,
+/// which is not what we are actually counting when adding graphemes to the output string.
+fn shorten_input(input: Cow<'_, str>, width: usize) -> Cow<'_, str> {
+    const ELLIPSIS: char = '…';
+    const ELLIPSIS_LEN: usize = 1;
+    const EXTENDED: bool = true;
+
+    let total_count = input.width();
+    if total_count <= width {
+        return input;
+    }
+
+    if ELLIPSIS_LEN > width {
+        return Cow::Borrowed("");
+    }
+
+    let graphemes_per_half = (width - ELLIPSIS_LEN) / 2;
+
+    let mut out = String::with_capacity(width);
+    let mut g = input.graphemes(EXTENDED);
+
+    out.extend(g.by_ref().take(graphemes_per_half));
+    out.push(ELLIPSIS);
+    out.extend(g.skip(total_count - graphemes_per_half * 2));
+
+    Cow::Owned(out)
+}
+
+#[cfg(test)]
+mod entries_test {
+    use super::shorten_input;
+
+    #[test]
+    fn test_shorten_string_middle() {
+        let numbers = "12345678";
+        let graphemes = "你好😁你好";
+        for (input, target_length, expected) in [
+            (numbers, 8, numbers),
+            (numbers, 7, "123…678"),
+            (numbers, 3, "1…8"),
+            (numbers, 2, "…"),
+            (numbers, 1, "…"),
+            (numbers, 0, ""),
+            // multi-block strings are handled incorrectly, but at least it doesn't crash.
+            (graphemes, 0, ""),
+            (graphemes, 1, "…"),
+            (graphemes, 3, "你…"),
+            (graphemes, 4, "你…"),
+            (graphemes, 5, "你好…"),
+            (graphemes, 6, "你好…"),
+            (graphemes, 7, "你好😁…"),
+            (graphemes, 8, "你好😁…"),
+            (graphemes, 9, "你好😁你…"),
+            (graphemes, 10, "你好😁你好"),
+        ] {
+            assert_eq!(shorten_input(input.into(), target_length), expected);
+        }
+    }
 }

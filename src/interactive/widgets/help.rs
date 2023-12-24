@@ -161,6 +161,11 @@ impl HelpPane {
                 );
                 hotkey("<Space>", "Toggle the currently selected entry", None);
                 hotkey("a", "Toggle all entries", None);
+                hotkey(
+                    "/",
+                    "Git-style glob search, case-insensitive, always from the top of the tree",
+                    None,
+                );
                 spacer();
             }
             title("Keys in the Mark pane");

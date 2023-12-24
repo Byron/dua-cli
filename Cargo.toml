@@ -14,7 +14,7 @@ default = ["tui-crossplatform", "trash-move"]
 tui-unix = ["crosstermion/tui-react-termion", "tui-shared"]
 tui-crossplatform = ["crosstermion/tui-react-crossterm", "tui-shared"]
 
-tui-shared = ["tui", "tui-react", "open", "unicode-segmentation"]
+tui-shared = ["tui", "tui-react", "open", "unicode-segmentation", "unicode-width"]
 trash-move = ["trash"]
 
 [dependencies]
@@ -32,6 +32,7 @@ chrono = { version = "0.4.31", default-features = false, features = ["std"] }
 
 # 'tui' related
 unicode-segmentation = { version = "1.3.0", optional = true }
+unicode-width = { version = "0.1.5", optional = true }
 crosstermion = { version = "0.12.0", default-features = false, optional = true }
 tui = { package = "ratatui", version = "0.24.0", optional = true, default-features = false }
 tui-react = { version = "0.21.0", optional = true }
@@ -40,6 +41,9 @@ wild = "2.0.4"
 owo-colors = "3.5.0"
 human_format = "1.0.3"
 once_cell = "1.19"
+gix-glob = "0.14.1"
+gix-path = "0.10.1"
+bstr = "1.8.0"
 
 [[bin]]
 name="dua"
@@ -53,7 +57,7 @@ panic = 'abort'
 incremental = false
 overflow-checks = false
 lto = "fat"
-codegen-units = 1
+#codegen-units = 1
 build-override = { opt-level = 3 }
 
 [dev-dependencies]

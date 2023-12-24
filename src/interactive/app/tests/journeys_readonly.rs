@@ -51,12 +51,13 @@ fn simple_user_journey_read_only() -> Result<()> {
 
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it selects the first node in the list",
         );
 
         assert_eq!(
-            app.traversal.root_index, app.state.root,
+            app.traversal.root_index,
+            app.state.navigation().view_root,
             "the root is the 'virtual' root",
         );
     }
@@ -132,28 +133,28 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_keys(b"j".iter()))?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it moves the cursor down and selects the next entry based on the current sort mode"
         );
         // when hitting it while there is nowhere to go
         app.process_events(&mut terminal, into_keys(b"j".iter()))?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it stays at the previous position"
         );
         // when hitting the k key
         app.process_events(&mut terminal, into_keys(b"k".iter()))?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it moves the cursor up and selects the next entry based on the current sort mode"
         );
         // when hitting the k key again
         app.process_events(&mut terminal, into_keys(b"k".iter()))?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
-            node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it stays at the current cursor position as there is nowhere to go"
         );
         // when hitting the o key with a directory selected
@@ -161,12 +162,13 @@ fn simple_user_journey_read_only() -> Result<()> {
         {
             let new_root_idx = index_by_name(&app, fixture_str(short_root));
             assert_eq!(
-                new_root_idx, app.state.root,
+                new_root_idx,
+                app.state.navigation().view_root,
                 "it enters the entry if it is a directory, changing the root"
             );
             assert_eq!(
                 index_by_name(&app, "dir"),
-                *app.state.selected.as_ref().unwrap(),
+                *app.state.navigation().selected.as_ref().unwrap(),
                 "it selects the first entry in the directory"
             );
 
@@ -174,12 +176,13 @@ fn simple_user_journey_read_only() -> Result<()> {
             app.process_events(&mut terminal, into_keys(b"u".iter()))?;
             {
                 assert_eq!(
-                    app.traversal.root_index, app.state.root,
+                    app.traversal.root_index,
+                    app.state.navigation().view_root,
                     "it sets the root to be the (roots) parent directory, being the virtual root"
                 );
                 assert_eq!(
                     node_by_name(&app, fixture_str(short_root)),
-                    node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                    node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
                     "changes the selection to the first item in the list of entries"
                 );
             }
@@ -189,12 +192,13 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_keys(b"ju".iter()))?;
         {
             assert_eq!(
-                app.traversal.root_index, app.state.root,
+                app.traversal.root_index,
+                app.state.navigation().view_root,
                 "it keeps the root - it can't go further up"
             );
             assert_eq!(
                 node_by_name(&app, fixture_str(long_root)),
-                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
                 "keeps the previous selection"
             );
         }
@@ -204,7 +208,7 @@ fn simple_user_journey_read_only() -> Result<()> {
     {
         // when hitting the 'd' key (also move cursor back to start)
         app.process_events(&mut terminal, into_keys(b"k".iter()))?;
-        let previously_selected_index = *app.state.selected.as_ref().unwrap();
+        let previously_selected_index = *app.state.navigation().selected.as_ref().unwrap();
         app.process_events(&mut terminal, into_keys(b"d".iter()))?;
         {
             assert_eq!(
@@ -219,7 +223,7 @@ fn simple_user_journey_read_only() -> Result<()> {
                 "it marks the selected node"
             );
             assert_eq!(
-                app.state.selected.as_ref().unwrap().index(),
+                app.state.navigation().selected.as_ref().unwrap().index(),
                 app.state.entries[1].index.index(),
                 "moves the cursor down one level to facilitate many markings in a row"
             );
@@ -236,7 +240,7 @@ fn simple_user_journey_read_only() -> Result<()> {
             );
 
             assert_eq!(
-                app.state.selected.as_ref().unwrap().index(),
+                app.state.navigation().selected.as_ref().unwrap().index(),
                 app.state.entries[1].index.index(),
                 "it could not advance the cursor, thus the newly marked item is still selected"
             );
@@ -271,7 +275,7 @@ fn simple_user_journey_read_only() -> Result<()> {
 
             assert_eq!(
                 node_by_index(&app, previously_selected_index),
-                node_by_index(&app, *app.state.selected.as_ref().unwrap()),
+                node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
                 "it does not advance the selection"
             );
         }

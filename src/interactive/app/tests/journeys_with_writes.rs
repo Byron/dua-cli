@@ -32,9 +32,14 @@ fn basic_user_journey_with_deletion() -> Result<()> {
         app.window.mark_pane.is_none(),
         "the marker pane is gone as all entries have been removed"
     );
-    assert_eq!(app.state.selected, None, "nothing is left to be selected");
     assert_eq!(
-        app.state.root, app.traversal.root_index,
+        app.state.navigation().selected,
+        None,
+        "nothing is left to be selected"
+    );
+    assert_eq!(
+        app.state.navigation().view_root,
+        app.traversal.root_index,
         "the only root left is the top-level"
     );
     assert!(

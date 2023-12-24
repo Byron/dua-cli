@@ -1,8 +1,9 @@
 use crate::interactive::path_of;
-use dua::traverse::{EntryData, Tree, TreeIndex};
+use dua::traverse::{Tree, TreeIndex};
 use itertools::Itertools;
 use petgraph::Direction;
-use std::cmp::Ordering;
+use std::time::SystemTime;
+use std::{cmp::Ordering, path::PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
@@ -47,37 +48,61 @@ impl SortMode {
 
 pub struct EntryDataBundle {
     pub index: TreeIndex,
-    pub data: EntryData,
+    pub name: PathBuf,
+    pub size: u128,
+    pub mtime: SystemTime,
+    pub entry_count: Option<u64>,
     pub is_dir: bool,
     pub exists: bool,
 }
 
-pub fn sorted_entries(tree: &Tree, node_idx: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
+/// Note that with `glob_root` present, we will not obtain metadata anymore as we might be seeing
+/// a lot of entries. That way, displaying 250k entries is no problem.
+pub fn sorted_entries(
+    tree: &Tree,
+    node_idx: TreeIndex,
+    sorting: SortMode,
+    glob_root: Option<TreeIndex>,
+) -> Vec<EntryDataBundle> {
     use SortMode::*;
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
-        l.data
-            .entry_count
-            .cmp(&r.data.entry_count)
-            .then_with(|| l.data.name.cmp(&r.data.name))
+        l.entry_count
+            .cmp(&r.entry_count)
+            .then_with(|| l.name.cmp(&r.name))
     }
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
-            tree.node_weight(idx).map(|w| {
-                let p = path_of(tree, idx);
-                let pm = p.symlink_metadata();
+            tree.node_weight(idx).map(|entry| {
+                let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
+                let (path, exists, is_dir) = {
+                    let path = path_of(tree, idx, glob_root);
+                    if glob_root.is_some() {
+                        (path, true, entry.is_dir)
+                    } else {
+                        let meta = path.symlink_metadata();
+                        (path, meta.is_ok(), meta.ok().map_or(false, |m| m.is_dir()))
+                    }
+                };
                 EntryDataBundle {
                     index: idx,
-                    data: w.clone(),
-                    exists: pm.is_ok(),
-                    is_dir: pm.ok().map_or(false, |m| m.is_dir()),
+                    name: if use_glob_path {
+                        path
+                    } else {
+                        entry.name.clone()
+                    },
+                    size: entry.size,
+                    mtime: entry.mtime,
+                    entry_count: entry.entry_count,
+                    exists,
+                    is_dir,
                 }
             })
         })
         .sorted_by(|l, r| match sorting {
-            SizeDescending => r.data.size.cmp(&l.data.size),
-            SizeAscending => l.data.size.cmp(&r.data.size),
-            MTimeAscending => l.data.mtime.cmp(&r.data.mtime),
-            MTimeDescending => r.data.mtime.cmp(&l.data.mtime),
+            SizeDescending => r.size.cmp(&l.size),
+            SizeAscending => l.size.cmp(&r.size),
+            MTimeAscending => l.mtime.cmp(&r.mtime),
+            MTimeDescending => r.mtime.cmp(&l.mtime),
             CountAscending => cmp_count(l, r),
             CountDescending => cmp_count(l, r).reverse(),
         })
