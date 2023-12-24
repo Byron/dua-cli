@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.24.0 (2023-12-24)
 
 <csr-id-9123ee7e648fab654520c33df672c053d5797966/>
 
@@ -28,7 +28,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 26 commits contributed to the release over the course of 12 calendar days.
+ - 29 commits contributed to the release over the course of 12 calendar days.
  - 12 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#197](https://github.com/Byron/dua-cli/issues/197)
@@ -48,6 +48,9 @@ Happy holidays!
  * **[#197](https://github.com/Byron/dua-cli/issues/197)**
     - EntryData size test passes on 32-bit ([`9123ee7`](https://github.com/Byron/dua-cli/commit/9123ee7e648fab654520c33df672c053d5797966))
  * **Uncategorized**
+    - Update dependencies ([`bc8c7a6`](https://github.com/Byron/dua-cli/commit/bc8c7a6bb0a96cc1562e02cf87182d13be6c264f))
+    - Upgrade owo-colors to v4.0 ([`141c56c`](https://github.com/Byron/dua-cli/commit/141c56c560b34f35e67a699c6e88bea0c0bef0ab))
+    - Update changelog prior to release; bump version ([`cfa8faa`](https://github.com/Byron/dua-cli/commit/cfa8faaf30a83b9517d5e10fd2702bd7a44ba1ad))
     - Merge branch 'glob-review' ([`1c4d6a7`](https://github.com/Byron/dua-cli/commit/1c4d6a77c9f439782446d5d5f791fe9e809de0e7))
     - Use `gix-glob` for matching; support for matching dirs only. ([`2e1858c`](https://github.com/Byron/dua-cli/commit/2e1858ca519fd2a6fbf4839a23abcf17588dcc32))
     - Remove treeview abstraction in favor of something simpler ([`3804a1f`](https://github.com/Byron/dua-cli/commit/3804a1f8e70e1f64977d1fcac20d6541aa5956d7))
