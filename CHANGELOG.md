@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.24.1 (2023-12-25)
+
+### Bug Fixes
+
+ - <csr-id-8ae727e462b38541636c8e03d140953cad8f34cf/> keep checking for existance of entries outside of the glob top-level.
+   The glob top-level is used to display all search results which means
+   that there can be a lot of them, which would unnecessarily slow down
+   the search operation.
+   
+   Previously it would never check for the existence of an entry in glob mode,
+   but now it will do so outside of the top-level.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Keep checking for existance of entries outside of the glob top-level. ([`8ae727e`](https://github.com/Byron/dua-cli/commit/8ae727e462b38541636c8e03d140953cad8f34cf))
+</details>
+
 ## 2.24.0 (2023-12-24)
 
 <csr-id-9123ee7e648fab654520c33df672c053d5797966/>
@@ -28,7 +58,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 29 commits contributed to the release over the course of 12 calendar days.
+ - 30 commits contributed to the release over the course of 12 calendar days.
  - 12 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#197](https://github.com/Byron/dua-cli/issues/197)
@@ -48,6 +78,7 @@ Happy holidays!
  * **[#197](https://github.com/Byron/dua-cli/issues/197)**
     - EntryData size test passes on 32-bit ([`9123ee7`](https://github.com/Byron/dua-cli/commit/9123ee7e648fab654520c33df672c053d5797966))
  * **Uncategorized**
+    - Release dua-cli v2.24.0 ([`f7958cc`](https://github.com/Byron/dua-cli/commit/f7958ccb36ab6023857bc3cdfba9ef90fdfe0c99))
     - Update dependencies ([`bc8c7a6`](https://github.com/Byron/dua-cli/commit/bc8c7a6bb0a96cc1562e02cf87182d13be6c264f))
     - Upgrade owo-colors to v4.0 ([`141c56c`](https://github.com/Byron/dua-cli/commit/141c56c560b34f35e67a699c6e88bea0c0bef0ab))
     - Update changelog prior to release; bump version ([`cfa8faa`](https://github.com/Byron/dua-cli/commit/cfa8faaf30a83b9517d5e10fd2702bd7a44ba1ad))
