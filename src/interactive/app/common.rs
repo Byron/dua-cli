@@ -76,7 +76,7 @@ pub fn sorted_entries(
                 let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
-                    if glob_root.is_some() {
+                    if glob_root == Some(node_idx) {
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
