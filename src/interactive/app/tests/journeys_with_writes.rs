@@ -18,7 +18,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     assert_eq!(
         app.window.mark_pane.as_ref().map(|p| p.marked().len()),
         Some(4),
-        "expecting 4 selected entries, the parent dir, and some children"
+        "expecting 4 selected items, the parent dir, and some children"
     );
 
     assert!(fixture.as_ref().is_dir(), "expecting fixture root to exist");
@@ -34,7 +34,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     )?;
     assert!(
         app.window.mark_pane.is_none(),
-        "the marker pane is gone as all entries have been removed"
+        "the marker pane is gone as all items have been removed"
     );
     assert_eq!(
         app.state.navigation().selected,

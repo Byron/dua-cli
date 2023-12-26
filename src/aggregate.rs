@@ -44,7 +44,7 @@ pub fn aggregate(
             stats.entries_traversed += 1;
             progress.throttled(|| {
                 if let Some(err) = err.as_mut() {
-                    write!(err, "Enumerating {} entries\r", stats.entries_traversed).ok();
+                    write!(err, "Enumerating {} items\r", stats.entries_traversed).ok();
                 }
             });
             match entry {

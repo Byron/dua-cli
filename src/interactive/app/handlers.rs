@@ -207,7 +207,7 @@ impl AppState {
         window.mark_pane = match res {
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
-                    self.message = Some("Deleting entries...".to_string());
+                    self.message = Some("Deleting items...".to_string());
                     let mut entries_deleted = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_delete| {
                         window.mark_pane = Some(pane);
@@ -217,7 +217,7 @@ impl AppState {
                             Ok(ed) => {
                                 entries_deleted += ed;
                                 self.message =
-                                    Some(format!("Deleted {} entries...", entries_deleted));
+                                    Some(format!("Deleted {} items...", entries_deleted));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),
@@ -228,7 +228,7 @@ impl AppState {
                 }
                 #[cfg(feature = "trash-move")]
                 Some(MarkMode::Trash) => {
-                    self.message = Some("Trashing entries...".to_string());
+                    self.message = Some("Trashing items...".to_string());
                     let mut entries_trashed = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_trash| {
                         window.mark_pane = Some(pane);
@@ -238,7 +238,7 @@ impl AppState {
                             Ok(ed) => {
                                 entries_trashed += ed;
                                 self.message =
-                                    Some(format!("Trashed {} entries...", entries_trashed));
+                                    Some(format!("Trashed {} items...", entries_trashed));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),
