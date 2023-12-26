@@ -3,7 +3,7 @@ use crate::interactive::{
     app::tree_view::TreeView, fit_string_graphemes_with_ellipsis, widgets::entry_color,
     CursorDirection,
 };
-use crosstermion::crossterm::event::KeyModifiers;
+use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
 use crosstermion::input::Key;
 use dua::{traverse::TreeIndex, ByteFormat};
 use itertools::Itertools;
@@ -117,6 +117,9 @@ impl MarkPane {
     pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
         use crosstermion::crossterm::event::KeyCode::*;
         let action = None;
+        if key.kind == KeyEventKind::Release {
+            return Some((self, action));
+        }
         match key.code {
             Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return Some(self.prepare_deletion(MarkMode::Delete))

@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use bstr::BString;
+use crosstermion::crossterm::event::KeyEventKind;
 use crosstermion::input::Key;
 use dua::traverse::{Tree, TreeIndex};
 use petgraph::Direction;
@@ -37,6 +38,9 @@ pub struct GlobPane {
 impl GlobPane {
     pub fn process_events(&mut self, key: Key) {
         use crosstermion::crossterm::event::KeyCode::*;
+        if key.kind == KeyEventKind::Release {
+            return;
+        }
         match key.code {
             Char(to_insert) => {
                 self.enter_char(to_insert);

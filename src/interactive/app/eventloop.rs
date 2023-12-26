@@ -6,7 +6,7 @@ use crate::interactive::{
     SortMode,
 };
 use anyhow::Result;
-use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::{input_channel, Event};
 use dua::{
     traverse::{EntryData, Traversal},
@@ -115,7 +115,7 @@ impl AppState {
 
         for event in events {
             let key = match event {
-                Event::Key(key) => key,
+                Event::Key(key) if key.kind != KeyEventKind::Release => key,
                 Event::Resize(_, _) => refresh_key(),
                 _ => continue,
             };

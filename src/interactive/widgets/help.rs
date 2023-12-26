@@ -1,6 +1,6 @@
 use crate::interactive::CursorDirection;
 pub use crosstermion::crossterm::event::KeyCode::*;
-use crosstermion::crossterm::event::KeyModifiers;
+use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
 use crosstermion::input::Key;
 use std::{borrow::Borrow, cell::RefCell};
 use tui::{
@@ -36,6 +36,9 @@ fn margin(r: Rect, margin: u16) -> Rect {
 
 impl HelpPane {
     pub fn process_events(&mut self, key: Key) {
+        if key.kind == KeyEventKind::Release {
+            return;
+        }
         match key.code {
             Char('H') => self.scroll_help(CursorDirection::ToTop),
             Char('G') => self.scroll_help(CursorDirection::ToBottom),
