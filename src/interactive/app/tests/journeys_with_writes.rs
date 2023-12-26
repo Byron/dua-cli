@@ -1,9 +1,9 @@
 use crate::interactive::app::tests::utils::{
-    initialized_app_and_terminal_from_paths, into_keys, WritableFixture,
+    initialized_app_and_terminal_from_paths, into_codes, WritableFixture,
 };
 use anyhow::Result;
+use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crosstermion::input::Event;
-use crosstermion::input::Key;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -13,7 +13,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
 
     // With a selection of items
-    app.process_events(&mut terminal, into_keys(b"doddd".iter()))?;
+    app.process_events(&mut terminal, into_codes("doddd"))?;
 
     assert_eq!(
         app.window.mark_pane.as_ref().map(|p| p.marked().len()),
@@ -26,7 +26,11 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        vec![Event::Key(Key::Char('\t')), Event::Key(Key::Ctrl('r'))].into_iter(),
+        vec![
+            Event::Key(KeyCode::Tab.into()),
+            Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+        ]
+        .into_iter(),
     )?;
     assert!(
         app.window.mark_pane.is_none(),

@@ -1,4 +1,5 @@
 use anyhow::{Context, Error, Result};
+use crosstermion::crossterm::event::KeyCode;
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, TraversalSorting, WalkOptions,
@@ -20,13 +21,15 @@ use tui_react::Terminal;
 use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};
 
 pub fn into_keys<'a>(
-    bytes: impl Iterator<Item = &'a u8> + 'a,
+    codes: impl IntoIterator<Item = KeyCode> + 'a,
 ) -> impl Iterator<Item = crosstermion::input::Event> + 'a {
-    bytes.map(|b| {
-        crosstermion::input::Event::Key(crosstermion::input::Key::Char(
-            std::char::from_u32(*b as u32).unwrap(),
-        ))
-    })
+    codes
+        .into_iter()
+        .map(|code| crosstermion::input::Event::Key(code.into()))
+}
+
+pub fn into_codes(input: &str) -> impl Iterator<Item = crosstermion::input::Event> + '_ {
+    into_keys(input.chars().map(KeyCode::Char))
 }
 
 pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {

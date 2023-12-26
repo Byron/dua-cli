@@ -36,9 +36,8 @@ pub struct GlobPane {
 
 impl GlobPane {
     pub fn process_events(&mut self, key: Key) {
-        use crosstermion::input::Key::*;
-
-        match key {
+        use crosstermion::crossterm::event::KeyCode::*;
+        match key.code {
             Char(to_insert) => {
                 self.enter_char(to_insert);
             }

@@ -5,7 +5,7 @@ use dua::TraversalSorting;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
 mod crossdev;
-#[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
+#[cfg(feature = "tui-crossplatform")]
 mod interactive;
 mod options;
 
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         ignore_dirs: opt.ignore_dirs,
     };
     let res = match opt.command {
-        #[cfg(any(feature = "tui-unix", feature = "tui-crossplatform"))]
+        #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { input }) => {
             use crate::interactive::{Interaction, TerminalApp};
             use anyhow::{anyhow, Context};
