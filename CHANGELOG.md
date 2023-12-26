@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.24.2 (2023-12-26)
+
+### Bug Fixes
+
+ - <csr-id-b5b8aa26b648d8a034667bca8320ba7952a27780/> avoid duplicate key input on windows.
+   On Windows, key-states like press/release/repeat are made available
+   separately, which means we should avoid responding to key-releases
+   as it would incorrectly double the actual user inputs.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#203](https://github.com/Byron/dua-cli/issues/203)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#203](https://github.com/Byron/dua-cli/issues/203)**
+    - Avoid duplicate key input on windows. ([`b5b8aa2`](https://github.com/Byron/dua-cli/commit/b5b8aa26b648d8a034667bca8320ba7952a27780))
+    - Upgrade to latest verison of tui-crates and native crossterm events. ([`90b65d5`](https://github.com/Byron/dua-cli/commit/90b65d59f5dde888f81c42e3c812670929b1740a))
+ * **Uncategorized**
+    - Merge branch 'tui-crates-upgrade' ([`edbb446`](https://github.com/Byron/dua-cli/commit/edbb446100405d16c19059d6ced096144f8bb54e))
+</details>
+
 ## 2.24.1 (2023-12-25)
 
 ### Bug Fixes
@@ -21,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -32,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.24.1 ([`46fece5`](https://github.com/Byron/dua-cli/commit/46fece5f295a8fb6f90ff969741f79d7c736c140))
     - Keep checking for existance of entries outside of the glob top-level. ([`8ae727e`](https://github.com/Byron/dua-cli/commit/8ae727e462b38541636c8e03d140953cad8f34cf))
 </details>
 
