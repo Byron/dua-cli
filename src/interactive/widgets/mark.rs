@@ -3,7 +3,8 @@ use crate::interactive::{
     app::tree_view::TreeView, fit_string_graphemes_with_ellipsis, widgets::entry_color,
     CursorDirection,
 };
-use crosstermion::{input::Key, input::Key::*};
+use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
+use crosstermion::input::Key;
 use dua::{traverse::TreeIndex, ByteFormat};
 use itertools::Itertools;
 use std::{
@@ -114,21 +115,35 @@ impl MarkPane {
         self.marked.into_values().map(|v| v.path)
     }
     pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
+        use crosstermion::crossterm::event::KeyCode::*;
         let action = None;
-        match key {
-            Ctrl('r') => return Some(self.prepare_deletion(MarkMode::Delete)),
+        if key.kind == KeyEventKind::Release {
+            return Some((self, action));
+        }
+        match key.code {
+            Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Some(self.prepare_deletion(MarkMode::Delete))
+            }
             #[cfg(feature = "trash-move")]
-            Ctrl('t') => return Some(self.prepare_deletion(MarkMode::Trash)),
-            Char('x') | Char('d') | Char(' ') => {
-                return self.remove_selected().map(|s| (s, action))
+            Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Some(self.prepare_deletion(MarkMode::Trash))
             }
             Char('a') => return None,
             Char('H') => self.change_selection(CursorDirection::ToTop),
             Char('G') => self.change_selection(CursorDirection::ToBottom),
-            Ctrl('u') | PageUp => self.change_selection(CursorDirection::PageUp),
+            PageUp => self.change_selection(CursorDirection::PageUp),
+            Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.change_selection(CursorDirection::PageUp)
+            }
+            Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.change_selection(CursorDirection::PageDown)
+            }
+            PageDown => self.change_selection(CursorDirection::PageDown),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
-            Ctrl('d') | PageDown => self.change_selection(CursorDirection::PageDown),
+            Char('x') | Char('d') | Char(' ') => {
+                return self.remove_selected().map(|s| (s, action))
+            }
             _ => {}
         };
         Some((self, action))

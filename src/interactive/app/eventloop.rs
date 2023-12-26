@@ -6,7 +6,8 @@ use crate::interactive::{
     SortMode,
 };
 use anyhow::Result;
-use crosstermion::input::{input_channel, Event, Key};
+use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crosstermion::input::{input_channel, Event};
 use dua::{
     traverse::{EntryData, Traversal},
     WalkOptions, WalkResult,
@@ -104,7 +105,7 @@ impl AppState {
     where
         B: Backend,
     {
-        use crosstermion::input::Key::*;
+        use crosstermion::crossterm::event::KeyCode::*;
         use FocussedPane::*;
 
         {
@@ -114,8 +115,9 @@ impl AppState {
 
         for event in events {
             let key = match event {
-                Event::Key(key) => key,
-                Event::Resize(_, _) => Alt('\r'),
+                Event::Key(key) if key.kind != KeyEventKind::Release => key,
+                Event::Resize(_, _) => refresh_key(),
+                _ => continue,
             };
 
             self.reset_message();
@@ -123,20 +125,20 @@ impl AppState {
             let glob_focussed = self.focussed == Glob;
             let mut tree_view = self.tree_view(traversal);
             let mut handled = true;
-            match key {
+            match key.code {
                 Esc => {
                     if let Some(value) = self.handle_quit(&mut tree_view, window) {
                         return value;
                     }
                 }
-                Char('\t') => {
+                Tab => {
                     self.cycle_focus(window);
                 }
                 Char('/') if !glob_focussed => {
                     self.toggle_glob_search(window);
                 }
                 Char('?') if !glob_focussed => self.toggle_help_pane(window),
-                Ctrl('c') if !glob_focussed => {
+                Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
                     return Ok(ProcessingResult::ExitRequested(WalkResult {
                         num_errors: tree_view.traversal.io_errors,
                     }))
@@ -165,23 +167,15 @@ impl AppState {
                     }
                     Glob => {
                         let glob_pane = window.glob_pane.as_mut().expect("glob pane");
-                        match key {
-                            Char('\n') => {
-                                self.search_glob_pattern(&mut tree_view, &glob_pane.input)
-                            }
+                        match key.code {
+                            Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
                             _ => glob_pane.process_events(key),
                         }
                     }
-                    Main => match key {
+                    Main => match key.code {
                         Char('O') => self.open_that(&tree_view),
                         Char(' ') => self.mark_entry(
                             CursorMode::KeepPosition,
-                            MarkEntryMode::Toggle,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('d') => self.mark_entry(
-                            CursorMode::Advance,
                             MarkEntryMode::Toggle,
                             window,
                             &tree_view,
@@ -195,24 +189,34 @@ impl AppState {
                         Char('a') => {
                             self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
                         }
-                        Char('u') | Char('h') | Backspace | Left => {
-                            self.exit_node_with_traversal(&tree_view)
-                        }
-                        Char('o') | Char('l') | Char('\n') | Right => {
+                        Char('o') | Char('l') | Enter | Right => {
                             self.enter_node_with_traversal(&tree_view)
                         }
                         Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                         Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
-                        Ctrl('u') | PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                        PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                        Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            self.change_entry_selection(CursorDirection::PageUp)
+                        }
                         Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
                         Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                        Ctrl('d') | PageDown => {
+                        PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                        Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             self.change_entry_selection(CursorDirection::PageDown)
                         }
                         Char('s') => self.cycle_sorting(&tree_view),
                         Char('m') => self.cycle_mtime_sorting(&tree_view),
                         Char('c') => self.cycle_count_sorting(&tree_view),
                         Char('g') => display.byte_vis.cycle(),
+                        Char('d') => self.mark_entry(
+                            CursorMode::Advance,
+                            MarkEntryMode::Toggle,
+                            window,
+                            &tree_view,
+                        ),
+                        Char('u') | Char('h') | Backspace | Left => {
+                            self.exit_node_with_traversal(&tree_view)
+                        }
                         _ => {}
                     },
                 };
@@ -353,7 +357,7 @@ impl TerminalApp {
                 &mut self.traversal,
                 &mut self.display,
                 terminal,
-                std::iter::once(Event::Key(Key::Alt('\r'))),
+                std::iter::once(Event::Key(refresh_key())),
             )
             .ok();
     }
@@ -481,4 +485,8 @@ pub enum Interaction {
     Full,
     #[allow(dead_code)]
     None,
+}
+
+fn refresh_key() -> KeyEvent {
+    KeyEvent::new(KeyCode::Char('\r'), KeyModifiers::ALT)
 }

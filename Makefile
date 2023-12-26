@@ -38,7 +38,6 @@ check:## run cargo-check with various features
 	cargo check --all
 	cargo check --all-features
 	cargo check --no-default-features
-	cargo check --no-default-features --features tui-unix
 	cargo check --no-default-features --features tui-crossplatform
 	cargo check --no-default-features --features trash-move
 

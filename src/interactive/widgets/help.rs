@@ -1,5 +1,7 @@
 use crate::interactive::CursorDirection;
-use crosstermion::{input::Key, input::Key::*};
+pub use crosstermion::crossterm::event::KeyCode::*;
+use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
+use crosstermion::input::Key;
 use std::{borrow::Borrow, cell::RefCell};
 use tui::{
     buffer::Buffer,
@@ -34,13 +36,22 @@ fn margin(r: Rect, margin: u16) -> Rect {
 
 impl HelpPane {
     pub fn process_events(&mut self, key: Key) {
-        match key {
+        if key.kind == KeyEventKind::Release {
+            return;
+        }
+        match key.code {
             Char('H') => self.scroll_help(CursorDirection::ToTop),
             Char('G') => self.scroll_help(CursorDirection::ToBottom),
-            Ctrl('u') | PageUp => self.scroll_help(CursorDirection::PageUp),
+            Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_help(CursorDirection::PageUp)
+            }
+            Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_help(CursorDirection::PageDown)
+            }
+            PageUp => self.scroll_help(CursorDirection::PageUp),
+            PageDown => self.scroll_help(CursorDirection::PageDown),
             Char('k') | Up => self.scroll_help(CursorDirection::Up),
             Char('j') | Down => self.scroll_help(CursorDirection::Down),
-            Ctrl('d') | PageDown => self.scroll_help(CursorDirection::PageDown),
             _ => {}
         };
     }
