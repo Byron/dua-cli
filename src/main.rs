@@ -1,9 +1,8 @@
 #![forbid(unsafe_code, rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
-#[macro_use]
-extern crate log;
 use clap::Parser;
 use dua::TraversalSorting;
+use log::info;
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
@@ -27,6 +26,7 @@ fn main() -> Result<()> {
     let opt: options::Args = options::Args::parse_from(wild::args_os());
 
     if let Some(log_file) = &opt.log_file {
+        log_panics::init();
         WriteLogger::init(
             LevelFilter::Info,
             Config::default(),
@@ -36,9 +36,8 @@ fn main() -> Result<()> {
                 .append(true)
                 .open(log_file)?,
         )?;
+        info!("dua options={opt:#?}");
     }
-    info!("dua-cli has started");
-    info!("opt={:#?}", opt);
 
     let walk_options = dua::WalkOptions {
         threads: opt.threads,

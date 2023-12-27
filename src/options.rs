@@ -80,7 +80,7 @@ pub struct Args {
     #[clap(value_parser)]
     pub input: Vec<PathBuf>,
 
-    /// If set, dua will log debug information to a file.
+    /// Write a log file with debug information, including panics.
     #[clap(long)]
     pub log_file: Option<PathBuf>,
 }
