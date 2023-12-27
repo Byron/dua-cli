@@ -106,105 +106,109 @@ impl HelpPane {
                 }
             };
 
-            title("Keys for pane control");
+            title("Pane control");
             {
                 hotkey(
                     "q/<Esc>",
-                    "Close the current pane. Closes the program if no",
-                    Some("pane is open"),
+                    "Close the current pane.",
+                    Some("Closes the program if no pane is open."),
                 );
                 hotkey(
                     "<Tab>",
                     "Cycle between all open panes.",
                     Some("Activate 'Marked Items' pane to delete selected files."),
                 );
-                hotkey("?", "Show or hide the help pane", None);
+                hotkey("?", "Show or hide this help pane.", None);
                 spacer();
             }
-            title("Keys for Navigation");
+            title("Navigation");
             {
-                hotkey("j/<Down>", "move down an entry", None);
-                hotkey("k/<Up>", "move up an entry", None);
-                hotkey("o/l/<Enter>", "descent into the selected directory", None);
+                hotkey("j/<Down>", "Move down 1 item.", None);
+                hotkey("k/<Up>", "Move up 1 item.", None);
+                hotkey("o/l/<Enter>", "Descent into the selected directory.", None);
                 hotkey("<Right>", "^", None);
                 hotkey(
                     "u/h/<Left>",
-                    "ascent one level into the parent directory",
+                    "Ascent one level into the parent directory.",
                     None,
                 );
                 hotkey("<Backspace>", "^", None);
-                hotkey("Ctrl + d", "move down 10 entries at once", None);
+                hotkey("Ctrl + d", "Move down 10 items.", None);
                 hotkey("<Page Down>", "^", None);
-                hotkey("Ctrl + u", "move up 10 entries at once", None);
+                hotkey("Ctrl + u", "Move up 10 items.", None);
                 hotkey("<Page Up>", "^", None);
-                hotkey("H/<Home>", "Move to the top of the entries list", None);
-                hotkey("G/<End>", "Move to the bottom of the entries list", None);
+                hotkey("H/<Home>", "Move to the top of the list.", None);
+                hotkey("G/<End>", "Move to the bottom of the list.", None);
                 spacer();
             }
-            title("Keys for display");
+            title("Display");
             {
-                hotkey("s", "toggle sort by size ascending/descending", None);
-                hotkey("m", "toggle sort by mtime ascending/descending", None);
-                hotkey("c", "toggle sort by items ascending/descending", None);
+                hotkey("s", "Toggle sort by size descending/ascending.", None);
+                hotkey(
+                    "m",
+                    "Toggle sort by modified time descending/ascending.",
+                    None,
+                );
+                hotkey("c", "Toggle sort by items descending/ascending.", None);
                 hotkey(
                     "g",
-                    "cycle through percentage display and bar options",
+                    "Cycle through percentage display and bar options.",
                     None,
                 );
                 spacer();
             }
-            title("Keys for entry operations");
+            title("Open/Mark/Search");
             {
                 hotkey(
                     "Shift + o",
-                    "Open the entry with the associated program",
+                    "Open the selected item with the associated program.",
                     None,
                 );
                 hotkey(
                     "d",
-                    "Toggle the currently selected entry and move down",
+                    "Toggle the currently selected item and move down.",
                     None,
                 );
                 hotkey(
                     "x",
-                    "Mark the currently selected entry for deletion and move down",
+                    "Mark the currently selected item for deletion and move down.",
                     None,
                 );
-                hotkey("<Space>", "Toggle the currently selected entry", None);
-                hotkey("a", "Toggle all entries", None);
+                hotkey("<Space>", "Toggle the currently selected item.", None);
+                hotkey("a", "Toggle all items.", None);
                 hotkey(
                     "/",
-                    "Git-style glob search, case-insensitive, always from the top of the tree",
-                    None,
+                    "Git-style glob search, case-insensitive.",
+                    Some("Search starts from the current directory."),
                 );
                 spacer();
             }
-            title("Keys in the Mark pane");
+            title("Mark items pane");
             {
                 hotkey(
                     "x/d/<Space>",
-                    "Remove the selected entry from the list",
+                    "Remove the selected item from the list.",
                     None,
                 );
-                hotkey("a", "Remove all entries from the list", None);
+                hotkey("a", "Remove all items from the list.", None);
                 hotkey(
                     "Ctrl + r",
-                    "Permanently delete all marked entries without prompt!",
+                    "Permanently delete all marked items without prompt.",
                     Some("This operation cannot be undone!"),
                 );
                 #[cfg(feature = "trash-move")]
                 hotkey(
                     "Ctrl + t",
-                    "Move all marked entries to the trash bin",
-                    Some("The entries can be restored from the trash bin"),
+                    "Move all marked items to the trash bin.",
+                    Some("The items can be restored from the trash bin."),
                 );
                 spacer();
             }
-            title("Keys for application control");
+            title("Application control");
             {
                 hotkey(
                     "Ctrl + c",
-                    "close the application. No questions asked!",
+                    "Close the application. No questions asked!",
                     None,
                 );
                 spacer();

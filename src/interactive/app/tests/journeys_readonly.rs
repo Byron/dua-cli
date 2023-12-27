@@ -36,7 +36,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
-            "it will sort entries in descending order by size"
+            "it will sort items in descending order by size"
         );
 
         assert!(
@@ -97,7 +97,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             node_by_index(&app, app.state.entries[0].index),
             node_by_name(&app, fixture_str(long_root)),
-            "it recomputes the cached entries"
+            "it recomputes the cached items"
         );
         // when hitting the S key
         app.process_events(&mut terminal, into_codes("s"))?;
@@ -109,7 +109,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             node_by_index(&app, app.state.entries[1].index),
             node_by_name(&app, fixture_str(long_root)),
-            "it recomputes the cached entries"
+            "it recomputes the cached items"
         );
         // when hitting the S key again
         app.process_events(&mut terminal, into_codes("s"))?;
@@ -125,7 +125,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             node_by_index(&app, app.state.entries[0].index),
             node_by_name(&app, fixture_str(short_root)),
-            "it recomputes the cached entries"
+            "it recomputes the cached items"
         );
     }
 
@@ -136,7 +136,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
-            "it moves the cursor down and selects the next entry based on the current sort mode"
+            "it moves the cursor down and selects the next item based on the current sort mode"
         );
         // when hitting it while there is nowhere to go
         app.process_events(&mut terminal, into_codes("j"))?;
@@ -150,7 +150,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
-            "it moves the cursor up and selects the next entry based on the current sort mode"
+            "it moves the cursor up and selects the next item based on the current sort mode"
         );
         // when hitting the k key again
         app.process_events(&mut terminal, into_codes("k"))?;
@@ -166,12 +166,12 @@ fn simple_user_journey_read_only() -> Result<()> {
             assert_eq!(
                 new_root_idx,
                 app.state.navigation().view_root,
-                "it enters the entry if it is a directory, changing the root"
+                "it enters the item if it is a directory, changing the root"
             );
             assert_eq!(
                 index_by_name(&app, "dir"),
                 *app.state.navigation().selected.as_ref().unwrap(),
-                "it selects the first entry in the directory"
+                "it selects the first item in the directory"
             );
 
             // when hitting the u key while inside a sub-directory
@@ -185,7 +185,7 @@ fn simple_user_journey_read_only() -> Result<()> {
                 assert_eq!(
                     node_by_name(&app, fixture_str(short_root)),
                     node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
-                    "changes the selection to the first item in the list of entries"
+                    "changes the selection to the first item in the list of items"
                 );
             }
         }
@@ -255,14 +255,14 @@ fn simple_user_journey_read_only() -> Result<()> {
             assert_eq!(
                 Some(1),
                 app.window.mark_pane.as_ref().map(|p| p.marked().len()),
-                "it toggled the previous selected entry off",
+                "it toggled the previous selected item off",
             );
 
             assert!(
                 app.window.mark_pane.as_ref().map_or(false, |p| p
                     .marked()
                     .contains_key(&previously_selected_index)),
-                "it leaves the first selected entry marked"
+                "it leaves the first selected item marked"
             );
         }
         // when hitting the spacebar (after moving up to the first entry)
