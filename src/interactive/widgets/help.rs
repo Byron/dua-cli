@@ -118,13 +118,13 @@ impl HelpPane {
                     "Cycle between all open panes.",
                     Some("Activate 'Marked Items' pane to delete selected files."),
                 );
-                hotkey("?", "Show or hide the help.", None);
+                hotkey("?", "Show or hide this help pane.", None);
                 spacer();
             }
             title("Navigation");
             {
-                hotkey("j/<Down>", "Move down.", None);
-                hotkey("k/<Up>", "Move up.", None);
+                hotkey("j/<Down>", "Move down 1 item.", None);
+                hotkey("k/<Up>", "Move up 1 item.", None);
                 hotkey("o/l/<Enter>", "Descent into the selected directory.", None);
                 hotkey("<Right>", "^", None);
                 hotkey(
@@ -161,7 +161,7 @@ impl HelpPane {
             {
                 hotkey(
                     "Shift + o",
-                    "Open the item with the associated program.",
+                    "Open the selected item with the associated program.",
                     None,
                 );
                 hotkey(
