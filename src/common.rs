@@ -1,7 +1,7 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
-use log::info;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -178,7 +178,7 @@ type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk
 
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
-        info!("root path={:?}", root);
+        let ignore_dirs = self.ignore_dirs.clone();
         WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
@@ -187,7 +187,6 @@ impl WalkOptions {
             })
             .skip_hidden(false)
             .process_read_dir({
-                let ignore_dirs = self.ignore_dirs.clone();
                 let cross_filesystems = self.cross_filesystems;
                 move |_, _, _, dir_entry_results| {
                     dir_entry_results.iter_mut().for_each(|dir_entry_result| {
@@ -200,7 +199,7 @@ impl WalkOptions {
                                         .as_ref()
                                         .map(|m| crossdev::is_same_device(root_device_id, m))
                                         .unwrap_or(true);
-                                if !ok_for_fs || ignore_dirs.contains(&dir_entry.path()) {
+                                if !ok_for_fs || ignore_directory(&dir_entry.path(), &ignore_dirs) {
                                     dir_entry.read_children_path = None;
                                 }
                             }
@@ -239,5 +238,81 @@ pub struct WalkResult {
 impl WalkResult {
     pub fn to_exit_code(&self) -> i32 {
         i32::from(self.num_errors > 0)
+    }
+}
+
+pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> Vec<PathBuf> {
+    ignore_dirs
+        .iter()
+        .map(fs::canonicalize)
+        .filter_map(Result::ok)
+        .collect()
+}
+
+fn ignore_directory(path: &Path, ignore_dirs: &[PathBuf]) -> bool {
+    if ignore_dirs.is_empty() {
+        return false;
+    }
+    let path = fs::canonicalize(path);
+    path.map(|path| ignore_dirs.contains(&path))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ignore_directories() {
+        #[cfg(unix)]
+        let mut parameters = vec![
+            ("/usr", vec!["/usr"], true),
+            ("/usr/local", vec!["/usr"], false),
+            ("/smth", vec!["/usr"], false),
+            ("/usr/local/..", vec!["/usr/local/.."], true),
+            ("/usr", vec!["/usr/local/.."], true),
+            ("/usr/local/share/../..", vec!["/usr"], true),
+        ];
+
+        #[cfg(windows)]
+        let mut parameters = vec![
+            ("C:\\Windows", vec!["C:\\Windows"], true),
+            ("C:\\Windows\\System", vec!["C:\\Windows"], false),
+            ("C:\\Smth", vec!["C:\\Windows"], false),
+            (
+                "C:\\Windows\\System\\..",
+                vec!["C:\\Windows\\System\\.."],
+                true,
+            ),
+            ("C:\\Windows", vec!["C:\\Windows\\System\\.."], true),
+            (
+                "C:\\Windows\\System\\Speech\\..\\..",
+                vec!["C:\\Windows"],
+                true,
+            ),
+        ];
+
+        parameters.append(&mut vec![
+            ("src", vec!["src"], true),
+            ("src/interactive", vec!["src"], false),
+            ("src/interactive/..", vec!["src"], true),
+        ]);
+
+        for (path, ignore_dirs, expected_result) in parameters {
+            let ignore_dirs = canonicalize_ignore_dirs(
+                &ignore_dirs
+                    .into_iter()
+                    .map(|p| PathBuf::from(p))
+                    .collect::<Vec<PathBuf>>(),
+            );
+            assert_eq!(
+                ignore_directory(&PathBuf::from(path), &ignore_dirs),
+                expected_result,
+                "result='{}' for path='{}' and ignore_dir='{:?}' ",
+                expected_result,
+                path,
+                ignore_dirs
+            );
+        }
     }
 }

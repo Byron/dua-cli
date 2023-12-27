@@ -1,7 +1,7 @@
 #![forbid(unsafe_code, rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
 use clap::Parser;
-use dua::TraversalSorting;
+use dua::{canonicalize_ignore_dirs, TraversalSorting};
 use log::info;
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::fs::OpenOptions;
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
         cross_filesystems: !opt.stay_on_filesystem,
-        ignore_dirs: opt.ignore_dirs,
+        ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
     };
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
