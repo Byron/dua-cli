@@ -235,7 +235,7 @@ impl AppState {
         }
     }
 
-    fn search_glob_pattern(&mut self, tree_view: &mut TreeView, glob_pattern: &str) {
+    fn search_glob_pattern(&mut self, tree_view: &mut TreeView<'_>, glob_pattern: &str) {
         use FocussedPane::*;
         match glob_search(tree_view.tree(), self.navigation.view_root, glob_pattern) {
             Ok(matches) if matches.is_empty() => {
@@ -321,7 +321,7 @@ impl AppState {
 
 pub fn draw_window<B>(
     window: &mut MainWindow,
-    props: MainWindowProps,
+    props: MainWindowProps<'_>,
     terminal: &mut Terminal<B>,
     cursor: &mut Cursor,
 ) -> Result<()>
