@@ -79,6 +79,10 @@ pub struct Args {
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[clap(value_parser)]
     pub input: Vec<PathBuf>,
+
+    /// Write a log file with debug information, including panics.
+    #[clap(long)]
+    pub log_file: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Subcommand)]

@@ -1,7 +1,10 @@
-#![forbid(unsafe_code)]
+#![forbid(unsafe_code, rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
 use clap::Parser;
 use dua::TraversalSorting;
+use log::info;
+use simplelog::{Config, LevelFilter, WriteLogger};
+use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
 mod crossdev;
@@ -21,6 +24,21 @@ fn main() -> Result<()> {
     use options::Command::*;
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
+
+    if let Some(log_file) = &opt.log_file {
+        log_panics::init();
+        WriteLogger::init(
+            LevelFilter::Info,
+            Config::default(),
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(log_file)?,
+        )?;
+        info!("dua options={opt:#?}");
+    }
+
     let walk_options = dua::WalkOptions {
         threads: opt.threads,
         byte_format: opt.format.into(),

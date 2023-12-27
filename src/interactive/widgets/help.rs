@@ -61,7 +61,7 @@ impl HelpPane {
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let lines = {
-            let lines = RefCell::new(Vec::<Line>::with_capacity(30));
+            let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
                 for _ in 0..n {
                     lines.borrow_mut().push(Line::from(Span::raw("")))

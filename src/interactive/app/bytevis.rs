@@ -34,7 +34,7 @@ impl ByteVisualization {
 }
 
 impl fmt::Display for DisplayByteVisualization {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use ByteVisualization::*;
         let Self { format, percentage } = self;
 
@@ -58,7 +58,11 @@ impl fmt::Display for DisplayByteVisualization {
 }
 
 impl DisplayByteVisualization {
-    fn make_bar(f: &mut fmt::Formatter, percentage: f32, length: usize) -> Result<(), fmt::Error> {
+    fn make_bar(
+        f: &mut fmt::Formatter<'_>,
+        percentage: f32,
+        length: usize,
+    ) -> Result<(), fmt::Error> {
         // Print the filled part of the bar
         let block_length = (length as f32 * percentage).floor() as usize;
         for _ in 0..block_length {
@@ -90,7 +94,7 @@ impl DisplayByteVisualization {
         }
         Ok(())
     }
-    fn make_percentage(f: &mut fmt::Formatter, percentage: f32) -> Result<(), fmt::Error> {
+    fn make_percentage(f: &mut fmt::Formatter<'_>, percentage: f32) -> Result<(), fmt::Error> {
         write!(f, " {:>5.01}% ", percentage * 100.0)
     }
 }

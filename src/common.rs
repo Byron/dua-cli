@@ -1,6 +1,7 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
+use log::info;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -177,6 +178,7 @@ type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk
 
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+        info!("root path={:?}", root);
         WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
