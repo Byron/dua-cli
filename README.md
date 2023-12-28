@@ -155,13 +155,11 @@ make
 
 #### But why is…
 
-#### …there two available backends? `crossterm` works everywhere!
+#### …there only one available backend? `termion` was available previously.
 
-Why add complexity to support `termion` if `crossterm` works everywhere? The answer is compile time and binary size, which both are larger
-when using `crossterm`. Thus on Unix we still build with `termion`, but there is no reason to stop supporting it once `crossterm` has no
-disadvantages.
-
-The `crosstermion` crate makes handling this a bit less cumbersome.
+Maintaining both backends seemed more cumbersome than it's worth and add complexity I didn't like anymore. `termion` had its benefits,
+but I never liked that it seems to have dropped out of support.
+Thus `crossterm` is the only remaining backend and it's very actively developed.
 
 ### Acknowledgements
 
@@ -205,5 +203,4 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
 [jwalk]: https://crates.io/crates/jwalk
-[termion]: https://crates.io/crates/termion
 [tui]: https://github.com/fdehau/tui-rs
