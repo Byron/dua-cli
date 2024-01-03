@@ -292,7 +292,7 @@ mod tests {
             ),
         ];
 
-        parameters.append(&mut vec![
+        parameters.extend([
             ("src", vec!["src"], true),
             ("src/interactive", vec!["src"], false),
             ("src/interactive/..", vec!["src"], true),
@@ -300,18 +300,12 @@ mod tests {
 
         for (path, ignore_dirs, expected_result) in parameters {
             let ignore_dirs = canonicalize_ignore_dirs(
-                &ignore_dirs
-                    .into_iter()
-                    .map(|p| PathBuf::from(p))
-                    .collect::<Vec<PathBuf>>(),
+                &ignore_dirs.into_iter().map(Into::into).collect::<Vec<_>>(),
             );
             assert_eq!(
-                ignore_directory(&PathBuf::from(path), &ignore_dirs),
+                ignore_directory(path.as_ref(), &ignore_dirs),
                 expected_result,
-                "result='{}' for path='{}' and ignore_dir='{:?}' ",
-                expected_result,
-                path,
-                ignore_dirs
+                "result='{expected_result}' for path='{path}' and ignore_dir='{ignore_dirs:?}' "
             );
         }
     }
