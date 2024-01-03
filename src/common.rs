@@ -1,7 +1,7 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
-use log::info;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -171,14 +171,15 @@ pub struct WalkOptions {
     pub apparent_size: bool,
     pub sorting: TraversalSorting,
     pub cross_filesystems: bool,
-    pub ignore_dirs: Vec<PathBuf>,
+    pub ignore_dirs: BTreeSet<PathBuf>,
 }
 
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
-        info!("root path={:?}", root);
+        let ignore_dirs = self.ignore_dirs.clone();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
@@ -187,7 +188,6 @@ impl WalkOptions {
             })
             .skip_hidden(false)
             .process_read_dir({
-                let ignore_dirs = self.ignore_dirs.clone();
                 let cross_filesystems = self.cross_filesystems;
                 move |_, _, _, dir_entry_results| {
                     dir_entry_results.iter_mut().for_each(|dir_entry_result| {
@@ -200,7 +200,9 @@ impl WalkOptions {
                                         .as_ref()
                                         .map(|m| crossdev::is_same_device(root_device_id, m))
                                         .unwrap_or(true);
-                                if !ok_for_fs || ignore_dirs.contains(&dir_entry.path()) {
+                                if !ok_for_fs
+                                    || ignore_directory(&dir_entry.path(), &ignore_dirs, &cwd)
+                                {
                                     dir_entry.read_children_path = None;
                                 }
                             }
@@ -239,5 +241,84 @@ pub struct WalkResult {
 impl WalkResult {
     pub fn to_exit_code(&self) -> i32 {
         i32::from(self.num_errors > 0)
+    }
+}
+
+pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> BTreeSet<PathBuf> {
+    let dirs = ignore_dirs
+        .iter()
+        .map(gix_path::realpath)
+        .filter_map(Result::ok)
+        .collect();
+    log::info!("Ignoring canonicalized {dirs:?}");
+    dirs
+}
+
+fn ignore_directory(path: &Path, ignore_dirs: &BTreeSet<PathBuf>, cwd: &Path) -> bool {
+    if ignore_dirs.is_empty() {
+        return false;
+    }
+    let path = gix_path::realpath_opts(path, cwd, 32);
+    path.map(|path| {
+        let ignored = ignore_dirs.contains(&path);
+        if ignored {
+            log::debug!("Ignored {path:?}");
+        }
+        ignored
+    })
+    .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ignore_directories() {
+        let cwd = std::env::current_dir().unwrap();
+        #[cfg(unix)]
+        let mut parameters = vec![
+            ("/usr", vec!["/usr"], true),
+            ("/usr/local", vec!["/usr"], false),
+            ("/smth", vec!["/usr"], false),
+            ("/usr/local/..", vec!["/usr/local/.."], true),
+            ("/usr", vec!["/usr/local/.."], true),
+            ("/usr/local/share/../..", vec!["/usr"], true),
+        ];
+
+        #[cfg(windows)]
+        let mut parameters = vec![
+            ("C:\\Windows", vec!["C:\\Windows"], true),
+            ("C:\\Windows\\System", vec!["C:\\Windows"], false),
+            ("C:\\Smth", vec!["C:\\Windows"], false),
+            (
+                "C:\\Windows\\System\\..",
+                vec!["C:\\Windows\\System\\.."],
+                true,
+            ),
+            ("C:\\Windows", vec!["C:\\Windows\\System\\.."], true),
+            (
+                "C:\\Windows\\System\\Speech\\..\\..",
+                vec!["C:\\Windows"],
+                true,
+            ),
+        ];
+
+        parameters.extend([
+            ("src", vec!["src"], true),
+            ("src/interactive", vec!["src"], false),
+            ("src/interactive/..", vec!["src"], true),
+        ]);
+
+        for (path, ignore_dirs, expected_result) in parameters {
+            let ignore_dirs = canonicalize_ignore_dirs(
+                &ignore_dirs.into_iter().map(Into::into).collect::<Vec<_>>(),
+            );
+            assert_eq!(
+                ignore_directory(path.as_ref(), &ignore_dirs, &cwd),
+                expected_result,
+                "result='{expected_result}' for path='{path}' and ignore_dir='{ignore_dirs:?}' "
+            );
+        }
     }
 }
