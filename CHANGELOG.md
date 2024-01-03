@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.25.0 (2024-01-03)
+
+### Chore
+
+ - <csr-id-e992659db17f275b48e555afd6b18df737401f01/> remove obsolete `tui-shared` feature
+
+### New Features
+
+ - <csr-id-6fbe17ff51360d62086aa265a0baa9288175cb84/> add `--log-file` flag to keep track of some debug info, which includes panics.
+   Previously, when `dua i` was used, panics would be hard to observe, if at all,
+   as they would print to the alternate screen. Now, when the `--log-file dua.log`
+   is specified, the panic will be emitted into the log file instead and thus won't
+   be lost anymore.
+   
+   This may help with debugging in future.
+
+### Bug Fixes
+
+ - <csr-id-49f98f537bf0ac41a7b1992094103f6d36f135f8/> `--ignore-dirs` now work as expected.
+   Previously they would need to be specified as relative to the traversal root, which
+   was unintuitive and would lead to ignores not working for many.
+   
+   Even though this was done for performance to avoid canonicalization, we do now
+   perform a more performance version of canonicalization so the overall performance
+   should be acceptable nonetheless.
+   
+   Also note that ignored directories are now logged when using a `--log-file`.
+ - <csr-id-20e85c1ebe7ce3a5254fe2675a52cb5d321f1e34/> consistent language across the application and improved style of the Help pane.
+   Generally, what was called `entry` is now called `item`, consistently.
+
+### Other
+
+ - <csr-id-729e7e92410b138f2778ef70f0f59a439028ac29/> clarify that (and why) `termion` isn't supported anymore in README.md
+   This was triggered by `crossterm` essentially breaking event handling
+   on Windows, which is when I decided to just use the seemingly more
+   powerful crossterm events natively.
+   
+   Overall, this made event handling more complex, but also allows users of
+   `crosstermion` (the crate that actually dropped `termion` support) to
+   write even more interactive applications without worrying about
+   the always out-of-date intermediate layer.
+   
+   Interestingly, the `crosstermion` crate adds some useful features around event handling,
+   but also optimizes build times thanks to `termion`, which is something that
+   on my current machine I don't notice anymore, so the value of it diminished greatly.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 13 commits contributed to the release over the course of 7 calendar days.
+ - 7 days passed between releases.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 2 unique issues were worked on: [#196](https://github.com/Byron/dua-cli/issues/196), [#208](https://github.com/Byron/dua-cli/issues/208)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#196](https://github.com/Byron/dua-cli/issues/196)**
+    - `--ignore-dirs` now work as expected. ([`49f98f5`](https://github.com/Byron/dua-cli/commit/49f98f537bf0ac41a7b1992094103f6d36f135f8))
+ * **[#208](https://github.com/Byron/dua-cli/issues/208)**
+    - Remove obsolete `tui-shared` feature ([`e992659`](https://github.com/Byron/dua-cli/commit/e992659db17f275b48e555afd6b18df737401f01))
+    - Clarify that (and why) `termion` isn't supported anymore in README.md ([`729e7e9`](https://github.com/Byron/dua-cli/commit/729e7e92410b138f2778ef70f0f59a439028ac29))
+ * **Uncategorized**
+    - Use `gix-path` for more control and performance. ([`93f0f61`](https://github.com/Byron/dua-cli/commit/93f0f61b3042b933f099714e3a6d336497eb18ba))
+    - Refactor ([`7905b48`](https://github.com/Byron/dua-cli/commit/7905b48f2f9ca981a6c617ced3a151e79cab9739))
+    - Fix ignore dirs wip ([`e2d5a34`](https://github.com/Byron/dua-cli/commit/e2d5a34b5b6d8212b53d60ceea20324eba08cb2a))
+    - Merge branch 'logging' ([`196f0d6`](https://github.com/Byron/dua-cli/commit/196f0d62f32aacc2d393ef2929305a831a150520))
+    - Add `--log-file` flag to keep track of some debug info, which includes panics. ([`6fbe17f`](https://github.com/Byron/dua-cli/commit/6fbe17ff51360d62086aa265a0baa9288175cb84))
+    - Enforce Rust 2021 style ([`45d886a`](https://github.com/Byron/dua-cli/commit/45d886a6b2c194a5a68961b428f8db2c8daf06a8))
+    - Merge branch 'help-language-consistency' ([`0a0dfe6`](https://github.com/Byron/dua-cli/commit/0a0dfe65c4a7bd8851841edf488296966ba27bf0))
+    - Consistent language across the application and improved style of the Help pane. ([`20e85c1`](https://github.com/Byron/dua-cli/commit/20e85c1ebe7ce3a5254fe2675a52cb5d321f1e34))
+    - Option to enable debug logs ([`4482e1d`](https://github.com/Byron/dua-cli/commit/4482e1de9808a8d662b93b3af907b90000e9f1ae))
+    - Keep consistent language/punctuation/case throughout the app. ([`1e6db58`](https://github.com/Byron/dua-cli/commit/1e6db588723dbbc96bc2f083e915d08bdf1b4ddf))
+</details>
+
 ## 2.24.2 (2023-12-26)
 
 ### Bug Fixes
@@ -18,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#203](https://github.com/Byron/dua-cli/issues/203)
@@ -33,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Avoid duplicate key input on windows. ([`b5b8aa2`](https://github.com/Byron/dua-cli/commit/b5b8aa26b648d8a034667bca8320ba7952a27780))
     - Upgrade to latest verison of tui-crates and native crossterm events. ([`90b65d5`](https://github.com/Byron/dua-cli/commit/90b65d59f5dde888f81c42e3c812670929b1740a))
  * **Uncategorized**
+    - Release dua-cli v2.24.2 ([`c973826`](https://github.com/Byron/dua-cli/commit/c9738265c40598f0a79befc8dd7be0d47a9f8179))
     - Merge branch 'tui-crates-upgrade' ([`edbb446`](https://github.com/Byron/dua-cli/commit/edbb446100405d16c19059d6ced096144f8bb54e))
 </details>
 
