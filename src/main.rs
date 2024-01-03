@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     if let Some(log_file) = &opt.log_file {
         log_panics::init();
         WriteLogger::init(
-            LevelFilter::Info,
+            LevelFilter::Debug,
             Config::default(),
             OpenOptions::new()
                 .write(true)
