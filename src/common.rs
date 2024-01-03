@@ -1,7 +1,7 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
-use std::fs;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -171,7 +171,7 @@ pub struct WalkOptions {
     pub apparent_size: bool,
     pub sorting: TraversalSorting,
     pub cross_filesystems: bool,
-    pub ignore_dirs: Vec<PathBuf>,
+    pub ignore_dirs: BTreeSet<PathBuf>,
 }
 
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
@@ -179,6 +179,7 @@ type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk
 impl WalkOptions {
     pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
         let ignore_dirs = self.ignore_dirs.clone();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)
             .follow_links(false)
             .sort(match self.sorting {
@@ -199,7 +200,9 @@ impl WalkOptions {
                                         .as_ref()
                                         .map(|m| crossdev::is_same_device(root_device_id, m))
                                         .unwrap_or(true);
-                                if !ok_for_fs || ignore_directory(&dir_entry.path(), &ignore_dirs) {
+                                if !ok_for_fs
+                                    || ignore_directory(&dir_entry.path(), &ignore_dirs, &cwd)
+                                {
                                     dir_entry.read_children_path = None;
                                 }
                             }
@@ -241,21 +244,29 @@ impl WalkResult {
     }
 }
 
-pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> Vec<PathBuf> {
-    ignore_dirs
+pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> BTreeSet<PathBuf> {
+    let dirs = ignore_dirs
         .iter()
-        .map(fs::canonicalize)
+        .map(gix_path::realpath)
         .filter_map(Result::ok)
-        .collect()
+        .collect();
+    log::info!("Ignoring canonicalized {dirs:?}");
+    dirs
 }
 
-fn ignore_directory(path: &Path, ignore_dirs: &[PathBuf]) -> bool {
+fn ignore_directory(path: &Path, ignore_dirs: &BTreeSet<PathBuf>, cwd: &Path) -> bool {
     if ignore_dirs.is_empty() {
         return false;
     }
-    let path = fs::canonicalize(path);
-    path.map(|path| ignore_dirs.contains(&path))
-        .unwrap_or(false)
+    let path = gix_path::realpath_opts(path, cwd, 32);
+    path.map(|path| {
+        let ignored = ignore_dirs.contains(&path);
+        if ignored {
+            log::debug!("Ignored {path:?}");
+        }
+        ignored
+    })
+    .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -264,6 +275,7 @@ mod tests {
 
     #[test]
     fn test_ignore_directories() {
+        let cwd = std::env::current_dir().unwrap();
         #[cfg(unix)]
         let mut parameters = vec![
             ("/usr", vec!["/usr"], true),
@@ -303,7 +315,7 @@ mod tests {
                 &ignore_dirs.into_iter().map(Into::into).collect::<Vec<_>>(),
             );
             assert_eq!(
-                ignore_directory(path.as_ref(), &ignore_dirs),
+                ignore_directory(path.as_ref(), &ignore_dirs, &cwd),
                 expected_result,
                 "result='{expected_result}' for path='{path}' and ignore_dir='{ignore_dirs:?}' "
             );

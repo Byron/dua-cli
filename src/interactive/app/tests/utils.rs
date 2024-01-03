@@ -185,7 +185,7 @@ pub fn initialized_app_and_terminal_with_closure(
             count_hard_links: false,
             sorting: TraversalSorting::AlphabeticalByFileName,
             cross_filesystems: false,
-            ignore_dirs: Vec::new(),
+            ignore_dirs: Default::default(),
         },
         input_paths,
         Interaction::None,
