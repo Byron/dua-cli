@@ -437,7 +437,7 @@ impl TerminalApp {
 
                 let mut events = fetch_buffered_key_events(&keys_rx);
                 if let Some(event) = event {
-                    // Updater is triggered by an event, insert it
+                    // This update is triggered by a user event, insert it
                     // before any events fetched later.
                     events.insert(0, event);
                 }

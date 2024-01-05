@@ -357,7 +357,6 @@ dependencies = [
  "chrono",
  "clap",
  "crossbeam",
- "crossterm",
  "crosstermion",
  "filesize",
  "gix-glob",

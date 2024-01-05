@@ -152,31 +152,33 @@ impl Traversal {
         }
 
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
-        let walk_options_clone = walk_options.clone();
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
-            .spawn(move || {
-                for path in input.into_iter() {
-                    let device_id = match crossdev::init(path.as_ref()) {
-                        Ok(id) => id,
-                        Err(_) => {
-                            t.io_errors += 1;
-                            continue;
-                        }
-                    };
-                    let shared_path = Arc::new(path);
+            .spawn({
+                let walk_options = walk_options.clone();
+                move || {
+                    for root_path in input.into_iter() {
+                        let device_id = match crossdev::init(root_path.as_ref()) {
+                            Ok(id) => id,
+                            Err(_) => {
+                                t.io_errors += 1;
+                                continue;
+                            }
+                        };
 
-                    for entry in walk_options_clone
-                        .iter_from_path(shared_path.as_ref(), device_id)
-                        .into_iter()
-                    {
-                        if entry_tx
-                            .send((entry, Arc::clone(&shared_path), device_id))
-                            .is_err()
+                        let root_path = Arc::new(root_path);
+                        for entry in walk_options
+                            .iter_from_path(root_path.as_ref(), device_id)
+                            .into_iter()
                         {
-                            // The channel is closed, this means the user has
-                            // requested to quit the app. Abort the walking.
-                            return;
+                            if entry_tx
+                                .send((entry, Arc::clone(&root_path), device_id))
+                                .is_err()
+                            {
+                                // The channel is closed, this means the user has
+                                // requested to quit the app. Abort the walking.
+                                return;
+                            }
                         }
                     }
                 }
@@ -185,7 +187,7 @@ impl Traversal {
         loop {
             crossbeam::select! {
                 recv(entry_rx) -> entry => {
-                    let Ok((entry, path, device_id)) = entry else {
+                    let Ok((entry, root_path, device_id)) = entry else {
                         break;
                     };
 
@@ -194,7 +196,7 @@ impl Traversal {
                     match entry {
                         Ok(entry) => {
                             data.name = if entry.depth < 1 {
-                                (*path).clone()
+                                (*root_path).clone()
                             } else {
                                 entry.file_name.into()
                             };
@@ -289,7 +291,7 @@ impl Traversal {
                         }
                         Err(_) => {
                             if previous_depth == 0 {
-                                data.name = (*path).clone();
+                                data.name = (*root_path).clone();
                                 let entry_index = t.tree.add_node(data);
                                 t.tree.add_edge(parent_node_idx, entry_index, ());
                             }

@@ -1,5 +1,5 @@
 use crossbeam::channel::Receiver;
-pub use crossterm::event::Event;
+pub use crosstermion::crossterm::event::Event;
 
 enum Action<T> {
     Continue,
@@ -18,7 +18,7 @@ pub fn input_channel() -> Receiver<Event> {
     let (key_send, key_receive) = crossbeam::channel::bounded(0);
     std::thread::spawn(move || -> Result<(), std::io::Error> {
         loop {
-            let event = match continue_on_interrupt(crossterm::event::read()) {
+            let event = match continue_on_interrupt(crosstermion::crossterm::event::read()) {
                 Action::Continue => continue,
                 Action::Result(res) => res?,
             };
