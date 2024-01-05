@@ -2,6 +2,7 @@ mod bytevis;
 mod common;
 mod eventloop;
 mod handlers;
+mod input;
 mod navigation;
 pub mod tree_view;
 
