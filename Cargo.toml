@@ -45,6 +45,7 @@ bstr = "1.8.0"
 simplelog = "0.12.1"
 log = "0.4.20"
 log-panics = { version = "2", features = ["with-backtrace"]}
+crossbeam = "0.8"
 
 [[bin]]
 name="dua"

@@ -6,8 +6,9 @@ use crate::interactive::{
     SortMode,
 };
 use anyhow::Result;
+use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crosstermion::input::{input_channel, Event};
+use crosstermion::input::Event;
 use dua::{
     traverse::{EntryData, Traversal},
     WalkOptions, WalkResult,
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
+use super::input::input_channel;
 use super::tree_view::TreeView;
 
 #[derive(Default, Copy, Clone, PartialEq)]
@@ -343,7 +345,7 @@ pub struct TerminalApp {
     pub window: MainWindow,
 }
 
-type KeyboardInputAndApp = (std::sync::mpsc::Receiver<Event>, TerminalApp);
+type KeyboardInputAndApp = (crossbeam::channel::Receiver<Event>, TerminalApp);
 
 impl TerminalApp {
     pub fn refresh_view<B>(&mut self, terminal: &mut Terminal<B>)
@@ -397,56 +399,63 @@ impl TerminalApp {
         let mut window = MainWindow::default();
         let keys_rx = match mode {
             Interaction::None => {
-                let (_, keys_rx) = std::sync::mpsc::channel();
+                let (_, keys_rx) = crossbeam::channel::unbounded();
                 keys_rx
             }
             Interaction::Full => input_channel(),
         };
 
-        let fetch_buffered_key_events = || {
+        #[inline]
+        fn fetch_buffered_key_events(keys_rx: &Receiver<Event>) -> Vec<Event> {
             let mut keys = Vec::new();
             while let Ok(key) = keys_rx.try_recv() {
                 keys.push(key);
             }
             keys
-        };
+        }
 
         let mut state = AppState {
             is_scanning: true,
             ..Default::default()
         };
         let mut received_events = false;
-        let traversal = Traversal::from_walk(options, input_paths, |traversal| {
-            if !received_events {
-                state.navigation_mut().view_root = traversal.root_index;
-            }
-            state.entries = sorted_entries(
-                &traversal.tree,
-                state.navigation().view_root,
-                state.sorting,
-                state.glob_root(),
-            );
-            if !received_events {
-                state.navigation_mut().selected = state.entries.first().map(|b| b.index);
-            }
-            state.reset_message(); // force "scanning" to appear
+        let traversal =
+            Traversal::from_walk(options, input_paths, &keys_rx, |traversal, event| {
+                if !received_events {
+                    state.navigation_mut().view_root = traversal.root_index;
+                }
+                state.entries = sorted_entries(
+                    &traversal.tree,
+                    state.navigation().view_root,
+                    state.sorting,
+                    state.glob_root(),
+                );
+                if !received_events {
+                    state.navigation_mut().selected = state.entries.first().map(|b| b.index);
+                }
+                state.reset_message(); // force "scanning" to appear
 
-            let events = fetch_buffered_key_events();
-            received_events |= !events.is_empty();
+                let mut events = fetch_buffered_key_events(&keys_rx);
+                if let Some(event) = event {
+                    // This update is triggered by a user event, insert it
+                    // before any events fetched later.
+                    events.insert(0, event);
+                }
+                received_events |= !events.is_empty();
 
-            let should_exit = match state.process_events(
-                &mut window,
-                traversal,
-                &mut display,
-                terminal,
-                events.into_iter(),
-            )? {
-                ProcessingResult::ExitRequested(_) => true,
-                ProcessingResult::Finished(_) => false,
-            };
+                let should_exit = match state.process_events(
+                    &mut window,
+                    traversal,
+                    &mut display,
+                    terminal,
+                    events.into_iter(),
+                )? {
+                    ProcessingResult::ExitRequested(_) => true,
+                    ProcessingResult::Finished(_) => false,
+                };
 
-            Ok(should_exit)
-        })?;
+                Ok(should_exit)
+            })?;
 
         let traversal = match traversal {
             Some(t) => t,

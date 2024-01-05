@@ -7,6 +7,7 @@ use std::{
     fs::Metadata,
     io,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -70,10 +71,11 @@ pub struct Traversal {
 }
 
 impl Traversal {
-    pub fn from_walk(
+    pub fn from_walk<T>(
         mut walk_options: WalkOptions,
         input: Vec<PathBuf>,
-        mut update: impl FnMut(&mut Traversal) -> Result<bool>,
+        waker_rx: &crossbeam::channel::Receiver<T>,
+        mut update: impl FnMut(&mut Traversal, Option<T>) -> Result<bool>,
     ) -> Result<Option<Traversal>> {
         #[derive(Default, Copy, Clone)]
         struct EntryInfo {
@@ -149,129 +151,173 @@ impl Traversal {
             parent.join(name).size_on_disk_fast(meta)
         }
 
-        for path in input.into_iter() {
-            let device_id = match crossdev::init(path.as_ref()) {
-                Ok(id) => id,
-                Err(_) => {
-                    t.io_errors += 1;
-                    continue;
-                }
-            };
-            for entry in walk_options
-                .iter_from_path(path.as_ref(), device_id)
-                .into_iter()
-            {
-                t.entries_traversed += 1;
-                let mut data = EntryData::default();
-                match entry {
-                    Ok(entry) => {
-                        data.name = if entry.depth < 1 {
-                            path.clone()
-                        } else {
-                            entry.file_name.into()
+        let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
+        std::thread::Builder::new()
+            .name("dua-fs-walk-dispatcher".to_string())
+            .spawn({
+                let walk_options = walk_options.clone();
+                move || {
+                    for root_path in input.into_iter() {
+                        let device_id = match crossdev::init(root_path.as_ref()) {
+                            Ok(id) => id,
+                            Err(_) => {
+                                t.io_errors += 1;
+                                continue;
+                            }
                         };
 
-                        let mut file_size = 0u128;
-                        let mut mtime: SystemTime = UNIX_EPOCH;
-                        match &entry.client_state {
-                            Some(Ok(ref m)) => {
-                                if !m.is_dir()
-                                    && (walk_options.count_hard_links || inodes.add(m))
-                                    && (walk_options.cross_filesystems
-                                        || crossdev::is_same_device(device_id, m))
-                                {
-                                    if walk_options.apparent_size {
-                                        file_size = m.len() as u128;
-                                    } else {
-                                        file_size = size_on_disk(&entry.parent_path, &data.name, m)
-                                            .unwrap_or_else(|_| {
-                                                t.io_errors += 1;
-                                                data.metadata_io_error = true;
-                                                0
-                                            })
-                                            as u128;
-                                    }
-                                } else {
-                                    data.entry_count = Some(0);
-                                    data.is_dir = true;
-                                }
-
-                                match m.modified() {
-                                    Ok(modified) => {
-                                        mtime = modified;
-                                    }
-                                    Err(_) => {
-                                        t.io_errors += 1;
-                                        data.metadata_io_error = true;
-                                    }
-                                }
+                        let root_path = Arc::new(root_path);
+                        for entry in walk_options
+                            .iter_from_path(root_path.as_ref(), device_id)
+                            .into_iter()
+                        {
+                            if entry_tx
+                                .send((entry, Arc::clone(&root_path), device_id))
+                                .is_err()
+                            {
+                                // The channel is closed, this means the user has
+                                // requested to quit the app. Abort the walking.
+                                return;
                             }
-                            Some(Err(_)) => {
-                                t.io_errors += 1;
-                                data.metadata_io_error = true;
-                            }
-                            None => {}
                         }
+                    }
+                }
+            })?;
 
-                        match (entry.depth, previous_depth) {
-                            (n, p) if n > p => {
-                                directory_info_per_depth_level.push(current_directory_at_depth);
-                                current_directory_at_depth = EntryInfo {
-                                    size: file_size,
-                                    entries_count: Some(1),
-                                };
-                                parent_node_idx = previous_node_idx;
+        loop {
+            crossbeam::select! {
+                recv(entry_rx) -> entry => {
+                    let Ok((entry, root_path, device_id)) = entry else {
+                        break;
+                    };
+
+                    t.entries_traversed += 1;
+                    let mut data = EntryData::default();
+                    match entry {
+                        Ok(entry) => {
+                            data.name = if entry.depth < 1 {
+                                (*root_path).clone()
+                            } else {
+                                entry.file_name.into()
+                            };
+
+                            let mut file_size = 0u128;
+                            let mut mtime: SystemTime = UNIX_EPOCH;
+                            match &entry.client_state {
+                                Some(Ok(ref m)) => {
+                                    if !m.is_dir()
+                                        && (walk_options.count_hard_links || inodes.add(m))
+                                        && (walk_options.cross_filesystems
+                                            || crossdev::is_same_device(device_id, m))
+                                    {
+                                        if walk_options.apparent_size {
+                                            file_size = m.len() as u128;
+                                        } else {
+                                            file_size = size_on_disk(&entry.parent_path, &data.name, m)
+                                                .unwrap_or_else(|_| {
+                                                    t.io_errors += 1;
+                                                    data.metadata_io_error = true;
+                                                    0
+                                                })
+                                                as u128;
+                                        }
+                                    } else {
+                                        data.entry_count = Some(0);
+                                        data.is_dir = true;
+                                    }
+
+                                    match m.modified() {
+                                        Ok(modified) => {
+                                            mtime = modified;
+                                        }
+                                        Err(_) => {
+                                            t.io_errors += 1;
+                                            data.metadata_io_error = true;
+                                        }
+                                    }
+                                }
+                                Some(Err(_)) => {
+                                    t.io_errors += 1;
+                                    data.metadata_io_error = true;
+                                }
+                                None => {}
                             }
-                            (n, p) if n < p => {
-                                for _ in n..p {
+
+                            match (entry.depth, previous_depth) {
+                                (n, p) if n > p => {
+                                    directory_info_per_depth_level.push(current_directory_at_depth);
+                                    current_directory_at_depth = EntryInfo {
+                                        size: file_size,
+                                        entries_count: Some(1),
+                                    };
+                                    parent_node_idx = previous_node_idx;
+                                }
+                                (n, p) if n < p => {
+                                    for _ in n..p {
+                                        set_entry_info_or_panic(
+                                            &mut t.tree,
+                                            parent_node_idx,
+                                            current_directory_at_depth,
+                                        );
+                                        let dir_info =
+                                            pop_or_panic(&mut directory_info_per_depth_level);
+
+                                        current_directory_at_depth.size += dir_info.size;
+                                        current_directory_at_depth.add_count(&dir_info);
+
+                                        parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
+                                    }
+                                    current_directory_at_depth.size += file_size;
+                                    *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
                                     set_entry_info_or_panic(
                                         &mut t.tree,
                                         parent_node_idx,
                                         current_directory_at_depth,
                                     );
-                                    let dir_info =
-                                        pop_or_panic(&mut directory_info_per_depth_level);
-
-                                    current_directory_at_depth.size += dir_info.size;
-                                    current_directory_at_depth.add_count(&dir_info);
-
-                                    parent_node_idx = parent_or_panic(&mut t.tree, parent_node_idx);
                                 }
-                                current_directory_at_depth.size += file_size;
-                                *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
-                                set_entry_info_or_panic(
-                                    &mut t.tree,
-                                    parent_node_idx,
-                                    current_directory_at_depth,
-                                );
-                            }
-                            _ => {
-                                current_directory_at_depth.size += file_size;
-                                *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
-                            }
-                        };
+                                _ => {
+                                    current_directory_at_depth.size += file_size;
+                                    *current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                                }
+                            };
 
-                        data.mtime = mtime;
-                        data.size = file_size;
-                        let entry_index = t.tree.add_node(data);
-
-                        t.tree.add_edge(parent_node_idx, entry_index, ());
-                        previous_node_idx = entry_index;
-                        previous_depth = entry.depth;
-                    }
-                    Err(_) => {
-                        if previous_depth == 0 {
-                            data.name = path.clone();
+                            data.mtime = mtime;
+                            data.size = file_size;
                             let entry_index = t.tree.add_node(data);
+
                             t.tree.add_edge(parent_node_idx, entry_index, ());
+                            previous_node_idx = entry_index;
+                            previous_depth = entry.depth;
                         }
+                        Err(_) => {
+                            if previous_depth == 0 {
+                                data.name = (*root_path).clone();
+                                let entry_index = t.tree.add_node(data);
+                                t.tree.add_edge(parent_node_idx, entry_index, ());
+                            }
 
-                        t.io_errors += 1
+                            t.io_errors += 1
+                        }
                     }
-                }
 
-                if throttle.can_update() && update(&mut t)? {
-                    return Ok(None);
+                    if throttle.can_update() && update(&mut t, None)? {
+                        return Ok(None);
+                    }
+                },
+                recv(waker_rx) -> waker_value => {
+                    let Ok(waker_value) = waker_value else {
+                        continue;
+                    };
+                    if update(&mut t, Some(waker_value))? {
+                        return Ok(None);
+                    }
+                },
+                default(Duration::from_millis(250)) => {
+                    // No events or new entries received, but we still need
+                    // to keep updating the status message regularly.
+                    if update(&mut t, None)? {
+                        return Ok(None);
+                    }
                 }
             }
         }

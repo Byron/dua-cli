@@ -356,6 +356,7 @@ dependencies = [
  "byte-unit",
  "chrono",
  "clap",
+ "crossbeam",
  "crosstermion",
  "filesize",
  "gix-glob",
