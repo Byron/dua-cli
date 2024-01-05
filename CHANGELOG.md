@@ -5,7 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.26.0 (2024-01-05)
+
+### New Features
+
+ - <csr-id-3c8a31b50da8230bb9268b857e00d0c90e8cb786/> responsive and buttery-smooth UI while scanning in interactive mode.
+   Using `dua i` the GUI would populate and is fully usable even while the scan
+   is in progress, which is fantastic when scanning big disks which can take several minutes.
+   
+   However, previously is was quite janky as the refresh loop was bound to receiving
+   entries to process, which sometimes stalled for many seconds.
+   
+   Now the GUI refresh is uncoupled from receiving traversal entries, and it will
+   update when the user presses a key or 250ms pass without any input, causing
+   it to respond immediately.
+   
+   Thanks so much for contributing, [@unixzii](https://github.com/unixzii)!
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 2 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#209](https://github.com/Byron/dua-cli/issues/209)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#209](https://github.com/Byron/dua-cli/issues/209)**
+    - Responsive and buttery-smooth UI while scanning in interactive mode. ([`3c8a31b`](https://github.com/Byron/dua-cli/commit/3c8a31b50da8230bb9268b857e00d0c90e8cb786))
+ * **Uncategorized**
+    - Refactor ([`0651cae`](https://github.com/Byron/dua-cli/commit/0651cae13b43104402ed9d90147ee8c63fe83b61))
+    - Optimize UI responsiveness during scanning state ([`983ba61`](https://github.com/Byron/dua-cli/commit/983ba6172604b83c2e4efad0f03273206a43c5db))
+</details>
+
 ## 2.25.0 (2024-01-03)
+
+<csr-id-e992659db17f275b48e555afd6b18df737401f01/>
+<csr-id-729e7e92410b138f2778ef70f0f59a439028ac29/>
 
 ### Chore
 
@@ -55,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 13 commits contributed to the release over the course of 7 calendar days.
+ - 14 commits contributed to the release over the course of 7 calendar days.
  - 7 days passed between releases.
  - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 2 unique issues were worked on: [#196](https://github.com/Byron/dua-cli/issues/196), [#208](https://github.com/Byron/dua-cli/issues/208)
@@ -72,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Remove obsolete `tui-shared` feature ([`e992659`](https://github.com/Byron/dua-cli/commit/e992659db17f275b48e555afd6b18df737401f01))
     - Clarify that (and why) `termion` isn't supported anymore in README.md ([`729e7e9`](https://github.com/Byron/dua-cli/commit/729e7e92410b138f2778ef70f0f59a439028ac29))
  * **Uncategorized**
+    - Release dua-cli v2.25.0 ([`ad7c77a`](https://github.com/Byron/dua-cli/commit/ad7c77ac8db663e7a870dd73e45159462c1cbe60))
     - Use `gix-path` for more control and performance. ([`93f0f61`](https://github.com/Byron/dua-cli/commit/93f0f61b3042b933f099714e3a6d336497eb18ba))
     - Refactor ([`7905b48`](https://github.com/Byron/dua-cli/commit/7905b48f2f9ca981a6c617ced3a151e79cab9739))
     - Fix ignore dirs wip ([`e2d5a34`](https://github.com/Byron/dua-cli/commit/e2d5a34b5b6d8212b53d60ceea20324eba08cb2a))
