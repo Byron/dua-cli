@@ -10,7 +10,7 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal},
+    traverse::{EntryData, Traversal, Tree},
     WalkOptions, WalkResult,
 };
 use std::path::PathBuf;
@@ -394,82 +394,96 @@ impl TerminalApp {
     {
         terminal.hide_cursor()?;
         terminal.clear()?;
+        
         let mut display: DisplayOptions = options.clone().into();
         display.byte_vis = ByteVisualization::PercentageAndBar;
+        
         let mut window = MainWindow::default();
 
-        #[inline]
-        fn fetch_buffered_key_events(keys_rx: &Receiver<Event>) -> Vec<Event> {
-            let mut keys = Vec::new();
-            while let Ok(key) = keys_rx.try_recv() {
-                keys.push(key);
-            }
-            keys
-        }
+        // #[inline]
+        // fn fetch_buffered_key_events(keys_rx: &Receiver<Event>) -> Vec<Event> {
+        //     let mut keys = Vec::new();
+        //     while let Ok(key) = keys_rx.try_recv() {
+        //         keys.push(key);
+        //     }
+        //     keys
+        // }
 
         let mut state = AppState {
-            is_scanning: true,
+            is_scanning: false,
             ..Default::default()
         };
-        let mut received_events = false;
-        let traversal =
-            Traversal::from_walk(options, input_paths, &keys_rx, |traversal, event| {
-                if !received_events {
-                    state.navigation_mut().view_root = traversal.root_index;
-                }
-                state.entries = sorted_entries(
-                    &traversal.tree,
-                    state.navigation().view_root,
-                    state.sorting,
-                    state.glob_root(),
-                );
-                if !received_events {
-                    state.navigation_mut().selected = state.entries.first().map(|b| b.index);
-                }
-                state.reset_message(); // force "scanning" to appear
 
-                let mut events = fetch_buffered_key_events(&keys_rx);
-                if let Some(event) = event {
-                    // This update is triggered by a user event, insert it
-                    // before any events fetched later.
-                    events.insert(0, event);
-                }
-                received_events |= !events.is_empty();
+        // let mut received_events = false;
+        // let traversal =
+        //     Traversal::from_walk(options, input_paths, &keys_rx, |traversal, event| {
+        //         if !received_events {
+        //             state.navigation_mut().view_root = traversal.root_index;
+        //         }
+        //         state.entries = sorted_entries(
+        //             &traversal.tree,
+        //             state.navigation().view_root,
+        //             state.sorting,
+        //             state.glob_root(),
+        //         );
+        //         if !received_events {
+        //             state.navigation_mut().selected = state.entries.first().map(|b| b.index);
+        //         }
+        //         state.reset_message(); // force "scanning" to appear
 
-                let should_exit = match state.process_events(
-                    &mut window,
-                    traversal,
-                    &mut display,
-                    terminal,
-                    events.into_iter(),
-                )? {
-                    ProcessingResult::ExitRequested(_) => true,
-                    ProcessingResult::Finished(_) => false,
-                };
+        //         let mut events = fetch_buffered_key_events(&keys_rx);
+        //         if let Some(event) = event {
+        //             // This update is triggered by a user event, insert it
+        //             // before any events fetched later.
+        //             events.insert(0, event);
+        //         }
+        //         received_events |= !events.is_empty();
 
-                Ok(should_exit)
-            })?;
+        //         let should_exit = match state.process_events(
+        //             &mut window,
+        //             traversal,
+        //             &mut display,
+        //             terminal,
+        //             events.into_iter(),
+        //         )? {
+        //             ProcessingResult::ExitRequested(_) => true,
+        //             ProcessingResult::Finished(_) => false,
+        //         };
 
-        let traversal = match traversal {
-            Some(t) => t,
-            None => return Ok(None),
+        //         Ok(should_exit)
+        //     })?;
+
+        // let traversal = match traversal {
+        //     Some(t) => t,
+        //     None => return Ok(None),
+        // };
+
+        // state.is_scanning = false;
+        // if !received_events {
+            // }
+
+        let traversal = {
+            let mut tree = Tree::new();
+            let root_index = tree.add_node(EntryData::default());
+            Traversal {
+                tree,
+                root_index,
+                entries_traversed: 0,
+                start: std::time::Instant::now(),
+                elapsed: None,
+                io_errors: 0,
+                total_bytes: None,
+            }
         };
 
-        state.is_scanning = false;
-        if !received_events {
-            state.navigation_mut().view_root = traversal.root_index;
-        }
+        state.navigation_mut().view_root = traversal.root_index;
         state.entries = sorted_entries(
             &traversal.tree,
             state.navigation().view_root,
             state.sorting,
             state.glob_root(),
         );
-        state.navigation_mut().selected = state
-            .navigation()
-            .selected
-            .filter(|_| received_events)
-            .or_else(|| state.entries.first().map(|b| b.index));
+        state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 
         let mut app = TerminalApp {
             state,
