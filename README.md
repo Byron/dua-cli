@@ -4,7 +4,7 @@
 
 **dua** (-> _Disk Usage Analyzer_) is a tool to conveniently learn about the usage of disk space of a given directory. It's parallel by default and will max out your SSD, providing relevant information as fast as possible. Optionally delete superfluous data, and do so more quickly than `rm`.
 
-[![asciicast](https://asciinema.org/a/316444.svg)](https://asciinema.org/a/316444)
+[![asciicast](https://asciinema.org/a/kDnXUOeqBxZVMoWuFNqzfpeey.svg)](https://asciinema.org/a/kDnXUOeqBxZVMoWuFNqzfpeey)
 
 ### Installation
 
