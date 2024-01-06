@@ -7,6 +7,8 @@ use simplelog::{Config, LevelFilter, WriteLogger};
 use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
+use crate::interactive::input::input_channel;
+
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
 mod interactive;
@@ -51,7 +53,7 @@ fn main() -> Result<()> {
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { input }) => {
-            use crate::interactive::{Interaction, TerminalApp};
+            use crate::interactive::{TerminalApp};
             use anyhow::{anyhow, Context};
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
@@ -64,11 +66,13 @@ fn main() -> Result<()> {
                 AlternateRawScreen::try_from(io::stderr()).with_context(|| no_tty_msg)?,
             )
             .with_context(|| "Could not instantiate terminal")?;
+
+            let keys_rx = input_channel();
             let res = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
-                Interaction::Full,
+                keys_rx,
             )?
             .map(|(keys_rx, mut app)| {
                 let res = app.process_events(&mut terminal, keys_rx.into_iter());

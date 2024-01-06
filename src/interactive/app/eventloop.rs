@@ -387,7 +387,7 @@ impl TerminalApp {
         terminal: &mut Terminal<B>,
         options: WalkOptions,
         input_paths: Vec<PathBuf>,
-        mode: Interaction,
+        keys_rx: Receiver<Event>,
     ) -> Result<Option<KeyboardInputAndApp>>
     where
         B: Backend,
@@ -397,13 +397,6 @@ impl TerminalApp {
         let mut display: DisplayOptions = options.clone().into();
         display.byte_vis = ByteVisualization::PercentageAndBar;
         let mut window = MainWindow::default();
-        let keys_rx = match mode {
-            Interaction::None => {
-                let (_, keys_rx) = crossbeam::channel::unbounded();
-                keys_rx
-            }
-            Interaction::Full => input_channel(),
-        };
 
         #[inline]
         fn fetch_buffered_key_events(keys_rx: &Receiver<Event>) -> Vec<Event> {
@@ -488,12 +481,6 @@ impl TerminalApp {
 
         Ok(Some((keys_rx, app)))
     }
-}
-
-pub enum Interaction {
-    Full,
-    #[allow(dead_code)]
-    None,
 }
 
 fn refresh_key() -> KeyEvent {

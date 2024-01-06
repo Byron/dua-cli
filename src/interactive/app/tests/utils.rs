@@ -18,7 +18,7 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};
+use crate::interactive::{app::tests::FIXTURE_PATH, TerminalApp};
 
 pub fn into_keys<'a>(
     codes: impl IntoIterator<Item = KeyCode> + 'a,
@@ -175,6 +175,7 @@ pub fn initialized_app_and_terminal_with_closure(
     let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
+    let (_, keys_rx) = crossbeam::channel::unbounded();
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
     let app = TerminalApp::initialize(
         &mut terminal,
@@ -188,7 +189,7 @@ pub fn initialized_app_and_terminal_with_closure(
             ignore_dirs: Default::default(),
         },
         input_paths,
-        Interaction::None,
+        keys_rx,
     )?
     .map(|(_, app)| app);
     Ok((
