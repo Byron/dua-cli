@@ -303,7 +303,11 @@ fn simple_user_journey_read_only() -> Result<()> {
         );
 
         // when advancing the selection to the marker pane
-        app.process_events(&mut terminal, into_keys(Some(KeyCode::Tab)), traversal_events)?;
+        app.process_events(
+            &mut terminal,
+            into_keys(Some(KeyCode::Tab)),
+            traversal_events,
+        )?;
         {
             assert_eq!(
                 Some(true),

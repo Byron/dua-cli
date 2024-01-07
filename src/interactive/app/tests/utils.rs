@@ -19,7 +19,10 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::{TerminalApp, TraversalEvent}};
+use crate::interactive::{
+    app::tests::FIXTURE_PATH,
+    terminal_app::{TerminalApp, TraversalEvent},
+};
 
 pub fn into_keys<'a>(
     codes: impl IntoIterator<Item = KeyCode> + 'a,

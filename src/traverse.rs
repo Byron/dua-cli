@@ -1,4 +1,4 @@
-use crate::{get_size_or_panic};
+use crate::get_size_or_panic;
 
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};

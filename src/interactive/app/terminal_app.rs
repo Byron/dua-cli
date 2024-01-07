@@ -13,7 +13,8 @@ use tui_react::Terminal;
 use crate::{crossdev, interactive::widgets::MainWindow};
 
 use super::{
-    app_state::{AppState, ProcessingResult, TraversalState}, sorted_entries, DisplayOptions,
+    app_state::{AppState, ProcessingResult, TraversalState},
+    sorted_entries, DisplayOptions,
 };
 
 /// State and methods representing the interactive disk usage analyser for the terminal

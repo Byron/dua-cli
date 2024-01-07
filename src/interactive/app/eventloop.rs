@@ -4,8 +4,8 @@ use crate::{
         app::navigation::Navigation,
         app_state::FocussedPane,
         sorted_entries,
-        widgets::{glob_search, MainWindow, MainWindowProps}, CursorDirection, CursorMode, DisplayOptions,
-        MarkEntryMode,
+        widgets::{glob_search, MainWindow, MainWindowProps},
+        CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
     },
 };
 use anyhow::Result;
@@ -16,19 +16,15 @@ use dua::{
     traverse::{size_on_disk, EntryData, Traversal},
     WalkOptions, WalkResult,
 };
-use std::{
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
+use super::app_state::{AppState, Cursor, ProcessingResult};
 use super::{
     app_state::{parent_or_panic, pop_or_panic, set_entry_info_or_panic, EntryInfo},
     terminal_app::TraversalEvent,
     tree_view::TreeView,
-};
-use super::{
-    app_state::{AppState, Cursor, ProcessingResult},
 };
 
 impl AppState {
@@ -355,7 +351,7 @@ impl AppState {
                     self.traversal_state.received_event = true;
                 }
                 key
-            },
+            }
             Event::Resize(_, _) => refresh_key(),
             _ => return Ok(None),
         };
