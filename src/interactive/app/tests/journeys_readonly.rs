@@ -27,8 +27,11 @@ fn init_from_pdu_results() -> Result<()> {
 fn simple_user_journey_read_only() -> Result<()> {
     let long_root = "sample-02/dir";
     let short_root = "sample-01";
-    let (mut terminal, mut app) =
+    let (mut terminal, mut app, traversal_events) =
         initialized_app_and_terminal_from_fixture(&[short_root, long_root])?;
+
+    // TODO: process traversal events before continuing?
+    // let (key_send, key_receive) = crossbeam::channel::bounded(0);
 
     // POST-INIT
     // after initialization, we expect that...
@@ -67,28 +70,28 @@ fn simple_user_journey_read_only() -> Result<()> {
     // SORTING
     {
         // when hitting the M key
-        app.process_events(&mut terminal, into_codes("m"))?;
+        app.process_events(&mut terminal, into_codes("m"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::MTimeDescending,
             "it sets the sort mode to descending by mtime"
         );
         // when hitting the M key again
-        app.process_events(&mut terminal, into_codes("m"))?;
+        app.process_events(&mut terminal, into_codes("m"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::MTimeAscending,
             "it sets the sort mode to ascending by mtime"
         );
         // when hitting the C key
-        app.process_events(&mut terminal, into_codes("c"))?;
+        app.process_events(&mut terminal, into_codes("c"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::CountDescending,
             "it sets the sort mode to descending by count"
         );
         // when hitting the C key again
-        app.process_events(&mut terminal, into_codes("c"))?;
+        app.process_events(&mut terminal, into_codes("c"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::CountAscending,
@@ -100,7 +103,7 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it recomputes the cached items"
         );
         // when hitting the S key
-        app.process_events(&mut terminal, into_codes("s"))?;
+        app.process_events(&mut terminal, into_codes("s"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeDescending,
@@ -112,14 +115,14 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it recomputes the cached items"
         );
         // when hitting the S key again
-        app.process_events(&mut terminal, into_codes("s"))?;
+        app.process_events(&mut terminal, into_codes("s"), traversal_events)?;
         assert_eq!(
             app.state.sorting,
             SortMode::SizeAscending,
             "it sets the sort mode to ascending by size"
         );
         // hit the S key again to get Descending - the rest depends on it
-        app.process_events(&mut terminal, into_codes("s"))?;
+        app.process_events(&mut terminal, into_codes("s"), traversal_events)?;
         assert_eq!(app.state.sorting, SortMode::SizeDescending,);
 
         assert_eq!(
@@ -132,35 +135,35 @@ fn simple_user_journey_read_only() -> Result<()> {
     // Entry-Navigation
     {
         // when hitting the j key
-        app.process_events(&mut terminal, into_codes("j"))?;
+        app.process_events(&mut terminal, into_codes("j"), traversal_events)?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it moves the cursor down and selects the next item based on the current sort mode"
         );
         // when hitting it while there is nowhere to go
-        app.process_events(&mut terminal, into_codes("j"))?;
+        app.process_events(&mut terminal, into_codes("j"), traversal_events)?;
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it stays at the previous position"
         );
         // when hitting the k key
-        app.process_events(&mut terminal, into_codes("k"))?;
+        app.process_events(&mut terminal, into_codes("k"), traversal_events)?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it moves the cursor up and selects the next item based on the current sort mode"
         );
         // when hitting the k key again
-        app.process_events(&mut terminal, into_codes("k"))?;
+        app.process_events(&mut terminal, into_codes("k"), traversal_events)?;
         assert_eq!(
             node_by_name(&app, fixture_str(short_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
             "it stays at the current cursor position as there is nowhere to go"
         );
         // when hitting the o key with a directory selected
-        app.process_events(&mut terminal, into_codes("o"))?;
+        app.process_events(&mut terminal, into_codes("o"), traversal_events)?;
         {
             let new_root_idx = index_by_name(&app, fixture_str(short_root));
             assert_eq!(
@@ -175,7 +178,7 @@ fn simple_user_journey_read_only() -> Result<()> {
             );
 
             // when hitting the u key while inside a sub-directory
-            app.process_events(&mut terminal, into_codes("u"))?;
+            app.process_events(&mut terminal, into_codes("u"), traversal_events)?;
             {
                 assert_eq!(
                     app.traversal.root_index,
@@ -191,7 +194,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         }
         // when hitting the u key while inside of the root directory
         // We are moving the cursor down just to have a non-default selection
-        app.process_events(&mut terminal, into_codes("ju"))?;
+        app.process_events(&mut terminal, into_codes("ju"), traversal_events)?;
         {
             assert_eq!(
                 app.traversal.root_index,
@@ -209,9 +212,9 @@ fn simple_user_journey_read_only() -> Result<()> {
     // Deletion
     {
         // when hitting the 'd' key (also move cursor back to start)
-        app.process_events(&mut terminal, into_codes("k"))?;
+        app.process_events(&mut terminal, into_codes("k"), traversal_events)?;
         let previously_selected_index = *app.state.navigation().selected.as_ref().unwrap();
-        app.process_events(&mut terminal, into_codes("d"))?;
+        app.process_events(&mut terminal, into_codes("d"), traversal_events)?;
         {
             assert_eq!(
                 Some(1),
@@ -233,7 +236,7 @@ fn simple_user_journey_read_only() -> Result<()> {
 
         // when hitting the 'd' key again
         {
-            app.process_events(&mut terminal, into_codes("d"))?;
+            app.process_events(&mut terminal, into_codes("d"), traversal_events)?;
 
             assert_eq!(
                 Some(2),
@@ -250,7 +253,7 @@ fn simple_user_journey_read_only() -> Result<()> {
 
         // when hitting the 'd' key once again
         {
-            app.process_events(&mut terminal, into_codes("d"))?;
+            app.process_events(&mut terminal, into_codes("d"), traversal_events)?;
 
             assert_eq!(
                 Some(1),
@@ -267,7 +270,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         }
         // when hitting the spacebar (after moving up to the first entry)
         {
-            app.process_events(&mut terminal, into_codes("k "))?;
+            app.process_events(&mut terminal, into_codes("k "), traversal_events)?;
 
             assert_eq!(
                 None,
@@ -286,7 +289,7 @@ fn simple_user_journey_read_only() -> Result<()> {
     // Marking
     {
         // select something
-        app.process_events(&mut terminal, into_codes(" j "))?;
+        app.process_events(&mut terminal, into_codes(" j "), traversal_events)?;
         assert_eq!(
             Some(false),
             app.window.mark_pane.as_ref().map(|p| p.has_focus()),
@@ -300,7 +303,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         );
 
         // when advancing the selection to the marker pane
-        app.process_events(&mut terminal, into_keys(Some(KeyCode::Tab)))?;
+        app.process_events(&mut terminal, into_keys(Some(KeyCode::Tab)), traversal_events)?;
         {
             assert_eq!(
                 Some(true),

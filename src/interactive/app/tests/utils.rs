@@ -1,4 +1,5 @@
 use anyhow::{Context, Error, Result};
+use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::KeyCode;
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
@@ -18,7 +19,7 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::TerminalApp};
+use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::{TerminalApp, TraversalEvent}};
 
 pub fn into_keys<'a>(
     codes: impl IntoIterator<Item = KeyCode> + 'a,
@@ -171,25 +172,25 @@ pub fn fixture_str(p: impl AsRef<Path>) -> String {
 pub fn initialized_app_and_terminal_with_closure(
     fixture_paths: &[impl AsRef<Path>],
     mut convert: impl FnMut(&Path) -> PathBuf,
-) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+) -> Result<(Terminal<TestBackend>, TerminalApp, Receiver<TraversalEvent>), Error> {
     let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
-    // let (_, keys_rx) = crossbeam::channel::unbounded();
-    // let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
-    let app = TerminalApp::initialize(&mut terminal, ByteFormat::Metric)?;
+    let walk_options = WalkOptions {
+        threads: 1,
+        apparent_size: true,
+        count_hard_links: false,
+        sorting: TraversalSorting::AlphabeticalByFileName,
+        cross_filesystems: false,
+        ignore_dirs: Default::default(),
+    };
 
-    Ok((terminal, app))
+    let mut app = TerminalApp::initialize(&mut terminal, walk_options, ByteFormat::Metric)?;
 
-    // WalkOptions {
-    //     threads: 1,
-    //     byte_format: ,
-    //     apparent_size: true,
-    //     count_hard_links: false,
-    //     sorting: TraversalSorting::AlphabeticalByFileName,
-    //     cross_filesystems: false,
-    //     ignore_dirs: Default::default(),
-    // }
+    let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
+    let traversal_rx = app.scan(input_paths)?;
+
+    Ok((terminal, app, traversal_rx))
 }
 
 pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {
@@ -198,7 +199,7 @@ pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {
 
 pub fn initialized_app_and_terminal_from_paths(
     fixture_paths: &[PathBuf],
-) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+) -> Result<(Terminal<TestBackend>, TerminalApp, Receiver<TraversalEvent>), Error> {
     fn to_path_buf(p: &Path) -> PathBuf {
         p.to_path_buf()
     }
@@ -207,7 +208,7 @@ pub fn initialized_app_and_terminal_from_paths(
 
 pub fn initialized_app_and_terminal_from_fixture(
     fixture_paths: &[&str],
-) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+) -> Result<(Terminal<TestBackend>, TerminalApp, Receiver<TraversalEvent>), Error> {
     #[allow(clippy::redundant_closure)]
     // doesn't actually work that way due to borrowchk - probably a bug
     initialized_app_and_terminal_with_closure(fixture_paths, |p| fixture(p))
