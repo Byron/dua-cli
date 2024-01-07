@@ -116,7 +116,7 @@ impl AppState {
         // }))
     }
 
-    // TODO:
+    // TODO: do we need this?
     //         default(Duration::from_millis(250)) => {
     //             // No events or new entries received, but we still need
     //             // to keep updating the status message regularly.
@@ -239,12 +239,16 @@ impl AppState {
                     }
                 }
 
-                // TODO:
-                // if throttle.can_update() && update(&mut t, None)? {
-                //     return Ok(None);
-                // }
+                if let Some(throttle) = &self.traversal_state.throttle {
+                    if throttle.can_update() {
+                        self.update_state(t);
+                    }
+                }
             },
             TraversalEvent::Finished(io_errors) => {
+                t.io_errors += io_errors;
+
+                self.traversal_state.throttle = None;
                 self.traversal_state.directory_info_per_depth_level.push(self.traversal_state.current_directory_at_depth);
                 self.traversal_state.current_directory_at_depth = EntryInfo::default();
                 for _ in 0..self.traversal_state.previous_depth {
@@ -266,9 +270,27 @@ impl AppState {
                 );
                 t.total_bytes = Some(root_size);
                 t.elapsed = Some(t.start.elapsed());
-                // Ok(Some(t))
+                
+                self.update_state(t);
             }
         }
+    }
+
+    fn update_state<'a>(&mut self, traversal: &'a Traversal) {
+        let mut received_events = false;
+        if !received_events {
+            self.navigation_mut().view_root = traversal.root_index;
+        }
+        self.entries = sorted_entries(
+            &traversal.tree,
+            self.navigation().view_root,
+            self.sorting,
+            self.glob_root(),
+        );
+        if !received_events {
+            self.navigation_mut().selected = self.entries.first().map(|b| b.index);
+        }
+        self.reset_message(); // force "scanning" to appear
     }
 
     fn process_event<B>(&mut self, 

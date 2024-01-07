@@ -125,40 +125,7 @@ impl TerminalApp {
         // let mut received_events = false;
         // let traversal =
         //     Traversal::from_walk(options, input_paths, |traversal, event| {
-        //         if !received_events {
-        //             state.navigation_mut().view_root = traversal.root_index;
-        //         }
-        //         state.entries = sorted_entries(
-        //             &traversal.tree,
-        //             state.navigation().view_root,
-        //             state.sorting,
-        //             state.glob_root(),
-        //         );
-        //         if !received_events {
-        //             state.navigation_mut().selected = state.entries.first().map(|b| b.index);
-        //         }
-        //         state.reset_message(); // force "scanning" to appear
 
-        //         let mut events = fetch_buffered_key_events(&keys_rx);
-        //         if let Some(event) = event {
-        //             // This update is triggered by a user event, insert it
-        //             // before any events fetched later.
-        //             events.insert(0, event);
-        //         }
-        //         received_events |= !events.is_empty();
-
-        //         let should_exit = match state.process_events(
-        //             &mut window,
-        //             traversal,
-        //             &mut display,
-        //             terminal,
-        //             events.into_iter(),
-        //         )? {
-        //             ProcessingResult::ExitRequested(_) => true,
-        //             ProcessingResult::Finished(_) => false,
-        //         };
-
-        //         Ok(should_exit)
         //     })?;
 
         // let traversal = match traversal {
