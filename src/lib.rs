@@ -4,7 +4,7 @@
 mod aggregate;
 mod common;
 mod crossdev;
-mod inodefilter;
+pub mod inodefilter;
 
 pub mod traverse;
 

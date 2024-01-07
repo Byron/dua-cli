@@ -1,24 +1,24 @@
-use crate::interactive::{
+use crate::{interactive::{
     app::navigation::Navigation,
     app_state::FocussedPane,
     sorted_entries,
     widgets::{glob_search, MainWindow, MainWindowProps},
     ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
     SortMode,
-};
+}, crossdev};
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal, Tree},
+    traverse::{EntryData, Traversal, Tree, size_on_disk},
     WalkOptions, WalkResult,
 };
-use std::path::PathBuf;
+use std::{path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::tree_view::TreeView;
+use super::{tree_view::TreeView, terminal_app::TraversalEvent, app_state::{EntryInfo, set_entry_info_or_panic, pop_or_panic, parent_or_panic}};
 use super::{
     app_state::{AppState, Cursor, ProcessingResult},
     input::input_channel,
@@ -74,132 +74,326 @@ impl AppState {
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        events: impl Iterator<Item = Event>,
+        walk_options: &WalkOptions,
+        events: Receiver<Event>,
+        traversal_events: Receiver<TraversalEvent>,
     ) -> Result<ProcessingResult>
+    where
+        B: Backend,
+    {
+        {
+            let tree_view = self.tree_view(traversal);
+            self.draw(window, &tree_view, *display, terminal)?;
+        }
+
+        loop {
+            crossbeam::select! {
+                recv(events) -> event => {
+                    let Ok(event) = event else {
+                        continue;
+                    };
+                    let result = self.process_event(
+                        window,
+                        traversal,
+                        display,
+                        terminal,
+                        event)?;
+                    if let Some(processing_result) = result {
+                        return Ok(processing_result);
+                    }
+                },
+                recv(traversal_events) -> event => {
+                    let Ok(event) = event else {
+                        continue;
+                    };
+                    self.process_traversal_event(traversal, walk_options, event);
+                }
+            }
+        }
+        // TODO: do we need this?
+        // Ok(ProcessingResult::Finished(WalkResult {
+        //     num_errors: traversal.io_errors,
+        // }))
+    }
+
+    // TODO:
+    //         default(Duration::from_millis(250)) => {
+    //             // No events or new entries received, but we still need
+    //             // to keep updating the status message regularly.
+    //             if update(&mut t, None)? {
+    //                 return Ok(None);
+    //             }
+    //         }
+    //     }
+    // }    
+
+    fn process_traversal_event<'a>(&mut self, t: &'a mut Traversal, walk_options: &'a WalkOptions, event: TraversalEvent) {
+        match event {
+            TraversalEvent::Entry(entry, root_path, device_id) => {
+                t.entries_traversed += 1;
+                let mut data = EntryData::default();
+                match entry {
+                    Ok(entry) => {
+                        data.name = if entry.depth < 1 {
+                            (*root_path).clone()
+                        } else {
+                            entry.file_name.into()
+                        };
+
+                        let mut file_size = 0u128;
+                        let mut mtime: SystemTime = UNIX_EPOCH;
+                        match &entry.client_state {
+                            Some(Ok(ref m)) => {
+                                if !m.is_dir()
+                                    && (walk_options.count_hard_links || self.traversal_state.inodes.add(m))
+                                    && (walk_options.cross_filesystems
+                                        || crossdev::is_same_device(device_id, m))
+                                {
+                                    if walk_options.apparent_size {
+                                        file_size = m.len() as u128;
+                                    } else {
+                                        file_size = size_on_disk(&entry.parent_path, &data.name, m)
+                                            .unwrap_or_else(|_| {
+                                                t.io_errors += 1;
+                                                data.metadata_io_error = true;
+                                                0
+                                            })
+                                            as u128;
+                                    }
+                                } else {
+                                    data.entry_count = Some(0);
+                                    data.is_dir = true;
+                                }
+
+                                match m.modified() {
+                                    Ok(modified) => {
+                                        mtime = modified;
+                                    }
+                                    Err(_) => {
+                                        t.io_errors += 1;
+                                        data.metadata_io_error = true;
+                                    }
+                                }
+                            }
+                            Some(Err(_)) => {
+                                t.io_errors += 1;
+                                data.metadata_io_error = true;
+                            }
+                            None => {}
+                        }
+
+                        match (entry.depth, self.traversal_state.previous_depth) {
+                            (n, p) if n > p => {
+                                self.traversal_state.directory_info_per_depth_level.push(self.traversal_state.current_directory_at_depth);
+                                self.traversal_state.current_directory_at_depth = EntryInfo {
+                                    size: file_size,
+                                    entries_count: Some(1),
+                                };
+                                self.traversal_state.parent_node_idx = self.traversal_state.previous_node_idx;
+                            }
+                            (n, p) if n < p => {
+                                for _ in n..p {
+                                    set_entry_info_or_panic(
+                                        &mut t.tree,
+                                        self.traversal_state.parent_node_idx,
+                                        self.traversal_state.current_directory_at_depth,
+                                    );
+                                    let dir_info =
+                                        pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
+
+                                    self.traversal_state.current_directory_at_depth.size += dir_info.size;
+                                    self.traversal_state.current_directory_at_depth.add_count(&dir_info);
+
+                                    self.traversal_state.parent_node_idx = parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
+                                }
+                                self.traversal_state.current_directory_at_depth.size += file_size;
+                                *self.traversal_state.current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                                set_entry_info_or_panic(
+                                    &mut t.tree,
+                                    self.traversal_state.parent_node_idx,
+                                    self.traversal_state.current_directory_at_depth,
+                                );
+                            }
+                            _ => {
+                                self.traversal_state.current_directory_at_depth.size += file_size;
+                                *self.traversal_state.current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                            }
+                        };
+
+                        data.mtime = mtime;
+                        data.size = file_size;
+                        let entry_index = t.tree.add_node(data);
+
+                        t.tree.add_edge(self.traversal_state.parent_node_idx, entry_index, ());
+                        self.traversal_state.previous_node_idx = entry_index;
+                        self.traversal_state.previous_depth = entry.depth;
+                    }
+                    Err(_) => {
+                        if self.traversal_state.previous_depth == 0 {
+                            data.name = (*root_path).clone();
+                            let entry_index = t.tree.add_node(data);
+                            t.tree.add_edge(self.traversal_state.parent_node_idx, entry_index, ());
+                        }
+
+                        t.io_errors += 1
+                    }
+                }
+
+                // TODO:
+                // if throttle.can_update() && update(&mut t, None)? {
+                //     return Ok(None);
+                // }
+            },
+            TraversalEvent::Finished(io_errors) => {
+                self.traversal_state.directory_info_per_depth_level.push(self.traversal_state.current_directory_at_depth);
+                self.traversal_state.current_directory_at_depth = EntryInfo::default();
+                for _ in 0..self.traversal_state.previous_depth {
+                    let dir_info = pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
+                    self.traversal_state.current_directory_at_depth.size += dir_info.size;
+                    self.traversal_state.current_directory_at_depth.add_count(&dir_info);
+
+                    set_entry_info_or_panic(&mut t.tree, self.traversal_state.parent_node_idx, self.traversal_state.current_directory_at_depth);
+                    self.traversal_state.parent_node_idx = parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
+                }
+                let root_size = t.recompute_root_size();
+                set_entry_info_or_panic(
+                    &mut t.tree,
+                    t.root_index,
+                    EntryInfo {
+                        size: root_size,
+                        entries_count: (t.entries_traversed > 0).then_some(t.entries_traversed),
+                    },
+                );
+                t.total_bytes = Some(root_size);
+                t.elapsed = Some(t.start.elapsed());
+                // Ok(Some(t))
+            }
+        }
+    }
+
+    fn process_event<B>(&mut self, 
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        event: Event
+    ) -> Result<Option<ProcessingResult>>
     where
         B: Backend,
     {
         use crosstermion::crossterm::event::KeyCode::*;
         use FocussedPane::*;
 
-        {
-            let tree_view = self.tree_view(traversal);
-            self.draw(window, &tree_view, *display, terminal)?;
+        let key = match event {
+            Event::Key(key) if key.kind != KeyEventKind::Release => key,
+            Event::Resize(_, _) => refresh_key(),
+            _ => return Ok(None),
+        };
+
+        self.reset_message();
+
+        let glob_focussed = self.focussed == Glob;
+        let mut tree_view = self.tree_view(traversal);
+        let mut handled = true;
+        match key.code {
+            Esc => {
+                if let Some(value) = self.handle_quit(&mut tree_view, window) {
+                    return Ok(Some(value?));
+                }
+            }
+            Tab => {
+                self.cycle_focus(window);
+            }
+            Char('/') if !glob_focussed => {
+                self.toggle_glob_search(window);
+            }
+            Char('?') if !glob_focussed => self.toggle_help_pane(window),
+            Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
+                return Ok(Some(ProcessingResult::ExitRequested(WalkResult {
+                    num_errors: tree_view.traversal.io_errors,
+                })))
+            }
+            Char('q') if !glob_focussed => {
+                if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                    return Ok(Some(result?));
+                }
+            }
+            _ => {
+                handled = false;
+            }
         }
 
-        for event in events {
-            let key = match event {
-                Event::Key(key) if key.kind != KeyEventKind::Release => key,
-                Event::Resize(_, _) => refresh_key(),
-                _ => continue,
+        if !handled {
+            match self.focussed {
+                Mark => {
+                    self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal)
+                }
+                Help => {
+                    window
+                        .help_pane
+                        .as_mut()
+                        .expect("help pane")
+                        .process_events(key);
+                }
+                Glob => {
+                    let glob_pane = window.glob_pane.as_mut().expect("glob pane");
+                    match key.code {
+                        Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
+                        _ => glob_pane.process_events(key),
+                    }
+                }
+                Main => match key.code {
+                    Char('O') => self.open_that(&tree_view),
+                    Char(' ') => self.mark_entry(
+                        CursorMode::KeepPosition,
+                        MarkEntryMode::Toggle,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('x') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::MarkForDeletion,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('a') => {
+                        self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
+                    }
+                    Char('o') | Char('l') | Enter | Right => {
+                        self.enter_node_with_traversal(&tree_view)
+                    }
+                    Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
+                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
+                    PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.change_entry_selection(CursorDirection::PageUp)
+                    }
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                    PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.change_entry_selection(CursorDirection::PageDown)
+                    }
+                    Char('s') => self.cycle_sorting(&tree_view),
+                    Char('m') => self.cycle_mtime_sorting(&tree_view),
+                    Char('c') => self.cycle_count_sorting(&tree_view),
+                    Char('g') => display.byte_vis.cycle(),
+                    Char('d') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::Toggle,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('u') | Char('h') | Backspace | Left => {
+                        self.exit_node_with_traversal(&tree_view)
+                    }
+                    _ => {}
+                },
             };
-
-            self.reset_message();
-
-            let glob_focussed = self.focussed == Glob;
-            let mut tree_view = self.tree_view(traversal);
-            let mut handled = true;
-            match key.code {
-                Esc => {
-                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
-                        return value;
-                    }
-                }
-                Tab => {
-                    self.cycle_focus(window);
-                }
-                Char('/') if !glob_focussed => {
-                    self.toggle_glob_search(window);
-                }
-                Char('?') if !glob_focussed => self.toggle_help_pane(window),
-                Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
-                    return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: tree_view.traversal.io_errors,
-                    }))
-                }
-                Char('q') if !glob_focussed => {
-                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
-                        return value;
-                    }
-                }
-                _ => {
-                    handled = false;
-                }
-            }
-
-            if !handled {
-                match self.focussed {
-                    Mark => {
-                        self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal)
-                    }
-                    Help => {
-                        window
-                            .help_pane
-                            .as_mut()
-                            .expect("help pane")
-                            .process_events(key);
-                    }
-                    Glob => {
-                        let glob_pane = window.glob_pane.as_mut().expect("glob pane");
-                        match key.code {
-                            Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
-                            _ => glob_pane.process_events(key),
-                        }
-                    }
-                    Main => match key.code {
-                        Char('O') => self.open_that(&tree_view),
-                        Char(' ') => self.mark_entry(
-                            CursorMode::KeepPosition,
-                            MarkEntryMode::Toggle,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('x') => self.mark_entry(
-                            CursorMode::Advance,
-                            MarkEntryMode::MarkForDeletion,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('a') => {
-                            self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
-                        }
-                        Char('o') | Char('l') | Enter | Right => {
-                            self.enter_node_with_traversal(&tree_view)
-                        }
-                        Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
-                        Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
-                        PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                        Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.change_entry_selection(CursorDirection::PageUp)
-                        }
-                        Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                        Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                        PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                        Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.change_entry_selection(CursorDirection::PageDown)
-                        }
-                        Char('s') => self.cycle_sorting(&tree_view),
-                        Char('m') => self.cycle_mtime_sorting(&tree_view),
-                        Char('c') => self.cycle_count_sorting(&tree_view),
-                        Char('g') => display.byte_vis.cycle(),
-                        Char('d') => self.mark_entry(
-                            CursorMode::Advance,
-                            MarkEntryMode::Toggle,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('u') | Char('h') | Backspace | Left => {
-                            self.exit_node_with_traversal(&tree_view)
-                        }
-                        _ => {}
-                    },
-                };
-            }
-            self.draw(window, &tree_view, *display, terminal)?;
         }
-        Ok(ProcessingResult::Finished(WalkResult {
-            num_errors: traversal.io_errors,
-        }))
+        self.draw(window, &tree_view, *display, terminal)?;
+
+        Ok(None)
     }
 
     fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {

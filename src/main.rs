@@ -44,7 +44,7 @@ fn main() -> Result<()> {
     }
 
     let byte_format: dua::ByteFormat = opt.format.into();
-    let walk_options = dua::WalkOptions {
+    let mut walk_options = dua::WalkOptions {
         threads: opt.threads,
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
@@ -52,6 +52,13 @@ fn main() -> Result<()> {
         cross_filesystems: !opt.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
     };
+    
+    if walk_options.threads == 0 {
+        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
+        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
+        walk_options.threads = num_cpus::get();
+    }
+
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { input }) => {
@@ -68,13 +75,12 @@ fn main() -> Result<()> {
             )
             .with_context(|| "Could not instantiate terminal")?;
 
-            // TODO: use
-            // extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
-
             let keys_rx = input_channel();
-            let mut app = TerminalApp::initialize(&mut terminal, byte_format)?;
+            let mut app = TerminalApp::initialize(&mut terminal, walk_options, byte_format)?;
 
-            let res = app.process_events(&mut terminal, keys_rx.into_iter());
+            let traversal_rx = app.scan(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
+            
+            let res = app.process_events(&mut terminal, keys_rx, traversal_rx);
 
             let res = res.map(|r| {
                 (

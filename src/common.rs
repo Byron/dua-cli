@@ -176,7 +176,7 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+    pub fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
         let ignore_dirs = self.ignore_dirs.clone();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)
