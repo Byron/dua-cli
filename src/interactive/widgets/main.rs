@@ -3,7 +3,7 @@ use crate::interactive::{
         Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header, HelpPane,
         HelpPaneProps, MarkPane, MarkPaneProps, COLOR_MARKED,
     },
-    AppState, Cursor, DisplayOptions, FocussedPane,
+    DisplayOptions, app_state::{AppState, FocussedPane, Cursor},
 };
 use std::borrow::Borrow;
 use tui::backend::Backend;

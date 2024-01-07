@@ -3,7 +3,7 @@ use crate::interactive::{
     sorted_entries,
     widgets::{glob_search, MainWindow, MainWindowProps},
     ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
-    SortMode,
+    SortMode, app_state::FocussedPane,
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
@@ -17,40 +17,8 @@ use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::input::input_channel;
+use super::{input::input_channel, app_state::{AppState, Cursor, ProcessingResult}};
 use super::tree_view::TreeView;
-
-#[derive(Default, Copy, Clone, PartialEq)]
-pub enum FocussedPane {
-    #[default]
-    Main,
-    Help,
-    Mark,
-    Glob,
-}
-
-#[derive(Default)]
-pub struct Cursor {
-    pub show: bool,
-    pub x: u16,
-    pub y: u16,
-}
-
-#[derive(Default)]
-pub struct AppState {
-    pub navigation: Navigation,
-    pub glob_navigation: Option<Navigation>,
-    pub entries: Vec<EntryDataBundle>,
-    pub sorting: SortMode,
-    pub message: Option<String>,
-    pub focussed: FocussedPane,
-    pub is_scanning: bool,
-}
-
-pub enum ProcessingResult {
-    Finished(WalkResult),
-    ExitRequested(WalkResult),
-}
 
 impl AppState {
     pub fn navigation_mut(&mut self) -> &mut Navigation {

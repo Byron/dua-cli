@@ -18,7 +18,7 @@ use tui_react::{draw_text_nowrap_fn, Terminal};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::interactive::Cursor;
+use crate::interactive::app_state::Cursor;
 
 pub struct GlobPaneProps {
     pub border_style: Style,

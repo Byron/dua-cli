@@ -1,14 +1,15 @@
 use crate::interactive::{
     app::tree_view::TreeView,
-    app::FocussedPane::*,
     widgets::{GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
-    AppState, DisplayOptions, EntryDataBundle,
+    DisplayOptions, EntryDataBundle,
 };
 use crosstermion::input::Key;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
+
+use super::app_state::{AppState, FocussedPane::*};
 
 #[derive(Copy, Clone)]
 pub enum CursorMode {

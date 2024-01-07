@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::interactive::widgets::MainWindow;
 
-use super::{DisplayOptions, AppState, ProcessingResult, ByteVisualization, sorted_entries, refresh_key};
+use super::{DisplayOptions, ByteVisualization, sorted_entries, refresh_key, app_state::{ProcessingResult, AppState}};
 
 
 /// State and methods representing the interactive disk usage analyser for the terminal
