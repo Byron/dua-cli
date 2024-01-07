@@ -8,6 +8,7 @@ use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
 use crate::interactive::input::input_channel;
+use crate::interactive::terminal_app::TerminalApp;
 
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
@@ -53,7 +54,6 @@ fn main() -> Result<()> {
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { input }) => {
-            use crate::interactive::{TerminalApp};
             use anyhow::{anyhow, Context};
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
