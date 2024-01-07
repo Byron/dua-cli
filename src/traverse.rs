@@ -76,7 +76,6 @@ impl Traversal {
     //     input: Vec<PathBuf>,
     //     mut update: impl FnMut(&mut Traversal, Option<T>) -> Result<bool>,
     // ) -> Result<Option<Traversal>> {
-        
 
     //     let mut t = {
     //         let mut tree = Tree::new();

@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use dua::{WalkResult, traverse::{TreeIndex, Tree}, inodefilter::InodeFilter, Throttle};
+use dua::{
+    inodefilter::InodeFilter,
+    traverse::{Tree, TreeIndex},
+    Throttle, WalkResult,
+};
 use petgraph::Direction;
 
 use super::{navigation::Navigation, EntryDataBundle, SortMode};
@@ -33,7 +37,6 @@ pub struct AppState {
     pub traversal_state: TraversalState,
 }
 
-
 #[derive(Default)]
 pub struct TraversalState {
     pub previous_node_idx: TreeIndex,
@@ -42,7 +45,7 @@ pub struct TraversalState {
     pub current_directory_at_depth: EntryInfo,
     pub previous_depth: usize,
     pub inodes: InodeFilter,
-    pub throttle: Option<Throttle>
+    pub throttle: Option<Throttle>,
 }
 
 impl TraversalState {

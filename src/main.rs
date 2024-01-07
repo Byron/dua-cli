@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         cross_filesystems: !opt.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
     };
-    
+
     if walk_options.threads == 0 {
         // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
         // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
@@ -78,8 +78,9 @@ fn main() -> Result<()> {
             let keys_rx = input_channel();
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, byte_format)?;
 
-            let traversal_rx = app.scan(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
-            
+            let traversal_rx =
+                app.scan(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
+
             let res = app.process_events(&mut terminal, keys_rx, traversal_rx);
 
             let res = res.map(|r| {

@@ -10,7 +10,7 @@ use dua::{
 use tui::prelude::Backend;
 use tui_react::Terminal;
 
-use crate::{interactive::widgets::MainWindow, crossdev};
+use crate::{crossdev, interactive::widgets::MainWindow};
 
 use super::{
     app_state::{AppState, ProcessingResult, TraversalState},
@@ -26,7 +26,8 @@ pub struct TerminalApp {
     pub walk_options: WalkOptions,
 }
 
-pub type TraversalEntry = Result<jwalk::DirEntry<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>, jwalk::Error>;
+pub type TraversalEntry =
+    Result<jwalk::DirEntry<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>, jwalk::Error>;
 
 pub enum TraversalEvent {
     Entry(TraversalEntry, Arc<PathBuf>, u64),
@@ -34,7 +35,11 @@ pub enum TraversalEvent {
 }
 
 impl TerminalApp {
-    pub fn initialize<B>(terminal: &mut Terminal<B>, walk_options: WalkOptions, byte_format: ByteFormat) -> Result<TerminalApp>
+    pub fn initialize<B>(
+        terminal: &mut Terminal<B>,
+        walk_options: WalkOptions,
+        byte_format: ByteFormat,
+    ) -> Result<TerminalApp>
     where
         B: Backend,
     {
@@ -107,7 +112,11 @@ impl TerminalApp {
                             .into_iter()
                         {
                             if entry_tx
-                                .send(TraversalEvent::Entry(entry, Arc::clone(&root_path), device_id))
+                                .send(TraversalEvent::Entry(
+                                    entry,
+                                    Arc::clone(&root_path),
+                                    device_id,
+                                ))
                                 .is_err()
                             {
                                 // The channel is closed, this means the user has

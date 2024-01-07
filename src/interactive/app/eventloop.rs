@@ -1,24 +1,34 @@
-use crate::{interactive::{
-    app::navigation::Navigation,
-    app_state::FocussedPane,
-    sorted_entries,
-    widgets::{glob_search, MainWindow, MainWindowProps},
-    ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
-    SortMode,
-}, crossdev};
+use crate::{
+    crossdev,
+    interactive::{
+        app::navigation::Navigation,
+        app_state::FocussedPane,
+        sorted_entries,
+        widgets::{glob_search, MainWindow, MainWindowProps},
+        ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle,
+        MarkEntryMode, SortMode,
+    },
+};
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal, Tree, size_on_disk},
+    traverse::{size_on_disk, EntryData, Traversal, Tree},
     WalkOptions, WalkResult,
 };
-use std::{path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::{tree_view::TreeView, terminal_app::TraversalEvent, app_state::{EntryInfo, set_entry_info_or_panic, pop_or_panic, parent_or_panic}};
+use super::{
+    app_state::{parent_or_panic, pop_or_panic, set_entry_info_or_panic, EntryInfo},
+    terminal_app::TraversalEvent,
+    tree_view::TreeView,
+};
 use super::{
     app_state::{AppState, Cursor, ProcessingResult},
     input::input_channel,
@@ -125,9 +135,14 @@ impl AppState {
     //             }
     //         }
     //     }
-    // }    
+    // }
 
-    fn process_traversal_event<'a>(&mut self, t: &'a mut Traversal, walk_options: &'a WalkOptions, event: TraversalEvent) {
+    fn process_traversal_event<'a>(
+        &mut self,
+        t: &'a mut Traversal,
+        walk_options: &'a WalkOptions,
+        event: TraversalEvent,
+    ) {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id) => {
                 t.entries_traversed += 1;
@@ -145,7 +160,8 @@ impl AppState {
                         match &entry.client_state {
                             Some(Ok(ref m)) => {
                                 if !m.is_dir()
-                                    && (walk_options.count_hard_links || self.traversal_state.inodes.add(m))
+                                    && (walk_options.count_hard_links
+                                        || self.traversal_state.inodes.add(m))
                                     && (walk_options.cross_filesystems
                                         || crossdev::is_same_device(device_id, m))
                                 {
@@ -184,12 +200,15 @@ impl AppState {
 
                         match (entry.depth, self.traversal_state.previous_depth) {
                             (n, p) if n > p => {
-                                self.traversal_state.directory_info_per_depth_level.push(self.traversal_state.current_directory_at_depth);
+                                self.traversal_state
+                                    .directory_info_per_depth_level
+                                    .push(self.traversal_state.current_directory_at_depth);
                                 self.traversal_state.current_directory_at_depth = EntryInfo {
                                     size: file_size,
                                     entries_count: Some(1),
                                 };
-                                self.traversal_state.parent_node_idx = self.traversal_state.previous_node_idx;
+                                self.traversal_state.parent_node_idx =
+                                    self.traversal_state.previous_node_idx;
                             }
                             (n, p) if n < p => {
                                 for _ in n..p {
@@ -198,16 +217,27 @@ impl AppState {
                                         self.traversal_state.parent_node_idx,
                                         self.traversal_state.current_directory_at_depth,
                                     );
-                                    let dir_info =
-                                        pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
+                                    let dir_info = pop_or_panic(
+                                        &mut self.traversal_state.directory_info_per_depth_level,
+                                    );
 
-                                    self.traversal_state.current_directory_at_depth.size += dir_info.size;
-                                    self.traversal_state.current_directory_at_depth.add_count(&dir_info);
+                                    self.traversal_state.current_directory_at_depth.size +=
+                                        dir_info.size;
+                                    self.traversal_state
+                                        .current_directory_at_depth
+                                        .add_count(&dir_info);
 
-                                    self.traversal_state.parent_node_idx = parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
+                                    self.traversal_state.parent_node_idx = parent_or_panic(
+                                        &mut t.tree,
+                                        self.traversal_state.parent_node_idx,
+                                    );
                                 }
                                 self.traversal_state.current_directory_at_depth.size += file_size;
-                                *self.traversal_state.current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                                *self
+                                    .traversal_state
+                                    .current_directory_at_depth
+                                    .entries_count
+                                    .get_or_insert(0) += 1;
                                 set_entry_info_or_panic(
                                     &mut t.tree,
                                     self.traversal_state.parent_node_idx,
@@ -216,7 +246,11 @@ impl AppState {
                             }
                             _ => {
                                 self.traversal_state.current_directory_at_depth.size += file_size;
-                                *self.traversal_state.current_directory_at_depth.entries_count.get_or_insert(0) += 1;
+                                *self
+                                    .traversal_state
+                                    .current_directory_at_depth
+                                    .entries_count
+                                    .get_or_insert(0) += 1;
                             }
                         };
 
@@ -224,7 +258,8 @@ impl AppState {
                         data.size = file_size;
                         let entry_index = t.tree.add_node(data);
 
-                        t.tree.add_edge(self.traversal_state.parent_node_idx, entry_index, ());
+                        t.tree
+                            .add_edge(self.traversal_state.parent_node_idx, entry_index, ());
                         self.traversal_state.previous_node_idx = entry_index;
                         self.traversal_state.previous_depth = entry.depth;
                     }
@@ -232,7 +267,8 @@ impl AppState {
                         if self.traversal_state.previous_depth == 0 {
                             data.name = (*root_path).clone();
                             let entry_index = t.tree.add_node(data);
-                            t.tree.add_edge(self.traversal_state.parent_node_idx, entry_index, ());
+                            t.tree
+                                .add_edge(self.traversal_state.parent_node_idx, entry_index, ());
                         }
 
                         t.io_errors += 1
@@ -244,20 +280,30 @@ impl AppState {
                         self.update_state(t);
                     }
                 }
-            },
+            }
             TraversalEvent::Finished(io_errors) => {
                 t.io_errors += io_errors;
 
                 self.traversal_state.throttle = None;
-                self.traversal_state.directory_info_per_depth_level.push(self.traversal_state.current_directory_at_depth);
+                self.traversal_state
+                    .directory_info_per_depth_level
+                    .push(self.traversal_state.current_directory_at_depth);
                 self.traversal_state.current_directory_at_depth = EntryInfo::default();
                 for _ in 0..self.traversal_state.previous_depth {
-                    let dir_info = pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
+                    let dir_info =
+                        pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
                     self.traversal_state.current_directory_at_depth.size += dir_info.size;
-                    self.traversal_state.current_directory_at_depth.add_count(&dir_info);
+                    self.traversal_state
+                        .current_directory_at_depth
+                        .add_count(&dir_info);
 
-                    set_entry_info_or_panic(&mut t.tree, self.traversal_state.parent_node_idx, self.traversal_state.current_directory_at_depth);
-                    self.traversal_state.parent_node_idx = parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
+                    set_entry_info_or_panic(
+                        &mut t.tree,
+                        self.traversal_state.parent_node_idx,
+                        self.traversal_state.current_directory_at_depth,
+                    );
+                    self.traversal_state.parent_node_idx =
+                        parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
                 }
                 let root_size = t.recompute_root_size();
                 set_entry_info_or_panic(
@@ -270,7 +316,7 @@ impl AppState {
                 );
                 t.total_bytes = Some(root_size);
                 t.elapsed = Some(t.start.elapsed());
-                
+
                 self.update_state(t);
             }
         }
@@ -293,12 +339,13 @@ impl AppState {
         self.reset_message(); // force "scanning" to appear
     }
 
-    fn process_event<B>(&mut self, 
+    fn process_event<B>(
+        &mut self,
         window: &mut MainWindow,
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        event: Event
+        event: Event,
     ) -> Result<Option<ProcessingResult>>
     where
         B: Backend,
@@ -347,9 +394,7 @@ impl AppState {
 
         if !handled {
             match self.focussed {
-                Mark => {
-                    self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal)
-                }
+                Mark => self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal),
                 Help => {
                     window
                         .help_pane
@@ -378,9 +423,7 @@ impl AppState {
                         window,
                         &tree_view,
                     ),
-                    Char('a') => {
-                        self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
-                    }
+                    Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
