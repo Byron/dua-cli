@@ -1,4 +1,4 @@
-use crate::{crossdev, InodeFilter, Throttle, WalkOptions, WalkResult};
+use crate::{crossdev, InodeFilter, Throttle, WalkOptions, WalkResult, ByteFormat};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
@@ -14,6 +14,7 @@ pub fn aggregate(
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
@@ -94,6 +95,7 @@ pub fn aggregate(
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
+                byte_format
             )?;
         }
         total += num_bytes;
@@ -114,6 +116,7 @@ pub fn aggregate(
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
+                byte_format
             )?;
         }
     }
@@ -126,6 +129,7 @@ pub fn aggregate(
             total,
             res.num_errors,
             None,
+            byte_format
         )?;
     }
     Ok((res, stats))
@@ -142,10 +146,11 @@ fn output_colored_path(
     num_bytes: u128,
     num_errors: u64,
     path_color: Option<Color>,
+    byte_format: ByteFormat,
 ) -> std::result::Result<(), io::Error> {
-    let size = options.byte_format.display(num_bytes).to_string();
+    let size = byte_format.display(num_bytes).to_string();
     let size = size.green();
-    let size_width = options.byte_format.width();
+    let size_width = byte_format.width();
     let path = path.as_ref().display();
 
     let errors = (num_errors != 0)

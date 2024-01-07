@@ -9,6 +9,7 @@ use std::{fs, io, io::Write, path::PathBuf, process};
 
 use crate::interactive::input::input_channel;
 use crate::interactive::terminal_app::TerminalApp;
+use crate::options::ByteFormat;
 
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
@@ -42,9 +43,9 @@ fn main() -> Result<()> {
         info!("dua options={opt:#?}");
     }
 
+    let byte_format: dua::ByteFormat = opt.format.into();
     let walk_options = dua::WalkOptions {
         threads: opt.threads,
-        byte_format: opt.format.into(),
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
@@ -70,7 +71,7 @@ fn main() -> Result<()> {
             let keys_rx = input_channel();
             let res = TerminalApp::initialize(
                 &mut terminal,
-                walk_options,
+                byte_format,
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
                 keys_rx,
             )?
@@ -123,6 +124,7 @@ fn main() -> Result<()> {
                 walk_options,
                 !no_total,
                 !no_sort,
+                byte_format,
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
             )?;
             if statistics {
@@ -139,6 +141,7 @@ fn main() -> Result<()> {
                 walk_options,
                 true,
                 true,
+                byte_format,
                 extract_paths_maybe_set_cwd(opt.input, !opt.stay_on_filesystem)?,
             )?
             .0

@@ -179,15 +179,7 @@ pub fn initialized_app_and_terminal_with_closure(
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
     let app = TerminalApp::initialize(
         &mut terminal,
-        WalkOptions {
-            threads: 1,
-            byte_format: ByteFormat::Metric,
-            apparent_size: true,
-            count_hard_links: false,
-            sorting: TraversalSorting::AlphabeticalByFileName,
-            cross_filesystems: false,
-            ignore_dirs: Default::default(),
-        },
+        ByteFormat::Metric,
         input_paths,
         keys_rx,
     )?
@@ -196,6 +188,16 @@ pub fn initialized_app_and_terminal_with_closure(
         terminal,
         app.expect("app that didn't try to abort iteration"),
     ))
+
+    // WalkOptions {
+    //     threads: 1,
+    //     byte_format: ,
+    //     apparent_size: true,
+    //     count_hard_links: false,
+    //     sorting: TraversalSorting::AlphabeticalByFileName,
+    //     cross_filesystems: false,
+    //     ignore_dirs: Default::default(),
+    // }
 }
 
 pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {

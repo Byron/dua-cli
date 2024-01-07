@@ -166,7 +166,6 @@ pub struct WalkOptions {
     /// The amount of threads to use. Refer to [`WalkDir::num_threads()`](https://docs.rs/jwalk/0.4.0/jwalk/struct.WalkDir.html#method.num_threads)
     /// for more information.
     pub threads: usize,
-    pub byte_format: ByteFormat,
     pub count_hard_links: bool,
     pub apparent_size: bool,
     pub sorting: TraversalSorting,

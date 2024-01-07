@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
-use dua::{traverse::{Traversal, Tree, EntryData}, WalkResult, WalkOptions};
+use dua::{traverse::{Traversal, Tree, EntryData}, WalkResult, WalkOptions, ByteFormat};
 use tui::prelude::Backend;
 use tui_react::Terminal;
 use anyhow::Result;
@@ -60,7 +60,7 @@ impl TerminalApp {
 
     pub fn initialize<B>(
         terminal: &mut Terminal<B>,
-        options: WalkOptions,
+        byte_format: ByteFormat,
         input_paths: Vec<PathBuf>,
         keys_rx: Receiver<Event>,
     ) -> Result<Option<KeyboardInputAndApp>>
@@ -70,9 +70,7 @@ impl TerminalApp {
         terminal.hide_cursor()?;
         terminal.clear()?;
         
-        let mut display: DisplayOptions = options.clone().into();
-        display.byte_vis = ByteVisualization::PercentageAndBar;
-        
+        let mut display = DisplayOptions::new(byte_format);
         let mut window = MainWindow::default();
 
         // #[inline]
