@@ -1,4 +1,4 @@
-use dua::{ByteFormat, WalkOptions};
+use dua::{ByteFormat};
 use std::fmt;
 
 #[derive(Default, Clone, Copy)]

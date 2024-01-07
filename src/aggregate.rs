@@ -90,7 +90,6 @@ pub fn aggregate(
         } else {
             output_colored_path(
                 &mut out,
-                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
@@ -111,7 +110,6 @@ pub fn aggregate(
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
             output_colored_path(
                 &mut out,
-                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
@@ -124,7 +122,6 @@ pub fn aggregate(
     if num_roots > 1 && compute_total {
         output_colored_path(
             &mut out,
-            &walk_options,
             Path::new("total"),
             total,
             res.num_errors,
@@ -141,7 +138,6 @@ fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
 
 fn output_colored_path(
     out: &mut impl io::Write,
-    options: &WalkOptions,
     path: impl AsRef<Path>,
     num_bytes: u128,
     num_errors: u64,

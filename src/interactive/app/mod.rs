@@ -10,7 +10,6 @@ pub mod tree_view;
 
 pub use bytevis::*;
 pub use common::*;
-pub use eventloop::*;
 pub use handlers::*;
 
 #[cfg(test)]

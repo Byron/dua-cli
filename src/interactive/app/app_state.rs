@@ -107,6 +107,5 @@ pub fn pop_or_panic(v: &mut Vec<EntryInfo>) -> EntryInfo {
 }
 
 pub enum ProcessingResult {
-    Finished(WalkResult),
     ExitRequested(WalkResult),
 }

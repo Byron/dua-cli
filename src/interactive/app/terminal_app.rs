@@ -13,8 +13,7 @@ use tui_react::Terminal;
 use crate::{crossdev, interactive::widgets::MainWindow};
 
 use super::{
-    app_state::{AppState, ProcessingResult, TraversalState},
-    refresh_key, sorted_entries, ByteVisualization, DisplayOptions,
+    app_state::{AppState, ProcessingResult, TraversalState}, sorted_entries, DisplayOptions,
 };
 
 /// State and methods representing the interactive disk usage analyser for the terminal
@@ -77,7 +76,7 @@ impl TerminalApp {
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 
-        let mut app = TerminalApp {
+        let app = TerminalApp {
             state,
             display,
             traversal,
@@ -87,7 +86,7 @@ impl TerminalApp {
         Ok(app)
     }
 
-    pub fn scan<'a>(&mut self, input: Vec<PathBuf>) -> Result<Receiver<TraversalEvent>> {
+    pub fn scan(&mut self, input: Vec<PathBuf>) -> Result<Receiver<TraversalEvent>> {
         self.state.traversal_state = TraversalState::new(self.traversal.root_index);
         self.state.is_scanning = true;
 
@@ -153,7 +152,7 @@ impl TerminalApp {
             events,
             traversal,
         )? {
-            ProcessingResult::Finished(res) | ProcessingResult::ExitRequested(res) => Ok(res),
+            ProcessingResult::ExitRequested(res) => Ok(res),
         }
     }
 }

@@ -9,7 +9,7 @@ use std::{fs, io, io::Write, path::PathBuf, process};
 
 use crate::interactive::input::input_channel;
 use crate::interactive::terminal_app::TerminalApp;
-use crate::options::ByteFormat;
+
 
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]

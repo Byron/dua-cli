@@ -1,5 +1,5 @@
-use crate::{crossdev, get_size_or_panic, InodeFilter, Throttle, WalkOptions};
-use anyhow::Result;
+use crate::{get_size_or_panic};
+
 use filesize::PathExt;
 use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
 use std::{
@@ -7,8 +7,7 @@ use std::{
     fs::Metadata,
     io,
     path::{Path, PathBuf},
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub type TreeIndex = NodeIndex;

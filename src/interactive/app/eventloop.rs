@@ -4,9 +4,8 @@ use crate::{
         app::navigation::Navigation,
         app_state::FocussedPane,
         sorted_entries,
-        widgets::{glob_search, MainWindow, MainWindowProps},
-        ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle,
-        MarkEntryMode, SortMode,
+        widgets::{glob_search, MainWindow, MainWindowProps}, CursorDirection, CursorMode, DisplayOptions,
+        MarkEntryMode,
     },
 };
 use anyhow::Result;
@@ -14,11 +13,10 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{size_on_disk, EntryData, Traversal, Tree},
+    traverse::{size_on_disk, EntryData, Traversal},
     WalkOptions, WalkResult,
 };
 use std::{
-    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tui::backend::Backend;
@@ -31,7 +29,6 @@ use super::{
 };
 use super::{
     app_state::{AppState, Cursor, ProcessingResult},
-    input::input_channel,
 };
 
 impl AppState {
@@ -318,10 +315,10 @@ impl AppState {
                 return true;
             }
         }
-        return false;
+        false
     }
 
-    fn update_state<'a>(&mut self, traversal: &'a Traversal) {
+    fn update_state(&mut self, traversal: &Traversal) {
         let received_events = self.traversal_state.received_event;
         if !received_events {
             self.navigation_mut().view_root = traversal.root_index;
