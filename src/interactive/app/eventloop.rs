@@ -131,22 +131,7 @@ impl AppState {
                 }
             }
         }
-        // TODO: do we need this?
-        // Ok(ProcessingResult::Finished(WalkResult {
-        //     num_errors: traversal.io_errors,
-        // }))
     }
-
-    // TODO: do we need this?
-    //         default(Duration::from_millis(250)) => {
-    //             // No events or new entries received, but we still need
-    //             // to keep updating the status message regularly.
-    //             if update(&mut t, None)? {
-    //                 return Ok(None);
-    //             }
-    //         }
-    //     }
-    // }
 
     fn process_traversal_event<'a>(
         &mut self,
