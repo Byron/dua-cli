@@ -175,19 +175,11 @@ pub fn initialized_app_and_terminal_with_closure(
     let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
-    let (_, keys_rx) = crossbeam::channel::unbounded();
-    let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
-    let app = TerminalApp::initialize(
-        &mut terminal,
-        ByteFormat::Metric,
-        input_paths,
-        keys_rx,
-    )?
-    .map(|(_, app)| app);
-    Ok((
-        terminal,
-        app.expect("app that didn't try to abort iteration"),
-    ))
+    // let (_, keys_rx) = crossbeam::channel::unbounded();
+    // let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
+    let app = TerminalApp::initialize(&mut terminal, ByteFormat::Metric)?;
+
+    Ok((terminal, app))
 
     // WalkOptions {
     //     threads: 1,

@@ -1,9 +1,10 @@
 use crate::interactive::{
+    app_state::{AppState, Cursor, FocussedPane},
     widgets::{
         Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header, HelpPane,
         HelpPaneProps, MarkPane, MarkPaneProps, COLOR_MARKED,
     },
-    DisplayOptions, app_state::{AppState, FocussedPane, Cursor},
+    DisplayOptions,
 };
 use std::borrow::Borrow;
 use tui::backend::Backend;

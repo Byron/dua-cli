@@ -1,16 +1,21 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
-use dua::{traverse::{Traversal, Tree, EntryData}, WalkResult, WalkOptions, ByteFormat};
+use dua::{
+    traverse::{EntryData, Traversal, Tree},
+    ByteFormat, WalkOptions, WalkResult,
+};
 use tui::prelude::Backend;
 use tui_react::Terminal;
-use anyhow::Result;
 
 use crate::interactive::widgets::MainWindow;
 
-use super::{DisplayOptions, ByteVisualization, sorted_entries, refresh_key, app_state::{ProcessingResult, AppState}};
-
+use super::{
+    app_state::{AppState, ProcessingResult},
+    refresh_key, sorted_entries, ByteVisualization, DisplayOptions,
+};
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
@@ -58,18 +63,13 @@ impl TerminalApp {
         }
     }
 
-    pub fn initialize<B>(
-        terminal: &mut Terminal<B>,
-        byte_format: ByteFormat,
-        input_paths: Vec<PathBuf>,
-        keys_rx: Receiver<Event>,
-    ) -> Result<Option<KeyboardInputAndApp>>
+    pub fn initialize<B>(terminal: &mut Terminal<B>, byte_format: ByteFormat) -> Result<TerminalApp>
     where
         B: Backend,
     {
         terminal.hide_cursor()?;
         terminal.clear()?;
-        
+
         let mut display = DisplayOptions::new(byte_format);
         let mut window = MainWindow::default();
 
@@ -133,7 +133,7 @@ impl TerminalApp {
 
         // state.is_scanning = false;
         // if !received_events {
-            // }
+        // }
 
         let traversal = {
             let mut tree = Tree::new();
@@ -166,6 +166,6 @@ impl TerminalApp {
         };
         app.refresh_view(terminal);
 
-        Ok(Some((keys_rx, app)))
+        Ok(app)
     }
 }

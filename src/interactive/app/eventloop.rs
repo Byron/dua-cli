@@ -1,9 +1,10 @@
 use crate::interactive::{
     app::navigation::Navigation,
+    app_state::FocussedPane,
     sorted_entries,
     widgets::{glob_search, MainWindow, MainWindowProps},
     ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
-    SortMode, app_state::FocussedPane,
+    SortMode,
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
@@ -17,8 +18,11 @@ use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::{input::input_channel, app_state::{AppState, Cursor, ProcessingResult}};
 use super::tree_view::TreeView;
+use super::{
+    app_state::{AppState, Cursor, ProcessingResult},
+    input::input_channel,
+};
 
 impl AppState {
     pub fn navigation_mut(&mut self) -> &mut Navigation {

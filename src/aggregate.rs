@@ -1,4 +1,4 @@
-use crate::{crossdev, InodeFilter, Throttle, WalkOptions, WalkResult, ByteFormat};
+use crate::{crossdev, ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
@@ -95,7 +95,7 @@ pub fn aggregate(
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
-                byte_format
+                byte_format,
             )?;
         }
         total += num_bytes;
@@ -116,7 +116,7 @@ pub fn aggregate(
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
-                byte_format
+                byte_format,
             )?;
         }
     }
@@ -129,7 +129,7 @@ pub fn aggregate(
             total,
             res.num_errors,
             None,
-            byte_format
+            byte_format,
         )?;
     }
     Ok((res, stats))

@@ -68,46 +68,41 @@ fn main() -> Result<()> {
             )
             .with_context(|| "Could not instantiate terminal")?;
 
-            let keys_rx = input_channel();
-            let res = TerminalApp::initialize(
-                &mut terminal,
-                byte_format,
-                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
-                keys_rx,
-            )?
-            .map(|(keys_rx, mut app)| {
-                let res = app.process_events(&mut terminal, keys_rx.into_iter());
+            // TODO: use
+            // extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
 
-                let res = res.map(|r| {
-                    (
-                        r,
-                        app.window
-                            .mark_pane
-                            .take()
-                            .map(|marked| marked.into_paths()),
-                    )
-                });
-                // Leak app memory to avoid having to wait for the hashmap to deallocate,
-                // which causes a noticeable delay shortly before the the program exits anyway.
-                std::mem::forget(app);
-                res
+            let keys_rx = input_channel();
+            let mut app = TerminalApp::initialize(&mut terminal, byte_format)?;
+
+            let res = app.process_events(&mut terminal, keys_rx.into_iter());
+
+            let res = res.map(|r| {
+                (
+                    r,
+                    app.window
+                        .mark_pane
+                        .take()
+                        .map(|marked| marked.into_paths()),
+                )
             });
+            // Leak app memory to avoid having to wait for the hashmap to deallocate,
+            // which causes a noticeable delay shortly before the the program exits anyway.
+            std::mem::forget(app);
 
             drop(terminal);
             io::stderr().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(
-                res.transpose()?
-                    .map(|(walk_result, paths)| {
-                        if let Some(paths) = paths {
-                            for path in paths {
-                                println!("{}", path.display())
-                            }
+                res.map(|(walk_result, paths)| {
+                    if let Some(paths) = paths {
+                        for path in paths {
+                            println!("{}", path.display())
                         }
-                        walk_result.to_exit_code()
-                    })
-                    .unwrap_or(0),
+                    }
+                    walk_result.to_exit_code()
+                })
+                .unwrap_or(0),
             );
         }
         Some(Aggregate {
