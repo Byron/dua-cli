@@ -46,6 +46,7 @@ pub struct TraversalState {
     pub previous_depth: usize,
     pub inodes: InodeFilter,
     pub throttle: Option<Throttle>,
+    pub received_event: bool,
 }
 
 impl TraversalState {
@@ -58,6 +59,7 @@ impl TraversalState {
             previous_depth: 0,
             inodes: InodeFilter::default(),
             throttle: Some(Throttle::new(Duration::from_millis(250), None)),
+            received_event: false,
         }
     }
 }

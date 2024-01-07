@@ -89,6 +89,7 @@ impl TerminalApp {
 
     pub fn scan<'a>(&mut self, input: Vec<PathBuf>) -> Result<Receiver<TraversalEvent>> {
         self.state.traversal_state = TraversalState::new(self.traversal.root_index);
+        self.state.is_scanning = true;
 
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         std::thread::Builder::new()
@@ -130,21 +131,6 @@ impl TerminalApp {
                     }
                 }
             })?;
-
-        // let mut received_events = false;
-        // let traversal =
-        //     Traversal::from_walk(options, input_paths, |traversal, event| {
-
-        //     })?;
-
-        // let traversal = match traversal {
-        //     Some(t) => t,
-        //     None => return Ok(None),
-        // };
-
-        // state.is_scanning = false;
-        // if !received_events {
-        // }
 
         Ok(entry_rx)
     }

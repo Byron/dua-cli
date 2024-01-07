@@ -116,7 +116,18 @@ impl AppState {
                     let Ok(event) = event else {
                         continue;
                     };
-                    self.process_traversal_event(traversal, walk_options, event);
+                    if self.process_traversal_event(traversal, walk_options, event) {
+                        self.update_state(traversal);
+                        let result = self.process_event(
+                            window,
+                            traversal,
+                            display,
+                            terminal,
+                            Event::Key(refresh_key()))?;
+                        if let Some(processing_result) = result {
+                            return Ok(processing_result);
+                        }
+                    }
                 }
             }
         }
@@ -142,7 +153,7 @@ impl AppState {
         t: &'a mut Traversal,
         walk_options: &'a WalkOptions,
         event: TraversalEvent,
-    ) {
+    ) -> bool {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id) => {
                 t.entries_traversed += 1;
@@ -277,7 +288,7 @@ impl AppState {
 
                 if let Some(throttle) = &self.traversal_state.throttle {
                     if throttle.can_update() {
-                        self.update_state(t);
+                        return true;
                     }
                 }
             }
@@ -317,13 +328,16 @@ impl AppState {
                 t.total_bytes = Some(root_size);
                 t.elapsed = Some(t.start.elapsed());
 
-                self.update_state(t);
+                self.is_scanning = false;
+
+                return true;
             }
         }
+        return false;
     }
 
     fn update_state<'a>(&mut self, traversal: &'a Traversal) {
-        let mut received_events = false;
+        let received_events = self.traversal_state.received_event;
         if !received_events {
             self.navigation_mut().view_root = traversal.root_index;
         }
@@ -354,7 +368,12 @@ impl AppState {
         use FocussedPane::*;
 
         let key = match event {
-            Event::Key(key) if key.kind != KeyEventKind::Release => key,
+            Event::Key(key) if key.kind != KeyEventKind::Release => {
+                if key.code != KeyCode::Char('\r') {
+                    self.traversal_state.received_event = true;
+                }
+                key
+            },
             Event::Resize(_, _) => refresh_key(),
             _ => return Ok(None),
         };
