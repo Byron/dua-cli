@@ -1,9 +1,4 @@
-
-
-use dua::{
-    traverse::{RunningTraversal}, WalkResult,
-};
-
+use dua::{traverse::RunningTraversal, WalkResult};
 
 use super::{navigation::Navigation, EntryDataBundle, SortMode};
 

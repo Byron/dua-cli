@@ -1,23 +1,19 @@
-use crate::{
-    interactive::{
-        app::navigation::Navigation,
-        app_state::FocussedPane,
-        sorted_entries,
-        widgets::{glob_search, MainWindow, MainWindowProps},
-        CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
-    },
+use crate::interactive::{
+    app::navigation::Navigation,
+    app_state::FocussedPane,
+    sorted_entries,
+    widgets::{glob_search, MainWindow, MainWindowProps},
+    CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
 };
 use anyhow::Result;
-use crossbeam::channel::{Receiver};
+use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
     traverse::{EntryData, ProcessEventResult, RunningTraversal, Traversal},
     WalkOptions, WalkResult,
 };
-use std::{
-    path::PathBuf,
-};
+use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
