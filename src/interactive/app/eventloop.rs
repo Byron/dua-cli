@@ -1,5 +1,4 @@
 use crate::{
-    crossdev,
     interactive::{
         app::navigation::Navigation,
         app_state::FocussedPane,
@@ -9,16 +8,15 @@ use crate::{
     },
 };
 use anyhow::Result;
-use crossbeam::channel::{Receiver, Select};
+use crossbeam::channel::{Receiver};
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{size_on_disk, EntryData, ProcessEventResult, RunningTraversal, Traversal},
+    traverse::{EntryData, ProcessEventResult, RunningTraversal, Traversal},
     WalkOptions, WalkResult,
 };
 use std::{
     path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
 };
 use tui::backend::Backend;
 use tui_react::Terminal;

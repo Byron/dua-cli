@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf};
 
 use anyhow::Result;
 use crossbeam::channel::Receiver;
@@ -10,7 +10,7 @@ use dua::{
 use tui::prelude::Backend;
 use tui_react::Terminal;
 
-use crate::{crossdev, interactive::widgets::MainWindow};
+use crate::{interactive::widgets::MainWindow};
 
 use super::{
     app_state::{AppState, ProcessingResult},

@@ -1,11 +1,9 @@
-use std::time::Duration;
+
 
 use dua::{
-    inodefilter::InodeFilter,
-    traverse::{RunningTraversal, Tree, TreeIndex},
-    Throttle, WalkResult,
+    traverse::{RunningTraversal}, WalkResult,
 };
-use petgraph::Direction;
+
 
 use super::{navigation::Navigation, EntryDataBundle, SortMode};
 

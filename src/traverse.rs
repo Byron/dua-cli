@@ -209,9 +209,9 @@ impl RunningTraversal {
         })
     }
 
-    pub fn process_event<'a>(
+    pub fn process_event(
         &mut self,
-        t: &'a mut Traversal,
+        t: &mut Traversal,
         event: TraversalEvent,
     ) -> ProcessEventResult {
         match event {
