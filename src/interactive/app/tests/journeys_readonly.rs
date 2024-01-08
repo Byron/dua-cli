@@ -29,7 +29,7 @@ fn simple_user_journey_read_only() -> Result<()> {
     let short_root = "sample-01";
     let (mut terminal, mut app) =
         initialized_app_and_terminal_from_fixture(&[short_root, long_root])?;
-    
+
     // POST-INIT
     // after initialization, we expect that...
     {
@@ -300,10 +300,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         );
 
         // when advancing the selection to the marker pane
-        app.process_events(
-            &mut terminal,
-            into_keys(Some(KeyCode::Tab)),
-        )?;
+        app.process_events(&mut terminal, into_keys(Some(KeyCode::Tab)))?;
         {
             assert_eq!(
                 Some(true),

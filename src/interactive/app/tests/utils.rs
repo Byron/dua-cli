@@ -1,6 +1,6 @@
 use anyhow::{Context, Error, Result};
-use crossbeam::channel::{Receiver, Sender};
-use crosstermion::{crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}}, input::Event};
+use crossbeam::channel::Receiver;
+use crosstermion::{crossterm::event::KeyCode, input::Event};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, TraversalSorting, WalkOptions,
@@ -21,9 +21,7 @@ use tui_react::Terminal;
 
 use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::TerminalApp};
 
-pub fn into_events<'a>(
-    events: impl IntoIterator<Item = Event> + 'a,
-) -> Receiver<Event> {
+pub fn into_events<'a>(events: impl IntoIterator<Item = Event> + 'a) -> Receiver<Event> {
     let (key_send, key_receive) = crossbeam::channel::unbounded();
     for event in events {
         _ = key_send.send(event);
@@ -31,15 +29,15 @@ pub fn into_events<'a>(
     key_receive
 }
 
-pub fn into_keys<'a>(
-    codes: impl IntoIterator<Item = KeyCode> + 'a,
-) -> Receiver<Event> {
-    into_events(codes
-        .into_iter()
-        .map(|code| crosstermion::input::Event::Key(code.into())))
+pub fn into_keys<'a>(codes: impl IntoIterator<Item = KeyCode> + 'a) -> Receiver<Event> {
+    into_events(
+        codes
+            .into_iter()
+            .map(|code| crosstermion::input::Event::Key(code.into())),
+    )
 }
 
-pub fn into_codes<'a>(input: &'a str) -> Receiver<Event> {
+pub fn into_codes(input: &str) -> Receiver<Event> {
     into_keys(input.chars().map(KeyCode::Char))
 }
 
@@ -195,12 +193,12 @@ pub fn initialized_app_and_terminal_with_closure(
         ignore_dirs: Default::default(),
     };
 
-    let (key_send, key_receive) = crossbeam::channel::bounded(0);
+    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(&mut terminal, walk_options, ByteFormat::Metric)?;
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
     app.traverse(input_paths)?;
-    app.run_until_traversed(&mut terminal, key_receive);
+    app.run_until_traversed(&mut terminal, key_receive)?;
 
     Ok((terminal, app))
 }

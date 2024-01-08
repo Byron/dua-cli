@@ -103,29 +103,38 @@ impl TerminalApp {
             ProcessingResult::ExitRequested(res) => Ok(res),
         }
     }
+}
 
-    pub fn run_until_traversed<B>(
-        &mut self,
-        terminal: &mut Terminal<B>,
-        events: Receiver<Event>,
-    ) -> Result<WalkResult>
-    where 
-        B: Backend
-    {
-        while self.state.running_traversal.is_some() {
-            match self.state.process_event(
-                &mut self.window,
-                &mut self.traversal,
-                &mut self.display,
-                terminal,
-                &events,
-            )? {
-                Some(ProcessingResult::ExitRequested(res)) => {
-                    return Ok(res);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use super::TerminalApp;
+
+    impl TerminalApp {
+        pub fn run_until_traversed<B>(
+            &mut self,
+            terminal: &mut Terminal<B>,
+            events: Receiver<Event>,
+        ) -> Result<WalkResult>
+        where
+            B: Backend,
+        {
+            while self.state.running_traversal.is_some() {
+                match self.state.process_event(
+                    &mut self.window,
+                    &mut self.traversal,
+                    &mut self.display,
+                    terminal,
+                    &events,
+                )? {
+                    Some(ProcessingResult::ExitRequested(res)) => {
+                        return Ok(res);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
+            Ok(WalkResult { num_errors: 0 })
         }
-        Ok(WalkResult { num_errors: 0 })
     }
 }

@@ -10,7 +10,7 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, TraversalProcessingEvent, RunningTraversal, Traversal},
+    traverse::{EntryData, RunningTraversal, Traversal, TraversalProcessingEvent},
     WalkOptions, WalkResult,
 };
 use std::path::PathBuf;
@@ -104,13 +104,9 @@ impl AppState {
         self.refresh_screen(window, traversal, display, terminal)?;
 
         loop {
-            if let Some(result) = self.process_event(
-                window,
-                traversal,
-                display,
-                terminal,
-                &events,
-            )? {
+            if let Some(result) =
+                self.process_event(window, traversal, display, terminal, &events)?
+            {
                 return Ok(result);
             }
         }
@@ -161,9 +157,12 @@ impl AppState {
             }
         } else {
             let Ok(event) = events.recv() else {
-                return Ok(Some(ProcessingResult::ExitRequested(WalkResult { num_errors: 0 })));
+                return Ok(Some(ProcessingResult::ExitRequested(WalkResult {
+                    num_errors: 0,
+                })));
             };
-            let result = self.process_terminal_event(window, traversal, display, terminal, event)?;
+            let result =
+                self.process_terminal_event(window, traversal, display, terminal, event)?;
             if let Some(processing_result) = result {
                 return Ok(Some(processing_result));
             }

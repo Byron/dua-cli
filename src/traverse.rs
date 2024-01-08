@@ -125,6 +125,7 @@ pub fn pop_or_panic(v: &mut Vec<EntryInfo>) -> EntryInfo {
 pub type TraversalEntry =
     Result<jwalk::DirEntry<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>, jwalk::Error>;
 
+#[allow(clippy::large_enum_variant)]
 pub enum TraversalEvent {
     Entry(TraversalEntry, Arc<PathBuf>, u64),
     Finished(u64),
