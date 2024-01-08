@@ -143,14 +143,14 @@ pub struct RunningTraversal {
 }
 
 #[derive(PartialEq)]
-pub enum ProcessEventResult {
-    NoOp,
+pub enum TraversalProcessingEvent {
+    None,
     UpdateIsReady,
     Finished,
 }
 
 impl RunningTraversal {
-    pub fn new(
+    pub fn start(
         root_idx: TreeIndex,
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
@@ -213,7 +213,7 @@ impl RunningTraversal {
         &mut self,
         t: &mut Traversal,
         event: TraversalEvent,
-    ) -> ProcessEventResult {
+    ) -> TraversalProcessingEvent {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id) => {
                 t.entries_traversed += 1;
@@ -335,7 +335,7 @@ impl RunningTraversal {
 
                 if let Some(throttle) = &self.throttle {
                     if throttle.can_update() {
-                        return ProcessEventResult::UpdateIsReady;
+                        return TraversalProcessingEvent::UpdateIsReady;
                     }
                 }
             }
@@ -370,10 +370,10 @@ impl RunningTraversal {
                 t.total_bytes = Some(root_size);
                 t.elapsed = Some(t.start.elapsed());
 
-                return ProcessEventResult::Finished;
+                return TraversalProcessingEvent::Finished;
             }
         }
-        ProcessEventResult::NoOp
+        TraversalProcessingEvent::None
     }
 }
 

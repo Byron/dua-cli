@@ -10,7 +10,7 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, ProcessEventResult, RunningTraversal, Traversal},
+    traverse::{EntryData, TraversalProcessingEvent, RunningTraversal, Traversal},
     WalkOptions, WalkResult,
 };
 use std::path::PathBuf;
@@ -70,7 +70,7 @@ impl AppState {
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
     ) -> Result<()> {
-        let running_traversal = RunningTraversal::new(traversal.root_index, walk_options, input)?;
+        let running_traversal = RunningTraversal::start(traversal.root_index, walk_options, input)?;
         self.running_traversal = Some(running_traversal);
         Ok(())
     }
@@ -104,48 +104,71 @@ impl AppState {
         self.refresh_screen(window, traversal, display, terminal)?;
 
         loop {
-            if let Some(running_traversal) = &mut self.running_traversal {
-                crossbeam::select! {
-                    recv(events) -> event => {
-                        let Ok(event) = event else {
-                            continue;
-                        };
-                        let result = self.process_event(
-                            window,
-                            traversal,
-                            display,
-                            terminal,
-                            event)?;
-                        if let Some(processing_result) = result {
-                            return Ok(processing_result);
-                        }
-                    },
-                    recv(&running_traversal.event_rx) -> event => {
-                        let Ok(event) = event else {
-                            continue;
-                        };
-
-                        let result = running_traversal.process_event(traversal, event);
-                        if result != ProcessEventResult::NoOp {
-                            if result == ProcessEventResult::Finished {
-                                self.is_scanning = false;
-                                self.running_traversal = None;
-                            }
-                            self.update_state(traversal);
-                            self.refresh_screen(window, traversal, display, terminal)?;
-                        }
-                    }
-                }
-            } else {
-                let Ok(event) = events.recv() else {
-                    continue;
-                };
-                let result = self.process_event(window, traversal, display, terminal, event)?;
-                if let Some(processing_result) = result {
-                    return Ok(processing_result);
-                }
+            if let Some(result) = self.process_event(
+                window,
+                traversal,
+                display,
+                terminal,
+                &events,
+            )? {
+                return Ok(result);
             }
         }
+    }
+
+    pub fn process_event<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        events: &Receiver<Event>,
+    ) -> Result<Option<ProcessingResult>>
+    where
+        B: Backend,
+    {
+        if let Some(running_traversal) = &mut self.running_traversal {
+            crossbeam::select! {
+                recv(events) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(Some(ProcessingResult::ExitRequested(WalkResult { num_errors: 0 })));
+                    };
+                    let result = self.process_terminal_event(
+                        window,
+                        traversal,
+                        display,
+                        terminal,
+                        event)?;
+                    if let Some(processing_result) = result {
+                        return Ok(Some(processing_result));
+                    }
+                },
+                recv(&running_traversal.event_rx) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(None);
+                    };
+
+                    let result = running_traversal.process_event(traversal, event);
+                    if result != TraversalProcessingEvent::None {
+                        if result == TraversalProcessingEvent::Finished {
+                            self.is_scanning = false;
+                            self.running_traversal = None;
+                        }
+                        self.update_state(traversal);
+                        self.refresh_screen(window, traversal, display, terminal)?;
+                    }
+                }
+            }
+        } else {
+            let Ok(event) = events.recv() else {
+                return Ok(Some(ProcessingResult::ExitRequested(WalkResult { num_errors: 0 })));
+            };
+            let result = self.process_terminal_event(window, traversal, display, terminal, event)?;
+            if let Some(processing_result) = result {
+                return Ok(Some(processing_result));
+            }
+        }
+        Ok(None)
     }
 
     fn update_state(&mut self, traversal: &Traversal) {
@@ -165,7 +188,7 @@ impl AppState {
         self.reset_message(); // force "scanning" to appear
     }
 
-    fn process_event<B>(
+    fn process_terminal_event<B>(
         &mut self,
         window: &mut MainWindow,
         traversal: &mut Traversal,
