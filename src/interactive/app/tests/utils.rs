@@ -19,10 +19,7 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{
-    app::tests::FIXTURE_PATH,
-    terminal_app::{TerminalApp, TraversalEvent},
-};
+use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::TerminalApp};
 
 pub fn into_keys<'a>(
     codes: impl IntoIterator<Item = KeyCode> + 'a,
@@ -191,7 +188,7 @@ pub fn initialized_app_and_terminal_with_closure(
     let mut app = TerminalApp::initialize(&mut terminal, walk_options, ByteFormat::Metric)?;
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
-    let traversal_rx = app.scan(input_paths)?;
+    let traversal_rx = app.traverse(input_paths)?;
 
     Ok((terminal, app, traversal_rx))
 }

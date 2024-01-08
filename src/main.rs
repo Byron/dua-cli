@@ -76,11 +76,9 @@ fn main() -> Result<()> {
 
             let keys_rx = input_channel();
             let mut app = TerminalApp::initialize(&mut terminal, walk_options, byte_format)?;
+            app.traverse(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
 
-            let traversal_rx =
-                app.scan(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
-
-            let res = app.process_events(&mut terminal, keys_rx, traversal_rx);
+            let res = app.process_events(&mut terminal, keys_rx);
 
             let res = res.map(|r| {
                 (

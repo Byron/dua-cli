@@ -9,23 +9,22 @@ use crate::{
     },
 };
 use anyhow::Result;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Receiver, Select};
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{size_on_disk, EntryData, Traversal},
+    traverse::{size_on_disk, EntryData, ProcessEventResult, RunningTraversal, Traversal},
     WalkOptions, WalkResult,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
 use super::app_state::{AppState, Cursor, ProcessingResult};
-use super::{
-    app_state::{parent_or_panic, pop_or_panic, set_entry_info_or_panic, EntryInfo},
-    terminal_app::TraversalEvent,
-    tree_view::TreeView,
-};
+use super::tree_view::TreeView;
 
 impl AppState {
     pub fn navigation_mut(&mut self) -> &mut Navigation {
@@ -71,251 +70,92 @@ impl AppState {
         result
     }
 
+    pub fn traverse(
+        &mut self,
+        traversal: &Traversal,
+        walk_options: &WalkOptions,
+        input: Vec<PathBuf>,
+    ) -> Result<()> {
+        let running_traversal = RunningTraversal::new(traversal.root_index, walk_options, input)?;
+        self.running_traversal = Some(running_traversal);
+        Ok(())
+    }
+
+    fn refresh_screen<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+    ) -> Result<()>
+    where
+        B: Backend,
+    {
+        let tree_view = self.tree_view(traversal);
+        self.draw(window, &tree_view, *display, terminal)?;
+        Ok(())
+    }
+
     pub fn process_events<B>(
         &mut self,
         window: &mut MainWindow,
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        walk_options: &WalkOptions,
         events: Receiver<Event>,
-        traversal_events: Receiver<TraversalEvent>,
     ) -> Result<ProcessingResult>
     where
         B: Backend,
     {
-        {
-            let tree_view = self.tree_view(traversal);
-            self.draw(window, &tree_view, *display, terminal)?;
-        }
+        self.refresh_screen(window, traversal, display, terminal)?;
 
         loop {
-            crossbeam::select! {
-                recv(events) -> event => {
-                    let Ok(event) = event else {
-                        continue;
-                    };
-                    let result = self.process_event(
-                        window,
-                        traversal,
-                        display,
-                        terminal,
-                        event)?;
-                    if let Some(processing_result) = result {
-                        return Ok(processing_result);
-                    }
-                },
-                recv(traversal_events) -> event => {
-                    let Ok(event) = event else {
-                        continue;
-                    };
-                    if self.process_traversal_event(traversal, walk_options, event) {
-                        self.update_state(traversal);
+            if let Some(running_traversal) = &mut self.running_traversal {
+                crossbeam::select! {
+                    recv(events) -> event => {
+                        let Ok(event) = event else {
+                            continue;
+                        };
                         let result = self.process_event(
                             window,
                             traversal,
                             display,
                             terminal,
-                            Event::Key(refresh_key()))?;
+                            event)?;
                         if let Some(processing_result) = result {
                             return Ok(processing_result);
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    fn process_traversal_event<'a>(
-        &mut self,
-        t: &'a mut Traversal,
-        walk_options: &'a WalkOptions,
-        event: TraversalEvent,
-    ) -> bool {
-        match event {
-            TraversalEvent::Entry(entry, root_path, device_id) => {
-                t.entries_traversed += 1;
-                let mut data = EntryData::default();
-                match entry {
-                    Ok(entry) => {
-                        data.name = if entry.depth < 1 {
-                            (*root_path).clone()
-                        } else {
-                            entry.file_name.into()
-                        };
-
-                        let mut file_size = 0u128;
-                        let mut mtime: SystemTime = UNIX_EPOCH;
-                        match &entry.client_state {
-                            Some(Ok(ref m)) => {
-                                if !m.is_dir()
-                                    && (walk_options.count_hard_links
-                                        || self.traversal_state.inodes.add(m))
-                                    && (walk_options.cross_filesystems
-                                        || crossdev::is_same_device(device_id, m))
-                                {
-                                    if walk_options.apparent_size {
-                                        file_size = m.len() as u128;
-                                    } else {
-                                        file_size = size_on_disk(&entry.parent_path, &data.name, m)
-                                            .unwrap_or_else(|_| {
-                                                t.io_errors += 1;
-                                                data.metadata_io_error = true;
-                                                0
-                                            })
-                                            as u128;
-                                    }
-                                } else {
-                                    data.entry_count = Some(0);
-                                    data.is_dir = true;
-                                }
-
-                                match m.modified() {
-                                    Ok(modified) => {
-                                        mtime = modified;
-                                    }
-                                    Err(_) => {
-                                        t.io_errors += 1;
-                                        data.metadata_io_error = true;
-                                    }
-                                }
-                            }
-                            Some(Err(_)) => {
-                                t.io_errors += 1;
-                                data.metadata_io_error = true;
-                            }
-                            None => {}
-                        }
-
-                        match (entry.depth, self.traversal_state.previous_depth) {
-                            (n, p) if n > p => {
-                                self.traversal_state
-                                    .directory_info_per_depth_level
-                                    .push(self.traversal_state.current_directory_at_depth);
-                                self.traversal_state.current_directory_at_depth = EntryInfo {
-                                    size: file_size,
-                                    entries_count: Some(1),
-                                };
-                                self.traversal_state.parent_node_idx =
-                                    self.traversal_state.previous_node_idx;
-                            }
-                            (n, p) if n < p => {
-                                for _ in n..p {
-                                    set_entry_info_or_panic(
-                                        &mut t.tree,
-                                        self.traversal_state.parent_node_idx,
-                                        self.traversal_state.current_directory_at_depth,
-                                    );
-                                    let dir_info = pop_or_panic(
-                                        &mut self.traversal_state.directory_info_per_depth_level,
-                                    );
-
-                                    self.traversal_state.current_directory_at_depth.size +=
-                                        dir_info.size;
-                                    self.traversal_state
-                                        .current_directory_at_depth
-                                        .add_count(&dir_info);
-
-                                    self.traversal_state.parent_node_idx = parent_or_panic(
-                                        &mut t.tree,
-                                        self.traversal_state.parent_node_idx,
-                                    );
-                                }
-                                self.traversal_state.current_directory_at_depth.size += file_size;
-                                *self
-                                    .traversal_state
-                                    .current_directory_at_depth
-                                    .entries_count
-                                    .get_or_insert(0) += 1;
-                                set_entry_info_or_panic(
-                                    &mut t.tree,
-                                    self.traversal_state.parent_node_idx,
-                                    self.traversal_state.current_directory_at_depth,
-                                );
-                            }
-                            _ => {
-                                self.traversal_state.current_directory_at_depth.size += file_size;
-                                *self
-                                    .traversal_state
-                                    .current_directory_at_depth
-                                    .entries_count
-                                    .get_or_insert(0) += 1;
-                            }
-                        };
-
-                        data.mtime = mtime;
-                        data.size = file_size;
-                        let entry_index = t.tree.add_node(data);
-
-                        t.tree
-                            .add_edge(self.traversal_state.parent_node_idx, entry_index, ());
-                        self.traversal_state.previous_node_idx = entry_index;
-                        self.traversal_state.previous_depth = entry.depth;
-                    }
-                    Err(_) => {
-                        if self.traversal_state.previous_depth == 0 {
-                            data.name = (*root_path).clone();
-                            let entry_index = t.tree.add_node(data);
-                            t.tree
-                                .add_edge(self.traversal_state.parent_node_idx, entry_index, ());
-                        }
-
-                        t.io_errors += 1
-                    }
-                }
-
-                if let Some(throttle) = &self.traversal_state.throttle {
-                    if throttle.can_update() {
-                        return true;
-                    }
-                }
-            }
-            TraversalEvent::Finished(io_errors) => {
-                t.io_errors += io_errors;
-
-                self.traversal_state.throttle = None;
-                self.traversal_state
-                    .directory_info_per_depth_level
-                    .push(self.traversal_state.current_directory_at_depth);
-                self.traversal_state.current_directory_at_depth = EntryInfo::default();
-                for _ in 0..self.traversal_state.previous_depth {
-                    let dir_info =
-                        pop_or_panic(&mut self.traversal_state.directory_info_per_depth_level);
-                    self.traversal_state.current_directory_at_depth.size += dir_info.size;
-                    self.traversal_state
-                        .current_directory_at_depth
-                        .add_count(&dir_info);
-
-                    set_entry_info_or_panic(
-                        &mut t.tree,
-                        self.traversal_state.parent_node_idx,
-                        self.traversal_state.current_directory_at_depth,
-                    );
-                    self.traversal_state.parent_node_idx =
-                        parent_or_panic(&mut t.tree, self.traversal_state.parent_node_idx);
-                }
-                let root_size = t.recompute_root_size();
-                set_entry_info_or_panic(
-                    &mut t.tree,
-                    t.root_index,
-                    EntryInfo {
-                        size: root_size,
-                        entries_count: (t.entries_traversed > 0).then_some(t.entries_traversed),
                     },
-                );
-                t.total_bytes = Some(root_size);
-                t.elapsed = Some(t.start.elapsed());
+                    recv(&running_traversal.event_rx) -> event => {
+                        let Ok(event) = event else {
+                            continue;
+                        };
 
-                self.is_scanning = false;
-
-                return true;
+                        let result = running_traversal.process_event(traversal, event);
+                        if result != ProcessEventResult::NoOp {
+                            if result == ProcessEventResult::Finished {
+                                self.is_scanning = false;
+                                self.running_traversal = None;
+                            }
+                            self.update_state(traversal);
+                            self.refresh_screen(window, traversal, display, terminal)?;
+                        }
+                    }
+                }
+            } else {
+                let Ok(event) = events.recv() else {
+                    continue;
+                };
+                let result = self.process_event(window, traversal, display, terminal, event)?;
+                if let Some(processing_result) = result {
+                    return Ok(processing_result);
+                }
             }
         }
-        false
     }
 
     fn update_state(&mut self, traversal: &Traversal) {
-        let received_events = self.traversal_state.received_event;
+        let received_events = self.received_event;
         if !received_events {
             self.navigation_mut().view_root = traversal.root_index;
         }
@@ -348,7 +188,7 @@ impl AppState {
         let key = match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 if key.code != KeyCode::Char('\r') {
-                    self.traversal_state.received_event = true;
+                    self.received_event = true;
                 }
                 key
             }
