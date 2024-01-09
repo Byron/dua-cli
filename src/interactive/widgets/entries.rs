@@ -7,6 +7,7 @@ use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::{Borrow, Cow};
+use std::collections::HashSet;
 use std::time::SystemTime;
 use tui::{
     buffer::Buffer,
@@ -33,6 +34,7 @@ pub struct EntriesProps<'a> {
     pub border_style: Style,
     pub is_focussed: bool,
     pub sort_mode: SortMode,
+    pub show_columns: &'a HashSet<Column>,
 }
 
 #[derive(Default)]
@@ -56,6 +58,7 @@ impl Entries {
             border_style,
             is_focussed,
             sort_mode,
+            show_columns,
         } = props.borrow();
         let list = &mut self.list;
 
@@ -87,7 +90,7 @@ impl Entries {
             let percentage_style = percentage_style(fraction, text_style);
 
             let mut columns = Vec::new();
-            if show_mtime_column(sort_mode) {
+            if show_mtime_column(sort_mode, show_columns) {
                 columns.push(mtime_column(
                     bundle.mtime,
                     column_style(Column::MTime, *sort_mode, text_style),
@@ -99,7 +102,7 @@ impl Entries {
                 column_style(Column::Bytes, *sort_mode, text_style),
             ));
             columns.push(percentage_column(*display, fraction, percentage_style));
-            if show_count_column(sort_mode) {
+            if show_count_column(sort_mode, show_columns) {
                 columns.push(count_column(
                     bundle.entry_count,
                     column_style(Column::Count, *sort_mode, text_style),
@@ -323,8 +326,8 @@ fn bytes_column(display: DisplayOptions, entry_size: u128, style: Style) -> Span
     )
 }
 
-#[derive(PartialEq)]
-enum Column {
+#[derive(PartialEq, Eq, Hash)]
+pub enum Column {
     Bytes,
     MTime,
     Count,
@@ -344,18 +347,18 @@ fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
     }
 }
 
-fn show_mtime_column(sort_mode: &SortMode) -> bool {
+fn show_mtime_column(sort_mode: &SortMode, show_columns: &HashSet<Column>) -> bool {
     matches!(
         sort_mode,
         SortMode::MTimeAscending | SortMode::MTimeDescending
-    )
+    ) || show_columns.contains(&Column::MTime)
 }
 
-fn show_count_column(sort_mode: &SortMode) -> bool {
+fn show_count_column(sort_mode: &SortMode, show_columns: &HashSet<Column>) -> bool {
     matches!(
         sort_mode,
         SortMode::CountAscending | SortMode::CountDescending
-    )
+    ) || show_columns.contains(&Column::Count)
 }
 
 /// Note that this implementation isn't correct as `width` is the amount of blocks to display,

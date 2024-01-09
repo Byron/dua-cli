@@ -111,6 +111,7 @@ impl MainWindow {
             border_style: entries_style,
             is_focussed: matches!(state.focussed, Main),
             sort_mode: state.sorting,
+            show_columns: &state.show_columns,
         };
         self.entries_pane
             .render(props, entries_area, terminal.current_buffer_mut());

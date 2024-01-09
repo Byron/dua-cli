@@ -289,8 +289,10 @@ impl AppState {
                     }
                     Char('s') => self.cycle_sorting(&tree_view),
                     Char('m') => self.cycle_mtime_sorting(&tree_view),
+                    Char('M') => self.toggle_mtime_column(),
                     Char('c') => self.cycle_count_sorting(&tree_view),
-                    Char('g') => display.byte_vis.cycle(),
+                    Char('C') => self.toggle_count_column(),
+                    Char('g') | Char('S') => display.byte_vis.cycle(),
                     Char('d') => self.mark_entry(
                         CursorMode::Advance,
                         MarkEntryMode::Toggle,

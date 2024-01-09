@@ -1,6 +1,6 @@
 use crate::interactive::{
     app::tree_view::TreeView,
-    widgets::{GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
+    widgets::{Column, GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
     DisplayOptions, EntryDataBundle,
 };
 use crosstermion::input::Key;
@@ -133,6 +133,22 @@ impl AppState {
     pub fn cycle_count_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_count();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+    }
+
+    pub fn toggle_mtime_column(&mut self) {
+        self.toggle_column(Column::MTime);
+    }
+
+    pub fn toggle_count_column(&mut self) {
+        self.toggle_column(Column::Count);
+    }
+
+    fn toggle_column(&mut self, column: Column) {
+        if self.show_columns.contains(&column) {
+            self.show_columns.remove(&column);
+        } else {
+            self.show_columns.insert(column);
+        }
     }
 
     pub fn toggle_glob_search(&mut self, window: &mut MainWindow) {
