@@ -9,6 +9,8 @@ use pretty_assertions::assert_eq;
 #[test]
 #[cfg(not(target_os = "windows"))] // it stopped working here, don't know if it's truly broken or if it's the test. Let's wait for windows users to report.
 fn basic_user_journey_with_deletion() -> Result<()> {
+    use crate::interactive::app::tests::utils::into_events;
+
     let fixture = WritableFixture::from("sample-02");
     let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
 
@@ -26,11 +28,10 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        vec![
+        into_events([
             Event::Key(KeyCode::Tab.into()),
             Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
-        ]
-        .into_iter(),
+        ]),
     )?;
     assert!(
         app.window.mark_pane.is_none(),

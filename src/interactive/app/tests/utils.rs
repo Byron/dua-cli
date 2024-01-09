@@ -1,5 +1,6 @@
 use anyhow::{Context, Error, Result};
-use crosstermion::crossterm::event::KeyCode;
+use crossbeam::channel::Receiver;
+use crosstermion::{crossterm::event::KeyCode, input::Event};
 use dua::{
     traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, TraversalSorting, WalkOptions,
@@ -18,17 +19,27 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{app::tests::FIXTURE_PATH, Interaction, TerminalApp};
+use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp};
 
-pub fn into_keys<'a>(
-    codes: impl IntoIterator<Item = KeyCode> + 'a,
-) -> impl Iterator<Item = crosstermion::input::Event> + 'a {
-    codes
-        .into_iter()
-        .map(|code| crosstermion::input::Event::Key(code.into()))
+pub fn into_events<'a>(events: impl IntoIterator<Item = Event> + 'a) -> Receiver<Event> {
+    let (key_send, key_receive) = crossbeam::channel::unbounded();
+    for event in events {
+        key_send
+            .send(event)
+            .expect("event is stored in the channel for later retrieval");
+    }
+    key_receive
 }
 
-pub fn into_codes(input: &str) -> impl Iterator<Item = crosstermion::input::Event> + '_ {
+pub fn into_keys<'a>(codes: impl IntoIterator<Item = KeyCode> + 'a) -> Receiver<Event> {
+    into_events(
+        codes
+            .into_iter()
+            .map(|code| crosstermion::input::Event::Key(code.into())),
+    )
+}
+
+pub fn into_codes(input: &str) -> Receiver<Event> {
     into_keys(input.chars().map(KeyCode::Char))
 }
 
@@ -175,26 +186,23 @@ pub fn initialized_app_and_terminal_with_closure(
     let mut terminal = new_test_terminal()?;
     std::env::set_current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))?;
 
+    let walk_options = WalkOptions {
+        threads: 1,
+        apparent_size: true,
+        count_hard_links: false,
+        sorting: TraversalSorting::AlphabeticalByFileName,
+        cross_filesystems: false,
+        ignore_dirs: Default::default(),
+    };
+
+    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
+    let mut app = TerminalApp::initialize(&mut terminal, walk_options, ByteFormat::Metric)?;
+
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
-    let app = TerminalApp::initialize(
-        &mut terminal,
-        WalkOptions {
-            threads: 1,
-            byte_format: ByteFormat::Metric,
-            apparent_size: true,
-            count_hard_links: false,
-            sorting: TraversalSorting::AlphabeticalByFileName,
-            cross_filesystems: false,
-            ignore_dirs: Default::default(),
-        },
-        input_paths,
-        Interaction::None,
-    )?
-    .map(|(_, app)| app);
-    Ok((
-        terminal,
-        app.expect("app that didn't try to abort iteration"),
-    ))
+    app.traverse(input_paths)?;
+    app.run_until_traversed(&mut terminal, key_receive)?;
+
+    Ok((terminal, app))
 }
 
 pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {

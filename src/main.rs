@@ -7,6 +7,11 @@ use simplelog::{Config, LevelFilter, WriteLogger};
 use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
+#[cfg(feature = "tui-crossplatform")]
+use crate::interactive::input::input_channel;
+#[cfg(feature = "tui-crossplatform")]
+use crate::interactive::terminal::TerminalApp;
+
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
 mod interactive;
@@ -39,19 +44,25 @@ fn main() -> Result<()> {
         info!("dua options={opt:#?}");
     }
 
-    let walk_options = dua::WalkOptions {
+    let byte_format: dua::ByteFormat = opt.format.into();
+    let mut walk_options = dua::WalkOptions {
         threads: opt.threads,
-        byte_format: opt.format.into(),
         apparent_size: opt.apparent_size,
         count_hard_links: opt.count_hard_links,
         sorting: TraversalSorting::None,
         cross_filesystems: !opt.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
     };
+
+    if walk_options.threads == 0 {
+        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
+        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
+        walk_options.threads = num_cpus::get();
+    }
+
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { input }) => {
-            use crate::interactive::{Interaction, TerminalApp};
             use anyhow::{anyhow, Context};
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
@@ -64,45 +75,40 @@ fn main() -> Result<()> {
                 AlternateRawScreen::try_from(io::stderr()).with_context(|| no_tty_msg)?,
             )
             .with_context(|| "Could not instantiate terminal")?;
-            let res = TerminalApp::initialize(
-                &mut terminal,
-                walk_options,
-                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
-                Interaction::Full,
-            )?
-            .map(|(keys_rx, mut app)| {
-                let res = app.process_events(&mut terminal, keys_rx.into_iter());
 
-                let res = res.map(|r| {
-                    (
-                        r,
-                        app.window
-                            .mark_pane
-                            .take()
-                            .map(|marked| marked.into_paths()),
-                    )
-                });
-                // Leak app memory to avoid having to wait for the hashmap to deallocate,
-                // which causes a noticeable delay shortly before the the program exits anyway.
-                std::mem::forget(app);
-                res
+            let keys_rx = input_channel();
+            let mut app = TerminalApp::initialize(&mut terminal, walk_options, byte_format)?;
+            app.traverse(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
+
+            let res = app.process_events(&mut terminal, keys_rx);
+
+            let res = res.map(|r| {
+                (
+                    r,
+                    app.window
+                        .mark_pane
+                        .take()
+                        .map(|marked| marked.into_paths()),
+                )
             });
+            // Leak app memory to avoid having to wait for the hashmap to deallocate,
+            // which causes a noticeable delay shortly before the the program exits anyway.
+            std::mem::forget(app);
 
             drop(terminal);
             io::stderr().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
             std::process::exit(
-                res.transpose()?
-                    .map(|(walk_result, paths)| {
-                        if let Some(paths) = paths {
-                            for path in paths {
-                                println!("{}", path.display())
-                            }
+                res.map(|(walk_result, paths)| {
+                    if let Some(paths) = paths {
+                        for path in paths {
+                            println!("{}", path.display())
                         }
-                        walk_result.to_exit_code()
-                    })
-                    .unwrap_or(0),
+                    }
+                    walk_result.to_exit_code()
+                })
+                .unwrap_or(0),
             );
         }
         Some(Aggregate {
@@ -119,6 +125,7 @@ fn main() -> Result<()> {
                 walk_options,
                 !no_total,
                 !no_sort,
+                byte_format,
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
             )?;
             if statistics {
@@ -135,6 +142,7 @@ fn main() -> Result<()> {
                 walk_options,
                 true,
                 true,
+                byte_format,
                 extract_paths_maybe_set_cwd(opt.input, !opt.stay_on_filesystem)?,
             )?
             .0

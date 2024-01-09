@@ -166,7 +166,6 @@ pub struct WalkOptions {
     /// The amount of threads to use. Refer to [`WalkDir::num_threads()`](https://docs.rs/jwalk/0.4.0/jwalk/struct.WalkDir.html#method.num_threads)
     /// for more information.
     pub threads: usize,
-    pub byte_format: ByteFormat,
     pub count_hard_links: bool,
     pub apparent_size: bool,
     pub sorting: TraversalSorting,
@@ -177,7 +176,7 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub(crate) fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+    pub fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
         let ignore_dirs = self.ignore_dirs.clone();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)

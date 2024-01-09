@@ -1,14 +1,15 @@
 use crate::interactive::{
     app::tree_view::TreeView,
-    app::FocussedPane::*,
     widgets::{GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
-    AppState, DisplayOptions, EntryDataBundle,
+    DisplayOptions, EntryDataBundle,
 };
 use crosstermion::input::Key;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
+
+use super::state::{AppState, FocussedPane::*};
 
 #[derive(Copy, Clone)]
 pub enum CursorMode {
@@ -145,7 +146,7 @@ impl AppState {
     }
 
     pub fn reset_message(&mut self) {
-        if self.is_scanning {
+        if self.active_traversal.is_some() {
             self.message = Some("-> scanning <-".into());
         } else {
             self.message = None;

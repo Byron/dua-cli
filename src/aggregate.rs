@@ -1,4 +1,4 @@
-use crate::{crossdev, InodeFilter, Throttle, WalkOptions, WalkResult};
+use crate::{crossdev, ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
@@ -14,6 +14,7 @@ pub fn aggregate(
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
     paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
@@ -89,11 +90,11 @@ pub fn aggregate(
         } else {
             output_colored_path(
                 &mut out,
-                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
+                byte_format,
             )?;
         }
         total += num_bytes;
@@ -109,11 +110,11 @@ pub fn aggregate(
         for (path, num_bytes, num_errors) in aggregates.into_iter() {
             output_colored_path(
                 &mut out,
-                &walk_options,
                 &path,
                 num_bytes,
                 num_errors,
                 path_color_of(&path),
+                byte_format,
             )?;
         }
     }
@@ -121,11 +122,11 @@ pub fn aggregate(
     if num_roots > 1 && compute_total {
         output_colored_path(
             &mut out,
-            &walk_options,
             Path::new("total"),
             total,
             res.num_errors,
             None,
+            byte_format,
         )?;
     }
     Ok((res, stats))
@@ -137,15 +138,15 @@ fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
 
 fn output_colored_path(
     out: &mut impl io::Write,
-    options: &WalkOptions,
     path: impl AsRef<Path>,
     num_bytes: u128,
     num_errors: u64,
     path_color: Option<Color>,
+    byte_format: ByteFormat,
 ) -> std::result::Result<(), io::Error> {
-    let size = options.byte_format.display(num_bytes).to_string();
+    let size = byte_format.display(num_bytes).to_string();
     let size = size.green();
-    let size_width = options.byte_format.width();
+    let size_width = byte_format.width();
     let path = path.as_ref().display();
 
     let errors = (num_errors != 0)

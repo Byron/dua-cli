@@ -1,4 +1,4 @@
-use dua::{ByteFormat, WalkOptions};
+use dua::ByteFormat;
 use std::fmt;
 
 #[derive(Default, Clone, Copy)]
@@ -106,8 +106,8 @@ pub struct DisplayOptions {
     pub byte_vis: ByteVisualization,
 }
 
-impl From<WalkOptions> for DisplayOptions {
-    fn from(WalkOptions { byte_format, .. }: WalkOptions) -> Self {
+impl DisplayOptions {
+    pub fn new(byte_format: ByteFormat) -> Self {
         DisplayOptions {
             byte_format,
             byte_vis: ByteVisualization::default(),

@@ -1,56 +1,24 @@
 use crate::interactive::{
     app::navigation::Navigation,
     sorted_entries,
+    state::FocussedPane,
     widgets::{glob_search, MainWindow, MainWindowProps},
-    ByteVisualization, CursorDirection, CursorMode, DisplayOptions, EntryDataBundle, MarkEntryMode,
-    SortMode,
+    CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal},
+    traverse::{BackgroundTraversal, EntryData, Traversal},
     WalkOptions, WalkResult,
 };
 use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::input::input_channel;
+use super::state::{AppState, Cursor};
 use super::tree_view::TreeView;
-
-#[derive(Default, Copy, Clone, PartialEq)]
-pub enum FocussedPane {
-    #[default]
-    Main,
-    Help,
-    Mark,
-    Glob,
-}
-
-#[derive(Default)]
-pub struct Cursor {
-    pub show: bool,
-    pub x: u16,
-    pub y: u16,
-}
-
-#[derive(Default)]
-pub struct AppState {
-    pub navigation: Navigation,
-    pub glob_navigation: Option<Navigation>,
-    pub entries: Vec<EntryDataBundle>,
-    pub sorting: SortMode,
-    pub message: Option<String>,
-    pub focussed: FocussedPane,
-    pub is_scanning: bool,
-}
-
-pub enum ProcessingResult {
-    Finished(WalkResult),
-    ExitRequested(WalkResult),
-}
 
 impl AppState {
     pub fn navigation_mut(&mut self) -> &mut Navigation {
@@ -96,138 +64,249 @@ impl AppState {
         result
     }
 
+    pub fn traverse(
+        &mut self,
+        traversal: &Traversal,
+        walk_options: &WalkOptions,
+        input: Vec<PathBuf>,
+    ) -> Result<()> {
+        let background_traversal =
+            BackgroundTraversal::start(traversal.root_index, walk_options, input)?;
+        self.navigation_mut().view_root = traversal.root_index;
+        self.active_traversal = Some(background_traversal);
+        Ok(())
+    }
+
+    fn refresh_screen<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+    ) -> Result<()>
+    where
+        B: Backend,
+    {
+        let tree_view = self.tree_view(traversal);
+        self.draw(window, &tree_view, *display, terminal)?;
+        Ok(())
+    }
+
+    /// This method ends once the user quits the application or there are no more inputs to process.
     pub fn process_events<B>(
         &mut self,
         window: &mut MainWindow,
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
-        events: impl Iterator<Item = Event>,
-    ) -> Result<ProcessingResult>
+        events: Receiver<Event>,
+    ) -> Result<WalkResult>
+    where
+        B: Backend,
+    {
+        self.refresh_screen(window, traversal, display, terminal)?;
+
+        loop {
+            if let Some(result) =
+                self.process_event(window, traversal, display, terminal, &events)?
+            {
+                return Ok(result);
+            }
+        }
+    }
+
+    pub fn process_event<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        events: &Receiver<Event>,
+    ) -> Result<Option<WalkResult>>
+    where
+        B: Backend,
+    {
+        if let Some(active_traversal) = &mut self.active_traversal {
+            crossbeam::select! {
+                recv(events) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(Some(WalkResult { num_errors: 0 }));
+                    };
+                    let res = self.process_terminal_event(
+                        window,
+                        traversal,
+                        display,
+                        terminal,
+                        event)?;
+                    if let Some(res) = res {
+                        return Ok(Some(res));
+                    }
+                },
+                recv(&active_traversal.event_rx) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(None);
+                    };
+
+                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                        if is_finished {
+                            self.active_traversal = None;
+                        }
+                        self.update_state(traversal);
+                        self.refresh_screen(window, traversal, display, terminal)?;
+                    };
+                }
+            }
+        } else {
+            let Ok(event) = events.recv() else {
+                return Ok(Some(WalkResult { num_errors: 0 }));
+            };
+            let result =
+                self.process_terminal_event(window, traversal, display, terminal, event)?;
+            if let Some(processing_result) = result {
+                return Ok(Some(processing_result));
+            }
+        }
+        Ok(None)
+    }
+
+    fn update_state(&mut self, traversal: &Traversal) {
+        self.entries = sorted_entries(
+            &traversal.tree,
+            self.navigation().view_root,
+            self.sorting,
+            self.glob_root(),
+        );
+        if !self.received_events {
+            self.navigation_mut().selected = self.entries.first().map(|b| b.index);
+        }
+        self.reset_message(); // force "scanning" to appear
+    }
+
+    fn process_terminal_event<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        event: Event,
+    ) -> Result<Option<WalkResult>>
     where
         B: Backend,
     {
         use crosstermion::crossterm::event::KeyCode::*;
         use FocussedPane::*;
 
-        {
-            let tree_view = self.tree_view(traversal);
-            self.draw(window, &tree_view, *display, terminal)?;
+        let key = match event {
+            Event::Key(key) if key.kind != KeyEventKind::Release => {
+                if key != refresh_key() {
+                    self.received_events = true;
+                }
+                key
+            }
+            Event::Resize(_, _) => refresh_key(),
+            _ => return Ok(None),
+        };
+
+        self.reset_message();
+
+        let glob_focussed = self.focussed == Glob;
+        let mut tree_view = self.tree_view(traversal);
+        let mut handled = true;
+        match key.code {
+            Esc => {
+                if let Some(value) = self.handle_quit(&mut tree_view, window) {
+                    return Ok(Some(value?));
+                }
+            }
+            Tab => {
+                self.cycle_focus(window);
+            }
+            Char('/') if !glob_focussed => {
+                self.toggle_glob_search(window);
+            }
+            Char('?') if !glob_focussed => self.toggle_help_pane(window),
+            Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
+                return Ok(Some(WalkResult {
+                    num_errors: tree_view.traversal.io_errors,
+                }))
+            }
+            Char('q') if !glob_focussed => {
+                if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                    return Ok(Some(result?));
+                }
+            }
+            _ => {
+                handled = false;
+            }
         }
 
-        for event in events {
-            let key = match event {
-                Event::Key(key) if key.kind != KeyEventKind::Release => key,
-                Event::Resize(_, _) => refresh_key(),
-                _ => continue,
+        if !handled {
+            match self.focussed {
+                Mark => self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal),
+                Help => {
+                    window
+                        .help_pane
+                        .as_mut()
+                        .expect("help pane")
+                        .process_events(key);
+                }
+                Glob => {
+                    let glob_pane = window.glob_pane.as_mut().expect("glob pane");
+                    match key.code {
+                        Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
+                        _ => glob_pane.process_events(key),
+                    }
+                }
+                Main => match key.code {
+                    Char('O') => self.open_that(&tree_view),
+                    Char(' ') => self.mark_entry(
+                        CursorMode::KeepPosition,
+                        MarkEntryMode::Toggle,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('x') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::MarkForDeletion,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
+                    Char('o') | Char('l') | Enter | Right => {
+                        self.enter_node_with_traversal(&tree_view)
+                    }
+                    Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
+                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
+                    PageUp => self.change_entry_selection(CursorDirection::PageUp),
+                    Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.change_entry_selection(CursorDirection::PageUp)
+                    }
+                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
+                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
+                    PageDown => self.change_entry_selection(CursorDirection::PageDown),
+                    Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.change_entry_selection(CursorDirection::PageDown)
+                    }
+                    Char('s') => self.cycle_sorting(&tree_view),
+                    Char('m') => self.cycle_mtime_sorting(&tree_view),
+                    Char('c') => self.cycle_count_sorting(&tree_view),
+                    Char('g') => display.byte_vis.cycle(),
+                    Char('d') => self.mark_entry(
+                        CursorMode::Advance,
+                        MarkEntryMode::Toggle,
+                        window,
+                        &tree_view,
+                    ),
+                    Char('u') | Char('h') | Backspace | Left => {
+                        self.exit_node_with_traversal(&tree_view)
+                    }
+                    _ => {}
+                },
             };
-
-            self.reset_message();
-
-            let glob_focussed = self.focussed == Glob;
-            let mut tree_view = self.tree_view(traversal);
-            let mut handled = true;
-            match key.code {
-                Esc => {
-                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
-                        return value;
-                    }
-                }
-                Tab => {
-                    self.cycle_focus(window);
-                }
-                Char('/') if !glob_focussed => {
-                    self.toggle_glob_search(window);
-                }
-                Char('?') if !glob_focussed => self.toggle_help_pane(window),
-                Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
-                    return Ok(ProcessingResult::ExitRequested(WalkResult {
-                        num_errors: tree_view.traversal.io_errors,
-                    }))
-                }
-                Char('q') if !glob_focussed => {
-                    if let Some(value) = self.handle_quit(&mut tree_view, window) {
-                        return value;
-                    }
-                }
-                _ => {
-                    handled = false;
-                }
-            }
-
-            if !handled {
-                match self.focussed {
-                    Mark => {
-                        self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal)
-                    }
-                    Help => {
-                        window
-                            .help_pane
-                            .as_mut()
-                            .expect("help pane")
-                            .process_events(key);
-                    }
-                    Glob => {
-                        let glob_pane = window.glob_pane.as_mut().expect("glob pane");
-                        match key.code {
-                            Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
-                            _ => glob_pane.process_events(key),
-                        }
-                    }
-                    Main => match key.code {
-                        Char('O') => self.open_that(&tree_view),
-                        Char(' ') => self.mark_entry(
-                            CursorMode::KeepPosition,
-                            MarkEntryMode::Toggle,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('x') => self.mark_entry(
-                            CursorMode::Advance,
-                            MarkEntryMode::MarkForDeletion,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('a') => {
-                            self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view)
-                        }
-                        Char('o') | Char('l') | Enter | Right => {
-                            self.enter_node_with_traversal(&tree_view)
-                        }
-                        Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
-                        Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
-                        PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                        Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.change_entry_selection(CursorDirection::PageUp)
-                        }
-                        Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                        Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                        PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                        Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.change_entry_selection(CursorDirection::PageDown)
-                        }
-                        Char('s') => self.cycle_sorting(&tree_view),
-                        Char('m') => self.cycle_mtime_sorting(&tree_view),
-                        Char('c') => self.cycle_count_sorting(&tree_view),
-                        Char('g') => display.byte_vis.cycle(),
-                        Char('d') => self.mark_entry(
-                            CursorMode::Advance,
-                            MarkEntryMode::Toggle,
-                            window,
-                            &tree_view,
-                        ),
-                        Char('u') | Char('h') | Backspace | Left => {
-                            self.exit_node_with_traversal(&tree_view)
-                        }
-                        _ => {}
-                    },
-                };
-            }
-            self.draw(window, &tree_view, *display, terminal)?;
         }
-        Ok(ProcessingResult::Finished(WalkResult {
-            num_errors: traversal.io_errors,
-        }))
+        self.draw(window, &tree_view, *display, terminal)?;
+
+        Ok(None)
     }
 
     fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {
@@ -283,16 +362,16 @@ impl AppState {
         &mut self,
         tree_view: &mut TreeView<'_>,
         window: &mut MainWindow,
-    ) -> Option<std::result::Result<ProcessingResult, anyhow::Error>> {
+    ) -> Option<std::result::Result<WalkResult, anyhow::Error>> {
         use FocussedPane::*;
         match self.focussed {
             Main => {
                 if self.glob_navigation.is_some() {
                     self.handle_glob_quit(tree_view, window);
                 } else {
-                    return Some(Ok(ProcessingResult::ExitRequested(WalkResult {
+                    return Some(Ok(WalkResult {
                         num_errors: tree_view.traversal.io_errors,
-                    })));
+                    }));
                 }
             }
             Mark => self.focussed = Main,
@@ -337,165 +416,6 @@ where
     Ok(())
 }
 
-/// State and methods representing the interactive disk usage analyser for the terminal
-pub struct TerminalApp {
-    pub traversal: Traversal,
-    pub display: DisplayOptions,
-    pub state: AppState,
-    pub window: MainWindow,
-}
-
-type KeyboardInputAndApp = (crossbeam::channel::Receiver<Event>, TerminalApp);
-
-impl TerminalApp {
-    pub fn refresh_view<B>(&mut self, terminal: &mut Terminal<B>)
-    where
-        B: Backend,
-    {
-        // Use an event that does nothing to trigger a refresh
-        self.state
-            .process_events(
-                &mut self.window,
-                &mut self.traversal,
-                &mut self.display,
-                terminal,
-                std::iter::once(Event::Key(refresh_key())),
-            )
-            .ok();
-    }
-
-    pub fn process_events<B>(
-        &mut self,
-        terminal: &mut Terminal<B>,
-        events: impl Iterator<Item = Event>,
-    ) -> Result<WalkResult>
-    where
-        B: Backend,
-    {
-        match self.state.process_events(
-            &mut self.window,
-            &mut self.traversal,
-            &mut self.display,
-            terminal,
-            events,
-        )? {
-            ProcessingResult::Finished(res) | ProcessingResult::ExitRequested(res) => Ok(res),
-        }
-    }
-
-    pub fn initialize<B>(
-        terminal: &mut Terminal<B>,
-        options: WalkOptions,
-        input_paths: Vec<PathBuf>,
-        mode: Interaction,
-    ) -> Result<Option<KeyboardInputAndApp>>
-    where
-        B: Backend,
-    {
-        terminal.hide_cursor()?;
-        terminal.clear()?;
-        let mut display: DisplayOptions = options.clone().into();
-        display.byte_vis = ByteVisualization::PercentageAndBar;
-        let mut window = MainWindow::default();
-        let keys_rx = match mode {
-            Interaction::None => {
-                let (_, keys_rx) = crossbeam::channel::unbounded();
-                keys_rx
-            }
-            Interaction::Full => input_channel(),
-        };
-
-        #[inline]
-        fn fetch_buffered_key_events(keys_rx: &Receiver<Event>) -> Vec<Event> {
-            let mut keys = Vec::new();
-            while let Ok(key) = keys_rx.try_recv() {
-                keys.push(key);
-            }
-            keys
-        }
-
-        let mut state = AppState {
-            is_scanning: true,
-            ..Default::default()
-        };
-        let mut received_events = false;
-        let traversal =
-            Traversal::from_walk(options, input_paths, &keys_rx, |traversal, event| {
-                if !received_events {
-                    state.navigation_mut().view_root = traversal.root_index;
-                }
-                state.entries = sorted_entries(
-                    &traversal.tree,
-                    state.navigation().view_root,
-                    state.sorting,
-                    state.glob_root(),
-                );
-                if !received_events {
-                    state.navigation_mut().selected = state.entries.first().map(|b| b.index);
-                }
-                state.reset_message(); // force "scanning" to appear
-
-                let mut events = fetch_buffered_key_events(&keys_rx);
-                if let Some(event) = event {
-                    // This update is triggered by a user event, insert it
-                    // before any events fetched later.
-                    events.insert(0, event);
-                }
-                received_events |= !events.is_empty();
-
-                let should_exit = match state.process_events(
-                    &mut window,
-                    traversal,
-                    &mut display,
-                    terminal,
-                    events.into_iter(),
-                )? {
-                    ProcessingResult::ExitRequested(_) => true,
-                    ProcessingResult::Finished(_) => false,
-                };
-
-                Ok(should_exit)
-            })?;
-
-        let traversal = match traversal {
-            Some(t) => t,
-            None => return Ok(None),
-        };
-
-        state.is_scanning = false;
-        if !received_events {
-            state.navigation_mut().view_root = traversal.root_index;
-        }
-        state.entries = sorted_entries(
-            &traversal.tree,
-            state.navigation().view_root,
-            state.sorting,
-            state.glob_root(),
-        );
-        state.navigation_mut().selected = state
-            .navigation()
-            .selected
-            .filter(|_| received_events)
-            .or_else(|| state.entries.first().map(|b| b.index));
-
-        let mut app = TerminalApp {
-            state,
-            display,
-            traversal,
-            window,
-        };
-        app.refresh_view(terminal);
-
-        Ok(Some((keys_rx, app)))
-    }
-}
-
-pub enum Interaction {
-    Full,
-    #[allow(dead_code)]
-    None,
-}
-
-fn refresh_key() -> KeyEvent {
+pub fn refresh_key() -> KeyEvent {
     KeyEvent::new(KeyCode::Char('\r'), KeyModifiers::ALT)
 }
