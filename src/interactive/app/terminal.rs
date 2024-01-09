@@ -12,10 +12,7 @@ use tui_react::Terminal;
 
 use crate::interactive::widgets::MainWindow;
 
-use super::{
-    app_state::{AppState, ProcessingResult},
-    sorted_entries, DisplayOptions,
-};
+use super::{sorted_entries, state::AppState, DisplayOptions};
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
@@ -41,10 +38,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState {
-            is_scanning: false,
-            ..Default::default()
-        };
+        let mut state = AppState::default();
 
         let traversal = {
             let mut tree = Tree::new();
@@ -93,15 +87,13 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        match self.state.process_events(
+        self.state.process_events(
             &mut self.window,
             &mut self.traversal,
             &mut self.display,
             terminal,
             events,
-        )? {
-            ProcessingResult::ExitRequested(res) => Ok(res),
-        }
+        )
     }
 }
 
@@ -120,18 +112,15 @@ mod tests {
         where
             B: Backend,
         {
-            while self.state.running_traversal.is_some() {
-                match self.state.process_event(
+            while self.state.active_traversal.is_some() {
+                if let Some(res) = self.state.process_event(
                     &mut self.window,
                     &mut self.traversal,
                     &mut self.display,
                     terminal,
                     &events,
                 )? {
-                    Some(ProcessingResult::ExitRequested(res)) => {
-                        return Ok(res);
-                    }
-                    _ => {}
+                    return Ok(res);
                 }
             }
             Ok(WalkResult { num_errors: 0 })

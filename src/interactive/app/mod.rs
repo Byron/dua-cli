@@ -1,11 +1,11 @@
-pub mod app_state;
 mod bytevis;
 mod common;
 mod eventloop;
 mod handlers;
 pub mod input;
 mod navigation;
-pub mod terminal_app;
+pub mod state;
+pub mod terminal;
 pub mod tree_view;
 
 pub use bytevis::*;

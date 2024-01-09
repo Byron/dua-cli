@@ -9,7 +9,7 @@ use std::{fs, io, path::PathBuf};
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::app_state::{AppState, FocussedPane::*};
+use super::state::{AppState, FocussedPane::*};
 
 #[derive(Copy, Clone)]
 pub enum CursorMode {
@@ -146,7 +146,7 @@ impl AppState {
     }
 
     pub fn reset_message(&mut self) {
-        if self.is_scanning {
+        if self.active_traversal.is_some() {
             self.message = Some("-> scanning <-".into());
         } else {
             self.message = None;

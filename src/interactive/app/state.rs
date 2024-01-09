@@ -1,4 +1,4 @@
-use dua::{traverse::RunningTraversal, WalkResult};
+use dua::traverse::BackgroundTraversal;
 
 use super::{navigation::Navigation, EntryDataBundle, SortMode};
 
@@ -26,11 +26,6 @@ pub struct AppState {
     pub sorting: SortMode,
     pub message: Option<String>,
     pub focussed: FocussedPane,
-    pub is_scanning: bool,
-    pub received_event: bool,
-    pub running_traversal: Option<RunningTraversal>,
-}
-
-pub enum ProcessingResult {
-    ExitRequested(WalkResult),
+    pub received_events: bool,
+    pub active_traversal: Option<BackgroundTraversal>,
 }

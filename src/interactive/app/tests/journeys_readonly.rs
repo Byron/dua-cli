@@ -40,8 +40,8 @@ fn simple_user_journey_read_only() -> Result<()> {
         );
 
         assert!(
-            !app.state.is_scanning,
-            "it will not think it is still scanning"
+            app.state.active_traversal.is_none(),
+            "it will not think it is still scanning as there is no traversal"
         );
 
         let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));

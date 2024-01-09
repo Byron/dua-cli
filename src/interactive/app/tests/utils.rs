@@ -19,12 +19,14 @@ use std::{
 use tui::backend::TestBackend;
 use tui_react::Terminal;
 
-use crate::interactive::{app::tests::FIXTURE_PATH, terminal_app::TerminalApp};
+use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp};
 
 pub fn into_events<'a>(events: impl IntoIterator<Item = Event> + 'a) -> Receiver<Event> {
     let (key_send, key_receive) = crossbeam::channel::unbounded();
     for event in events {
-        _ = key_send.send(event);
+        key_send
+            .send(event)
+            .expect("event is stored in the channel for later retrieval");
     }
     key_receive
 }

@@ -1,7 +1,7 @@
 use crate::interactive::{
     app::navigation::Navigation,
-    app_state::FocussedPane,
     sorted_entries,
+    state::FocussedPane,
     widgets::{glob_search, MainWindow, MainWindowProps},
     CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
 };
@@ -10,14 +10,14 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, RunningTraversal, Traversal, TraversalProcessingEvent},
+    traverse::{BackgroundTraversal, EntryData, Traversal},
     WalkOptions, WalkResult,
 };
 use std::path::PathBuf;
 use tui::backend::Backend;
 use tui_react::Terminal;
 
-use super::app_state::{AppState, Cursor, ProcessingResult};
+use super::state::{AppState, Cursor};
 use super::tree_view::TreeView;
 
 impl AppState {
@@ -70,8 +70,10 @@ impl AppState {
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
     ) -> Result<()> {
-        let running_traversal = RunningTraversal::start(traversal.root_index, walk_options, input)?;
-        self.running_traversal = Some(running_traversal);
+        let background_traversal =
+            BackgroundTraversal::start(traversal.root_index, walk_options, input)?;
+        self.navigation_mut().view_root = traversal.root_index;
+        self.active_traversal = Some(background_traversal);
         Ok(())
     }
 
@@ -90,6 +92,7 @@ impl AppState {
         Ok(())
     }
 
+    /// This method ends once the user quits the application or there are no more inputs to process.
     pub fn process_events<B>(
         &mut self,
         window: &mut MainWindow,
@@ -97,7 +100,7 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         events: Receiver<Event>,
-    ) -> Result<ProcessingResult>
+    ) -> Result<WalkResult>
     where
         B: Backend,
     {
@@ -119,47 +122,43 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         events: &Receiver<Event>,
-    ) -> Result<Option<ProcessingResult>>
+    ) -> Result<Option<WalkResult>>
     where
         B: Backend,
     {
-        if let Some(running_traversal) = &mut self.running_traversal {
+        if let Some(active_traversal) = &mut self.active_traversal {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
-                        return Ok(Some(ProcessingResult::ExitRequested(WalkResult { num_errors: 0 })));
+                        return Ok(Some(WalkResult { num_errors: 0 }));
                     };
-                    let result = self.process_terminal_event(
+                    let res = self.process_terminal_event(
                         window,
                         traversal,
                         display,
                         terminal,
                         event)?;
-                    if let Some(processing_result) = result {
-                        return Ok(Some(processing_result));
+                    if let Some(res) = res {
+                        return Ok(Some(res));
                     }
                 },
-                recv(&running_traversal.event_rx) -> event => {
+                recv(&active_traversal.event_rx) -> event => {
                     let Ok(event) = event else {
                         return Ok(None);
                     };
 
-                    let result = running_traversal.process_event(traversal, event);
-                    if result != TraversalProcessingEvent::None {
-                        if result == TraversalProcessingEvent::Finished {
-                            self.is_scanning = false;
-                            self.running_traversal = None;
+                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                        if is_finished {
+                            self.active_traversal = None;
                         }
                         self.update_state(traversal);
                         self.refresh_screen(window, traversal, display, terminal)?;
-                    }
+                    };
                 }
             }
         } else {
             let Ok(event) = events.recv() else {
-                return Ok(Some(ProcessingResult::ExitRequested(WalkResult {
-                    num_errors: 0,
-                })));
+                return Ok(Some(WalkResult { num_errors: 0 }));
             };
             let result =
                 self.process_terminal_event(window, traversal, display, terminal, event)?;
@@ -171,17 +170,13 @@ impl AppState {
     }
 
     fn update_state(&mut self, traversal: &Traversal) {
-        let received_events = self.received_event;
-        if !received_events {
-            self.navigation_mut().view_root = traversal.root_index;
-        }
         self.entries = sorted_entries(
             &traversal.tree,
             self.navigation().view_root,
             self.sorting,
             self.glob_root(),
         );
-        if !received_events {
+        if !self.received_events {
             self.navigation_mut().selected = self.entries.first().map(|b| b.index);
         }
         self.reset_message(); // force "scanning" to appear
@@ -194,7 +189,7 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         event: Event,
-    ) -> Result<Option<ProcessingResult>>
+    ) -> Result<Option<WalkResult>>
     where
         B: Backend,
     {
@@ -203,8 +198,8 @@ impl AppState {
 
         let key = match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if key.code != KeyCode::Char('\r') {
-                    self.received_event = true;
+                if key != refresh_key() {
+                    self.received_events = true;
                 }
                 key
             }
@@ -231,9 +226,9 @@ impl AppState {
             }
             Char('?') if !glob_focussed => self.toggle_help_pane(window),
             Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
-                return Ok(Some(ProcessingResult::ExitRequested(WalkResult {
+                return Ok(Some(WalkResult {
                     num_errors: tree_view.traversal.io_errors,
-                })))
+                }))
             }
             Char('q') if !glob_focussed => {
                 if let Some(result) = self.handle_quit(&mut tree_view, window) {
@@ -367,16 +362,16 @@ impl AppState {
         &mut self,
         tree_view: &mut TreeView<'_>,
         window: &mut MainWindow,
-    ) -> Option<std::result::Result<ProcessingResult, anyhow::Error>> {
+    ) -> Option<std::result::Result<WalkResult, anyhow::Error>> {
         use FocussedPane::*;
         match self.focussed {
             Main => {
                 if self.glob_navigation.is_some() {
                     self.handle_glob_quit(tree_view, window);
                 } else {
-                    return Some(Ok(ProcessingResult::ExitRequested(WalkResult {
+                    return Some(Ok(WalkResult {
                         num_errors: tree_view.traversal.io_errors,
-                    })));
+                    }));
                 }
             }
             Mark => self.focussed = Main,

@@ -131,7 +131,8 @@ pub enum TraversalEvent {
     Finished(u64),
 }
 
-pub struct RunningTraversal {
+/// An in-progress traversal which exposes newly obtained entries
+pub struct BackgroundTraversal {
     walk_options: WalkOptions,
     previous_node_idx: TreeIndex,
     parent_node_idx: TreeIndex,
@@ -143,19 +144,14 @@ pub struct RunningTraversal {
     pub event_rx: Receiver<TraversalEvent>,
 }
 
-#[derive(PartialEq)]
-pub enum TraversalProcessingEvent {
-    None,
-    UpdateIsReady,
-    Finished,
-}
-
-impl RunningTraversal {
+impl BackgroundTraversal {
+    /// Start a background thread to perform the actual tree walk, and dispatch the results
+    /// as events to be received on [BackgroundTraversal::event_rx].
     pub fn start(
         root_idx: TreeIndex,
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
-    ) -> anyhow::Result<RunningTraversal> {
+    ) -> anyhow::Result<BackgroundTraversal> {
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
@@ -210,11 +206,18 @@ impl RunningTraversal {
         })
     }
 
-    pub fn process_event(
+    /// Integrate `event` into traversal `t` so its information is represented by it.
+    /// This builds the traversal tree from a directory-walk.
+    ///
+    /// Returns
+    /// * `Some(true)` if the traversal is finished
+    /// * `Some(false)` if the caller may update its state after throttling kicked in
+    /// * `None` - the event was written into the traversal, but there is nothing else to do
+    pub fn integrate_traversal_event(
         &mut self,
         t: &mut Traversal,
         event: TraversalEvent,
-    ) -> TraversalProcessingEvent {
+    ) -> Option<bool> {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id) => {
                 t.entries_traversed += 1;
@@ -334,10 +337,8 @@ impl RunningTraversal {
                     }
                 }
 
-                if let Some(throttle) = &self.throttle {
-                    if throttle.can_update() {
-                        return TraversalProcessingEvent::UpdateIsReady;
-                    }
+                if self.throttle.as_ref().map_or(false, |t| t.can_update()) {
+                    return Some(false);
                 }
             }
             TraversalEvent::Finished(io_errors) => {
@@ -371,10 +372,10 @@ impl RunningTraversal {
                 t.total_bytes = Some(root_size);
                 t.elapsed = Some(t.start.elapsed());
 
-                return TraversalProcessingEvent::Finished;
+                return Some(true);
             }
         }
-        TraversalProcessingEvent::None
+        None
     }
 }
 

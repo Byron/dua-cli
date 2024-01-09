@@ -28,13 +28,10 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     // When selecting the marker window and pressing the combination to delete entries
     app.process_events(
         &mut terminal,
-        into_events(
-            vec![
-                Event::Key(KeyCode::Tab.into()),
-                Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
-            ]
-            .into_iter(),
-        ),
+        into_events([
+            Event::Key(KeyCode::Tab.into()),
+            Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+        ]),
     )?;
     assert!(
         app.window.mark_pane.is_none(),
