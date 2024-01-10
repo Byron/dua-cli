@@ -1,4 +1,8 @@
+use std::collections::HashSet;
+
 use dua::traverse::BackgroundTraversal;
+
+use crate::interactive::widgets::Column;
 
 use super::{navigation::Navigation, EntryDataBundle, SortMode};
 
@@ -24,6 +28,7 @@ pub struct AppState {
     pub glob_navigation: Option<Navigation>,
     pub entries: Vec<EntryDataBundle>,
     pub sorting: SortMode,
+    pub show_columns: HashSet<Column>,
     pub message: Option<String>,
     pub focussed: FocussedPane,
     pub received_events: bool,

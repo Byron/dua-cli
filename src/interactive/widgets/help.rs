@@ -149,9 +149,11 @@ impl HelpPane {
                     "Toggle sort by modified time descending/ascending.",
                     None,
                 );
+                hotkey("M", "Show/hide modified time.", None);
                 hotkey("c", "Toggle sort by items descending/ascending.", None);
+                hotkey("C", "Show/hide item count.", None);
                 hotkey(
-                    "g",
+                    "g/S",
                     "Cycle through percentage display and bar options.",
                     None,
                 );
