@@ -11,7 +11,7 @@ use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifie
 use crosstermion::input::Event;
 use dua::{
     traverse::{BackgroundTraversal, EntryData, Traversal},
-    WalkOptions, WalkResult,
+    WalkResult,
 };
 use std::path::PathBuf;
 use tui::backend::Backend;
@@ -64,14 +64,9 @@ impl AppState {
         result
     }
 
-    pub fn traverse(
-        &mut self,
-        traversal: &Traversal,
-        walk_options: &WalkOptions,
-        input: Vec<PathBuf>,
-    ) -> Result<()> {
+    pub fn traverse(&mut self, traversal: &Traversal, input: Vec<PathBuf>) -> Result<()> {
         let background_traversal =
-            BackgroundTraversal::start(traversal.root_index, walk_options, input)?;
+            BackgroundTraversal::start(traversal.root_index, &self.walk_options, input)?;
         self.navigation_mut().view_root = traversal.root_index;
         self.active_traversal = Some(background_traversal);
         Ok(())

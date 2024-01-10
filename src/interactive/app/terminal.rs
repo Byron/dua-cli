@@ -20,7 +20,6 @@ pub struct TerminalApp {
     pub display: DisplayOptions,
     pub state: AppState,
     pub window: MainWindow,
-    pub walk_options: WalkOptions,
 }
 
 impl TerminalApp {
@@ -38,7 +37,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::default();
+        let mut state = AppState::new(walk_options);
 
         let traversal = {
             let mut tree = Tree::new();
@@ -68,14 +67,12 @@ impl TerminalApp {
             display,
             traversal,
             window,
-            walk_options,
         };
         Ok(app)
     }
 
     pub fn traverse(&mut self, input: Vec<PathBuf>) -> Result<()> {
-        self.state
-            .traverse(&self.traversal, &self.walk_options, input)?;
+        self.state.traverse(&self.traversal, input)?;
         Ok(())
     }
 
