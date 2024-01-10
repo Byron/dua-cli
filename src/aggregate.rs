@@ -41,7 +41,7 @@ pub fn aggregate(
                 continue;
             }
         };
-        for entry in walk_options.iter_from_path(path.as_ref(), device_id) {
+        for entry in walk_options.iter_from_path(path.as_ref(), device_id, false) {
             stats.entries_traversed += 1;
             progress.throttled(|| {
                 if let Some(err) = err.as_mut() {

@@ -72,9 +72,9 @@ pub struct Traversal {
 }
 
 impl Traversal {
-    pub fn recompute_root_size(&self) -> u128 {
+    pub fn recompute_node_size(&self, node_index: TreeIndex) -> u128 {
         self.tree
-            .neighbors_directed(self.root_index, Direction::Outgoing)
+            .neighbors_directed(node_index, Direction::Outgoing)
             .map(|idx| get_size_or_panic(&self.tree, idx))
             .sum()
     }
@@ -134,6 +134,7 @@ pub enum TraversalEvent {
 /// An in-progress traversal which exposes newly obtained entries
 pub struct BackgroundTraversal {
     walk_options: WalkOptions,
+    root_idx: TreeIndex,
     previous_node_idx: TreeIndex,
     parent_node_idx: TreeIndex,
     directory_info_per_depth_level: Vec<EntryInfo>,
@@ -141,6 +142,7 @@ pub struct BackgroundTraversal {
     previous_depth: usize,
     inodes: InodeFilter,
     throttle: Option<Throttle>,
+    skip_root: bool,
     pub event_rx: Receiver<TraversalEvent>,
 }
 
@@ -151,6 +153,7 @@ impl BackgroundTraversal {
         root_idx: TreeIndex,
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
+        skip_root: bool,
     ) -> anyhow::Result<BackgroundTraversal> {
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         std::thread::Builder::new()
@@ -160,6 +163,7 @@ impl BackgroundTraversal {
                 let mut io_errors: u64 = 0;
                 move || {
                     for root_path in input.into_iter() {
+                        log::info!("Walking {root_path:?}");
                         let device_id = match crossdev::init(root_path.as_ref()) {
                             Ok(id) => id,
                             Err(_) => {
@@ -170,9 +174,10 @@ impl BackgroundTraversal {
 
                         let root_path = Arc::new(root_path);
                         for entry in walk_options
-                            .iter_from_path(root_path.as_ref(), device_id)
+                            .iter_from_path(root_path.as_ref(), device_id, skip_root)
                             .into_iter()
                         {
+                            log::info!("{:?}", entry);
                             if entry_tx
                                 .send(TraversalEvent::Entry(
                                     entry,
@@ -195,6 +200,7 @@ impl BackgroundTraversal {
 
         Ok(Self {
             walk_options: walk_options.clone(),
+            root_idx,
             previous_node_idx: root_idx,
             parent_node_idx: root_idx,
             directory_info_per_depth_level: Vec::new(),
@@ -202,6 +208,7 @@ impl BackgroundTraversal {
             previous_depth: 0,
             inodes: InodeFilter::default(),
             throttle: Some(Throttle::new(Duration::from_millis(250), None)),
+            skip_root,
             event_rx: entry_rx,
         })
     }
@@ -223,12 +230,17 @@ impl BackgroundTraversal {
                 t.entries_traversed += 1;
                 let mut data = EntryData::default();
                 match entry {
-                    Ok(entry) => {
-                        data.name = if entry.depth < 1 {
-                            (*root_path).clone()
+                    Ok(mut entry) => {
+                        if self.skip_root {
+                            entry.depth = entry.depth - 1;
+                            data.name = entry.file_name.into()
                         } else {
-                            entry.file_name.into()
-                        };
+                            data.name = if entry.depth < 1 {
+                                (*root_path).clone()
+                            } else {
+                                entry.file_name.into()
+                            }
+                        }
 
                         let mut file_size = 0u128;
                         let mut mtime: SystemTime = UNIX_EPOCH;
@@ -360,10 +372,10 @@ impl BackgroundTraversal {
                     );
                     self.parent_node_idx = parent_or_panic(&mut t.tree, self.parent_node_idx);
                 }
-                let root_size = t.recompute_root_size();
+                let root_size = t.recompute_node_size(self.root_idx);
                 set_entry_info_or_panic(
                     &mut t.tree,
-                    t.root_index,
+                    self.root_idx,
                     EntryInfo {
                         size: root_size,
                         entries_count: (t.entries_traversed > 0).then_some(t.entries_traversed),

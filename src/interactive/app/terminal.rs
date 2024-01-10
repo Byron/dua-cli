@@ -120,7 +120,7 @@ mod tests {
                     return Ok(res);
                 }
             }
-            Ok(WalkResult { num_errors: 0 })
+            Ok(WalkResult { num_errors: self.traversal.io_errors })
         }
     }
 }

@@ -176,11 +176,12 @@ pub struct WalkOptions {
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub fn iter_from_path(&self, root: &Path, root_device_id: u64) -> WalkDir {
+    pub fn iter_from_path(&self, root: &Path, root_device_id: u64, skip_root: bool) -> WalkDir {
         let ignore_dirs = self.ignore_dirs.clone();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)
             .follow_links(false)
+            .min_depth(if skip_root { 1 } else { 0 })
             .sort(match self.sorting {
                 TraversalSorting::None => false,
                 TraversalSorting::AlphabeticalByFileName => true,

@@ -66,7 +66,7 @@ impl AppState {
 
     pub fn traverse(&mut self, traversal: &Traversal, input: Vec<PathBuf>) -> Result<()> {
         let background_traversal =
-            BackgroundTraversal::start(traversal.root_index, &self.walk_options, input)?;
+            BackgroundTraversal::start(traversal.root_index, &self.walk_options, input, false)?;
         self.navigation_mut().view_root = traversal.root_index;
         self.active_traversal = Some(background_traversal);
         Ok(())
@@ -125,7 +125,7 @@ impl AppState {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
-                        return Ok(Some(WalkResult { num_errors: 0 }));
+                        return Ok(Some(WalkResult { num_errors: traversal.io_errors }));
                     };
                     let res = self.process_terminal_event(
                         window,
@@ -153,7 +153,7 @@ impl AppState {
             }
         } else {
             let Ok(event) = events.recv() else {
-                return Ok(Some(WalkResult { num_errors: 0 }));
+                return Ok(Some(WalkResult { num_errors: traversal.io_errors }));
             };
             let result =
                 self.process_terminal_event(window, traversal, display, terminal, event)?;
@@ -309,23 +309,30 @@ impl AppState {
     }
 
     fn refresh(&mut self, tree: &mut TreeView<'_>, what: Refresh) -> anyhow::Result<()> {
+        // TODO: we should refresh parent_idx not selected index
         match what {
             Refresh::Selected => {
-                if let Some(selected) = self.navigation().selected {
-                    let parent_idx = tree
-                        .fs_parent_of(selected)
-                        .expect("there is always a parent to a selection");
-                    let path = tree.path_of(selected);
-                    tree.remove_entries(selected);
-                    tree.recompute_sizes_recursively(parent_idx);
-                    self.entries = tree.sorted_entries(parent_idx, self.sorting);
-                    self.navigation_mut().selected = self.entries.first().map(|e| e.index);
-                    self.active_traversal = Some(BackgroundTraversal::start(
-                        parent_idx,
-                        &self.walk_options,
-                        vec![path],
-                    )?);
+                let mut path = tree.path_of(self.navigation().view_root);
+                if path.to_str().unwrap() == "" {
+                    path = PathBuf::from(".");
                 }
+                log::info!("Refreshing {:?}", path);
+
+                let entries_deleted = tree.remove_entries(self.navigation().view_root, false);
+                log::info!("Deleted {entries_deleted} entries");
+                
+                tree.recompute_sizes_recursively(self.navigation().view_root);
+                self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
+                self.navigation_mut().selected = self.entries.first().map(|e| e.index);
+                
+                self.active_traversal = Some(BackgroundTraversal::start(
+                    self.navigation().view_root,
+                    &self.walk_options,
+                    vec![path],
+                    true,
+                )?);
+
+                self.received_events = false;
             }
             Refresh::AllInView => {
                 log::info!("Not implemented")

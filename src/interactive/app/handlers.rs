@@ -312,7 +312,7 @@ impl AppState {
         let parent_idx = tree_view
             .fs_parent_of(index)
             .expect("us being unable to delete the root index");
-        let entries_deleted = tree_view.remove_entries(index);
+        let entries_deleted = tree_view.remove_entries(index, true);
 
         if !tree_view.exists(self.navigation().view_root) {
             self.go_to_root(tree_view);
