@@ -270,6 +270,8 @@ impl AppState {
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
+                    Char('R') => self.refresh(&mut tree_view, Refresh::AllInView)?,
+                    Char('r') => self.refresh(&mut tree_view, Refresh::Selected)?,
                     Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                     Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
@@ -304,6 +306,32 @@ impl AppState {
         self.draw(window, &tree_view, *display, terminal)?;
 
         Ok(None)
+    }
+
+    fn refresh(&mut self, tree: &mut TreeView<'_>, what: Refresh) -> anyhow::Result<()> {
+        match what {
+            Refresh::Selected => {
+                if let Some(selected) = self.navigation().selected {
+                    let parent_idx = tree
+                        .fs_parent_of(selected)
+                        .expect("there is always a parent to a selection");
+                    let path = tree.path_of(selected);
+                    tree.remove_entries(selected);
+                    tree.recompute_sizes_recursively(parent_idx);
+                    self.entries = tree.sorted_entries(parent_idx, self.sorting);
+                    self.navigation_mut().selected = self.entries.first().map(|e| e.index);
+                    self.active_traversal = Some(BackgroundTraversal::start(
+                        parent_idx,
+                        &self.walk_options,
+                        vec![path],
+                    )?);
+                }
+            }
+            Refresh::AllInView => {
+                log::info!("Not implemented")
+            }
+        }
+        Ok(())
     }
 
     fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {
@@ -395,6 +423,13 @@ impl AppState {
         tree_view.glob_tree_root.take();
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
     }
+}
+
+enum Refresh {
+    /// Refresh the directory currently in view
+    AllInView,
+    /// Refresh only the selected item
+    Selected,
 }
 
 pub fn draw_window<B>(
