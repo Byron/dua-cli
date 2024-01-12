@@ -25,6 +25,7 @@ pub struct FooterProps {
 
 impl Footer {
     pub fn render(&self, props: impl Borrow<FooterProps>, area: Rect, buf: &mut Buffer) {
+        use SortMode::*;
         let FooterProps {
             total_bytes,
             entries_traversed,
@@ -39,12 +40,12 @@ impl Footer {
             Span::from(format!(
                 "Sort mode: {}  Total disk usage: {}  Items: {} {progress}  ",
                 match sort_mode {
-                    SortMode::SizeAscending => "size ascending",
-                    SortMode::SizeDescending => "size descending",
-                    SortMode::MTimeAscending => "modified ascending",
-                    SortMode::MTimeDescending => "modified descending",
-                    SortMode::CountAscending => "items ascending",
-                    SortMode::CountDescending => "items descending",
+                    SizeAscending => "size ascending",
+                    SizeDescending => "size descending",
+                    MTimeAscending => "modified ascending",
+                    MTimeDescending => "modified descending",
+                    CountAscending => "items ascending",
+                    CountDescending => "items descending",
                 },
                 match total_bytes {
                     Some(b) => format!("{}", format.display(*b)),
