@@ -68,7 +68,8 @@ impl TreeView<'_> {
                 continue;
             }
             self.tree_mut().remove_node(nx);
-            self.traversal.entries_traversed -= 1;
+            // TODO: don't need this right?
+            // self.traversal.entries_traversed -= 1;
             entries_deleted += 1;
         }
         entries_deleted
@@ -96,10 +97,11 @@ impl TreeView<'_> {
                 Some(parent) => index = parent,
             }
         }
-        self.traversal.total_bytes = self
-            .tree()
-            .node_weight(self.traversal.root_index)
-            .map(|w| w.size);
+        // TODO: don't need this right?
+        // self.traversal.total_bytes = self
+        //     .tree()
+        //     .node_weight(self.traversal.root_index)
+        //     .map(|w| w.size);
     }
 }
 

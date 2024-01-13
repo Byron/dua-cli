@@ -10,7 +10,7 @@ use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{BackgroundTraversal, EntryData, Traversal},
+    traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
     WalkResult,
 };
 use std::path::PathBuf;
@@ -43,10 +43,10 @@ impl AppState {
     {
         let props = MainWindowProps {
             current_path: tree_view.current_path(self.navigation().view_root),
-            entries_traversed: tree_view.traversal.entries_traversed,
-            total_bytes: tree_view.traversal.total_bytes,
-            start: tree_view.traversal.start,
-            elapsed: tree_view.traversal.elapsed,
+            entries_traversed: self.stats.entries_traversed,
+            total_bytes: self.stats.total_bytes,
+            start: self.stats.start,
+            elapsed: self.stats.elapsed,
             display,
             state: self,
         };
@@ -70,6 +70,15 @@ impl AppState {
         self.navigation_mut().view_root = traversal.root_index;
         self.active_traversal = Some(background_traversal);
         Ok(())
+    }
+
+    fn recompute_sizes_recursively(
+        &mut self,
+        traversal: &mut Traversal,
+        node_index: TreeIndex)
+    {
+        let mut tree_view = self.tree_view(traversal);
+        tree_view.recompute_sizes_recursively(node_index);
     }
 
     fn refresh_screen<B>(
@@ -125,7 +134,7 @@ impl AppState {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
-                        return Ok(Some(WalkResult { num_errors: traversal.io_errors }));
+                        return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
                     };
                     let res = self.process_terminal_event(
                         window,
@@ -144,6 +153,8 @@ impl AppState {
 
                     if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
                         if is_finished {
+                            let root_index = active_traversal.root_idx;
+                            self.recompute_sizes_recursively(traversal, root_index);
                             self.active_traversal = None;
                         }
                         self.update_state(traversal);
@@ -153,7 +164,7 @@ impl AppState {
             }
         } else {
             let Ok(event) = events.recv() else {
-                return Ok(Some(WalkResult { num_errors: traversal.io_errors }));
+                return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
             };
             let result =
                 self.process_terminal_event(window, traversal, display, terminal, event)?;
@@ -222,7 +233,7 @@ impl AppState {
             Char('?') if !glob_focussed => self.toggle_help_pane(window),
             Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
                 return Ok(Some(WalkResult {
-                    num_errors: tree_view.traversal.io_errors,
+                    num_errors: self.stats.io_errors,
                 }))
             }
             Char('q') if !glob_focussed => {
@@ -402,7 +413,7 @@ impl AppState {
                     self.handle_glob_quit(tree_view, window);
                 } else {
                     return Some(Ok(WalkResult {
-                        num_errors: tree_view.traversal.io_errors,
+                        num_errors: self.stats.io_errors,
                     }));
                 }
             }

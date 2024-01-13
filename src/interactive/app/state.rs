@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use dua::traverse::BackgroundTraversal;
+use dua::traverse::{BackgroundTraversal, TraversalStats};
 use dua::WalkOptions;
 
 use crate::interactive::widgets::Column;
@@ -33,6 +33,7 @@ pub struct AppState {
     pub focussed: FocussedPane,
     pub received_events: bool,
     pub active_traversal: Option<BackgroundTraversal>,
+    pub stats: TraversalStats,
     pub walk_options: WalkOptions,
 }
 
@@ -48,6 +49,7 @@ impl AppState {
             focussed: Default::default(),
             received_events: false,
             active_traversal: None,
+            stats: TraversalStats::default(),
             walk_options,
         }
     }
