@@ -44,7 +44,7 @@ impl AppState {
         let props = MainWindowProps {
             current_path: tree_view.current_path(self.navigation().view_root),
             entries_traversed: self.stats.entries_traversed,
-            total_bytes: self.stats.total_bytes,
+            total_bytes: tree_view.total_size(),
             start: self.stats.start,
             elapsed: self.stats.elapsed,
             display,
@@ -152,6 +152,7 @@ impl AppState {
                     };
 
                     if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                        self.stats = active_traversal.stats;
                         if is_finished {
                             let root_index = active_traversal.root_idx;
                             self.recompute_sizes_recursively(traversal, root_index);
@@ -327,12 +328,9 @@ impl AppState {
                 if path.to_str().unwrap() == "" {
                     path = PathBuf::from(".");
                 }
-                log::info!("Refreshing {:?}", path);
-
-                let entries_deleted = tree.remove_entries(self.navigation().view_root, false);
-                log::info!("Deleted {entries_deleted} entries");
-                
+                tree.remove_entries(self.navigation().view_root, false);                
                 tree.recompute_sizes_recursively(self.navigation().view_root);
+                
                 self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
                 self.navigation_mut().selected = self.entries.first().map(|e| e.index);
                 
@@ -343,6 +341,7 @@ impl AppState {
                     true,
                 )?);
 
+                // TODO: fix
                 self.received_events = false;
             }
             Refresh::AllInView => {

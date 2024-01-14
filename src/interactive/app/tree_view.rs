@@ -68,8 +68,6 @@ impl TreeView<'_> {
                 continue;
             }
             self.tree_mut().remove_node(nx);
-            // TODO: don't need this right?
-            // self.traversal.entries_traversed -= 1;
             entries_deleted += 1;
         }
         entries_deleted
@@ -77,6 +75,13 @@ impl TreeView<'_> {
 
     pub fn exists(&self, idx: TreeIndex) -> bool {
         self.tree().node_weight(idx).is_some()
+    }
+
+    pub fn total_size(&self) -> u128 {
+        self.tree()
+            .neighbors_directed(self.traversal.root_index, Direction::Outgoing)
+            .filter_map(|idx| self.tree().node_weight(idx).map(|w| w.size))
+            .sum()
     }
 
     pub fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
@@ -97,11 +102,6 @@ impl TreeView<'_> {
                 Some(parent) => index = parent,
             }
         }
-        // TODO: don't need this right?
-        // self.traversal.total_bytes = self
-        //     .tree()
-        //     .node_weight(self.traversal.root_index)
-        //     .map(|w| w.size);
     }
 }
 

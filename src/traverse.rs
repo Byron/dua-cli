@@ -79,6 +79,7 @@ impl Traversal {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct TraversalStats {
     /// Amount of files or directories we have seen during the filesystem traversal
     pub entries_traversed: u64,
