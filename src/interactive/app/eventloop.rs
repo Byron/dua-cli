@@ -283,8 +283,8 @@ impl AppState {
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
-                    Char('R') => self.refresh(&mut tree_view, Refresh::Selected)?,
-                    Char('r') => self.refresh(&mut tree_view, Refresh::AllInView)?,
+                    Char('R') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
+                    Char('r') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
                     Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                     Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
@@ -321,8 +321,14 @@ impl AppState {
         Ok(None)
     }
 
-    fn refresh(&mut self, tree: &mut TreeView<'_>, what: Refresh) -> anyhow::Result<()> {
-       let (remove_index, skip_root, index, parent_index) = match what {
+    fn refresh(&mut self, tree: &mut TreeView<'_>, window: &mut MainWindow, what: Refresh) -> anyhow::Result<()> {
+        if let Some(glob_tree_root) = tree.glob_tree_root {
+            if glob_tree_root == self.navigation().view_root {
+                self.quit_glob_mode(tree, window)
+            }
+        }
+
+        let (remove_index, skip_root, index, parent_index) = match what {
             Refresh::Selected => {
                 let Some(selected) = self.navigation().selected else {
                     return Ok(());
@@ -414,7 +420,7 @@ impl AppState {
         match self.focussed {
             Main => {
                 if self.glob_navigation.is_some() {
-                    self.handle_glob_quit(tree_view, window);
+                    self.quit_glob_mode(tree_view, window);
                 } else {
                     return Some(Ok(WalkResult {
                         num_errors: self.stats.io_errors,
@@ -427,13 +433,13 @@ impl AppState {
                 window.help_pane = None
             }
             Glob => {
-                self.handle_glob_quit(tree_view, window);
+                self.quit_glob_mode(tree_view, window);
             }
         }
         None
     }
 
-    fn handle_glob_quit(&mut self, tree_view: &mut TreeView<'_>, window: &mut MainWindow) {
+    fn quit_glob_mode(&mut self, tree_view: &mut TreeView<'_>, window: &mut MainWindow) {
         use FocussedPane::*;
         self.focussed = Main;
         if let Some(glob_source) = &self.glob_navigation {
