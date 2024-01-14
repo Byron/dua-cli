@@ -183,6 +183,8 @@ impl HelpPane {
                     "Git-style glob search, case-insensitive.",
                     Some("Search starts from the current directory."),
                 );
+                hotkey("r", "Refresh all items in the current view.", None);
+                hotkey("R", "Refresh only the selected item.", None);
                 spacer();
             }
             title("Mark items pane");

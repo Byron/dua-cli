@@ -226,7 +226,7 @@ impl AppState {
             Tab => {
                 self.cycle_focus(window);
             }
-            Char('/') if !glob_focussed => {
+            Char('/') if !glob_focussed && self.active_traversal.is_none() => {
                 self.toggle_glob_search(window);
             }
             Char('?') if !glob_focussed => self.toggle_help_pane(window),
@@ -324,6 +324,12 @@ impl AppState {
         window: &mut MainWindow,
         what: Refresh,
     ) -> anyhow::Result<()> {
+        // If another traversal is already running do not do anything.
+        if self.active_traversal.is_some() {
+            return Ok(());
+        }
+
+        // If we are displaing root of the glob search results then cancel the search.
         if let Some(glob_tree_root) = tree.glob_tree_root {
             if glob_tree_root == self.navigation().view_root {
                 self.quit_glob_mode(tree, window)
