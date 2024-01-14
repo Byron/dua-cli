@@ -334,7 +334,7 @@ impl AppState {
         entries_deleted
     }
 
-    fn go_to_root(&mut self, tree_view: &TreeView<'_>) {
+    pub fn go_to_root(&mut self, tree_view: &TreeView<'_>) {
         let root = self.navigation().tree_root;
         let entries = tree_view.sorted_entries(root, self.sorting);
         self.navigation_mut().exit_node(root, &entries);

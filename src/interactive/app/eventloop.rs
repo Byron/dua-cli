@@ -176,13 +176,14 @@ impl AppState {
         Ok(None)
     }
 
-    fn update_state(&mut self, traversal: &Traversal) {
-        self.entries = sorted_entries(
-            &traversal.tree,
-            self.navigation().view_root,
-            self.sorting,
-            self.glob_root(),
-        );
+    fn update_state(&mut self, traversal: &mut Traversal) {
+        let tree_view = self.tree_view(traversal);
+        if !tree_view.exists(self.navigation().view_root) {
+            self.go_to_root(&tree_view);
+        } else {
+            self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        }
+
         if !self.received_events {
             self.navigation_mut().selected = self.entries.first().map(|b| b.index);
         }
@@ -282,8 +283,8 @@ impl AppState {
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
-                    Char('R') => self.refresh(&mut tree_view, Refresh::AllInView)?,
-                    Char('r') => self.refresh(&mut tree_view, Refresh::Selected)?,
+                    Char('R') => self.refresh(&mut tree_view, Refresh::Selected)?,
+                    Char('r') => self.refresh(&mut tree_view, Refresh::AllInView)?,
                     Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                     Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
@@ -321,33 +322,37 @@ impl AppState {
     }
 
     fn refresh(&mut self, tree: &mut TreeView<'_>, what: Refresh) -> anyhow::Result<()> {
-        // TODO: we should refresh parent_idx not selected index
-        match what {
+       let (remove_index, skip_root, index, parent_index) = match what {
             Refresh::Selected => {
-                let mut path = tree.path_of(self.navigation().view_root);
-                if path.to_str().unwrap() == "" {
-                    path = PathBuf::from(".");
-                }
-                tree.remove_entries(self.navigation().view_root, false);                
-                tree.recompute_sizes_recursively(self.navigation().view_root);
-                
-                self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
-                self.navigation_mut().selected = self.entries.first().map(|e| e.index);
-                
-                self.active_traversal = Some(BackgroundTraversal::start(
-                    self.navigation().view_root,
-                    &self.walk_options,
-                    vec![path],
-                    true,
-                )?);
+                let Some(selected) = self.navigation().selected else {
+                    return Ok(());
+                };
+                let parent_index = tree
+                    .fs_parent_of(selected)
+                    .expect("there is always a parent to a selection");
+                (true, false, selected, parent_index)
+            },
+            Refresh::AllInView => (false, true, self.navigation().view_root, self.navigation().view_root)
+        };
 
-                // TODO: fix
-                self.received_events = false;
-            }
-            Refresh::AllInView => {
-                log::info!("Not implemented")
-            }
+        let mut path = tree.path_of(index);
+        if path.to_str() == Some("") {
+            path = PathBuf::from(".");
         }
+        tree.remove_entries(index, remove_index);                
+        tree.recompute_sizes_recursively(parent_index);
+        
+        self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
+        self.navigation_mut().selected = self.entries.first().map(|e| e.index);
+        
+        self.active_traversal = Some(BackgroundTraversal::start(
+            parent_index,
+            &self.walk_options,
+            vec![path],
+            skip_root,
+        )?);
+
+        self.received_events = false;
         Ok(())
     }
 
