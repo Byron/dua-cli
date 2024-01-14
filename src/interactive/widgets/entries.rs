@@ -157,7 +157,7 @@ fn title_block(title: &str, border_style: Style) -> Block<'_> {
 
 fn title(current_path: &str, item_count: u64, display: DisplayOptions, size: u128) -> String {
     format!(
-        " {} ({} item{}, {}) ",
+        " {} ({} file{}, {}) ",
         current_path,
         COUNT.format(item_count as f64),
         match item_count {

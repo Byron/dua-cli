@@ -270,6 +270,7 @@ impl BackgroundTraversal {
 
                         let mut file_size = 0u128;
                         let mut mtime: SystemTime = UNIX_EPOCH;
+                        let mut file_count = 0u64;
                         match &entry.client_state {
                             Some(Ok(ref m)) => {
                                 if !m.is_dir()
@@ -277,6 +278,7 @@ impl BackgroundTraversal {
                                     && (self.walk_options.cross_filesystems
                                         || crossdev::is_same_device(device_id, m))
                                 {
+                                    file_count = 1;
                                     if self.walk_options.apparent_size {
                                         file_size = m.len() as u128;
                                     } else {
@@ -316,7 +318,7 @@ impl BackgroundTraversal {
                                     .push(self.current_directory_at_depth);
                                 self.current_directory_at_depth = EntryInfo {
                                     size: file_size,
-                                    entries_count: Some(1),
+                                    entries_count: Some(file_count),
                                 };
                                 self.parent_node_idx = self.previous_node_idx;
                             }
@@ -340,7 +342,7 @@ impl BackgroundTraversal {
                                 *self
                                     .current_directory_at_depth
                                     .entries_count
-                                    .get_or_insert(0) += 1;
+                                    .get_or_insert(0) += file_count;
                                 set_entry_info_or_panic(
                                     &mut traversal.tree,
                                     self.parent_node_idx,
@@ -352,7 +354,7 @@ impl BackgroundTraversal {
                                 *self
                                     .current_directory_at_depth
                                     .entries_count
-                                    .get_or_insert(0) += 1;
+                                    .get_or_insert(0) += file_count;
                             }
                         };
 
