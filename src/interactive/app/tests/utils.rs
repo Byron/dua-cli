@@ -234,7 +234,7 @@ pub fn sample_01_tree() -> Tree {
         let root_size = 1259070;
         #[cfg(windows)]
         let root_size = 1259069;
-        let rn = add_node("", root_size, 14, None);
+        let rn = add_node("", root_size, 10, None);
         {
             let sn = add_node(&fixture_str("sample-01"), root_size, 10, Some(rn));
             {
@@ -272,7 +272,7 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
     {
         let mut add_node = make_add_node(&mut tree);
         let root_size = 1540;
-        root_index = add_node("", root_size, 10, None);
+        root_index = add_node("", root_size, 6, None);
         {
             let sn = add_node(
                 format!(
