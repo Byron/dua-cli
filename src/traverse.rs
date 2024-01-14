@@ -388,7 +388,6 @@ impl BackgroundTraversal {
                 self.directory_info_per_depth_level
                     .push(self.current_directory_at_depth);
                 self.current_directory_at_depth = EntryInfo::default();
-                // TODO: this loop is broken
                 for _ in 0..self.previous_depth {
                     let dir_info = pop_or_panic(&mut self.directory_info_per_depth_level);
                     self.current_directory_at_depth.size += dir_info.size;
@@ -401,8 +400,6 @@ impl BackgroundTraversal {
                     );
                     self.parent_node_idx = parent_or_panic(&mut traversal.tree, self.parent_node_idx);
                 }
-                // TODO: this is a hack because the loop above is broken
-                log::info!("directory_info_per_depth_level.size() = {}", self.directory_info_per_depth_level.len());
                 let root_size = traversal.recompute_node_size(self.root_idx);
                 set_entry_info_or_panic(
                     &mut traversal.tree,
