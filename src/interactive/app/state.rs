@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use dua::traverse::{BackgroundTraversal, TraversalStats};
 use dua::WalkOptions;
@@ -32,7 +33,7 @@ pub struct AppState {
     pub message: Option<String>,
     pub focussed: FocussedPane,
     pub received_events: bool,
-    pub active_traversal: Option<BackgroundTraversal>,
+    pub active_traversal: Option<(BackgroundTraversal, Option<PathBuf>)>,
     pub stats: TraversalStats,
     pub walk_options: WalkOptions,
 }

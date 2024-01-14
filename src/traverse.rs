@@ -172,6 +172,7 @@ pub struct BackgroundTraversal {
     inodes: InodeFilter,
     throttle: Option<Throttle>,
     skip_root: bool,
+    use_root_path: bool,
     pub event_rx: Receiver<TraversalEvent>,
 }
 
@@ -183,6 +184,7 @@ impl BackgroundTraversal {
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
         skip_root: bool,
+        use_root_path: bool,
     ) -> anyhow::Result<BackgroundTraversal> {
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         std::thread::Builder::new()
@@ -238,6 +240,7 @@ impl BackgroundTraversal {
             inodes: InodeFilter::default(),
             throttle: Some(Throttle::new(Duration::from_millis(250), None)),
             skip_root,
+            use_root_path,
             event_rx: entry_rx,
         })
     }
@@ -264,7 +267,7 @@ impl BackgroundTraversal {
                             entry.depth -= 1;
                             data.name = entry.file_name.into()
                         } else {
-                            data.name = if entry.depth < 1 {
+                            data.name = if entry.depth < 1 && self.use_root_path {
                                 (*root_path).clone()
                             } else {
                                 entry.file_name.into()

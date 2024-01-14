@@ -64,10 +64,15 @@ impl AppState {
     }
 
     pub fn traverse(&mut self, traversal: &Traversal, input: Vec<PathBuf>) -> Result<()> {
-        let background_traversal =
-            BackgroundTraversal::start(traversal.root_index, &self.walk_options, input, false)?;
+        let background_traversal = BackgroundTraversal::start(
+            traversal.root_index,
+            &self.walk_options,
+            input,
+            false,
+            true,
+        )?;
         self.navigation_mut().view_root = traversal.root_index;
-        self.active_traversal = Some(background_traversal);
+        self.active_traversal = Some((background_traversal, None));
         Ok(())
     }
 
@@ -125,7 +130,7 @@ impl AppState {
     where
         B: Backend,
     {
-        if let Some(active_traversal) = &mut self.active_traversal {
+        if let Some((active_traversal, selected_name)) = &mut self.active_traversal {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
@@ -148,12 +153,13 @@ impl AppState {
 
                     if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
                         self.stats = active_traversal.stats;
+                        let selected_name = selected_name.clone();
                         if is_finished {
                             let root_index = active_traversal.root_idx;
                             self.recompute_sizes_recursively(traversal, root_index);
                             self.active_traversal = None;
                         }
-                        self.update_state(traversal);
+                        self.update_state_during_traversal(traversal, selected_name.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal)?;
                     };
                 }
@@ -173,16 +179,23 @@ impl AppState {
         Ok(None)
     }
 
-    fn update_state(&mut self, traversal: &mut Traversal) {
+    fn update_state_during_traversal(
+        &mut self,
+        traversal: &mut Traversal,
+        selected_name: Option<&PathBuf>,
+        is_finished: bool,
+    ) {
         let tree_view = self.tree_view(traversal);
-        if !tree_view.exists(self.navigation().view_root) {
-            self.go_to_root(&tree_view);
-        } else {
-            self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
-        }
+        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
 
         if !self.received_events {
-            self.navigation_mut().selected = self.entries.first().map(|b| b.index);
+            let selected_entry = selected_name
+                .and_then(|selected_name| self.entries.iter().find(|e| e.name == *selected_name));
+            if let Some(selected_entry) = selected_entry {
+                self.navigation_mut().selected = Some(selected_entry.index);
+            } else if is_finished {
+                self.navigation_mut().selected = self.entries.first().map(|b| b.index);
+            }
         }
         self.reset_message(); // force "scanning" to appear
     }
@@ -354,6 +367,11 @@ impl AppState {
             ),
         };
 
+        let selected_name = self
+            .navigation()
+            .selected
+            .and_then(|w| tree.tree().node_weight(w).map(|w| w.name.clone()));
+
         let mut path = tree.path_of(index);
         if path.to_str() == Some("") {
             path = PathBuf::from(".");
@@ -364,12 +382,16 @@ impl AppState {
         self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
-        self.active_traversal = Some(BackgroundTraversal::start(
-            parent_index,
-            &self.walk_options,
-            vec![path],
-            skip_root,
-        )?);
+        self.active_traversal = Some((
+            BackgroundTraversal::start(
+                parent_index,
+                &self.walk_options,
+                vec![path],
+                skip_root,
+                false,
+            )?,
+            selected_name,
+        ));
 
         self.received_events = false;
         Ok(())
