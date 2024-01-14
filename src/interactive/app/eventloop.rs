@@ -1,6 +1,5 @@
 use crate::interactive::{
     app::navigation::Navigation,
-    sorted_entries,
     state::FocussedPane,
     widgets::{glob_search, MainWindow, MainWindowProps},
     CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
@@ -72,11 +71,7 @@ impl AppState {
         Ok(())
     }
 
-    fn recompute_sizes_recursively(
-        &mut self,
-        traversal: &mut Traversal,
-        node_index: TreeIndex)
-    {
+    fn recompute_sizes_recursively(&mut self, traversal: &mut Traversal, node_index: TreeIndex) {
         let mut tree_view = self.tree_view(traversal);
         tree_view.recompute_sizes_recursively(node_index);
     }
@@ -165,7 +160,9 @@ impl AppState {
             }
         } else {
             let Ok(event) = events.recv() else {
-                return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
+                return Ok(Some(WalkResult {
+                    num_errors: self.stats.io_errors,
+                }));
             };
             let result =
                 self.process_terminal_event(window, traversal, display, terminal, event)?;
@@ -321,7 +318,12 @@ impl AppState {
         Ok(None)
     }
 
-    fn refresh(&mut self, tree: &mut TreeView<'_>, window: &mut MainWindow, what: Refresh) -> anyhow::Result<()> {
+    fn refresh(
+        &mut self,
+        tree: &mut TreeView<'_>,
+        window: &mut MainWindow,
+        what: Refresh,
+    ) -> anyhow::Result<()> {
         if let Some(glob_tree_root) = tree.glob_tree_root {
             if glob_tree_root == self.navigation().view_root {
                 self.quit_glob_mode(tree, window)
@@ -337,20 +339,25 @@ impl AppState {
                     .fs_parent_of(selected)
                     .expect("there is always a parent to a selection");
                 (true, false, selected, parent_index)
-            },
-            Refresh::AllInView => (false, true, self.navigation().view_root, self.navigation().view_root)
+            }
+            Refresh::AllInView => (
+                false,
+                true,
+                self.navigation().view_root,
+                self.navigation().view_root,
+            ),
         };
 
         let mut path = tree.path_of(index);
         if path.to_str() == Some("") {
             path = PathBuf::from(".");
         }
-        tree.remove_entries(index, remove_index);                
+        tree.remove_entries(index, remove_index);
         tree.recompute_sizes_recursively(parent_index);
-        
+
         self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
-        
+
         self.active_traversal = Some(BackgroundTraversal::start(
             parent_index,
             &self.walk_options,

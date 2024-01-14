@@ -90,12 +90,15 @@ impl TreeView<'_> {
                 .tree()
                 .neighbors_directed(index, Direction::Outgoing)
                 .filter_map(|idx| {
-                    self.tree().node_weight(idx).map(|w| (w.size, w.entry_count.unwrap_or(1)))
+                    self.tree()
+                        .node_weight(idx)
+                        .map(|w| (w.size, w.entry_count.unwrap_or(1)))
                 })
                 .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
                 .unwrap_or_default();
 
-            let node = self.traversal
+            let node = self
+                .traversal
                 .tree
                 .node_weight_mut(index)
                 .expect("valid index");

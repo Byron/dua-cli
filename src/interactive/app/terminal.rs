@@ -4,7 +4,7 @@ use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal, Tree, TraversalStats},
+    traverse::{Traversal, TraversalStats},
     ByteFormat, WalkOptions, WalkResult,
 };
 use tui::prelude::Backend;
@@ -110,7 +110,9 @@ mod tests {
                     return Ok(res);
                 }
             }
-            Ok(WalkResult { num_errors: self.stats.io_errors })
+            Ok(WalkResult {
+                num_errors: self.stats.io_errors,
+            })
         }
     }
 }

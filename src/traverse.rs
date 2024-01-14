@@ -58,17 +58,20 @@ pub struct Traversal {
     /// A tree representing the entire filestem traversal
     pub tree: Tree,
     /// The top-level node of the tree.
-    pub root_index: TreeIndex,    
+    pub root_index: TreeIndex,
+}
+
+impl Default for Traversal {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Traversal {
     pub fn new() -> Self {
         let mut tree = Tree::new();
         let root_index = tree.add_node(EntryData::default());
-        Self {
-            tree,
-            root_index,
-        }
+        Self { tree, root_index }
     }
 
     pub fn recompute_node_size(&self, node_index: TreeIndex) -> u128 {
@@ -258,7 +261,7 @@ impl BackgroundTraversal {
                 match entry {
                     Ok(mut entry) => {
                         if self.skip_root {
-                            entry.depth = entry.depth - 1;
+                            entry.depth -= 1;
                             data.name = entry.file_name.into()
                         } else {
                             data.name = if entry.depth < 1 {
@@ -362,7 +365,9 @@ impl BackgroundTraversal {
                         data.size = file_size;
                         let entry_index = traversal.tree.add_node(data);
 
-                        traversal.tree.add_edge(self.parent_node_idx, entry_index, ());
+                        traversal
+                            .tree
+                            .add_edge(self.parent_node_idx, entry_index, ());
                         self.previous_node_idx = entry_index;
                         self.previous_depth = entry.depth;
                     }
@@ -370,7 +375,9 @@ impl BackgroundTraversal {
                         if self.previous_depth == 0 {
                             data.name = (*root_path).clone();
                             let entry_index = traversal.tree.add_node(data);
-                            traversal.tree.add_edge(self.parent_node_idx, entry_index, ());
+                            traversal
+                                .tree
+                                .add_edge(self.parent_node_idx, entry_index, ());
                         }
 
                         self.stats.io_errors += 1
@@ -398,7 +405,8 @@ impl BackgroundTraversal {
                         self.parent_node_idx,
                         self.current_directory_at_depth,
                     );
-                    self.parent_node_idx = parent_or_panic(&mut traversal.tree, self.parent_node_idx);
+                    self.parent_node_idx =
+                        parent_or_panic(&mut traversal.tree, self.parent_node_idx);
                 }
                 let root_size = traversal.recompute_node_size(self.root_idx);
                 set_entry_info_or_panic(
@@ -406,7 +414,8 @@ impl BackgroundTraversal {
                     self.root_idx,
                     EntryInfo {
                         size: root_size,
-                        entries_count: (self.stats.entries_traversed > 0).then_some(self.stats.entries_traversed),
+                        entries_count: (self.stats.entries_traversed > 0)
+                            .then_some(self.stats.entries_traversed),
                     },
                 );
                 self.stats.total_bytes = Some(root_size);

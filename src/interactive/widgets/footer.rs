@@ -46,7 +46,7 @@ impl Footer {
                     SortMode::CountAscending => "items ascending",
                     SortMode::CountDescending => "items descending",
                 },
-                format!("{}", format.display(*total_bytes)),
+                format.display(*total_bytes),
                 entries_traversed,
                 progress = match elapsed {
                     Some(elapsed) => format!("in {:.02}s", elapsed.as_secs_f32()),
