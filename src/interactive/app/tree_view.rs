@@ -86,16 +86,22 @@ impl TreeView<'_> {
 
     pub fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
         loop {
-            let size_of_children = self
+            let (size_of_children, item_count) = self
                 .tree()
                 .neighbors_directed(index, Direction::Outgoing)
-                .filter_map(|idx| self.tree().node_weight(idx).map(|w| w.size))
-                .sum();
-            self.traversal
+                .filter_map(|idx| {
+                    self.tree().node_weight(idx).map(|w| (w.size, w.entry_count.unwrap_or(1)))
+                })
+                .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
+                .unwrap_or_default();
+
+            let node = self.traversal
                 .tree
                 .node_weight_mut(index)
-                .expect("valid index")
-                .size = size_of_children;
+                .expect("valid index");
+
+            node.size = size_of_children;
+            node.entry_count = Some(item_count);
 
             match self.fs_parent_of(index) {
                 None => break,
