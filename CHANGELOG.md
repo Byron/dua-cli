@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.27.0 (2024-01-17)
+
+### New Features
+
+ - <csr-id-bed351ed2190e50e2932278b9b13b83c2969401b/> Press `r` or `R` for refresh
+   Lower-case `r` will refresh the currently selected entry, while upper-case `R`
+   will refresh the entire displayed directory, and all entries in it.
+   
+   Further, what was called `item` is now called `entry` across the
+   user-interface.
+ - <csr-id-1544e8dffeacb55940deae2d06534d8a500765d4/> show and hide mtime and item count columns with 'M' and 'C' respectively
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 44 commits contributed to the release over the course of 10 calendar days.
+ - 11 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#96](https://github.com/Byron/dua-cli/issues/96)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#96](https://github.com/Byron/dua-cli/issues/96)**
+    - Press `r` or `R` for refresh ([`bed351e`](https://github.com/Byron/dua-cli/commit/bed351ed2190e50e2932278b9b13b83c2969401b))
+    - Prepare for (R)efresh support ([`1812227`](https://github.com/Byron/dua-cli/commit/181222745ed50b7346bfd082473168634e01fa99))
+ * **Uncategorized**
+    - Refactor ([`18a725d`](https://github.com/Byron/dua-cli/commit/18a725dc5af97841afd06dcd4c8469e1d7ea873c))
+    - Make `Shift+r` do more than 'r' ([`f1fc13e`](https://github.com/Byron/dua-cli/commit/f1fc13ec8e2af583d0ce4eb541e260e9045c8cf2))
+    - Preserve selected element after refresh ([`99e5384`](https://github.com/Byron/dua-cli/commit/99e53849dd6096d05ab4962e1ed5440efcae83f3))
+    - Various updates based on the code review feedback: ([`c3d665d`](https://github.com/Byron/dua-cli/commit/c3d665d40264c819be66a5e290a87fb9f2007cf8))
+    - Cargo clippy & fmt ([`ad7abd8`](https://github.com/Byron/dua-cli/commit/ad7abd83261d5db6b59fbf9d55a24020c531f157))
+    - Fix tests ([`6b24912`](https://github.com/Byron/dua-cli/commit/6b2491200cbabb846f6566cb58eeb8b859a776e0))
+    - Exit glob mode if view root is the same as glob root ([`253f720`](https://github.com/Byron/dua-cli/commit/253f720ff81e675d071fd0da8562ddf8ed1626f8))
+    - Fix updating item count ([`13614a9`](https://github.com/Byron/dua-cli/commit/13614a9a8989df2dfd434e04a0d9ba132ee79244))
+    - Fixed tests ([`69f14af`](https://github.com/Byron/dua-cli/commit/69f14af5403dd17597cfaabf074bf158beabeda3))
+    - Remove debug comments ([`9f37e1c`](https://github.com/Byron/dua-cli/commit/9f37e1ca5e9635cb2ebd1c4d543d59340a5c77e8))
+    - Refresh all in view vs selected ([`06ee3ab`](https://github.com/Byron/dua-cli/commit/06ee3ab6e7b116c50aabe64c642ff128bbc2fb9a))
+    - Fix file count ([`eeae2bc`](https://github.com/Byron/dua-cli/commit/eeae2bc238871a5883624ced30a5ee43b4f8fdfb))
+    - Fix traversal stats ([`96ef242`](https://github.com/Byron/dua-cli/commit/96ef242d3b00dfb46800b179595114fecb62fa35))
+    - Moved traversal stats to separate type ([`969e64b`](https://github.com/Byron/dua-cli/commit/969e64bbde872d0598b1ebf6278f5d55e152f7b1))
+    - Traverse children vs parent & fix parent node size after refresh ([`226cbb8`](https://github.com/Byron/dua-cli/commit/226cbb8b2d6388ddd7a7e48fdac1a4db2ee75474))
+    - Add `R` to trigger a full refresh (PoC) ([`30d8dd5`](https://github.com/Byron/dua-cli/commit/30d8dd5fb54ef6db8b4444524407f15db25d7b02))
+    - Make WalkOptions available in State so it can re-use it for additional walks. ([`0ad90ba`](https://github.com/Byron/dua-cli/commit/0ad90ba23e59b98ccca198ce075e582c93d13c5c))
+    - Merge pull request #217 from Geezus42/patch-1 ([`85005ce`](https://github.com/Byron/dua-cli/commit/85005ce364b08066a76ab2a8743ce18b4662fa3c))
+    - Update README.md ([`e0ac3d1`](https://github.com/Byron/dua-cli/commit/e0ac3d1916b1e58bb6fd3619a7c7dbd4ce201e77))
+    - Merge branch 'show_columns' ([`1a54d95`](https://github.com/Byron/dua-cli/commit/1a54d95bd6e60bd5b071c772324c7a8540d250f6))
+    - Show and hide mtime and item count columns with 'M' and 'C' respectively ([`1544e8d`](https://github.com/Byron/dua-cli/commit/1544e8dffeacb55940deae2d06534d8a500765d4))
+    - Refactor ([`30da672`](https://github.com/Byron/dua-cli/commit/30da672a83c1063eb6f4c5483cb47f5d69c1dc35))
+    - Clippy ([`c4efba8`](https://github.com/Byron/dua-cli/commit/c4efba87179636afeb26e472353a029a4030086c))
+    - Fixed tests ([`d903ea6`](https://github.com/Byron/dua-cli/commit/d903ea67a4f77c9483aed7bda1ef6694ee4465da))
+    - Fmt ([`6c63bf5`](https://github.com/Byron/dua-cli/commit/6c63bf5a33ebb6b98516ca9a96796facfdab2277))
+    - Clippy ([`f74a40a`](https://github.com/Byron/dua-cli/commit/f74a40a7212bde94bae9ff0ee1947a5b1478fb93))
+    - New Traversal ([`9eaa961`](https://github.com/Byron/dua-cli/commit/9eaa96144bc72de6515c30fc32961a2807b247c7))
+    - Fmt ([`b3236dc`](https://github.com/Byron/dua-cli/commit/b3236dcb3db927f3709e9355b218f42327a66a99))
+    - Clippy ([`8aaa05a`](https://github.com/Byron/dua-cli/commit/8aaa05ada6169860cd083a24764bc2c5915b220b))
+    - Started fixing tests... ([`5abb9d7`](https://github.com/Byron/dua-cli/commit/5abb9d7e8d18799caa4a2f3823e06b77bdb27133))
+    - Remove commented out code ([`7378bd8`](https://github.com/Byron/dua-cli/commit/7378bd8bb1887379688eafe00a773521a7c32c9b))
+    - First working version ([`b52f66e`](https://github.com/Byron/dua-cli/commit/b52f66e4cd48bc670b1b98a4a713e280b63d9432))
+    - Cargo fmt ([`0cd5ea9`](https://github.com/Byron/dua-cli/commit/0cd5ea9612005ff724226ba502c2bea8ff4f0486))
+    - Update entries ([`bb511b5`](https://github.com/Byron/dua-cli/commit/bb511b538c7d75b02d598d495b307a83a11f53c0))
+    - Wip ([`51b67ff`](https://github.com/Byron/dua-cli/commit/51b67ff9d009a56272448d1fee1951f30b1de678))
+    - Clean-up init function ([`13c381b`](https://github.com/Byron/dua-cli/commit/13c381bebc6a64e553ec11793ec8880f868e712c))
+    - Move ByteFormat out of WalkOptions ([`e53036a`](https://github.com/Byron/dua-cli/commit/e53036ad84b71e1121588929fe4653a7ababbf67))
+    - Move AppState to separate file ([`feec3eb`](https://github.com/Byron/dua-cli/commit/feec3eb37d50c4b927ae3f948159693f134edf4b))
+    - Move TerminalApp to separate file ([`5123cf5`](https://github.com/Byron/dua-cli/commit/5123cf584ab68c0a2f491580289c7243e8651bfa))
+    - Scan disabled ([`cf3c507`](https://github.com/Byron/dua-cli/commit/cf3c507bb43221066acf96cde778b66bbd578669))
+    - Update demo ([`0e2e8c6`](https://github.com/Byron/dua-cli/commit/0e2e8c6c422a29ad25f055da8dd1611746827795))
+    - No Interactive enum ([`807916c`](https://github.com/Byron/dua-cli/commit/807916ced6e4ec195e0c3805181f3ccd78d69ce3))
+</details>
+
 ## 2.26.0 (2024-01-05)
 
 ### New Features
@@ -26,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 2 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#209](https://github.com/Byron/dua-cli/issues/209)
@@ -40,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#209](https://github.com/Byron/dua-cli/issues/209)**
     - Responsive and buttery-smooth UI while scanning in interactive mode. ([`3c8a31b`](https://github.com/Byron/dua-cli/commit/3c8a31b50da8230bb9268b857e00d0c90e8cb786))
  * **Uncategorized**
+    - Release dua-cli v2.26.0 ([`b19c3e0`](https://github.com/Byron/dua-cli/commit/b19c3e02b3f6a810a717235d9742466c8e1bf7d9))
     - Refactor ([`0651cae`](https://github.com/Byron/dua-cli/commit/0651cae13b43104402ed9d90147ee8c63fe83b61))
     - Optimize UI responsiveness during scanning state ([`983ba61`](https://github.com/Byron/dua-cli/commit/983ba6172604b83c2e4efad0f03273206a43c5db))
 </details>
