@@ -20,7 +20,7 @@ use FocussedPane::*;
 pub struct MainWindowProps<'a> {
     pub current_path: String,
     pub entries_traversed: u64,
-    pub total_bytes: Option<u128>,
+    pub total_bytes: u128,
     pub start: std::time::Instant,
     pub elapsed: Option<std::time::Duration>,
     pub display: DisplayOptions,

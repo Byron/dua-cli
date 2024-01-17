@@ -59,13 +59,15 @@ impl TreeView<'_> {
         current_path(&self.traversal.tree, view_root, self.glob_tree_root)
     }
 
-    pub fn remove_entries(&mut self, index: TreeIndex) -> usize {
+    pub fn remove_entries(&mut self, root_index: TreeIndex, remove_root_node: bool) -> usize {
         let mut entries_deleted = 0;
-        let mut bfs = Bfs::new(self.tree(), index);
+        let mut bfs = Bfs::new(self.tree(), root_index);
 
         while let Some(nx) = bfs.next(&self.tree()) {
+            if nx == root_index && !remove_root_node {
+                continue;
+            }
             self.tree_mut().remove_node(nx);
-            self.traversal.entries_traversed -= 1;
             entries_deleted += 1;
         }
         entries_deleted
@@ -75,28 +77,40 @@ impl TreeView<'_> {
         self.tree().node_weight(idx).is_some()
     }
 
+    pub fn total_size(&self) -> u128 {
+        self.tree()
+            .neighbors_directed(self.traversal.root_index, Direction::Outgoing)
+            .filter_map(|idx| self.tree().node_weight(idx).map(|w| w.size))
+            .sum()
+    }
+
     pub fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
         loop {
-            let size_of_children = self
+            let (size_of_children, item_count) = self
                 .tree()
                 .neighbors_directed(index, Direction::Outgoing)
-                .filter_map(|idx| self.tree().node_weight(idx).map(|w| w.size))
-                .sum();
-            self.traversal
+                .filter_map(|idx| {
+                    self.tree()
+                        .node_weight(idx)
+                        .map(|w| (w.size, w.entry_count.unwrap_or(1)))
+                })
+                .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
+                .unwrap_or_default();
+
+            let node = self
+                .traversal
                 .tree
                 .node_weight_mut(index)
-                .expect("valid index")
-                .size = size_of_children;
+                .expect("valid index");
+
+            node.size = size_of_children;
+            node.entry_count = Some(item_count);
 
             match self.fs_parent_of(index) {
                 None => break,
                 Some(parent) => index = parent,
             }
         }
-        self.traversal.total_bytes = self
-            .tree()
-            .node_weight(self.traversal.root_index)
-            .map(|w| w.size);
     }
 }
 

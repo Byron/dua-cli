@@ -89,6 +89,23 @@ Via `pacman` on your ArchLinux system.
 sudo pacman -S dua-cli
 ```
 
+#### NixOS
+https://search.nixos.org/packages?channel=23.11&show=dua&from=0&size=50&sort=relevance&type=packages&query=dua
+
+Nix-shell (temporary)
+
+```
+nix-shell -p dua
+```
+
+NixOS configuration
+
+```
+  environment.systemPackages = [
+    pkgs.dua
+  ];
+```
+
 #### NetBSD
 Via `pkgin` on your NetBSD system.
 

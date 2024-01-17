@@ -4,7 +4,7 @@ use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
 use dua::{
-    traverse::{EntryData, Traversal, Tree},
+    traverse::{Traversal, TraversalStats},
     ByteFormat, WalkOptions, WalkResult,
 };
 use tui::prelude::Backend;
@@ -17,10 +17,10 @@ use super::{sorted_entries, state::AppState, DisplayOptions};
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
     pub traversal: Traversal,
+    pub stats: TraversalStats,
     pub display: DisplayOptions,
     pub state: AppState,
     pub window: MainWindow,
-    pub walk_options: WalkOptions,
 }
 
 impl TerminalApp {
@@ -38,21 +38,9 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::default();
-
-        let traversal = {
-            let mut tree = Tree::new();
-            let root_index = tree.add_node(EntryData::default());
-            Traversal {
-                tree,
-                root_index,
-                entries_traversed: 0,
-                start: std::time::Instant::now(),
-                elapsed: None,
-                io_errors: 0,
-                total_bytes: None,
-            }
-        };
+        let mut state = AppState::new(walk_options);
+        let traversal = Traversal::new();
+        let stats = TraversalStats::default();
 
         state.navigation_mut().view_root = traversal.root_index;
         state.entries = sorted_entries(
@@ -67,15 +55,14 @@ impl TerminalApp {
             state,
             display,
             traversal,
+            stats,
             window,
-            walk_options,
         };
         Ok(app)
     }
 
     pub fn traverse(&mut self, input: Vec<PathBuf>) -> Result<()> {
-        self.state
-            .traverse(&self.traversal, &self.walk_options, input)?;
+        self.state.traverse(&self.traversal, input)?;
         Ok(())
     }
 
@@ -112,7 +99,7 @@ mod tests {
         where
             B: Backend,
         {
-            while self.state.active_traversal.is_some() {
+            while self.state.scan.is_some() {
                 if let Some(res) = self.state.process_event(
                     &mut self.window,
                     &mut self.traversal,
@@ -123,7 +110,9 @@ mod tests {
                     return Ok(res);
                 }
             }
-            Ok(WalkResult { num_errors: 0 })
+            Ok(WalkResult {
+                num_errors: self.stats.io_errors,
+            })
         }
     }
 }

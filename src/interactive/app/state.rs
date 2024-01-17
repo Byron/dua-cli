@@ -1,6 +1,8 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
-use dua::traverse::BackgroundTraversal;
+use dua::traverse::{BackgroundTraversal, TraversalStats};
+use dua::WalkOptions;
 
 use crate::interactive::widgets::Column;
 
@@ -22,7 +24,12 @@ pub struct Cursor {
     pub y: u16,
 }
 
-#[derive(Default)]
+pub(crate) struct FilesystemScan {
+    pub active_traversal: BackgroundTraversal,
+    /// The selected item prior to starting the traversal, if available, based on its name or index into [`AppState::entries`].
+    pub previous_selection: Option<(PathBuf, usize)>,
+}
+
 pub struct AppState {
     pub navigation: Navigation,
     pub glob_navigation: Option<Navigation>,
@@ -32,5 +39,25 @@ pub struct AppState {
     pub message: Option<String>,
     pub focussed: FocussedPane,
     pub received_events: bool,
-    pub active_traversal: Option<BackgroundTraversal>,
+    pub scan: Option<FilesystemScan>,
+    pub stats: TraversalStats,
+    pub walk_options: WalkOptions,
+}
+
+impl AppState {
+    pub fn new(walk_options: WalkOptions) -> Self {
+        AppState {
+            navigation: Default::default(),
+            glob_navigation: None,
+            entries: vec![],
+            sorting: Default::default(),
+            show_columns: Default::default(),
+            message: None,
+            focussed: Default::default(),
+            received_events: false,
+            scan: None,
+            stats: TraversalStats::default(),
+            walk_options,
+        }
+    }
 }

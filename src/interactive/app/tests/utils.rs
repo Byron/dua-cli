@@ -234,9 +234,9 @@ pub fn sample_01_tree() -> Tree {
         let root_size = 1259070;
         #[cfg(windows)]
         let root_size = 1259069;
-        let rn = add_node("", root_size, 14, None);
+        let rn = add_node("", root_size, 10, None);
         {
-            let sn = add_node(&fixture_str("sample-01"), root_size, 13, Some(rn));
+            let sn = add_node(&fixture_str("sample-01"), root_size, 10, Some(rn));
             {
                 add_node(".hidden.666", 666, 0, Some(sn));
                 add_node("a", 256, 0, Some(sn));
@@ -245,7 +245,7 @@ pub fn sample_01_tree() -> Tree {
                 add_node("c.lnk", 1, 0, Some(sn));
                 #[cfg(windows)]
                 add_node("c.lnk", 0, 0, Some(sn));
-                let dn = add_node("dir", 1258024, 7, Some(sn));
+                let dn = add_node("dir", 1258024, 5, Some(sn));
                 {
                     add_node("1000bytes", 1000, 0, Some(dn));
                     add_node("dir-a.1mb", 1_000_000, 0, Some(dn));
@@ -272,7 +272,7 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
     {
         let mut add_node = make_add_node(&mut tree);
         let root_size = 1540;
-        root_index = add_node("", root_size, 10, None);
+        root_index = add_node("", root_size, 6, None);
         {
             let sn = add_node(
                 format!(
@@ -285,13 +285,13 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
                 )
                 .as_str(),
                 root_size,
-                9,
+                6,
                 Some(root_index),
             );
             {
                 add_node("a", 256, 0, Some(sn));
                 add_node("b", 1, 0, Some(sn));
-                let dn = add_node("dir", 1283, 6, Some(sn));
+                let dn = add_node("dir", 1283, 4, Some(sn));
                 {
                     add_node("c", 257, 0, Some(dn));
                     add_node("d", 2, 0, Some(dn));

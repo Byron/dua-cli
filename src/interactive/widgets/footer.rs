@@ -14,7 +14,7 @@ use crate::interactive::SortMode;
 pub struct Footer;
 
 pub struct FooterProps {
-    pub total_bytes: Option<u128>,
+    pub total_bytes: u128,
     pub entries_traversed: u64,
     pub traversal_start: std::time::Instant,
     pub elapsed: Option<std::time::Duration>,
@@ -37,7 +37,7 @@ impl Footer {
 
         let spans = vec![
             Span::from(format!(
-                "Sort mode: {}  Total disk usage: {}  Items: {} {progress}  ",
+                "Sort mode: {}  Total disk usage: {}  Processed {} entries {progress}  ",
                 match sort_mode {
                     SortMode::SizeAscending => "size ascending",
                     SortMode::SizeDescending => "size descending",
@@ -46,10 +46,7 @@ impl Footer {
                     SortMode::CountAscending => "items ascending",
                     SortMode::CountDescending => "items descending",
                 },
-                match total_bytes {
-                    Some(b) => format!("{}", format.display(*b)),
-                    None => "-".to_owned(),
-                },
+                format.display(*total_bytes),
                 entries_traversed,
                 progress = match elapsed {
                     Some(elapsed) => format!("in {:.02}s", elapsed.as_secs_f32()),

@@ -63,12 +63,18 @@ impl Entries {
         let list = &mut self.list;
 
         let total: u128 = entries.iter().map(|b| b.size).sum();
-        let (item_count, item_size): (u64, u128) = entries
+        let (recursive_item_count, item_size): (u64, u128) = entries
             .iter()
             .map(|f| (f.entry_count.unwrap_or(1), f.size))
             .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
             .unwrap_or_default();
-        let title = title(current_path, item_count, *display, item_size);
+        let title = title(
+            current_path,
+            entries.len(),
+            recursive_item_count,
+            *display,
+            item_size,
+        );
         let title_block = title_block(&title, *border_style);
         let inner_area = title_block.inner(area);
         let entry_in_view = entry_in_view(*selected, entries);
@@ -155,15 +161,17 @@ fn title_block(title: &str, border_style: Style) -> Block<'_> {
         .borders(Borders::ALL)
 }
 
-fn title(current_path: &str, item_count: u64, display: DisplayOptions, size: u128) -> String {
+fn title(
+    current_path: &str,
+    item_count: usize,
+    recursive_item_count: u64,
+    display: DisplayOptions,
+    size: u128,
+) -> String {
     format!(
-        " {} ({} item{}, {}) ",
+        " {} ({item_count} visible, {} total, {}) ",
         current_path,
-        COUNT.format(item_count as f64),
-        match item_count {
-            1 => "",
-            _ => "s",
-        },
+        COUNT.format(recursive_item_count as f64),
         display.byte_format.display(size)
     )
 }
