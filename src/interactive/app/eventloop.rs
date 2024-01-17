@@ -293,8 +293,8 @@ impl AppState {
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
-                    Char('R') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
-                    Char('r') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
+                    Char('r') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
+                    Char('R') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
                     Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
                     Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
