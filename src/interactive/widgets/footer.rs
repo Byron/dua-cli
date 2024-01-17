@@ -37,7 +37,7 @@ impl Footer {
 
         let spans = vec![
             Span::from(format!(
-                "Sort mode: {}  Total disk usage: {}  Processed {} items {progress}  ",
+                "Sort mode: {}  Total disk usage: {}  Processed {} entries {progress}  ",
                 match sort_mode {
                     SortMode::SizeAscending => "size ascending",
                     SortMode::SizeDescending => "size descending",

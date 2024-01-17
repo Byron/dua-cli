@@ -24,6 +24,12 @@ pub struct Cursor {
     pub y: u16,
 }
 
+pub(crate) struct FilesystemScan {
+    pub active_traversal: BackgroundTraversal,
+    /// The selected item prior to starting the traversal, if available, based on its name or index into [`AppState::entries`].
+    pub previous_selection: Option<(PathBuf, usize)>,
+}
+
 pub struct AppState {
     pub navigation: Navigation,
     pub glob_navigation: Option<Navigation>,
@@ -33,7 +39,7 @@ pub struct AppState {
     pub message: Option<String>,
     pub focussed: FocussedPane,
     pub received_events: bool,
-    pub active_traversal: Option<(BackgroundTraversal, Option<PathBuf>)>,
+    pub scan: Option<FilesystemScan>,
     pub stats: TraversalStats,
     pub walk_options: WalkOptions,
 }
@@ -49,7 +55,7 @@ impl AppState {
             message: None,
             focussed: Default::default(),
             received_events: false,
-            active_traversal: None,
+            scan: None,
             stats: TraversalStats::default(),
             walk_options,
         }

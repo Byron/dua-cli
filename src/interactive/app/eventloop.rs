@@ -1,3 +1,4 @@
+use crate::interactive::state::FilesystemScan;
 use crate::interactive::{
     app::navigation::Navigation,
     state::FocussedPane,
@@ -64,7 +65,7 @@ impl AppState {
     }
 
     pub fn traverse(&mut self, traversal: &Traversal, input: Vec<PathBuf>) -> Result<()> {
-        let background_traversal = BackgroundTraversal::start(
+        let traverasal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
             input,
@@ -72,7 +73,10 @@ impl AppState {
             true,
         )?;
         self.navigation_mut().view_root = traversal.root_index;
-        self.active_traversal = Some((background_traversal, None));
+        self.scan = Some(FilesystemScan {
+            active_traversal: traverasal,
+            previous_selection: None,
+        });
         Ok(())
     }
 
@@ -130,7 +134,11 @@ impl AppState {
     where
         B: Backend,
     {
-        if let Some((active_traversal, selected_name)) = &mut self.active_traversal {
+        if let Some(FilesystemScan {
+            active_traversal,
+            previous_selection,
+        }) = self.scan.as_mut()
+        {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
@@ -153,13 +161,13 @@ impl AppState {
 
                     if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
                         self.stats = active_traversal.stats;
-                        let selected_name = selected_name.clone();
+                        let previous_selection = previous_selection.clone();
                         if is_finished {
                             let root_index = active_traversal.root_idx;
                             self.recompute_sizes_recursively(traversal, root_index);
-                            self.active_traversal = None;
+                            self.scan = None;
                         }
-                        self.update_state_during_traversal(traversal, selected_name.as_ref(), is_finished);
+                        self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal)?;
                     };
                 }
@@ -182,16 +190,21 @@ impl AppState {
     fn update_state_during_traversal(
         &mut self,
         traversal: &mut Traversal,
-        selected_name: Option<&PathBuf>,
+        previous_selection: Option<&(PathBuf, usize)>,
         is_finished: bool,
     ) {
         let tree_view = self.tree_view(traversal);
         self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
 
         if !self.received_events {
-            let selected_entry = selected_name
-                .and_then(|selected_name| self.entries.iter().find(|e| e.name == *selected_name));
-            if let Some(selected_entry) = selected_entry {
+            let previously_selected_entry =
+                previous_selection.and_then(|(selected_name, selected_idx)| {
+                    self.entries
+                        .iter()
+                        .find(|e| e.name == *selected_name)
+                        .or_else(|| self.entries.get(*selected_idx))
+                });
+            if let Some(selected_entry) = previously_selected_entry {
                 self.navigation_mut().selected = Some(selected_entry.index);
             } else if is_finished {
                 self.navigation_mut().selected = self.entries.first().map(|b| b.index);
@@ -239,8 +252,12 @@ impl AppState {
             Tab => {
                 self.cycle_focus(window);
             }
-            Char('/') if !glob_focussed && self.active_traversal.is_none() => {
-                self.toggle_glob_search(window);
+            Char('/') if !glob_focussed => {
+                if self.scan.is_some() {
+                    self.message = Some("glob search disabled during traversal".into());
+                } else {
+                    self.toggle_glob_search(window);
+                }
             }
             Char('?') if !glob_focussed => self.toggle_help_pane(window),
             Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
@@ -338,18 +355,32 @@ impl AppState {
         what: Refresh,
     ) -> anyhow::Result<()> {
         // If another traversal is already running do not do anything.
-        if self.active_traversal.is_some() {
+        if self.scan.is_some() {
+            self.message = Some("Traversal already running".into());
             return Ok(());
         }
 
-        // If we are displaing root of the glob search results then cancel the search.
+        let previous_selection = self.navigation().selected.and_then(|sel_index| {
+            tree.tree().node_weight(sel_index).map(|w| {
+                (
+                    w.name.clone(),
+                    self.entries
+                        .iter()
+                        .enumerate()
+                        .find_map(|(idx, e)| (e.index == sel_index).then_some(idx))
+                        .expect("selected item is always in entries"),
+                )
+            })
+        });
+
+        // If we are displaying the root of the glob search results then cancel the search.
         if let Some(glob_tree_root) = tree.glob_tree_root {
             if glob_tree_root == self.navigation().view_root {
                 self.quit_glob_mode(tree, window)
             }
         }
 
-        let (remove_index, skip_root, index, parent_index) = match what {
+        let (remove_root_node, skip_root, index, parent_index) = match what {
             Refresh::Selected => {
                 let Some(selected) = self.navigation().selected else {
                     return Ok(());
@@ -367,31 +398,26 @@ impl AppState {
             ),
         };
 
-        let selected_name = self
-            .navigation()
-            .selected
-            .and_then(|w| tree.tree().node_weight(w).map(|w| w.name.clone()));
-
         let mut path = tree.path_of(index);
         if path.to_str() == Some("") {
             path = PathBuf::from(".");
         }
-        tree.remove_entries(index, remove_index);
+        tree.remove_entries(index, remove_root_node);
         tree.recompute_sizes_recursively(parent_index);
 
         self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
-        self.active_traversal = Some((
-            BackgroundTraversal::start(
+        self.scan = Some(FilesystemScan {
+            active_traversal: BackgroundTraversal::start(
                 parent_index,
                 &self.walk_options,
                 vec![path],
                 skip_root,
                 false,
             )?,
-            selected_name,
-        ));
+            previous_selection,
+        });
 
         self.received_events = false;
         Ok(())

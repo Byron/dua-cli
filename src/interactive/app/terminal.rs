@@ -99,7 +99,7 @@ mod tests {
         where
             B: Backend,
         {
-            while self.state.active_traversal.is_some() {
+            while self.state.scan.is_some() {
                 if let Some(res) = self.state.process_event(
                     &mut self.window,
                     &mut self.traversal,

@@ -162,7 +162,7 @@ impl AppState {
     }
 
     pub fn reset_message(&mut self) {
-        if self.active_traversal.is_some() {
+        if self.scan.is_some() {
             self.message = Some("-> scanning <-".into());
         } else {
             self.message = None;
@@ -312,7 +312,8 @@ impl AppState {
         let parent_idx = tree_view
             .fs_parent_of(index)
             .expect("us being unable to delete the root index");
-        let entries_deleted = tree_view.remove_entries(index, true);
+        let entries_deleted =
+            tree_view.remove_entries(index, true /* remove node at `index` */);
 
         if !tree_view.exists(self.navigation().view_root) {
             self.go_to_root(tree_view);

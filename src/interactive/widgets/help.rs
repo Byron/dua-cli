@@ -123,8 +123,8 @@ impl HelpPane {
             }
             title("Navigation");
             {
-                hotkey("j/<Down>", "Move down 1 item.", None);
-                hotkey("k/<Up>", "Move up 1 item.", None);
+                hotkey("j/<Down>", "Move down 1 entry.", None);
+                hotkey("k/<Up>", "Move up 1 entry.", None);
                 hotkey("o/l/<Enter>", "Descent into the selected directory.", None);
                 hotkey("<Right>", "^", None);
                 hotkey(
@@ -133,9 +133,9 @@ impl HelpPane {
                     None,
                 );
                 hotkey("<Backspace>", "^", None);
-                hotkey("Ctrl + d", "Move down 10 items.", None);
+                hotkey("Ctrl + d", "Move down 10 entries.", None);
                 hotkey("<Page Down>", "^", None);
-                hotkey("Ctrl + u", "Move up 10 items.", None);
+                hotkey("Ctrl + u", "Move up 10 entries.", None);
                 hotkey("<Page Up>", "^", None);
                 hotkey("H/<Home>", "Move to the top of the list.", None);
                 hotkey("G/<End>", "Move to the bottom of the list.", None);
@@ -150,8 +150,8 @@ impl HelpPane {
                     None,
                 );
                 hotkey("M", "Show/hide modified time.", None);
-                hotkey("c", "Toggle sort by items descending/ascending.", None);
-                hotkey("C", "Show/hide item count.", None);
+                hotkey("c", "Toggle sort by entries descending/ascending.", None);
+                hotkey("C", "Show/hide entry count.", None);
                 hotkey(
                     "g/S",
                     "Cycle through percentage display and bar options.",
@@ -163,48 +163,48 @@ impl HelpPane {
             {
                 hotkey(
                     "Shift + o",
-                    "Open the selected item with the associated program.",
+                    "Open the selected entry with the associated program.",
                     None,
                 );
                 hotkey(
                     "d",
-                    "Toggle the currently selected item and move down.",
+                    "Toggle the currently selected entry and move down.",
                     None,
                 );
                 hotkey(
                     "x",
-                    "Mark the currently selected item for deletion and move down.",
+                    "Mark the currently selected entry for deletion and move down.",
                     None,
                 );
-                hotkey("<Space>", "Toggle the currently selected item.", None);
-                hotkey("a", "Toggle all items.", None);
+                hotkey("<Space>", "Toggle the currently selected entry.", None);
+                hotkey("a", "Toggle all entries.", None);
                 hotkey(
                     "/",
                     "Git-style glob search, case-insensitive.",
                     Some("Search starts from the current directory."),
                 );
-                hotkey("r", "Refresh only the selected item.", None);
-                hotkey("R", "Refresh all items in the current view.", None);
+                hotkey("r", "Refresh only the selected entry.", None);
+                hotkey("R", "Refresh all entries in the current view.", None);
                 spacer();
             }
-            title("Mark items pane");
+            title("Mark entries pane");
             {
                 hotkey(
                     "x/d/<Space>",
-                    "Remove the selected item from the list.",
+                    "Remove the selected entry from the list.",
                     None,
                 );
-                hotkey("a", "Remove all items from the list.", None);
+                hotkey("a", "Remove all entries from the list.", None);
                 hotkey(
                     "Ctrl + r",
-                    "Permanently delete all marked items without prompt.",
+                    "Permanently delete all marked entries without prompt.",
                     Some("This operation cannot be undone!"),
                 );
                 #[cfg(feature = "trash-move")]
                 hotkey(
                     "Ctrl + t",
-                    "Move all marked items to the trash bin.",
-                    Some("The items can be restored from the trash bin."),
+                    "Move all marked entries to the trash bin.",
+                    Some("The entries can be restored from the trash bin."),
                 );
                 spacer();
             }

@@ -59,12 +59,12 @@ impl TreeView<'_> {
         current_path(&self.traversal.tree, view_root, self.glob_tree_root)
     }
 
-    pub fn remove_entries(&mut self, index: TreeIndex, remove_index: bool) -> usize {
+    pub fn remove_entries(&mut self, root_index: TreeIndex, remove_root_node: bool) -> usize {
         let mut entries_deleted = 0;
-        let mut bfs = Bfs::new(self.tree(), index);
+        let mut bfs = Bfs::new(self.tree(), root_index);
 
         while let Some(nx) = bfs.next(&self.tree()) {
-            if nx == index && !remove_index {
+            if nx == root_index && !remove_root_node {
                 continue;
             }
             self.tree_mut().remove_node(nx);

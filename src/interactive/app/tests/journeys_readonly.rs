@@ -40,7 +40,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         );
 
         assert!(
-            app.state.active_traversal.is_none(),
+            app.state.scan.is_none(),
             "it will not think it is still scanning as there is no traversal"
         );
 
