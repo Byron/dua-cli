@@ -158,6 +158,21 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert!(!app.state.show_columns.contains(&Column::MTime));
     }
 
+    // Glob pane open/close
+    {
+        // '/' shows the glob pane
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.window.glob_pane.is_some());
+
+        // ESC closes the glob pane
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.window.glob_pane.is_none());
+    }
+
     // Entry-Navigation
     {
         // when hitting the j key
