@@ -28,6 +28,7 @@ impl TerminalApp {
         terminal: &mut Terminal<B>,
         walk_options: WalkOptions,
         byte_format: ByteFormat,
+        input: Vec<PathBuf>,
     ) -> Result<TerminalApp>
     where
         B: Backend,
@@ -38,7 +39,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::new(walk_options);
+        let mut state = AppState::new(walk_options, input);
         let traversal = Traversal::new();
         let stats = TraversalStats::default();
 
@@ -61,8 +62,8 @@ impl TerminalApp {
         Ok(app)
     }
 
-    pub fn traverse(&mut self, input: Vec<PathBuf>) -> Result<()> {
-        self.state.traverse(&self.traversal, input)?;
+    pub fn traverse(&mut self) -> Result<()> {
+        self.state.traverse(&self.traversal)?;
         Ok(())
     }
 

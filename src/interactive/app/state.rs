@@ -42,10 +42,11 @@ pub struct AppState {
     pub scan: Option<FilesystemScan>,
     pub stats: TraversalStats,
     pub walk_options: WalkOptions,
+    pub input: Vec<PathBuf>,
 }
 
 impl AppState {
-    pub fn new(walk_options: WalkOptions) -> Self {
+    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>) -> Self {
         AppState {
             navigation: Default::default(),
             glob_navigation: None,
@@ -58,6 +59,7 @@ impl AppState {
             scan: None,
             stats: TraversalStats::default(),
             walk_options,
+            input,
         }
     }
 }

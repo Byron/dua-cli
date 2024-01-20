@@ -64,11 +64,11 @@ impl AppState {
         result
     }
 
-    pub fn traverse(&mut self, traversal: &Traversal, input: Vec<PathBuf>) -> Result<()> {
+    pub fn traverse(&mut self, traversal: &Traversal) -> Result<()> {
         let traverasal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
-            input,
+            self.input.clone(),
             false,
             true,
         )?;
@@ -380,7 +380,7 @@ impl AppState {
             }
         }
 
-        let (remove_root_node, skip_root, index, parent_index) = match what {
+        let (paths, remove_root_node, skip_root, use_root_path, index, parent_index) = match what {
             Refresh::Selected => {
                 let Some(selected) = self.navigation().selected else {
                     return Ok(());
@@ -388,20 +388,55 @@ impl AppState {
                 let parent_index = tree
                     .fs_parent_of(selected)
                     .expect("there is always a parent to a selection");
-                (true, false, selected, parent_index)
+
+                let mut path = tree.path_of(selected);
+                if path.to_str() == Some("") {
+                    path = PathBuf::from(".");
+                }
+
+                let (paths, use_root_path, skip_root) = if self.navigation().view_root
+                    == tree.traversal.root_index
+                    && self.input.len() > 1
+                {
+                    (vec![path], true, false)
+                } else {
+                    (vec![path], false, false)
+                };
+
+                (
+                    paths,
+                    true,
+                    skip_root,
+                    use_root_path,
+                    selected,
+                    parent_index,
+                )
             }
-            Refresh::AllInView => (
-                false,
-                true,
-                self.navigation().view_root,
-                self.navigation().view_root,
-            ),
+            Refresh::AllInView => {
+                let (paths, use_root_path, skip_root) = if self.navigation().view_root
+                    == tree.traversal.root_index
+                    && self.input.len() > 1
+                {
+                    (self.input.clone(), true, false)
+                } else {
+                    let mut path = tree.path_of(self.navigation().view_root);
+                    if path.to_str() == Some("") {
+                        path = PathBuf::from(".");
+                    }
+                    (vec![path], false, true)
+                };
+
+                (
+                    paths,
+                    false,
+                    skip_root,
+                    use_root_path,
+                    self.navigation().view_root,
+                    self.navigation().view_root,
+                )
+            }
         };
 
-        let mut path = tree.path_of(index);
-        if path.to_str() == Some("") {
-            path = PathBuf::from(".");
-        }
         tree.remove_entries(index, remove_root_node);
         tree.recompute_sizes_recursively(parent_index);
 
@@ -412,9 +447,9 @@ impl AppState {
             active_traversal: BackgroundTraversal::start(
                 parent_index,
                 &self.walk_options,
-                vec![path],
+                paths,
                 skip_root,
-                false,
+                use_root_path,
             )?,
             previous_selection,
         });
