@@ -173,6 +173,51 @@ fn simple_user_journey_read_only() -> Result<()> {
         assert!(app.window.glob_pane.is_none());
     }
 
+    // Refresh finishes eventually
+    {
+        assert!(app.state.scan.is_none());
+
+        // 'R' refreshes all entries in the view
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('R'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.state.scan.is_some());
+        
+        // refresh should finish eventually
+        app.run_until_traversed(&mut terminal, into_events([]))?;
+        assert!(app.state.scan.is_none());
+    }
+
+    // Refresh finishes eventually
+    {
+        // Refresh is not running
+        assert!(app.state.scan.is_none());
+
+        app.process_events(&mut terminal, into_codes("j"))?;
+        assert_eq!(
+            node_by_name(&app, fixture_str(long_root)),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
+            "it moves the cursor down and selects the next item based on the current sort mode"
+        );
+
+        // 'R' refreshes all entries in the view
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('R'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.state.scan.is_some());
+        
+        // Refresh should finish
+        app.run_until_traversed(&mut terminal, into_events([]))?;
+        assert!(app.state.scan.is_none());
+
+        // Previous selection is preserved
+        assert_eq!(
+            node_by_name(&app, fixture_str(long_root)),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
+            "previous selection is preserved after refresh"
+        );
+    }
+
     // Entry-Navigation
     {
         // when hitting the j key

@@ -101,15 +101,13 @@ mod tests {
             B: Backend,
         {
             while self.state.scan.is_some() {
-                if let Some(res) = self.state.process_event(
+                self.state.process_event(
                     &mut self.window,
                     &mut self.traversal,
                     &mut self.display,
                     terminal,
                     &events,
-                )? {
-                    return Ok(res);
-                }
+                )?;
             }
             Ok(WalkResult {
                 num_errors: self.stats.io_errors,
