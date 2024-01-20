@@ -1,9 +1,11 @@
 use anyhow::Result;
-use crosstermion::crossterm::event::KeyCode;
+use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crosstermion::input::Event;
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 
-use crate::interactive::app::tests::utils::into_codes;
+use crate::interactive::app::tests::utils::{into_codes, into_events};
+use crate::interactive::widgets::Column;
 use crate::interactive::{
     app::tests::{
         utils::{
@@ -127,6 +129,33 @@ fn simple_user_journey_read_only() -> Result<()> {
             node_by_name(&app, fixture_str(short_root)),
             "it recomputes the cached items"
         );
+    }
+
+    // Columns
+    {
+        // hit the C key shows the entry count column
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('C'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.state.show_columns.contains(&Column::Count));
+
+        // when hitting the C key again hides the entry count column
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('C'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(!app.state.show_columns.contains(&Column::Count));
+
+        // hit the M key shows the entry count column
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('M'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(app.state.show_columns.contains(&Column::MTime));
+
+        // when hitting the M key again hides the entry count column
+        app.process_events(&mut terminal, into_events([
+            Event::Key(KeyEvent::new(KeyCode::Char('M'), KeyModifiers::NONE)),
+        ]))?;
+        assert!(!app.state.show_columns.contains(&Column::MTime));
     }
 
     // Entry-Navigation
