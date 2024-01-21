@@ -133,90 +133,60 @@ fn simple_user_journey_read_only() -> Result<()> {
 
     // Columns
     {
-        // hit the C key shows the entry count column
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('C'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(app.state.show_columns.contains(&Column::Count));
+        app.process_events(&mut terminal, into_codes("C"))?;
+        assert!(
+            app.state.show_columns.contains(&Column::Count),
+            "hit the C key to show the entry count column"
+        );
 
-        // when hitting the C key again hides the entry count column
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('C'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(!app.state.show_columns.contains(&Column::Count));
+        app.process_events(&mut terminal, into_codes("C"))?;
+        assert!(
+            !app.state.show_columns.contains(&Column::Count),
+            "when hitting the C key again it hides the entry count column"
+        );
 
-        // hit the M key shows the entry count column
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('M'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(app.state.show_columns.contains(&Column::MTime));
+        app.process_events(&mut terminal, into_codes("M"))?;
+        assert!(
+            app.state.show_columns.contains(&Column::MTime),
+            "hit the M key to show the entry count column"
+        );
 
-        // when hitting the M key again hides the entry count column
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('M'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(!app.state.show_columns.contains(&Column::MTime));
+        app.process_events(&mut terminal, into_codes("M"))?;
+        assert!(
+            !app.state.show_columns.contains(&Column::MTime),
+            "when hitting the M key again it hides the entry count column"
+        );
     }
 
     // Glob pane open/close
     {
-        // '/' shows the glob pane
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('/'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(app.window.glob_pane.is_some());
+        app.process_events(&mut terminal, into_codes("/"))?;
+        assert!(app.window.glob_pane.is_some(), "'/' shows the glob pane");
 
-        // ESC closes the glob pane
         app.process_events(
             &mut terminal,
             into_events([Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))]),
         )?;
-        assert!(app.window.glob_pane.is_none());
+        assert!(app.window.glob_pane.is_none(), "ESC closes the glob pane");
     }
 
-    // Refresh finishes eventually
+    // explicit full refresh
     {
-        assert!(app.state.scan.is_none());
+        assert!(app.state.scan.is_none(), "no refresh in progress");
 
-        // 'R' refreshes all entries in the view
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('R'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(app.state.scan.is_some());
+        app.process_events(&mut terminal, into_codes("R"))?;
+        assert!(
+            app.state.scan.is_some(),
+            "'R' refreshes all entries in the view"
+        );
 
-        // refresh should finish eventually
-        app.run_until_traversed(&mut terminal, into_events([]))?;
-        assert!(app.state.scan.is_none());
+        app.run_until_traversed(&mut terminal, into_codes(""))?;
+        assert!(app.state.scan.is_none(), "refresh should finish eventually");
     }
 
-    // Refresh finishes eventually
+    // explicit partial refresh
     {
-        // Refresh is not running
-        assert!(app.state.scan.is_none());
+        assert!(app.state.scan.is_none(), "no refresh in progress");
 
         app.process_events(&mut terminal, into_codes("j"))?;
         assert_eq!(
@@ -225,21 +195,15 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it moves the cursor down and selects the next item based on the current sort mode"
         );
 
-        // 'R' refreshes all entries in the view
-        app.process_events(
-            &mut terminal,
-            into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('R'),
-                KeyModifiers::NONE,
-            ))]),
-        )?;
-        assert!(app.state.scan.is_some());
+        app.process_events(&mut terminal, into_codes("r"))?;
+        assert!(
+            app.state.scan.is_some(),
+            "'r' refreshes all entries in the view"
+        );
 
-        // Refresh should finish
         app.run_until_traversed(&mut terminal, into_events([]))?;
-        assert!(app.state.scan.is_none());
+        assert!(app.state.scan.is_none(), "Refresh should finish");
 
-        // Previous selection is preserved
         assert_eq!(
             node_by_name(&app, fixture_str(long_root)),
             node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),

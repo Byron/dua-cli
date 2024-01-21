@@ -42,7 +42,8 @@ pub struct AppState {
     pub scan: Option<FilesystemScan>,
     pub stats: TraversalStats,
     pub walk_options: WalkOptions,
-    pub input: Vec<PathBuf>,
+    /// The paths used in the initial traversal, at least 1.
+    pub root_paths: Vec<PathBuf>,
 }
 
 impl AppState {
@@ -59,7 +60,7 @@ impl AppState {
             scan: None,
             stats: TraversalStats::default(),
             walk_options,
-            input,
+            root_paths: input,
         }
     }
 }

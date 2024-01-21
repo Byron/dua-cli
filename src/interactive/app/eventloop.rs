@@ -68,7 +68,7 @@ impl AppState {
         let traverasal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
-            self.input.clone(),
+            self.root_paths.clone(),
             false,
             true,
         )?;
@@ -396,7 +396,7 @@ impl AppState {
 
                 let (paths, use_root_path, skip_root) = if self.navigation().view_root
                     == tree.traversal.root_index
-                    && self.input.len() > 1
+                    && self.root_paths.len() > 1
                 {
                     (vec![path], true, false)
                 } else {
@@ -415,9 +415,9 @@ impl AppState {
             Refresh::AllInView => {
                 let (paths, use_root_path, skip_root) = if self.navigation().view_root
                     == tree.traversal.root_index
-                    && self.input.len() > 1
+                    && self.root_paths.len() > 1
                 {
-                    (self.input.clone(), true, false)
+                    (self.root_paths.clone(), true, false)
                 } else {
                     let mut path = tree.path_of(self.navigation().view_root);
                     if path.to_str() == Some("") {
