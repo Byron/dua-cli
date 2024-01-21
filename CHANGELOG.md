@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.27.1 (2024-01-21)
+
+### Bug Fixes
+
+ - <csr-id-f70d1a8e6ace812a7949cd7d0299507b71306d48/> Explicit refreshes with 'r and 'R' now work with multiple root paths as will.
+   This can happen in cases of `dua i root-a root-b` for instance.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 7 commits contributed to the release over the course of 1 calendar day.
+ - 4 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Explicit refreshes with 'r and 'R' now work with multiple root paths as will. ([`f70d1a8`](https://github.com/Byron/dua-cli/commit/f70d1a8e6ace812a7949cd7d0299507b71306d48))
+    - Refactor ([`9d976d0`](https://github.com/Byron/dua-cli/commit/9d976d0d76fcf45d1e0672bc5c1533b000a46ebf))
+    - Cargo fmt ([`99b5443`](https://github.com/Byron/dua-cli/commit/99b5443f2f8821b0a285320c8ec3f982722cfff8))
+    - Tests for refresh & selection ([`dcff2ee`](https://github.com/Byron/dua-cli/commit/dcff2eebed4422f3103d99eac6bd91e56df327c6))
+    - Fix refresh with multiple input paths ([`65f6735`](https://github.com/Byron/dua-cli/commit/65f6735b7a0761b1371bcede86e9b46b9920bb5c))
+    - Test glob pane open/close ([`7efd77e`](https://github.com/Byron/dua-cli/commit/7efd77e6dd3d442f198ef50967ab50524ca22ffd))
+    - Tests for shwing/hiding additional columns ([`dbab511`](https://github.com/Byron/dua-cli/commit/dbab511ff68d8cc7d8e4906db3c2472dd8305b77))
+</details>
+
 ## 2.27.0 (2024-01-17)
 
 ### New Features
@@ -21,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 44 commits contributed to the release over the course of 10 calendar days.
+ - 45 commits contributed to the release over the course of 10 calendar days.
  - 11 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#96](https://github.com/Byron/dua-cli/issues/96)
@@ -36,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Press `r` or `R` for refresh ([`bed351e`](https://github.com/Byron/dua-cli/commit/bed351ed2190e50e2932278b9b13b83c2969401b))
     - Prepare for (R)efresh support ([`1812227`](https://github.com/Byron/dua-cli/commit/181222745ed50b7346bfd082473168634e01fa99))
  * **Uncategorized**
+    - Release dua-cli v2.27.0 ([`322eeb1`](https://github.com/Byron/dua-cli/commit/322eeb1aa07dacdc82e147bae64f8bfd4d758e1d))
     - Refactor ([`18a725d`](https://github.com/Byron/dua-cli/commit/18a725dc5af97841afd06dcd4c8469e1d7ea873c))
     - Make `Shift+r` do more than 'r' ([`f1fc13e`](https://github.com/Byron/dua-cli/commit/f1fc13ec8e2af583d0ce4eb541e260e9045c8cf2))
     - Preserve selected element after refresh ([`99e5384`](https://github.com/Byron/dua-cli/commit/99e53849dd6096d05ab4962e1ed5440efcae83f3))
