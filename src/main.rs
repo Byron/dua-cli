@@ -77,8 +77,13 @@ fn main() -> Result<()> {
             .with_context(|| "Could not instantiate terminal")?;
 
             let keys_rx = input_channel();
-            let mut app = TerminalApp::initialize(&mut terminal, walk_options, byte_format)?;
-            app.traverse(extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?)?;
+            let mut app = TerminalApp::initialize(
+                &mut terminal,
+                walk_options,
+                byte_format,
+                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
+            )?;
+            app.traverse()?;
 
             let res = app.process_events(&mut terminal, keys_rx);
 

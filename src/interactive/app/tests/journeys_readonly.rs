@@ -1,9 +1,11 @@
 use anyhow::Result;
-use crosstermion::crossterm::event::KeyCode;
+use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crosstermion::input::Event;
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 
-use crate::interactive::app::tests::utils::into_codes;
+use crate::interactive::app::tests::utils::{into_codes, into_events};
+use crate::interactive::widgets::Column;
 use crate::interactive::{
     app::tests::{
         utils::{
@@ -126,6 +128,86 @@ fn simple_user_journey_read_only() -> Result<()> {
             node_by_index(&app, app.state.entries[0].index),
             node_by_name(&app, fixture_str(short_root)),
             "it recomputes the cached items"
+        );
+    }
+
+    // Columns
+    {
+        app.process_events(&mut terminal, into_codes("C"))?;
+        assert!(
+            app.state.show_columns.contains(&Column::Count),
+            "hit the C key to show the entry count column"
+        );
+
+        app.process_events(&mut terminal, into_codes("C"))?;
+        assert!(
+            !app.state.show_columns.contains(&Column::Count),
+            "when hitting the C key again it hides the entry count column"
+        );
+
+        app.process_events(&mut terminal, into_codes("M"))?;
+        assert!(
+            app.state.show_columns.contains(&Column::MTime),
+            "hit the M key to show the entry count column"
+        );
+
+        app.process_events(&mut terminal, into_codes("M"))?;
+        assert!(
+            !app.state.show_columns.contains(&Column::MTime),
+            "when hitting the M key again it hides the entry count column"
+        );
+    }
+
+    // Glob pane open/close
+    {
+        app.process_events(&mut terminal, into_codes("/"))?;
+        assert!(app.window.glob_pane.is_some(), "'/' shows the glob pane");
+
+        app.process_events(
+            &mut terminal,
+            into_events([Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))]),
+        )?;
+        assert!(app.window.glob_pane.is_none(), "ESC closes the glob pane");
+    }
+
+    // explicit full refresh
+    {
+        assert!(app.state.scan.is_none(), "no refresh in progress");
+
+        app.process_events(&mut terminal, into_codes("R"))?;
+        assert!(
+            app.state.scan.is_some(),
+            "'R' refreshes all entries in the view"
+        );
+
+        app.run_until_traversed(&mut terminal, into_codes(""))?;
+        assert!(app.state.scan.is_none(), "refresh should finish eventually");
+    }
+
+    // explicit partial refresh
+    {
+        assert!(app.state.scan.is_none(), "no refresh in progress");
+
+        app.process_events(&mut terminal, into_codes("j"))?;
+        assert_eq!(
+            node_by_name(&app, fixture_str(long_root)),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
+            "it moves the cursor down and selects the next item based on the current sort mode"
+        );
+
+        app.process_events(&mut terminal, into_codes("r"))?;
+        assert!(
+            app.state.scan.is_some(),
+            "'r' refreshes all entries in the view"
+        );
+
+        app.run_until_traversed(&mut terminal, into_events([]))?;
+        assert!(app.state.scan.is_none(), "Refresh should finish");
+
+        assert_eq!(
+            node_by_name(&app, fixture_str(long_root)),
+            node_by_index(&app, *app.state.navigation().selected.as_ref().unwrap()),
+            "previous selection is preserved after refresh"
         );
     }
 
