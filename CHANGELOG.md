@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.27.2 (2024-01-22)
+
+### Bug Fixes
+
+ - <csr-id-67c5bdb74cfcf8cab647888afec26cd09ccf543a/> allow `/` (glob-mode) while scanning.
+   This will possibly lead to incomplete results, but I find being
+   able to use ones muscle-memory more important than preventing
+   dealing with incomplete results.
+   
+   What happens to me is usually to type `/` followed by `target/`
+   which tends to select all current entries for deletion.
+ - <csr-id-c70ca81f007f925c7891340d0d0e763bcfc4114d/> don't check entry metadata while a scan is in progress
+   Previously each time the UI refreshes, every 250ms, it display
+   entries but also check their metadata to assure they exist.
+   
+   This could lead to performance loss when the displayed folder
+   has a lot of entries.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#223](https://github.com/Byron/dua-cli/issues/223)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#223](https://github.com/Byron/dua-cli/issues/223)**
+    - Don't check entry metadata while a scan is in progress ([`c70ca81`](https://github.com/Byron/dua-cli/commit/c70ca81f007f925c7891340d0d0e763bcfc4114d))
+ * **Uncategorized**
+    - Merge branch 'fix-overhead' ([`7a4b271`](https://github.com/Byron/dua-cli/commit/7a4b27153c2cb47caca87e28c5e178921c3a3fd9))
+    - Allow `/` (glob-mode) while scanning. ([`67c5bdb`](https://github.com/Byron/dua-cli/commit/67c5bdb74cfcf8cab647888afec26cd09ccf543a))
+</details>
+
 ## 2.27.1 (2024-01-21)
 
 ### Bug Fixes
@@ -16,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 1 calendar day.
+ - 8 commits contributed to the release over the course of 1 calendar day.
  - 4 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -28,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.27.1 ([`346b944`](https://github.com/Byron/dua-cli/commit/346b944a45d4cec12f7689718893ebdef0f46546))
     - Explicit refreshes with 'r and 'R' now work with multiple root paths as will. ([`f70d1a8`](https://github.com/Byron/dua-cli/commit/f70d1a8e6ace812a7949cd7d0299507b71306d48))
     - Refactor ([`9d976d0`](https://github.com/Byron/dua-cli/commit/9d976d0d76fcf45d1e0672bc5c1533b000a46ebf))
     - Cargo fmt ([`99b5443`](https://github.com/Byron/dua-cli/commit/99b5443f2f8821b0a285320c8ec3f982722cfff8))
