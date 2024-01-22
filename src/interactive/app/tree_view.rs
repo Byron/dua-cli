@@ -46,12 +46,18 @@ impl TreeView<'_> {
         path_of(&self.traversal.tree, node_idx, self.glob_tree_root)
     }
 
-    pub fn sorted_entries(&self, view_root: TreeIndex, sorting: SortMode) -> Vec<EntryDataBundle> {
+    pub fn sorted_entries(
+        &self,
+        view_root: TreeIndex,
+        sorting: SortMode,
+        is_scanning: bool,
+    ) -> Vec<EntryDataBundle> {
         sorted_entries(
             &self.traversal.tree,
             view_root,
             sorting,
             self.glob_tree_root,
+            is_scanning,
         )
     }
 

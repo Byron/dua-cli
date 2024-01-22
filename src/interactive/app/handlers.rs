@@ -67,7 +67,7 @@ impl AppState {
             .map(|parent_idx| {
                 (
                     parent_idx,
-                    tree_view.sorted_entries(parent_idx, self.sorting),
+                    tree_view.sorted_entries(parent_idx, self.sorting, self.scan.is_some()),
                 )
             })
     }
@@ -89,7 +89,7 @@ impl AppState {
         self.navigation().selected.map(|previously_selected| {
             (
                 previously_selected,
-                tree_view.sorted_entries(previously_selected, self.sorting),
+                tree_view.sorted_entries(previously_selected, self.sorting, self.scan.is_some()),
             )
         })
     }
@@ -122,17 +122,29 @@ impl AppState {
 
     pub fn cycle_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_size();
-        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
     }
 
     pub fn cycle_mtime_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_mtime();
-        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
     }
 
     pub fn cycle_count_sorting(&mut self, tree_view: &TreeView<'_>) {
         self.sorting.toggle_count();
-        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
     }
 
     pub fn toggle_mtime_column(&mut self) {
@@ -318,7 +330,11 @@ impl AppState {
         if !tree_view.exists(self.navigation().view_root) {
             self.go_to_root(tree_view);
         } else {
-            self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+            self.entries = tree_view.sorted_entries(
+                self.navigation().view_root,
+                self.sorting,
+                self.scan.is_some(),
+            );
         }
 
         if self
@@ -337,7 +353,7 @@ impl AppState {
 
     pub fn go_to_root(&mut self, tree_view: &TreeView<'_>) {
         let root = self.navigation().tree_root;
-        let entries = tree_view.sorted_entries(root, self.sorting);
+        let entries = tree_view.sorted_entries(root, self.sorting, self.scan.is_some());
         self.navigation_mut().exit_node(root, &entries);
         self.entries = entries;
     }
