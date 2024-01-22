@@ -49,6 +49,7 @@ impl TerminalApp {
             state.navigation().view_root,
             state.sorting,
             state.glob_root(),
+            state.scan.is_some(),
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 

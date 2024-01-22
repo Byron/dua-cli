@@ -194,7 +194,11 @@ impl AppState {
         is_finished: bool,
     ) {
         let tree_view = self.tree_view(traversal);
-        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
 
         if !self.received_events {
             let previously_selected_entry =
@@ -440,7 +444,11 @@ impl AppState {
         tree.remove_entries(index, remove_root_node);
         tree.recompute_sizes_recursively(parent_index);
 
-        self.entries = tree.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
         self.scan = Some(FilesystemScan {
@@ -493,7 +501,8 @@ impl AppState {
                     traversal: tree_view.traversal,
                     glob_tree_root: Some(tree_root),
                 };
-                let new_entries = glob_tree_view.sorted_entries(tree_root, self.sorting);
+                let new_entries =
+                    glob_tree_view.sorted_entries(tree_root, self.sorting, self.scan.is_some());
 
                 let new_entries = self
                     .navigation_mut()
@@ -545,7 +554,11 @@ impl AppState {
         window.glob_pane = None;
 
         tree_view.glob_tree_root.take();
-        self.entries = tree_view.sorted_entries(self.navigation().view_root, self.sorting);
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.scan.is_some(),
+        );
     }
 }
 

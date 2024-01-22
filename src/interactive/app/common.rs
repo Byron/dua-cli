@@ -63,6 +63,7 @@ pub fn sorted_entries(
     node_idx: TreeIndex,
     sorting: SortMode,
     glob_root: Option<TreeIndex>,
+    is_scanning: bool,
 ) -> Vec<EntryDataBundle> {
     use SortMode::*;
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
@@ -76,7 +77,7 @@ pub fn sorted_entries(
                 let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
-                    if glob_root == Some(node_idx) {
+                    if is_scanning || glob_root == Some(node_idx) {
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
