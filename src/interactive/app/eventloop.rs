@@ -257,11 +257,7 @@ impl AppState {
                 self.cycle_focus(window);
             }
             Char('/') if !glob_focussed => {
-                if self.scan.is_some() {
-                    self.message = Some("glob search disabled during traversal".into());
-                } else {
-                    self.toggle_glob_search(window);
-                }
+                self.toggle_glob_search(window);
             }
             Char('?') if !glob_focussed => self.toggle_help_pane(window),
             Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
