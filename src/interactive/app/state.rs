@@ -24,7 +24,7 @@ pub struct Cursor {
     pub y: u16,
 }
 
-pub(crate) struct FilesystemScan {
+pub struct FilesystemScan {
     pub active_traversal: BackgroundTraversal,
     /// The selected item prior to starting the traversal, if available, based on its name or index into [`AppState::entries`].
     pub previous_selection: Option<(PathBuf, usize)>,
