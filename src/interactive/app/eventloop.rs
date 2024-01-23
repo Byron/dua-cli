@@ -3,7 +3,7 @@ use crate::interactive::{
     app::navigation::Navigation,
     state::FocussedPane,
     widgets::{glob_search, MainWindow, MainWindowProps},
-    CursorDirection, CursorMode, DisplayOptions, MarkEntryMode,
+    CursorDirection, CursorMode, DisplayOptions, EntryCheck, MarkEntryMode,
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
@@ -197,7 +197,7 @@ impl AppState {
         self.entries = tree_view.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
 
         if !self.received_events {
@@ -215,6 +215,10 @@ impl AppState {
             }
         }
         self.reset_message(); // force "scanning" to appear
+    }
+
+    pub(crate) fn entry_check(&self) -> EntryCheck {
+        EntryCheck::new(self.scan.is_some(), self.allow_entry_check)
     }
 
     fn process_terminal_event<B>(
@@ -443,7 +447,7 @@ impl AppState {
         self.entries = tree.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
@@ -498,7 +502,7 @@ impl AppState {
                     glob_tree_root: Some(tree_root),
                 };
                 let new_entries =
-                    glob_tree_view.sorted_entries(tree_root, self.sorting, self.scan.is_some());
+                    glob_tree_view.sorted_entries(tree_root, self.sorting, self.entry_check());
 
                 let new_entries = self
                     .navigation_mut()
@@ -553,7 +557,7 @@ impl AppState {
         self.entries = tree_view.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
     }
 }

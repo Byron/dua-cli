@@ -44,6 +44,8 @@ pub struct AppState {
     pub walk_options: WalkOptions,
     /// The paths used in the initial traversal, at least 1.
     pub root_paths: Vec<PathBuf>,
+    /// If true, listed entries will be validated for presence when switching directories.
+    pub allow_entry_check: bool,
 }
 
 impl AppState {
@@ -61,6 +63,7 @@ impl AppState {
             stats: TraversalStats::default(),
             walk_options,
             root_paths: input,
+            allow_entry_check: true,
         }
     }
 }

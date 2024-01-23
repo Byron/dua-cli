@@ -1,5 +1,5 @@
 use super::{sorted_entries, EntryDataBundle, SortMode};
-use crate::interactive::path_of;
+use crate::interactive::{path_of, EntryCheck};
 use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
 use petgraph::{visit::Bfs, Direction};
 use std::path::{Path, PathBuf};
@@ -50,14 +50,14 @@ impl TreeView<'_> {
         &self,
         view_root: TreeIndex,
         sorting: SortMode,
-        is_scanning: bool,
+        check: EntryCheck,
     ) -> Vec<EntryDataBundle> {
         sorted_entries(
             &self.traversal.tree,
             view_root,
             sorting,
             self.glob_tree_root,
-            is_scanning,
+            check,
         )
     }
 
