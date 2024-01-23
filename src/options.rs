@@ -91,6 +91,9 @@ pub enum Command {
     #[cfg(feature = "tui-crossplatform")]
     #[clap(name = "interactive", visible_alias = "i")]
     Interactive {
+        /// Do not check entries for presence when listing a directory to avoid slugging performance on slow filesystems.
+        #[clap(long, short = 'e')]
+        no_entry_check: bool,
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[clap(value_parser)]
         input: Vec<PathBuf>,

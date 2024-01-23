@@ -62,7 +62,10 @@ fn main() -> Result<()> {
 
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
-        Some(Interactive { input }) => {
+        Some(Interactive {
+            no_entry_check,
+            input,
+        }) => {
             use anyhow::{anyhow, Context};
             use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
 
@@ -81,6 +84,7 @@ fn main() -> Result<()> {
                 &mut terminal,
                 walk_options,
                 byte_format,
+                !no_entry_check,
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
             )?;
             app.traverse()?;

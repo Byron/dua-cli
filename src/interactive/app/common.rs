@@ -56,6 +56,21 @@ pub struct EntryDataBundle {
     pub exists: bool,
 }
 
+pub enum EntryCheck {
+    PossiblyCostlyLstat,
+    Disabled,
+}
+
+impl EntryCheck {
+    pub fn new(is_scanning: bool, allow_entry_check: bool) -> Self {
+        if allow_entry_check && !is_scanning {
+            EntryCheck::PossiblyCostlyLstat
+        } else {
+            EntryCheck::Disabled
+        }
+    }
+}
+
 /// Note that with `glob_root` present, we will not obtain metadata anymore as we might be seeing
 /// a lot of entries. That way, displaying 250k entries is no problem.
 pub fn sorted_entries(
@@ -63,7 +78,7 @@ pub fn sorted_entries(
     node_idx: TreeIndex,
     sorting: SortMode,
     glob_root: Option<TreeIndex>,
-    is_scanning: bool,
+    check: EntryCheck,
 ) -> Vec<EntryDataBundle> {
     use SortMode::*;
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
@@ -77,7 +92,7 @@ pub fn sorted_entries(
                 let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
-                    if is_scanning || glob_root == Some(node_idx) {
+                    if matches!(check, EntryCheck::Disabled) || glob_root == Some(node_idx) {
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();

@@ -198,8 +198,13 @@ pub fn initialized_app_and_terminal_with_closure(
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
 
-    let mut app =
-        TerminalApp::initialize(&mut terminal, walk_options, ByteFormat::Metric, input_paths)?;
+    let mut app = TerminalApp::initialize(
+        &mut terminal,
+        walk_options,
+        ByteFormat::Metric,
+        false, /* entry-check */
+        input_paths,
+    )?;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;
 

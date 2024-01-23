@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::interactive::EntryCheck;
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
@@ -28,6 +29,7 @@ impl TerminalApp {
         terminal: &mut Terminal<B>,
         walk_options: WalkOptions,
         byte_format: ByteFormat,
+        entry_check: bool,
         input: Vec<PathBuf>,
     ) -> Result<TerminalApp>
     where
@@ -40,6 +42,7 @@ impl TerminalApp {
         let window = MainWindow::default();
 
         let mut state = AppState::new(walk_options, input);
+        state.allow_entry_check = entry_check;
         let traversal = Traversal::new();
         let stats = TraversalStats::default();
 
@@ -49,7 +52,7 @@ impl TerminalApp {
             state.navigation().view_root,
             state.sorting,
             state.glob_root(),
-            state.scan.is_some(),
+            EntryCheck::new(state.scan.is_some(), state.allow_entry_check),
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 

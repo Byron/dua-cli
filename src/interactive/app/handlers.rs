@@ -67,7 +67,7 @@ impl AppState {
             .map(|parent_idx| {
                 (
                     parent_idx,
-                    tree_view.sorted_entries(parent_idx, self.sorting, self.scan.is_some()),
+                    tree_view.sorted_entries(parent_idx, self.sorting, self.entry_check()),
                 )
             })
     }
@@ -89,7 +89,7 @@ impl AppState {
         self.navigation().selected.map(|previously_selected| {
             (
                 previously_selected,
-                tree_view.sorted_entries(previously_selected, self.sorting, self.scan.is_some()),
+                tree_view.sorted_entries(previously_selected, self.sorting, self.entry_check()),
             )
         })
     }
@@ -125,7 +125,7 @@ impl AppState {
         self.entries = tree_view.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
     }
 
@@ -134,7 +134,7 @@ impl AppState {
         self.entries = tree_view.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
     }
 
@@ -143,7 +143,7 @@ impl AppState {
         self.entries = tree_view.sorted_entries(
             self.navigation().view_root,
             self.sorting,
-            self.scan.is_some(),
+            self.entry_check(),
         );
     }
 
@@ -333,7 +333,7 @@ impl AppState {
             self.entries = tree_view.sorted_entries(
                 self.navigation().view_root,
                 self.sorting,
-                self.scan.is_some(),
+                self.entry_check(),
             );
         }
 
@@ -353,7 +353,7 @@ impl AppState {
 
     pub fn go_to_root(&mut self, tree_view: &TreeView<'_>) {
         let root = self.navigation().tree_root;
-        let entries = tree_view.sorted_entries(root, self.sorting, self.scan.is_some());
+        let entries = tree_view.sorted_entries(root, self.sorting, self.entry_check());
         self.navigation_mut().exit_node(root, &entries);
         self.entries = entries;
     }
