@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.28.0 (2024-01-23)
+
+### New Features
+
+ - <csr-id-78b9a8e22568c902132ed98d32e223ff71eb7b06/> add `dua i --no-entry-check` flag.
+   With it, in interactive mode, entries will not be checked for presence.
+   
+   This can avoid laggy behaviour when switching between directories
+   as `lstat` calls will not run, which can be slow on some filesystems.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 2 unique issues were worked on: [#226](https://github.com/Byron/dua-cli/issues/226), [#227](https://github.com/Byron/dua-cli/issues/227)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#226](https://github.com/Byron/dua-cli/issues/226)**
+    - Make builds with rustc 1.72 work ([`600bee2`](https://github.com/Byron/dua-cli/commit/600bee234edd4e7922017c26927a6f135a02c335))
+ * **[#227](https://github.com/Byron/dua-cli/issues/227)**
+    - Add `dua i --no-entry-check` flag. ([`78b9a8e`](https://github.com/Byron/dua-cli/commit/78b9a8e22568c902132ed98d32e223ff71eb7b06))
+ * **Uncategorized**
+    - Merge branch 'no-entry-check' ([`d837d72`](https://github.com/Byron/dua-cli/commit/d837d720e3b1e204043b8d89447db0d65ae000ba))
+</details>
+
 ## 2.27.2 (2024-01-22)
 
 ### Bug Fixes
@@ -27,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#223](https://github.com/Byron/dua-cli/issues/223)
 
@@ -40,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#223](https://github.com/Byron/dua-cli/issues/223)**
     - Don't check entry metadata while a scan is in progress ([`c70ca81`](https://github.com/Byron/dua-cli/commit/c70ca81f007f925c7891340d0d0e763bcfc4114d))
  * **Uncategorized**
+    - Release dua-cli v2.27.2 ([`e512f31`](https://github.com/Byron/dua-cli/commit/e512f31df3aeba1410df5e250dd74569a48fdf66))
     - Merge branch 'fix-overhead' ([`7a4b271`](https://github.com/Byron/dua-cli/commit/7a4b27153c2cb47caca87e28c5e178921c3a3fd9))
     - Allow `/` (glob-mode) while scanning. ([`67c5bdb`](https://github.com/Byron/dua-cli/commit/67c5bdb74cfcf8cab647888afec26cd09ccf543a))
 </details>
