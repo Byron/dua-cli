@@ -176,7 +176,7 @@ jobs:
         run: |
           docker run --rm -v \
             "$PWD/target:/target:Z" \
-            rustembedded/cross:aarch64-musl \
+            messense/rust-musl-cross:aarch64-musl \
             musl-strip \
             /target/aarch64-unknown-linux-musl/release/${{ env.EXE_NAME }}
       - name: Build archive
