@@ -76,7 +76,7 @@ jobs:
       EXE_NAME: dua
     strategy:
       matrix:
-        build: [linux, linux-arm, macos, win-msvc, win32-msvc]
+        build: [linux, linux-arm, linux-arm64, macos, win-msvc, win32-msvc]
         include:
           - build: linux
             os: ubuntu-latest
@@ -86,6 +86,10 @@ jobs:
             os: ubuntu-latest
             rust: nightly
             target: arm-unknown-linux-gnueabihf
+          - build: linux-arm64
+            os: ubuntu-latest
+            rust: stable
+            target: aarch64-unknown-linux-musl
           - build: macos
             os: macos-latest
             rust: stable
@@ -167,6 +171,14 @@ jobs:
             rustembedded/cross:arm-unknown-linux-gnueabihf \
             arm-linux-gnueabihf-strip \
             /target/arm-unknown-linux-gnueabihf/release/${{ env.EXE_NAME }}
+      - name: Strip release binary (arm64)
+        if: matrix.build == 'linux-arm64'
+        run: |
+          docker run --rm -v \
+            "$PWD/target:/target:Z" \
+            messense/rust-musl-cross:aarch64-musl \
+            musl-strip \
+            /target/aarch64-unknown-linux-musl/release/${{ env.EXE_NAME }}
       - name: Build archive
         shell: bash
         run: |
