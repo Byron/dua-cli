@@ -36,7 +36,6 @@ fn main() -> Result<()> {
             LevelFilter::Debug,
             Config::default(),
             OpenOptions::new()
-                .write(true)
                 .create(true)
                 .append(true)
                 .open(log_file)?,
