@@ -12,6 +12,7 @@
 **/*.rs.bk
 
 /.idea/
+/.vscode/
 
 /callgrind.profile
 
