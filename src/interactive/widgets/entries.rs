@@ -83,7 +83,8 @@ impl Entries {
             block: Some(title_block),
             entry_in_view,
         };
-        let lines = entries.iter().map(|bundle| {
+        let mut scroll_offset = None;
+        let lines = entries.iter().enumerate().map(|(idx, bundle)| {
             let node_idx = &bundle.index;
             let is_dir = &bundle.is_dir;
             let exists = &bundle.exists;
@@ -91,6 +92,9 @@ impl Entries {
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
             let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+            if is_selected {
+                scroll_offset = Some(idx);
+            }
             let fraction = bundle.size as f32 / total as f32;
             let text_style = style(is_selected, *is_focussed);
             let percentage_style = percentage_style(fraction, text_style);
@@ -139,15 +143,8 @@ impl Entries {
             .orientation(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None);
-        let scroll_offset = selected
-            .and_then(|selected_idx| {
-                entries
-                    .iter()
-                    .find_position(|bundle| bundle.index == selected_idx)
-                    .map(|(pos, _)| pos)
-            })
-            .unwrap_or(list.offset);
-        let mut scrollbar_state = ScrollbarState::new(line_count).position(scroll_offset);
+        let mut scrollbar_state =
+            ScrollbarState::new(line_count).position(scroll_offset.unwrap_or(list.offset));
 
         scrollbar.render(area.inner(&Margin::new(0, 1)), buf, &mut scrollbar_state);
 
