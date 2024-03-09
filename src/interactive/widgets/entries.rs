@@ -11,10 +11,10 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 use tui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Margin, Rect},
     style::{Color, Modifier, Style},
     text::Span,
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget},
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
@@ -83,7 +83,8 @@ impl Entries {
             block: Some(title_block),
             entry_in_view,
         };
-        let lines = entries.iter().map(|bundle| {
+        let mut scroll_offset = None;
+        let lines = entries.iter().enumerate().map(|(idx, bundle)| {
             let node_idx = &bundle.index;
             let is_dir = &bundle.is_dir;
             let exists = &bundle.exists;
@@ -91,6 +92,9 @@ impl Entries {
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
             let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+            if is_selected {
+                scroll_offset = Some(idx);
+            }
             let fraction = bundle.size as f32 / total as f32;
             let text_style = style(is_selected, *is_focussed);
             let percentage_style = percentage_style(fraction, text_style);
@@ -132,7 +136,17 @@ impl Entries {
             columns_with_separators(columns, percentage_style, false)
         });
 
+        let line_count = lines.len();
         list.render(props, lines, area, buf);
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None);
+        let mut scrollbar_state =
+            ScrollbarState::new(line_count).position(scroll_offset.unwrap_or(list.offset));
+
+        scrollbar.render(area.inner(&Margin::new(0, 1)), buf, &mut scrollbar_state);
 
         if *is_focussed {
             let bound = draw_top_right_help(area, &title, buf);
