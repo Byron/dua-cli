@@ -11,10 +11,10 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 use tui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Margin, Rect},
     style::{Color, Modifier, Style},
     text::Span,
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget},
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
@@ -132,7 +132,24 @@ impl Entries {
             columns_with_separators(columns, percentage_style, false)
         });
 
+        let line_count = lines.len();
         list.render(props, lines, area, buf);
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None);
+        let scroll_offset = selected
+            .and_then(|selected_idx| {
+                entries
+                    .iter()
+                    .find_position(|bundle| bundle.index == selected_idx)
+                    .map(|(pos, _)| pos)
+            })
+            .unwrap_or(list.offset);
+        let mut scrollbar_state = ScrollbarState::new(line_count).position(scroll_offset);
+
+        scrollbar.render(area.inner(&Margin::new(0, 1)), buf, &mut scrollbar_state);
 
         if *is_focussed {
             let bound = draw_top_right_help(area, &title, buf);
