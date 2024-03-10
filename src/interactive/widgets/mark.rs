@@ -359,8 +359,8 @@ impl MarkPane {
 
         let list_area = if self.has_focus {
             let (help_line_area, list_area) = {
-                let help_at_bottom =
-                    selected.unwrap_or(0) >= inner_area.height.saturating_sub(1) as usize / 2;
+                let help_at_bottom = selected.unwrap_or(0).saturating_sub(self.list.offset)
+                    >= inner_area.height.saturating_sub(1) as usize / 2;
                 let constraints = {
                     let mut c = vec![Constraint::Length(1), Constraint::Max(256)];
                     if help_at_bottom {
