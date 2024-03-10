@@ -17,7 +17,10 @@ use tui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Widget,
+    },
 };
 use tui_react::{
     draw_text_nowrap_fn,
@@ -292,7 +295,8 @@ impl MarkPane {
                     let num_path_graphemes = path.graphemes(true).count();
                     match num_path_graphemes + format.total_width() {
                         n if n > area.width as usize => {
-                            let desired_size = num_path_graphemes - (n - area.width as usize);
+                            let desired_size =
+                                num_path_graphemes.saturating_sub(n - area.width as usize);
                             fit_string_graphemes_with_ellipsis(
                                 path,
                                 num_path_graphemes,
@@ -355,8 +359,8 @@ impl MarkPane {
 
         let list_area = if self.has_focus {
             let (help_line_area, list_area) = {
-                let help_at_bottom =
-                    selected.unwrap_or(0) >= inner_area.height.saturating_sub(1) as usize / 2;
+                let help_at_bottom = selected.unwrap_or(0).saturating_sub(self.list.offset)
+                    >= inner_area.height.saturating_sub(1) as usize / 2;
                 let constraints = {
                     let mut c = vec![Constraint::Length(1), Constraint::Max(256)];
                     if help_at_bottom {
@@ -411,11 +415,32 @@ impl MarkPane {
             inner_area
         };
 
+        let line_count = marked.len();
         let props = ListProps {
             block: None,
             entry_in_view,
         };
         self.list.render(props, entries, list_area, buf);
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None);
+        let mut scrollbar_state =
+            ScrollbarState::new(line_count).position(selected.unwrap_or(self.list.offset));
+
+        scrollbar.render(
+            {
+                let mut scrollbar_area = list_area;
+                // The list has no blocks, so we need to increase
+                // the render area for scrollbar to make sure it
+                // will be drawn on the border.
+                scrollbar_area.width += 1;
+                scrollbar_area
+            },
+            buf,
+            &mut scrollbar_state,
+        );
 
         if has_focus {
             let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
