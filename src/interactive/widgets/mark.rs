@@ -17,7 +17,10 @@ use tui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Widget,
+    },
 };
 use tui_react::{
     draw_text_nowrap_fn,
@@ -411,11 +414,32 @@ impl MarkPane {
             inner_area
         };
 
+        let line_count = marked.len();
         let props = ListProps {
             block: None,
             entry_in_view,
         };
         self.list.render(props, entries, list_area, buf);
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None);
+        let mut scrollbar_state =
+            ScrollbarState::new(line_count).position(selected.unwrap_or(self.list.offset));
+
+        scrollbar.render(
+            {
+                let mut scrollbar_area = list_area;
+                // The list has no blocks, so we need to increase
+                // the render area for scrollbar to make sure it
+                // will be drawn on the border.
+                scrollbar_area.width += 1;
+                scrollbar_area
+            },
+            buf,
+            &mut scrollbar_state,
+        );
 
         if has_focus {
             let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
