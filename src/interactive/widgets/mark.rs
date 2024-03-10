@@ -295,7 +295,8 @@ impl MarkPane {
                     let num_path_graphemes = path.graphemes(true).count();
                     match num_path_graphemes + format.total_width() {
                         n if n > area.width as usize => {
-                            let desired_size = num_path_graphemes - (n - area.width as usize);
+                            let desired_size =
+                                num_path_graphemes.saturating_sub(n - area.width as usize);
                             fit_string_graphemes_with_ellipsis(
                                 path,
                                 num_path_graphemes,
