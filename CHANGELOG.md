@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.29.0 (2024-03-10)
+
+### New Features
+
+ - <csr-id-0c511ffa0f15e16520353ff712f6bcc11318e379/> Add scrollbar to the main entries list.
+   That way it's easier to grasp how long the list is, and how fast one is
+   traversing is.
+
+### Bug Fixes
+
+ - <csr-id-caa1e7261bad1b0e2b10628aa14c9d2b6868a14a/> avoid crashes when the terminal is resized to unusually small sizes.
+ - <csr-id-24a6c29b3f48289cb6374aa66e84357edb5d0d54/> mark-pane help bar now shows closest to the selected item.
+   Previously this would only work in the first screen, but not when
+   the list was long enough for scrolling.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 18 commits contributed to the release over the course of 44 calendar days.
+ - 46 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Avoid crashes when the terminal is resized to unusually small sizes. ([`caa1e72`](https://github.com/Byron/dua-cli/commit/caa1e7261bad1b0e2b10628aa14c9d2b6868a14a))
+    - Mark-pane help bar now shows closest to the selected item. ([`24a6c29`](https://github.com/Byron/dua-cli/commit/24a6c29b3f48289cb6374aa66e84357edb5d0d54))
+    - Update to the latest versions of `tui-react` and `ratatui` ([`8ab4ee7`](https://github.com/Byron/dua-cli/commit/8ab4ee72423bba54402525b4ea4593f0c582261e))
+    - Fix possible overflow during substraction in mark pane ([`a94c7d3`](https://github.com/Byron/dua-cli/commit/a94c7d31ec152ff2427092054b99d8c4f3f74cfd))
+    - Add scrollbar for mark list ([`5fe858d`](https://github.com/Byron/dua-cli/commit/5fe858d771d286204d2ed911533869223ea20d2c))
+    - Add scrollbar to the main entries list. ([`0c511ff`](https://github.com/Byron/dua-cli/commit/0c511ffa0f15e16520353ff712f6bcc11318e379))
+    - Avoid iterating a potentially long list doubly ([`fd797e8`](https://github.com/Byron/dua-cli/commit/fd797e86787ca1675e0f0406828c06506b4b1a11))
+    - Add scrollbar for main list ([`120a08a`](https://github.com/Byron/dua-cli/commit/120a08aefeed9581f5d9110861b15ee0cbcd5831))
+    - Merge branch 'dev/pwach/ignore-vs-code' ([`b79fde4`](https://github.com/Byron/dua-cli/commit/b79fde47d07a712101ab97127fc3b23acd105b13))
+    - Remove user and platform specific files from `.gitignore` ([`30f28a7`](https://github.com/Byron/dua-cli/commit/30f28a7426ea4093a0205e02674bd43943130b88))
+    - Ignore .vscode directory (same as .idea) ([`27cbd21`](https://github.com/Byron/dua-cli/commit/27cbd2128c1b4213b8b2bd354e8205b2f8e1878d))
+    - Merge pull request #231 from gosuwachu/dev/pwach/fix-clippy ([`250fdc4`](https://github.com/Byron/dua-cli/commit/250fdc420e12634a195f23f461dda07c998cacea))
+    - Update dependencies ([`0086854`](https://github.com/Byron/dua-cli/commit/00868548eee4b57a5646aef0d9e0cf8cd6de8226))
+    - Fixes clippy error in rust 1.76 ([`85c00cd`](https://github.com/Byron/dua-cli/commit/85c00cd44f7e3dbd862c5d02a7f8310de7ead670))
+    - Merge pull request #229 from chessmango-forks/main ([`5052da9`](https://github.com/Byron/dua-cli/commit/5052da9567b7ba75ebba015171a70202a10d26ee))
+    - Different image obvi ([`f5ec49f`](https://github.com/Byron/dua-cli/commit/f5ec49f09e9699e2b5d538cd77c9facf236753b0))
+    - Strip arm64 bin ([`504ac52`](https://github.com/Byron/dua-cli/commit/504ac521afca3f0791d2ac2c02adffb34d1a2e34))
+    - Add aarch64 releases ([`a88baf1`](https://github.com/Byron/dua-cli/commit/a88baf1d9494118cca405aa2639656e1d05ba533))
+</details>
+
 ## 2.28.0 (2024-01-23)
 
 ### New Features
@@ -19,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 2 unique issues were worked on: [#226](https://github.com/Byron/dua-cli/issues/226), [#227](https://github.com/Byron/dua-cli/issues/227)
@@ -35,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#227](https://github.com/Byron/dua-cli/issues/227)**
     - Add `dua i --no-entry-check` flag. ([`78b9a8e`](https://github.com/Byron/dua-cli/commit/78b9a8e22568c902132ed98d32e223ff71eb7b06))
  * **Uncategorized**
+    - Release dua-cli v2.28.0 ([`984fd97`](https://github.com/Byron/dua-cli/commit/984fd979e18ffaa20ba35bca3b85dc47c404328c))
     - Merge branch 'no-entry-check' ([`d837d72`](https://github.com/Byron/dua-cli/commit/d837d720e3b1e204043b8d89447db0d65ae000ba))
 </details>
 
