@@ -5,16 +5,17 @@ use crosstermion::input::Key;
 use dua::traverse::{Tree, TreeIndex};
 use petgraph::Direction;
 use std::borrow::Borrow;
-use tui::backend::Backend;
-use tui::prelude::Buffer;
 use tui::{
+    buffer::Buffer,
     layout::Rect,
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget},
 };
-use tui_react::util::{block_width, rect};
-use tui_react::{draw_text_nowrap_fn, Terminal};
+use tui_react::{
+    draw_text_nowrap_fn,
+    util::{block_width, rect},
+};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -100,15 +101,13 @@ impl GlobPane {
         new_cursor_pos.clamp(0, self.input.graphemes(true).count())
     }
 
-    pub fn render<B>(
+    pub fn render(
         &mut self,
         props: impl Borrow<GlobPaneProps>,
         area: Rect,
-        terminal: &mut Terminal<B>,
+        buffer: &mut Buffer,
         cursor: &mut Cursor,
-    ) where
-        B: Backend,
-    {
+    ) {
         let GlobPaneProps {
             border_style,
             has_focus,
@@ -120,18 +119,15 @@ impl GlobPane {
             .border_style(*border_style)
             .borders(Borders::ALL);
         let inner_block_area = block.inner(area);
-        block.render(area, terminal.current_buffer_mut());
+        block.render(area, buffer);
 
         let spans = vec![Span::from(&self.input)];
         Paragraph::new(Text::from(Line::from(spans)))
             .style(Style::default())
-            .render(
-                margin_left_right(inner_block_area, 1),
-                terminal.current_buffer_mut(),
-            );
+            .render(margin_left_right(inner_block_area, 1), buffer);
 
         if *has_focus {
-            draw_top_right_help(area, title, terminal.current_buffer_mut());
+            draw_top_right_help(area, title, buffer);
 
             cursor.show = true;
             cursor.x = inner_block_area.x

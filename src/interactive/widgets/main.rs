@@ -7,13 +7,12 @@ use crate::interactive::{
     DisplayOptions,
 };
 use std::borrow::Borrow;
-use tui::backend::Backend;
+use tui::buffer::Buffer;
 use tui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     style::{Color, Style},
 };
-use tui_react::Terminal;
 use Constraint::*;
 use FocussedPane::*;
 
@@ -36,15 +35,13 @@ pub struct MainWindow {
 }
 
 impl MainWindow {
-    pub fn render<'a, B>(
+    pub fn render<'a>(
         &mut self,
         props: impl Borrow<MainWindowProps<'a>>,
         area: Rect,
-        terminal: &mut Terminal<B>,
+        buffer: &mut Buffer,
         cursor: &mut Cursor,
-    ) where
-        B: Backend,
-    {
+    ) {
         let MainWindowProps {
             current_path,
             entries_traversed,
@@ -59,7 +56,7 @@ impl MainWindow {
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
         let header_bg_color = header_background_color(self.is_anything_marked(), state.focussed);
-        Header.render(header_bg_color, header_area, terminal.current_buffer_mut());
+        Header.render(header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
             let (left_pane, right_pane) = content_layout(content_area);
@@ -90,7 +87,7 @@ impl MainWindow {
                 border_style: mark_style,
                 format: display.byte_format,
             };
-            pane.render(props, mark_area, terminal.current_buffer_mut());
+            pane.render(props, mark_area, buffer);
         }
 
         if let Some((help_area, pane)) = help_pane {
@@ -98,7 +95,7 @@ impl MainWindow {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
             };
-            pane.render(props, help_area, terminal.current_buffer_mut());
+            pane.render(props, help_area, buffer);
         }
 
         let marked = self.mark_pane.as_ref().map(|p| p.marked());
@@ -113,15 +110,14 @@ impl MainWindow {
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
         };
-        self.entries_pane
-            .render(props, entries_area, terminal.current_buffer_mut());
+        self.entries_pane.render(props, entries_area, buffer);
 
         if let Some((glob_area, pane)) = glob_pane {
             let props = GlobPaneProps {
                 border_style: glob_style,
                 has_focus: matches!(state.focussed, Glob),
             };
-            pane.render(props, glob_area, terminal, cursor);
+            pane.render(props, glob_area, buffer, cursor);
         }
 
         Footer.render(
@@ -135,7 +131,7 @@ impl MainWindow {
                 sort_mode: state.sorting,
             },
             footer_area,
-            terminal.current_buffer_mut(),
+            buffer,
         );
     }
 

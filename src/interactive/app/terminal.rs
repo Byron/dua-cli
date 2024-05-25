@@ -8,8 +8,7 @@ use dua::{
     traverse::{Traversal, TraversalStats},
     ByteFormat, WalkOptions, WalkResult,
 };
-use tui::prelude::Backend;
-use tui_react::Terminal;
+use tui::{backend::Backend, Terminal};
 
 use crate::interactive::widgets::MainWindow;
 

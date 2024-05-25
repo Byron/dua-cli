@@ -16,8 +16,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
-use tui::backend::TestBackend;
-use tui_react::Terminal;
+use tui::{backend::TestBackend, Terminal};
 
 use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp};
 
