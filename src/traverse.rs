@@ -376,7 +376,7 @@ impl BackgroundTraversal {
                     }
                     Err(_) => {
                         if self.previous_depth == 0 {
-                            data.name = (*root_path).clone();
+                            data.name.clone_from(&(*root_path));
                             let entry_index = traversal.tree.add_node(data);
                             traversal
                                 .tree
