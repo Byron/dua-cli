@@ -215,7 +215,7 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
   * [`godu`](https://github.com/viktomas/godu)
 * **GUI:**
   * [GNOME's Disk Usage Analyzer, a.k.a. `baobab`](https://wiki.gnome.org/action/show/Apps/DiskUsageAnalyzer)
-  * Filelight
+  * [Filelight](https://apps.kde.org/filelight/)
   
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
