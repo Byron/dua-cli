@@ -6,8 +6,7 @@ use crate::interactive::{
 use crosstermion::input::Key;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
-use tui::backend::Backend;
-use tui_react::Terminal;
+use tui::{backend::Backend, Terminal};
 
 use super::state::{AppState, FocussedPane::*};
 

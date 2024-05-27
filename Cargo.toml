@@ -11,8 +11,7 @@ include = ["src/**/*", "Cargo.*", "LICENSE", "README.md", "CHANGELOG.md", "!**/t
 
 [features]
 default = ["tui-crossplatform", "trash-move"]
-tui-crossplatform = ["crosstermion/tui-react-crossterm", "tui", "tui-react", "open", "unicode-segmentation", "unicode-width"]
-
+tui-crossplatform = ["crosstermion/tui-crossterm", "tui", "tui-react", "open", "unicode-segmentation", "unicode-width"]
 trash-move = ["trash"]
 
 [dependencies]

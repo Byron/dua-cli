@@ -14,8 +14,7 @@ use dua::{
     WalkResult,
 };
 use std::path::PathBuf;
-use tui::backend::Backend;
-use tui_react::Terminal;
+use tui::{backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget, Terminal};
 
 use super::state::{AppState, Cursor};
 use super::tree_view::TreeView;
@@ -569,6 +568,55 @@ enum Refresh {
     Selected,
 }
 
+/// A [`Widget`] that renders by calling a function.
+///
+/// The `FunctionWidget` struct holds a function that renders into a portion of
+/// a [`Buffer`] designated by a [`Rect`].
+///
+/// This widget can be used to create custom UI elements that are defined by a
+/// rendering function. and allows for rendering functions that do not implement
+/// the [`Widget`] trait.
+struct FunctionWidget<F>
+where
+    F: FnOnce(Rect, &mut Buffer),
+{
+    render: F,
+}
+
+impl<F> FunctionWidget<F>
+where
+    F: FnOnce(Rect, &mut Buffer),
+{
+    /// Creates a new [`FunctionWidget`] with the given rendering function.
+    ///
+    /// The rendering function must have the signature `FnOnce(Rect, &mut
+    /// Buffer)`, where:
+    /// - [`Rect`] represents the available space for rendering.
+    /// - [`Buffer`] is the buffer to write the rendered content to.
+    ///
+    /// The `FunctionWidget` can then be used to render the provided function in
+    /// a user interface.
+    fn new(function: F) -> FunctionWidget<F>
+    where
+        F: FnOnce(Rect, &mut Buffer),
+    {
+        FunctionWidget { render: function }
+    }
+}
+
+/// Implements the [`Widget`] trait for [`FunctionWidget`].
+///
+/// The implementation simply calls the provided render function with the given
+/// `Rect` and `Buffer`.
+impl<F> Widget for FunctionWidget<F>
+where
+    F: FnOnce(Rect, &mut Buffer),
+{
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        (self.render)(area, buf);
+    }
+}
+
 pub fn draw_window<B>(
     window: &mut MainWindow,
     props: MainWindowProps<'_>,
@@ -578,10 +626,14 @@ pub fn draw_window<B>(
 where
     B: Backend,
 {
-    let area = terminal.pre_render()?;
-    window.render(props, area, terminal, cursor);
-    terminal.post_render()?;
-
+    terminal.draw(|frame| {
+        frame.render_widget(
+            FunctionWidget::new(|area, buf| {
+                window.render(props, area, buf, cursor);
+            }),
+            frame.size(),
+        );
+    })?;
     Ok(())
 }
 
