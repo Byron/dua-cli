@@ -19,7 +19,7 @@ pub fn aggregate(
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
     let mut stats = Statistics {
-        smallest_file_in_bytes: u128::max_value(),
+        smallest_file_in_bytes: u128::MAX,
         ..Default::default()
     };
     let mut total = 0;
