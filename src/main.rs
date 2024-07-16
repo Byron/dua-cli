@@ -1,4 +1,4 @@
-#![forbid(unsafe_code, rust_2018_idioms, unsafe_code)]
+#![forbid(rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
 use clap::Parser;
 use dua::{canonicalize_ignore_dirs, TraversalSorting};
