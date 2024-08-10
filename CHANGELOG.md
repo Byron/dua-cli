@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+This is a maintenance release without user-facing changes.
+
+### Bug Fixes
+
+ - <csr-id-46ebf149548f10c1b144f596aa715062787fd141/> clippy warning
+
+### Other
+
+ - <csr-id-f0b9a8e07b24d963116da4dfaa3338a4d4e8a3bf/> update version in install instructions
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 14 commits contributed to the release over the course of 121 calendar days.
+ - 147 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#253](https://github.com/Byron/dua-cli/issues/253)**
+    - Avoid `Cargo.lock` in exported archives ([`2ef583d`](https://github.com/Byron/dua-cli/commit/2ef583d0485941c9cbe91e85c2b62ead80cbb490))
+ * **Uncategorized**
+    - Update locked dependencies ([`319bdde`](https://github.com/Byron/dua-cli/commit/319bddec1812b4a732c8380208b5503f40841bbc))
+    - Merge branch 'olastor/main' ([`80c14a9`](https://github.com/Byron/dua-cli/commit/80c14a9cd28e5a18f5e9df517f6a3332d90e7c30))
+    - Thanks clippy ([`7ddbfbe`](https://github.com/Byron/dua-cli/commit/7ddbfbe37a56b845cc437e60509cb5bb6a89fe01))
+    - Update version in install instructions ([`f0b9a8e`](https://github.com/Byron/dua-cli/commit/f0b9a8e07b24d963116da4dfaa3338a4d4e8a3bf))
+    - Merge pull request #246 from matta/use-ratatui-terminal ([`ced3b4f`](https://github.com/Byron/dua-cli/commit/ced3b4f5e375278dbee52319eac8750b14eb328a))
+    - Update dependencies to fix CI ([`69a7cdd`](https://github.com/Byron/dua-cli/commit/69a7cdd11068b2e4053460b42d8a4959501a7799))
+    - Replace tui_react::Terminal with tui::Terminal ([`1350c2f`](https://github.com/Byron/dua-cli/commit/1350c2f5d7e7bd79909fe78584008385dec1b794))
+    - Merge pull request #247 from matta/fix-clippy ([`e3aff9d`](https://github.com/Byron/dua-cli/commit/e3aff9d987a09910b52dbce84c0de806d4233b04))
+    - Merge pull request #240 from denilsonsa/patch-1 ([`c1caa70`](https://github.com/Byron/dua-cli/commit/c1caa704cab61bf94abbf4de64f6cb890d1a1ea6))
+    - Clippy warning ([`46ebf14`](https://github.com/Byron/dua-cli/commit/46ebf149548f10c1b144f596aa715062787fd141))
+    - Added link to Filelight ([`e3883af`](https://github.com/Byron/dua-cli/commit/e3883af3f751a683b0ba208efc9127e0a07281e2))
+    - Merge pull request #235 from blinxen/main ([`66e0166`](https://github.com/Byron/dua-cli/commit/66e01667ddf6cc8da8a2387ef9d457aef63f42a5))
+    - Update gix-glob dependency to 0.16.2 ([`71a365e`](https://github.com/Byron/dua-cli/commit/71a365efadab4c8dffb4a0e10dcc282dd3f57516))
+</details>
+
 ## 2.29.0 (2024-03-10)
 
 ### New Features
@@ -24,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 18 commits contributed to the release over the course of 44 calendar days.
+ - 19 commits contributed to the release over the course of 44 calendar days.
  - 46 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -36,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.29.0 ([`ab52733`](https://github.com/Byron/dua-cli/commit/ab5273334bd55e01adc5ded64432bb40eefc4053))
     - Avoid crashes when the terminal is resized to unusually small sizes. ([`caa1e72`](https://github.com/Byron/dua-cli/commit/caa1e7261bad1b0e2b10628aa14c9d2b6868a14a))
     - Mark-pane help bar now shows closest to the selected item. ([`24a6c29`](https://github.com/Byron/dua-cli/commit/24a6c29b3f48289cb6374aa66e84357edb5d0d54))
     - Update to the latest versions of `tui-react` and `ratatui` ([`8ab4ee7`](https://github.com/Byron/dua-cli/commit/8ab4ee72423bba54402525b4ea4593f0c582261e))
