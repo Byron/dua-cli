@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.29.2 (2024-08-10)
 
 A maintenance release without user-facing changes.
 
@@ -13,9 +13,9 @@ A maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
+ - 2 unique issues were worked on: [#253](https://github.com/Byron/dua-cli/issues/253), [#254](https://github.com/Byron/dua-cli/issues/254)
 
 ### Commit Details
 
@@ -25,6 +25,8 @@ A maintenance release without user-facing changes.
 
  * **[#253](https://github.com/Byron/dua-cli/issues/253)**
     - Revert "avoid `Cargo.lock` in exported archives" ([`452b30f`](https://github.com/Byron/dua-cli/commit/452b30f0a7c2cc0b5c33cb7d12700fd18dd1e4e1))
+ * **[#254](https://github.com/Byron/dua-cli/issues/254)**
+    - Prepare a new patch release to bring Cargo.lock back ([`dd2d7cd`](https://github.com/Byron/dua-cli/commit/dd2d7cda58c34d0ddf7af11c8b06b31f4c4ddd31))
 </details>
 
 ## 2.29.1 (2024-08-10)
