@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.29.1 (2024-08-10)
+
+<csr-id-f0b9a8e07b24d963116da4dfaa3338a4d4e8a3bf/>
 
 This is a maintenance release without user-facing changes.
 
@@ -21,8 +23,8 @@ This is a maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 14 commits contributed to the release over the course of 121 calendar days.
- - 147 days passed between releases.
+ - 15 commits contributed to the release over the course of 126 calendar days.
+ - 152 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
 
@@ -41,6 +43,7 @@ This is a maintenance release without user-facing changes.
  * **[#253](https://github.com/Byron/dua-cli/issues/253)**
     - Avoid `Cargo.lock` in exported archives ([`2ef583d`](https://github.com/Byron/dua-cli/commit/2ef583d0485941c9cbe91e85c2b62ead80cbb490))
  * **Uncategorized**
+    - Prepare changelog prior to release ([`9a27130`](https://github.com/Byron/dua-cli/commit/9a271309624bd01c1814e4058c859e3fdc2ffcd3))
     - Update locked dependencies ([`319bdde`](https://github.com/Byron/dua-cli/commit/319bddec1812b4a732c8380208b5503f40841bbc))
     - Merge branch 'olastor/main' ([`80c14a9`](https://github.com/Byron/dua-cli/commit/80c14a9cd28e5a18f5e9df517f6a3332d90e7c30))
     - Thanks clippy ([`7ddbfbe`](https://github.com/Byron/dua-cli/commit/7ddbfbe37a56b845cc437e60509cb5bb6a89fe01))
