@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A maintenance release without user-facing changes.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#253](https://github.com/Byron/dua-cli/issues/253)**
+    - Revert "avoid `Cargo.lock` in exported archives" ([`452b30f`](https://github.com/Byron/dua-cli/commit/452b30f0a7c2cc0b5c33cb7d12700fd18dd1e4e1))
+</details>
+
 ## 2.29.1 (2024-08-10)
 
 <csr-id-f0b9a8e07b24d963116da4dfaa3338a4d4e8a3bf/>
@@ -23,7 +45,7 @@ This is a maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 15 commits contributed to the release over the course of 126 calendar days.
+ - 16 commits contributed to the release over the course of 126 calendar days.
  - 152 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
@@ -43,6 +65,7 @@ This is a maintenance release without user-facing changes.
  * **[#253](https://github.com/Byron/dua-cli/issues/253)**
     - Avoid `Cargo.lock` in exported archives ([`2ef583d`](https://github.com/Byron/dua-cli/commit/2ef583d0485941c9cbe91e85c2b62ead80cbb490))
  * **Uncategorized**
+    - Release dua-cli v2.29.1 ([`c82b3f9`](https://github.com/Byron/dua-cli/commit/c82b3f9cad2e84b4976c142faa7f7085d7cc20b7))
     - Prepare changelog prior to release ([`9a27130`](https://github.com/Byron/dua-cli/commit/9a271309624bd01c1814e4058c859e3fdc2ffcd3))
     - Update locked dependencies ([`319bdde`](https://github.com/Byron/dua-cli/commit/319bddec1812b4a732c8380208b5503f40841bbc))
     - Merge branch 'olastor/main' ([`80c14a9`](https://github.com/Byron/dua-cli/commit/80c14a9cd28e5a18f5e9df517f6a3332d90e7c30))
