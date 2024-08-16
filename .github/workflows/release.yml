@@ -207,3 +207,17 @@ jobs:
           asset_path: ${{ env.ASSET }}
           asset_name: ${{ env.ASSET }}
           asset_content_type: application/octet-stream
+
+  winget-release:
+    name: winget-release
+    needs: ["build-release"]
+    runs-on: windows-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@main
+        with:
+          identifier: Byron.dua-cli
+          installers-regex: '-pc-windows-msvc\.zip$'
+          # This step uses russellbanks/Komac to submit manifests.
+          # It requires a PAT with `public_repo` scope.
+          # See https://github.com/marketplace/actions/winget-releaser#configuration-options-%EF%B8%8F
+          token: ${{ secrets.WINGET_TOKEN }}
