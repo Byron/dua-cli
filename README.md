@@ -129,6 +129,14 @@ Alternatively, install via cargo as in
 cargo +nightly install dua-cli
 ```
 
+#### x-cmd
+
+[x-cmd](https://www.x-cmd.com/) is a **toolbox for Posix Shell**, offering a lightweight package manager built using shell and awk.
+```sh
+x env use dua
+```
+- Additionally, the [`x dua ...`](https://www.x-cmd.com/pkg/dua#dua) command is available, which automatically installs `dua` without affecting the environment, such as not modifying the `PATH` variable.
+
 ### Usage
 
 ```bash
