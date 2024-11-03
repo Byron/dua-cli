@@ -5,7 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.29.4 (2024-11-03)
+
+### Bug Fixes
+
+ - <csr-id-4efb5d0cd46c00f13d06dfcb13279f2c5d852d95/> enable "chrono" in `trash` crate
+   This hopefully adds deletion dates to trashed files.
+
+### Other
+
+ - <csr-id-44d25a64475ff861875fe97c4612356eb697f4bf/> update actions/upload-artifact to v4
+   The release workflow failed because actions/upload-artifact@v1 doesn't work anymore.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#268](https://github.com/Byron/dua-cli/issues/268)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#268](https://github.com/Byron/dua-cli/issues/268)**
+    - Enable "chrono" in `trash` crate ([`4efb5d0`](https://github.com/Byron/dua-cli/commit/4efb5d0cd46c00f13d06dfcb13279f2c5d852d95))
+ * **Uncategorized**
+    - Merge pull request #267 from suzuki-shunsuke/chore-update-upload-artifact-v4 ([`904b3fc`](https://github.com/Byron/dua-cli/commit/904b3fce3a1df7a57c8564e57e65ed582d61ba44))
+    - Update actions/upload-artifact to v4 ([`44d25a6`](https://github.com/Byron/dua-cli/commit/44d25a64475ff861875fe97c4612356eb697f4bf))
+</details>
+
 ## 2.29.3 (2024-11-03)
+
+<csr-id-25a6ad73a6571bffe7fac56c61ff2e52ccda0b53/>
+<csr-id-c66e585ec73707d113d481ae2627187c9071539d/>
+<csr-id-fa203b1b955b896d989eb46e72f13fd5e6cd6120/>
 
 ### Chore
 
@@ -25,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 10 commits contributed to the release.
+ - 11 commits contributed to the release.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#265](https://github.com/Byron/dua-cli/issues/265)
 
@@ -38,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#265](https://github.com/Byron/dua-cli/issues/265)**
     - Upgrade `gix-glob` and `trash` ([`25a6ad7`](https://github.com/Byron/dua-cli/commit/25a6ad73a6571bffe7fac56c61ff2e52ccda0b53))
  * **Uncategorized**
+    - Release dua-cli v2.29.3 ([`f5cb1ce`](https://github.com/Byron/dua-cli/commit/f5cb1ce4bab5c225bf8053229e86ab21b5f273e5))
     - Merge pull request #266 from Byron/upgrades ([`297be49`](https://github.com/Byron/dua-cli/commit/297be49c4502ca05104693a8135ccf1f63b8a5c7))
     - Merge pull request #261 from Byron/dependabot/github_actions/dot-github/workflows/actions/download-artifact-4.1.7 ([`ee55bf5`](https://github.com/Byron/dua-cli/commit/ee55bf584ffa3e7adf25f30190e091a54102959f))
     - Merge pull request #260 from Byron/dependabot/cargo/gix-path-0.10.10 ([`4d859aa`](https://github.com/Byron/dua-cli/commit/4d859aac4fd95b2a3c12dbbc5bfaa414490d0316))
