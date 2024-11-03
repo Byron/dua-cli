@@ -39,7 +39,7 @@ num_cpus = "1.10.0"
 filesize = "0.2.0"
 anyhow = "1.0.31"
 trash = { version = "5.2.0", optional = true, default-features = false, features = [
-    "coinit_apartmentthreaded",
+    "coinit_apartmentthreaded", "chrono"
 ] }
 chrono = { version = "0.4.31", default-features = false, features = ["std"] }
 
