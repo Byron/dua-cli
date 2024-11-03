@@ -53,7 +53,7 @@ jobs:
         run: echo "${{ env.ARTIFACT_VERSION }}" > artifacts/release-version
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: artifacts
           path: artifacts
