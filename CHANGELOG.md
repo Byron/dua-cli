@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.29.3 (2024-11-03)
+
+### Chore
+
+ - <csr-id-25a6ad73a6571bffe7fac56c61ff2e52ccda0b53/> upgrade `gix-glob` and `trash`
+
+### Other
+
+ - <csr-id-c66e585ec73707d113d481ae2627187c9071539d/> add x-cmd install steps
+   Hi, I've added instructions on how to install dua using x-cmd to the README file.
+   - [x-cmd](https://www.x-cmd.com/) is a **toolbox for Posix Shell**, offering a lightweight package manager built using shell and awk.
+   ```sh
+   x env use dua
+   ```
+ - <csr-id-fa203b1b955b896d989eb46e72f13fd5e6cd6120/> Auto submit new manifest to winget-pkgs
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 10 commits contributed to the release.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#265](https://github.com/Byron/dua-cli/issues/265)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#265](https://github.com/Byron/dua-cli/issues/265)**
+    - Upgrade `gix-glob` and `trash` ([`25a6ad7`](https://github.com/Byron/dua-cli/commit/25a6ad73a6571bffe7fac56c61ff2e52ccda0b53))
+ * **Uncategorized**
+    - Merge pull request #266 from Byron/upgrades ([`297be49`](https://github.com/Byron/dua-cli/commit/297be49c4502ca05104693a8135ccf1f63b8a5c7))
+    - Merge pull request #261 from Byron/dependabot/github_actions/dot-github/workflows/actions/download-artifact-4.1.7 ([`ee55bf5`](https://github.com/Byron/dua-cli/commit/ee55bf584ffa3e7adf25f30190e091a54102959f))
+    - Merge pull request #260 from Byron/dependabot/cargo/gix-path-0.10.10 ([`4d859aa`](https://github.com/Byron/dua-cli/commit/4d859aac4fd95b2a3c12dbbc5bfaa414490d0316))
+    - Bump actions/download-artifact from 1 to 4.1.7 in /.github/workflows ([`57a67a5`](https://github.com/Byron/dua-cli/commit/57a67a59da48e042332fd7e8b6bd046c2155a391))
+    - Bump gix-path from 0.10.9 to 0.10.10 ([`4db9b9e`](https://github.com/Byron/dua-cli/commit/4db9b9e1269a562a93e6a94a641eed2498da9621))
+    - Merge pull request #259 from lunrenyi/patch-1 ([`b3fdc92`](https://github.com/Byron/dua-cli/commit/b3fdc923cfa5ef03a932aa4d7c994e322f212da3))
+    - Add x-cmd install steps ([`c66e585`](https://github.com/Byron/dua-cli/commit/c66e585ec73707d113d481ae2627187c9071539d))
+    - Merge pull request #256 from Dragon1573/issues/255 ([`3309e3b`](https://github.com/Byron/dua-cli/commit/3309e3b59f167002f883fb79e98e8326f2ba1055))
+    - Auto submit new manifest to winget-pkgs ([`fa203b1`](https://github.com/Byron/dua-cli/commit/fa203b1b955b896d989eb46e72f13fd5e6cd6120))
+</details>
+
 ## 2.29.2 (2024-08-10)
 
 A maintenance release without user-facing changes.
@@ -13,7 +57,7 @@ A maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 2 unique issues were worked on: [#253](https://github.com/Byron/dua-cli/issues/253), [#254](https://github.com/Byron/dua-cli/issues/254)
 
@@ -27,6 +71,8 @@ A maintenance release without user-facing changes.
     - Revert "avoid `Cargo.lock` in exported archives" ([`452b30f`](https://github.com/Byron/dua-cli/commit/452b30f0a7c2cc0b5c33cb7d12700fd18dd1e4e1))
  * **[#254](https://github.com/Byron/dua-cli/issues/254)**
     - Prepare a new patch release to bring Cargo.lock back ([`dd2d7cd`](https://github.com/Byron/dua-cli/commit/dd2d7cda58c34d0ddf7af11c8b06b31f4c4ddd31))
+ * **Uncategorized**
+    - Release dua-cli v2.29.2 ([`60ed763`](https://github.com/Byron/dua-cli/commit/60ed763e98620664c06eac5fd7972f407ae97503))
 </details>
 
 ## 2.29.1 (2024-08-10)
@@ -48,7 +94,6 @@ This is a maintenance release without user-facing changes.
 <csr-read-only-do-not-edit/>
 
  - 16 commits contributed to the release over the course of 126 calendar days.
- - 152 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#253](https://github.com/Byron/dua-cli/issues/253)
 
@@ -103,7 +148,7 @@ This is a maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 19 commits contributed to the release over the course of 44 calendar days.
+ - 19 commits contributed to the release.
  - 46 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -221,7 +266,7 @@ This is a maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 8 commits contributed to the release over the course of 1 calendar day.
+ - 8 commits contributed to the release.
  - 4 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -259,7 +304,7 @@ This is a maintenance release without user-facing changes.
 
 <csr-read-only-do-not-edit/>
 
- - 45 commits contributed to the release over the course of 10 calendar days.
+ - 45 commits contributed to the release.
  - 11 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#96](https://github.com/Byron/dua-cli/issues/96)
@@ -528,7 +573,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 30 commits contributed to the release over the course of 12 calendar days.
+ - 30 commits contributed to the release.
  - 12 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#197](https://github.com/Byron/dua-cli/issues/197)
@@ -607,7 +652,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 17 commits contributed to the release over the course of 1 calendar day.
+ - 17 commits contributed to the release.
  - 2 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#194](https://github.com/Byron/dua-cli/issues/194)
@@ -778,8 +823,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 9 commits contributed to the release over the course of 32 calendar days.
- - 198 days passed between releases.
+ - 9 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#177](https://github.com/Byron/dua-cli/issues/177)
 
@@ -852,8 +896,7 @@ Happy holidays!
 
 <csr-read-only-do-not-edit/>
 
- - 14 commits contributed to the release over the course of 71 calendar days.
- - 71 days passed between releases.
+ - 14 commits contributed to the release.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 3 unique issues were worked on: [#157](https://github.com/Byron/dua-cli/issues/157), [#33](https://github.com/Byron/dua-cli/issues/33), [#85](https://github.com/Byron/dua-cli/issues/85)
 
@@ -1056,8 +1099,7 @@ to something without color by default thanks to the upgrade to `clap` 4.
 
 <csr-read-only-do-not-edit/>
 
- - 12 commits contributed to the release over the course of 86 calendar days.
- - 92 days passed between releases.
+ - 12 commits contributed to the release.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -1795,7 +1837,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
     - Make the trash feature optional ([`1fdded1`](https://github.com/Byron/dua-cli/commit/1fdded129fe766729ac332fa881c0681c9495316))
 </details>
 
-## v2.14.1 (2021-06-29)
+## v2.14.1 (2021-06-30)
 
 * Pressing `ctrl+t` in the mark pane now trashes entries instead of deleting them. Not only does that make
   'deletion' reversible but it makes removal of the entry faster in many cases as well.
@@ -1823,7 +1865,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
     - Dependency update ([`93cd08d`](https://github.com/Byron/dua-cli/commit/93cd08df930e7f5f5164bc2b9d0979a5794c05be))
 </details>
 
-## v2.14.0 (2021-06-29)
+## v2.14.0 (2021-06-30)
 
 <csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/>
 
@@ -1835,7 +1877,7 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 2 calendar days.
+ - 7 commits contributed to the release.
  - 20 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -2639,7 +2681,7 @@ for anyone who passes paths to their command-line tool.
     - First version of options struct based on Argh ([`d787a9c`](https://github.com/Byron/dua-cli/commit/d787a9c5b8ccadae678c985b05ecc328d62df8f3))
 </details>
 
-## v2.7.0 (2020-07-01)
+## v2.7.0 (2020-07-02)
 
 * [Support for extremely large][issue-58], zeta byte scale, files or filesystem traversals.
 * [Fix possibly incorrect handling of hard links][pr-57] in traversals spanning multiple devices.
@@ -2785,7 +2827,7 @@ Much more nuanced percentage bars for a more precise visualization of space cons
     - Clippy ([`70b043a`](https://github.com/Byron/dua-cli/commit/70b043abfd4a5765b4966cff65a7b67c518528ef))
 </details>
 
-## v2.4.1 (2020-03-29)
+## v2.4.1 (2020-03-30)
 
 Bugfix: Update currently visible entries when scanning.
 
@@ -2930,7 +2972,7 @@ This is also the first release with github releases: https://github.com/Byron/du
     - Create rust.yml ([`64d9524`](https://github.com/Byron/dua-cli/commit/64d95247edbd69bb6bf5dd976d2b43364535c107))
 </details>
 
-## v2.3.7 (2020-03-23)
+## v2.3.7 (2020-03-24)
 
 <csr-id-45d1ef31181cd9b430d855a4fe23550ea97e685e/>
 
@@ -2961,7 +3003,7 @@ Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
     - Update Fedora instructions ([`45d1ef3`](https://github.com/Byron/dua-cli/commit/45d1ef31181cd9b430d855a4fe23550ea97e685e))
 </details>
 
-## v2.3.6 (2020-03-15)
+## v2.3.6 (2020-03-16)
 
 Upgrade to jwalk 0.5 bringing better threading control and no symlink following during traversal
 
@@ -3086,7 +3128,7 @@ Incude the license file in crate.
     - Add license file to TUI-react; include it in dua, update dependencies ([`96ff5ab`](https://github.com/Byron/dua-cli/commit/96ff5ab74a70dd908f5dd218077cd2382e08d9f1))
 </details>
 
-## v2.3.1 (2020-02-22)
+## v2.3.1 (2020-02-23)
 
 Include .md files in Crate, update dependencies.
 
@@ -3187,7 +3229,6 @@ Binaries for Linux and MacOS are now available on GitHub Releases.
 <csr-read-only-do-not-edit/>
 
  - 9 commits contributed to the release over the course of 87 calendar days.
- - 100 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -3222,7 +3263,6 @@ Now the color of the widget frame is changed to light gray, instead of remaining
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
- - 89 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -3644,8 +3684,7 @@ A sub-command bringing up a terminal user interface to allow drilling into direc
 
 <csr-read-only-do-not-edit/>
 
- - 234 commits contributed to the release over the course of 13 calendar days.
- - 13 days passed between releases.
+ - 234 commits contributed to the release.
  - 16 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
