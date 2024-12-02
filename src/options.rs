@@ -34,6 +34,14 @@ fn dft_format() -> ByteFormat {
     }
 }
 
+/// For some reason, on MacOS, too many threads are bad and 3 is the best these days on M4.
+/// On M1 it was more like 4, but close enough.
+#[cfg(target_os = "macos")]
+const DEFAULT_THREADS: usize = 3;
+
+#[cfg(not(target_os = "macos"))]
+const DEFAULT_THREADS: usize = 0;
+
 /// A tool to learn about disk usage, fast!
 #[derive(Debug, clap::Parser)]
 #[clap(name = "dua", version)]
@@ -44,7 +52,7 @@ pub struct Args {
 
     /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
     /// Set to 1 to use only a single thread.
-    #[clap(short = 't', long = "threads", default_value_t = 0)]
+    #[clap(short = 't', long = "threads", default_value_t = DEFAULT_THREADS)]
     pub threads: usize,
 
     /// The format with which to print byte counts.
