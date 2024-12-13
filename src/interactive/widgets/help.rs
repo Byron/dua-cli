@@ -94,7 +94,7 @@ impl HelpPane {
                             ..Default::default()
                         },
                     ),
-                    Span::from(format!(" => {}", description)),
+                    Span::from(format!(" => {description}")),
                 ]));
                 if let Some(second_line) = other_line {
                     lines.borrow_mut().push(Line::from(Span::from(format!(

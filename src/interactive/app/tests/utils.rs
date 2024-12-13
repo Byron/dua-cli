@@ -333,5 +333,5 @@ pub fn make_add_node(
 }
 
 pub fn debug(item: impl fmt::Debug) -> String {
-    format!("{:?}", item)
+    format!("{item:?}")
 }

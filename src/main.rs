@@ -137,7 +137,7 @@ fn main() -> Result<()> {
                 extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
             )?;
             if statistics {
-                writeln!(io::stderr(), "{:?}", stats).ok();
+                writeln!(io::stderr(), "{stats:?}").ok();
             }
             res
         }

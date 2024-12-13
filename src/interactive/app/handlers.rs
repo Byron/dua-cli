@@ -244,8 +244,7 @@ impl AppState {
                         match self.delete_entry(entry_to_delete, tree_view) {
                             Ok(ed) => {
                                 entries_deleted += ed;
-                                self.message =
-                                    Some(format!("Deleted {} items...", entries_deleted));
+                                self.message = Some(format!("Deleted {entries_deleted} items..."));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),
@@ -265,8 +264,7 @@ impl AppState {
                         match self.trash_entry(entry_to_trash, tree_view) {
                             Ok(ed) => {
                                 entries_trashed += ed;
-                                self.message =
-                                    Some(format!("Trashed {} items...", entries_trashed));
+                                self.message = Some(format!("Trashed {entries_trashed} items..."));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),

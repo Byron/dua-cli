@@ -46,7 +46,7 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it will not think it is still scanning as there is no traversal"
         );
 
-        let first_selected_path = OsString::from(format!("{}/{}", FIXTURE_PATH, long_root));
+        let first_selected_path = OsString::from(format!("{FIXTURE_PATH}/{long_root}"));
         assert_eq!(
             node_by_name(&app, &first_selected_path).name,
             first_selected_path,
