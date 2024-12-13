@@ -245,7 +245,7 @@ impl AppState {
                             Ok(ed) => {
                                 entries_deleted += ed;
                                 self.message =
-                                    Some(format!("Deleted {} items...", entries_deleted));
+                                    Some(format!("Deleted {entries_deleted} items..."));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),
@@ -266,7 +266,7 @@ impl AppState {
                             Ok(ed) => {
                                 entries_trashed += ed;
                                 self.message =
-                                    Some(format!("Trashed {} items...", entries_trashed));
+                                    Some(format!("Trashed {entries_trashed} items..."));
                                 Ok(pane)
                             }
                             Err(c) => Err((pane, c)),

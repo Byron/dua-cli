@@ -261,7 +261,7 @@ fn columns_with_separators(
 fn mtime_column(entry_mtime: SystemTime, style: Style) -> Span<'static> {
     let datetime = DateTime::<chrono::Utc>::from(entry_mtime);
     let formatted_time = datetime.format("%d/%m/%Y %H:%M:%S").to_string();
-    Span::styled(format!("{:>20}", formatted_time), style)
+    Span::styled(format!("{formatted_time:>20}"), style)
 }
 
 fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
