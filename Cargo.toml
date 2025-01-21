@@ -33,7 +33,7 @@ clap = { version = "4.0.29", features = ["derive"] }
 jwalk = "0.8.1"
 byte-unit = "4"
 atty = "0.2.11"
-petgraph = "0.6"
+petgraph = "0.7"
 itertools = "0.13.0"
 num_cpus = "1.10.0"
 filesize = "0.2.0"
