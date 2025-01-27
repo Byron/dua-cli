@@ -45,6 +45,8 @@ impl Footer {
                     SortMode::MTimeDescending => "modified descending",
                     SortMode::CountAscending => "items ascending",
                     SortMode::CountDescending => "items descending",
+                    SortMode::NameAscending => "name ascending",
+                    SortMode::NameDescending => "name descending",
                 },
                 format.display(*total_bytes),
                 entries_traversed,

@@ -68,6 +68,20 @@ fn simple_user_journey_read_only() -> Result<()> {
 
     // SORTING
     {
+        // when hitting the N key
+        app.process_events(&mut terminal, into_codes("n"))?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::NameAscending,
+            "it sets the sort mode to ascending by name"
+        );
+        // when hitting the N key again
+        app.process_events(&mut terminal, into_codes("n"))?;
+        assert_eq!(
+            app.state.sorting,
+            SortMode::NameDescending,
+            "it sets the sort mode to descending by name"
+        );
         // when hitting the M key
         app.process_events(&mut terminal, into_codes("m"))?;
         assert_eq!(

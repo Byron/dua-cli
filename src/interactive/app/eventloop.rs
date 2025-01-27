@@ -332,6 +332,7 @@ impl AppState {
                     Char('M') => self.toggle_mtime_column(),
                     Char('c') => self.cycle_count_sorting(&tree_view),
                     Char('C') => self.toggle_count_column(),
+                    Char('n') => self.cycle_name_sorting(&tree_view),
                     Char('g') | Char('S') => display.byte_vis.cycle(),
                     Char('d') => self.mark_entry(
                         CursorMode::Advance,

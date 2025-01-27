@@ -146,6 +146,15 @@ impl AppState {
         );
     }
 
+    pub fn cycle_name_sorting(&mut self, tree_view: &TreeView<'_>) {
+        self.sorting.toggle_name();
+        self.entries = tree_view.sorted_entries(
+            self.navigation().view_root,
+            self.sorting,
+            self.entry_check(),
+        );
+    }
+
     pub fn toggle_mtime_column(&mut self) {
         self.toggle_column(Column::MTime);
     }

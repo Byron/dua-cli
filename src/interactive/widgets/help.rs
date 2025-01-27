@@ -152,6 +152,7 @@ impl HelpPane {
                 hotkey("M", "Show/hide modified time.", None);
                 hotkey("c", "Toggle sort by entries descending/ascending.", None);
                 hotkey("C", "Show/hide entry count.", None);
+                hotkey("n", "Toggle sort by name ascending/descending.", None);
                 hotkey(
                     "g/S",
                     "Cycle through percentage display and bar options.",
