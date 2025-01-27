@@ -387,7 +387,7 @@ impl BackgroundTraversal {
                     }
                 }
 
-                if self.throttle.as_ref().map_or(false, |t| t.can_update()) {
+                if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
                     return Some(false);
                 }
             }

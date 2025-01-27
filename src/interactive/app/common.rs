@@ -109,14 +109,14 @@ pub fn sorted_entries(
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|entry| {
-                let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
+                let use_glob_path = glob_root.is_some_and(|glob_root| glob_root == node_idx);
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
                     if matches!(check, EntryCheck::Disabled) || glob_root == Some(node_idx) {
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
-                        (path, meta.is_ok(), meta.ok().map_or(false, |m| m.is_dir()))
+                        (path, meta.is_ok(), meta.ok().is_some_and(|m| m.is_dir()))
                     }
                 };
                 EntryDataBundle {

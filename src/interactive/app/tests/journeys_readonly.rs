@@ -315,9 +315,10 @@ fn simple_user_journey_read_only() -> Result<()> {
                 "it marks only a single node",
             );
             assert!(
-                app.window.mark_pane.as_ref().map_or(false, |p| p
-                    .marked()
-                    .contains_key(&previously_selected_index)),
+                app.window
+                    .mark_pane
+                    .as_ref()
+                    .is_some_and(|p| p.marked().contains_key(&previously_selected_index)),
                 "it marks the selected node"
             );
             assert_eq!(
@@ -355,9 +356,10 @@ fn simple_user_journey_read_only() -> Result<()> {
             );
 
             assert!(
-                app.window.mark_pane.as_ref().map_or(false, |p| p
-                    .marked()
-                    .contains_key(&previously_selected_index)),
+                app.window
+                    .mark_pane
+                    .as_ref()
+                    .is_some_and(|p| p.marked().contains_key(&previously_selected_index)),
                 "it leaves the first selected item marked"
             );
         }
