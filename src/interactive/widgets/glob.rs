@@ -74,7 +74,7 @@ impl GlobPane {
             self.input
                 .graphemes(true)
                 .take(self.cursor_grapheme_idx)
-                .map(|g| g.as_bytes().len())
+                .map(|g| g.len())
                 .sum::<usize>(),
             new_char,
         );

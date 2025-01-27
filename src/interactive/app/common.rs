@@ -15,6 +15,8 @@ pub enum SortMode {
     MTimeAscending,
     CountDescending,
     CountAscending,
+    NameDescending,
+    NameAscending,
 }
 
 impl SortMode {
@@ -42,6 +44,15 @@ impl SortMode {
             CountAscending => CountDescending,
             CountDescending => CountAscending,
             _ => CountDescending,
+        }
+    }
+
+    pub fn toggle_name(&mut self) {
+        use SortMode::*;
+        *self = match self {
+            NameAscending => NameDescending,
+            NameDescending => NameAscending,
+            _ => NameAscending,
         }
     }
 }
@@ -86,17 +97,26 @@ pub fn sorted_entries(
             .cmp(&r.entry_count)
             .then_with(|| l.name.cmp(&r.name))
     }
+    fn cmp_name(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
+        if l.is_dir && !r.is_dir {
+            Ordering::Less
+        } else if !l.is_dir && r.is_dir {
+            Ordering::Greater
+        } else {
+            l.name.cmp(&r.name)
+        }
+    }
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|entry| {
-                let use_glob_path = glob_root.map_or(false, |glob_root| glob_root == node_idx);
+                let use_glob_path = glob_root.is_some_and(|glob_root| glob_root == node_idx);
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
                     if matches!(check, EntryCheck::Disabled) || glob_root == Some(node_idx) {
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
-                        (path, meta.is_ok(), meta.ok().map_or(false, |m| m.is_dir()))
+                        (path, meta.is_ok(), meta.ok().is_some_and(|m| m.is_dir()))
                     }
                 };
                 EntryDataBundle {
@@ -121,6 +141,8 @@ pub fn sorted_entries(
             MTimeDescending => r.mtime.cmp(&l.mtime),
             CountAscending => cmp_count(l, r),
             CountDescending => cmp_count(l, r).reverse(),
+            NameAscending => cmp_name(l, r),
+            NameDescending => cmp_name(l, r).reverse(),
         })
         .collect()
 }
