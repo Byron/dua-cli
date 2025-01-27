@@ -5,7 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.30.0 (2025-01-27)
+
+### New Features
+
+ - <csr-id-73224e63bc21d1ffa416b3e685a95c04afb72657/> allow sorting by name in interactive mode
+
+### Bug Fixes
+
+ - <csr-id-0a4d09eae898c80f8f81bbf8f8c652883d9424e7/> formatting in src/interactive/app/handlers.rs
+ - <csr-id-8933be4fa8a801a7f79d994d735eee1105bd30ba/> on MacOS use only 3 threads by default.
+   Otherwise, it would get very slow and the difference is enormous.
+   16 threads for example take 4.1s on a workload, whereas this only takes
+   550ms with 3 threads.
+
+### Style
+
+ - <csr-id-c1dc1b26735279e976d36597bfe45eb3557458fe/> simplify some statements for readability
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release over the course of 55 calendar days.
+ - 84 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #275 from joehasson/feat/interactive-mode-sort-by-name ([`364f732`](https://github.com/Byron/dua-cli/commit/364f73206dc89277496486da6a6b462fb38e1262))
+    - Thanks clippy ([`092a6c5`](https://github.com/Byron/dua-cli/commit/092a6c53cdd0b01f4041f7a79c736b27a1c2a3ce))
+    - Allow sorting by name in interactive mode ([`73224e6`](https://github.com/Byron/dua-cli/commit/73224e63bc21d1ffa416b3e685a95c04afb72657))
+    - Merge pull request #274 from musicinmybrain/petgraph0.7 ([`14a276e`](https://github.com/Byron/dua-cli/commit/14a276eb513cec833f5137670ff55f1391d1b4d7))
+    - Update petgraph to 0.7 ([`b83a2f6`](https://github.com/Byron/dua-cli/commit/b83a2f6dc348f696d7f675e1266ecc2527382d8e))
+    - Merge pull request #271 from hamirmahal/style/simplify-some-statements-for-readability ([`3bc25bd`](https://github.com/Byron/dua-cli/commit/3bc25bd5e337bdebce706a89e0fe4227d9997b9a))
+    - Formatting in src/interactive/app/handlers.rs ([`0a4d09e`](https://github.com/Byron/dua-cli/commit/0a4d09eae898c80f8f81bbf8f8c652883d9424e7))
+    - Simplify some statements for readability ([`c1dc1b2`](https://github.com/Byron/dua-cli/commit/c1dc1b26735279e976d36597bfe45eb3557458fe))
+    - On MacOS use only 3 threads by default. ([`8933be4`](https://github.com/Byron/dua-cli/commit/8933be4fa8a801a7f79d994d735eee1105bd30ba))
+</details>
+
 ## 2.29.4 (2024-11-03)
+
+<csr-id-44d25a64475ff861875fe97c4612356eb697f4bf/>
 
 ### Bug Fixes
 
@@ -21,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#268](https://github.com/Byron/dua-cli/issues/268)
 
@@ -34,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#268](https://github.com/Byron/dua-cli/issues/268)**
     - Enable "chrono" in `trash` crate ([`4efb5d0`](https://github.com/Byron/dua-cli/commit/4efb5d0cd46c00f13d06dfcb13279f2c5d852d95))
  * **Uncategorized**
+    - Release dua-cli v2.29.4 ([`6386036`](https://github.com/Byron/dua-cli/commit/63860365d18e156656b7f00e1c99be93186b04b2))
     - Merge pull request #267 from suzuki-shunsuke/chore-update-upload-artifact-v4 ([`904b3fc`](https://github.com/Byron/dua-cli/commit/904b3fce3a1df7a57c8564e57e65ed582d61ba44))
     - Update actions/upload-artifact to v4 ([`44d25a6`](https://github.com/Byron/dua-cli/commit/44d25a64475ff861875fe97c4612356eb697f4bf))
 </details>
