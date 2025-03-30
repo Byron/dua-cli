@@ -29,8 +29,8 @@ say_err() {
 }
 
 err() {
-    if [ ! -z $td ]; then
-        rm -rf $td
+    if [ ! -z "$td" ]; then
+        rm -rf "$td"
     fi
 
     say_err "ERROR $1"
@@ -38,7 +38,7 @@ err() {
 }
 
 need() {
-    if ! command -v $1 > /dev/null 2>&1; then
+    if ! command -v "$1" > /dev/null 2>&1; then
         err "need $1 (command not found)"
     fi
 }
@@ -88,48 +88,48 @@ need mktemp
 need tar
 
 # Optional dependencies
-if [ -z $crate ] || [ -z $tag ] || [ -z $target ]; then
+if [ -z "$crate" ] || [ -z "$tag" ] || [ -z "$target" ]; then
     need cut
 fi
 
-if [ -z $tag ]; then
+if [ -z "$tag" ]; then
     need rev
 fi
 
-if [ -z $target ]; then
+if [ -z "$target" ]; then
     need grep
     need rustc
 fi
 
-if [ -z $git ]; then
+if [ -z "$git" ]; then
     err 'must specify a git repository using `--git`. Example: `install.sh --git japaric/cross`'
 fi
 
 url="https://github.com/$git"
 say_err "GitHub repository: $url"
 
-if [ -z $crate ]; then
-    crate=$(echo $git | cut -d'/' -f2)
+if [ -z "$crate" ]; then
+    crate=$(echo "$git" | cut -d'/' -f2)
 fi
 
 say_err "Crate: $crate"
 
 url="$url/releases"
 
-if [ -z $tag ]; then
+if [ -z "$tag" ]; then
     tag=$(curl -s "$url/latest" | cut -d'"' -f2 | rev | cut -d'/' -f1 | rev)
     say_err "Tag: latest ($tag)"
 else
     say_err "Tag: $tag"
 fi
 
-if [ -z $target ]; then
+if [ -z "$target" ]; then
     target=$(rustc -Vv | grep host | cut -d' ' -f2)
 fi
 
 say_err "Target: $target"
 
-if [ -z $dest ]; then
+if [ -z "$dest" ]; then
     dest="${CARGO_HOME:-$HOME/.cargo/bin}"
 fi
 
@@ -139,17 +139,17 @@ url="$url/download/$tag/$crate-$tag-$target.tar.gz"
 
 say_err "Downloading: $url"
 td=$(mktemp -d || mktemp -d -t tmp)
-curl -sL $url | tar -C $td -xz
+curl -sL "$url" | tar -C "$td" -xz
 
-for f in $(cd $td && find . -type f); do
-    test -x $td/$f || continue
+for f in $(cd "$td" && find . -type f); do
+    test -x "$td/$f" || continue
 
     if [ -e "$dest/$f" ] && [ $force = false ]; then
         err "$f already exists in $dest"
     else
-        mkdir -p $dest
-        install -v -m 755 $td/$f $dest
+        mkdir -p "$dest"
+        install -v -m 755 "$td/$f" "$dest"
     fi
 done
 
-rm -rf $td
+rm -rf "$td"
