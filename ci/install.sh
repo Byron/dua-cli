@@ -16,7 +16,7 @@ Options:
     --crate NAME    Name of the crate to install (default <repository name>)
     --tag TAG       Tag (version) of the crate to install (default <latest release>)
     --target TARGET Install the release compiled for $TARGET (default <`rustc` host>)
-    --to LOCATION   Where to install the binary (default ~/.cargo/bin)
+    --to LOCATION   Where to install the binary (default '$CARGO_HOME' if defined, otherwise '~/.cargo/bin')
 EOF
 }
 
@@ -130,7 +130,7 @@ fi
 say_err "Target: $target"
 
 if [ -z $dest ]; then
-    dest="$HOME/.cargo/bin"
+    dest="${CARGO_HOME:-$HOME/.cargo/bin}"
 fi
 
 say_err "Installing to: $dest"
