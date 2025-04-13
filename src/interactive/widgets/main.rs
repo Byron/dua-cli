@@ -139,7 +139,7 @@ impl MainWindow {
         self.mark_pane
             .as_ref()
             .map(|p| p.marked())
-            .map_or(true, |m| m.is_empty())
+            .is_none_or(|m| m.is_empty())
     }
 }
 

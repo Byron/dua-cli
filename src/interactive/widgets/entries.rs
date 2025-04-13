@@ -91,7 +91,7 @@ impl Entries {
             let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-            let is_selected = selected.map_or(false, |idx| idx == *node_idx);
+            let is_selected = selected == &Some(*node_idx);
             if is_selected {
                 scroll_offset = Some(idx);
             }
@@ -287,7 +287,7 @@ fn fill_background_to_right(mut s: Cow<'_, str>, entire_width: u16) -> Cow<'_, s
     match (s.len(), entire_width as usize) {
         (x, y) if x >= y => s,
         (x, y) => {
-            s.to_mut().extend(std::iter::repeat(' ').take(y - x));
+            s.to_mut().extend(std::iter::repeat_n(' ', y - x));
             s
         }
     }

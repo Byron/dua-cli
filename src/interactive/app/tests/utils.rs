@@ -114,9 +114,7 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
                 .sorted_by_key(|p| p.components().count())
                 .rev()
                 .map(|d| {
-                    remove_dir(d)
-                        .with_context(|| format!("Could not delete '{}'", d.display()))
-                        .map_err(Error::from)
+                    remove_dir(d).with_context(|| format!("Could not delete '{}'", d.display()))
                 }),
         )
         .collect::<Result<_, _>>()
