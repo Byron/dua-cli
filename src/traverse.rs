@@ -19,6 +19,7 @@ pub type Tree = StableGraph<EntryData, (), Directed>;
 pub struct EntryData {
     pub name: PathBuf,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
+    /// plus the  size of the directory entry itself
     pub size: u128,
     pub mtime: SystemTime,
     pub entry_count: Option<u64>,
@@ -128,6 +129,7 @@ impl EntryInfo {
 pub fn set_entry_info_or_panic(
     tree: &mut Tree,
     node_idx: TreeIndex,
+    node_own_size: u128,
     EntryInfo {
         size,
         entries_count,
@@ -136,8 +138,8 @@ pub fn set_entry_info_or_panic(
     let node = tree
         .node_weight_mut(node_idx)
         .expect("node for parent index we just retrieved");
-    node.size = size;
-    node.entry_count = entries_count;
+    node.size = size + node_own_size;
+    node.entry_count = entries_count.map(|n| n + 1);
 }
 
 pub fn parent_or_panic(tree: &mut Tree, parent_node_idx: TreeIndex) -> TreeIndex {
@@ -146,7 +148,7 @@ pub fn parent_or_panic(tree: &mut Tree, parent_node_idx: TreeIndex) -> TreeIndex
         .expect("every node in the iteration has a parent")
 }
 
-pub fn pop_or_panic(v: &mut Vec<EntryInfo>) -> EntryInfo {
+pub fn pop_or_panic<T>(v: &mut Vec<T>) -> T {
     v.pop().expect("sizes per level to be in sync with graph")
 }
 
@@ -168,6 +170,9 @@ pub struct BackgroundTraversal {
     parent_node_idx: TreeIndex,
     directory_info_per_depth_level: Vec<EntryInfo>,
     current_directory_at_depth: EntryInfo,
+    parent_node_size: u128,
+    parent_node_size_per_depth_level: Vec<u128>,
+    previous_node_size: u128,
     previous_depth: usize,
     inodes: InodeFilter,
     throttle: Option<Throttle>,
@@ -234,6 +239,9 @@ impl BackgroundTraversal {
             stats: TraversalStats::default(),
             previous_node_idx: root_idx,
             parent_node_idx: root_idx,
+            previous_node_size: 0,
+            parent_node_size: 0,
+            parent_node_size_per_depth_level: Vec::new(),
             directory_info_per_depth_level: Vec::new(),
             current_directory_at_depth: EntryInfo::default(),
             previous_depth: 0,
@@ -279,10 +287,10 @@ impl BackgroundTraversal {
                         let mut file_count = 0u64;
                         match &entry.client_state {
                             Some(Ok(ref m)) => {
-                                if !m.is_dir()
-                                    && (self.walk_options.count_hard_links || self.inodes.add(m))
-                                    && (self.walk_options.cross_filesystems
-                                        || crossdev::is_same_device(device_id, m))
+                                if self.walk_options.count_hard_links
+                                    || self.inodes.add(m)
+                                        && (self.walk_options.cross_filesystems
+                                            || crossdev::is_same_device(device_id, m))
                                 {
                                     file_count = 1;
                                     if self.walk_options.apparent_size {
@@ -326,13 +334,19 @@ impl BackgroundTraversal {
                                     size: file_size,
                                     entries_count: Some(file_count),
                                 };
+
+                                self.parent_node_size_per_depth_level
+                                    .push(self.previous_node_size);
+
                                 self.parent_node_idx = self.previous_node_idx;
+                                self.parent_node_size = self.previous_node_size;
                             }
                             (n, p) if n < p => {
                                 for _ in n..p {
                                     set_entry_info_or_panic(
                                         &mut traversal.tree,
                                         self.parent_node_idx,
+                                        self.parent_node_size,
                                         self.current_directory_at_depth,
                                     );
                                     let dir_info =
@@ -343,6 +357,8 @@ impl BackgroundTraversal {
 
                                     self.parent_node_idx =
                                         parent_or_panic(&mut traversal.tree, self.parent_node_idx);
+                                    self.parent_node_size =
+                                        pop_or_panic(&mut self.parent_node_size_per_depth_level);
                                 }
                                 self.current_directory_at_depth.size += file_size;
                                 *self
@@ -352,6 +368,7 @@ impl BackgroundTraversal {
                                 set_entry_info_or_panic(
                                     &mut traversal.tree,
                                     self.parent_node_idx,
+                                    self.parent_node_size,
                                     self.current_directory_at_depth,
                                 );
                             }
@@ -372,6 +389,7 @@ impl BackgroundTraversal {
                             .tree
                             .add_edge(self.parent_node_idx, entry_index, ());
                         self.previous_node_idx = entry_index;
+                        self.previous_node_size = file_size;
                         self.previous_depth = entry.depth;
                     }
                     Err(_) => {
@@ -406,6 +424,7 @@ impl BackgroundTraversal {
                     set_entry_info_or_panic(
                         &mut traversal.tree,
                         self.parent_node_idx,
+                        self.parent_node_size,
                         self.current_directory_at_depth,
                     );
                     self.parent_node_idx =
@@ -415,6 +434,7 @@ impl BackgroundTraversal {
                 set_entry_info_or_panic(
                     &mut traversal.tree,
                     self.root_idx,
+                    root_size,
                     EntryInfo {
                         size: root_size,
                         entries_count: (self.stats.entries_traversed > 0)
