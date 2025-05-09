@@ -52,8 +52,7 @@ pub fn aggregate(
                 Ok(entry) => {
                     let file_size = match entry.client_state {
                         Some(Ok(ref m))
-                            if !m.is_dir()
-                                && (walk_options.count_hard_links || inodes.add(m))
+                            if (walk_options.count_hard_links || inodes.add(m))
                                 && (walk_options.cross_filesystems
                                     || crossdev::is_same_device(device_id, m)) =>
                         {

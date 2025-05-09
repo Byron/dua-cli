@@ -234,12 +234,12 @@ pub fn sample_01_tree() -> Tree {
     {
         let mut add_node = make_add_node(&mut tree);
         #[cfg(not(windows))]
-        let root_size = 1259070;
+        let root_size = 1275454;
         #[cfg(windows)]
         let root_size = 1259069;
-        let rn = add_node("", root_size, 10, None);
+        let rn = add_node("", root_size, 14, None);
         {
-            let sn = add_node(&fixture_str("sample-01"), root_size, 10, Some(rn));
+            let sn = add_node(&fixture_str("sample-01"), root_size, 14, Some(rn));
             {
                 add_node(".hidden.666", 666, 0, Some(sn));
                 add_node("a", 256, 0, Some(sn));
@@ -248,16 +248,26 @@ pub fn sample_01_tree() -> Tree {
                 add_node("c.lnk", 1, 0, Some(sn));
                 #[cfg(windows)]
                 add_node("c.lnk", 0, 0, Some(sn));
-                let dn = add_node("dir", 1258024, 5, Some(sn));
+
+                #[cfg(not(windows))]
+                let dn = add_node("dir", 1270312, 8, Some(sn));
+                #[cfg(windows)]
+                let dn = add_node("dir", 1258024, 8, Some(sn));
                 {
                     add_node("1000bytes", 1000, 0, Some(dn));
                     add_node("dir-a.1mb", 1_000_000, 0, Some(dn));
                     add_node("dir-a.kb", 1024, 0, Some(dn));
-                    let en = add_node("empty-dir", 0, 1, Some(dn));
+                    #[cfg(not(windows))]
+                    let en = add_node("empty-dir", 4096, 2, Some(dn));
+                    #[cfg(windows)]
+                    let en = add_node("empty-dir", 0, 2, Some(dn));
                     {
                         add_node(".gitkeep", 0, 0, Some(en));
                     }
-                    let sub = add_node("sub", 256_000, 1, Some(dn));
+                    #[cfg(not(windows))]
+                    let sub = add_node("sub", 260_096, 2, Some(dn));
+                    #[cfg(windows)]
+                    let sub = add_node("sub", 256_000, 2, Some(dn));
                     {
                         add_node("dir-sub-a.256kb", 256_000, 0, Some(sub));
                     }
@@ -274,8 +284,11 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
     let root_index: TreeIndex;
     {
         let mut add_node = make_add_node(&mut tree);
+        #[cfg(not(windows))]
+        let root_size = 17924;
+        #[cfg(windows)]
         let root_size = 1540;
-        root_index = add_node("", root_size, 6, None);
+        root_index = add_node("", root_size, 10, None);
         {
             let sn = add_node(
                 format!(
@@ -288,21 +301,30 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
                 )
                 .as_str(),
                 root_size,
-                6,
+                10,
                 Some(root_index),
             );
             {
                 add_node("a", 256, 0, Some(sn));
                 add_node("b", 1, 0, Some(sn));
-                let dn = add_node("dir", 1283, 4, Some(sn));
+                #[cfg(not(windows))]
+                let dn = add_node("dir", 13571, 7, Some(sn));
+                #[cfg(windows)]
+                let dn = add_node("dir", 1283, 7, Some(sn));
                 {
                     add_node("c", 257, 0, Some(dn));
                     add_node("d", 2, 0, Some(dn));
-                    let en = add_node("empty-dir", 0, 1, Some(dn));
+                    #[cfg(not(windows))]
+                    let en = add_node("empty-dir", 4096, 2, Some(dn));
+                    #[cfg(windows)]
+                    let en = add_node("empty-dir", 0, 2, Some(dn));
                     {
                         add_node(".gitkeep", 0, 0, Some(en));
                     }
-                    let sub = add_node("sub", 1024, 1, Some(dn));
+                    #[cfg(not(windows))]
+                    let sub = add_node("sub", 5120, 2, Some(dn));
+                    #[cfg(windows)]
+                    let sub = add_node("sub", 1024, 2, Some(dn));
                     {
                         add_node("e", 1024, 0, Some(sub));
                     }
@@ -331,5 +353,5 @@ pub fn make_add_node(
 }
 
 pub fn debug(item: impl fmt::Debug) -> String {
-    format!("{item:?}")
+    format!("{item:#?}")
 }
