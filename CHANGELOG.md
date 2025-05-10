@@ -5,7 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+In this release, the size of directories is also taken into consideration, for more realistic sizes similar to what `du` does.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #284 from joehasson/feat/include-directory-inodes-in-size-calculations ([`b5b411b`](https://github.com/Byron/dua-cli/commit/b5b411b2757d61ebdd64f2254cac002234ed1d5d))
+    - Include directory inode in directory size aggregation ([`a93b28e`](https://github.com/Byron/dua-cli/commit/a93b28ead02714bb80cda296e4b4ad2a1248ba0e))
+    - Merge pull request #283 from Byron/dependabot/cargo/crossbeam-channel-0.5.15 ([`ca6122f`](https://github.com/Byron/dua-cli/commit/ca6122f914d0626a5f51ff0986bcb6a1ff98e9ec))
+    - Thanks clippy ([`49bbd2c`](https://github.com/Byron/dua-cli/commit/49bbd2c05d091ef344feb83e6a25d825267025e7))
+    - Bump crossbeam-channel from 0.5.13 to 0.5.15 ([`af3f3fe`](https://github.com/Byron/dua-cli/commit/af3f3fed990be166595b0cb5133272d2091483e8))
+</details>
+
 ## 2.30.0 (2025-01-27)
+
+<csr-id-c1dc1b26735279e976d36597bfe45eb3557458fe/>
 
 ### New Features
 
@@ -27,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 9 commits contributed to the release over the course of 55 calendar days.
+ - 10 commits contributed to the release over the course of 55 calendar days.
  - 84 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -45,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.30.0 ([`b5377bc`](https://github.com/Byron/dua-cli/commit/b5377bcf07ced300ab1493ed969999ac58825e83))
     - Merge pull request #275 from joehasson/feat/interactive-mode-sort-by-name ([`364f732`](https://github.com/Byron/dua-cli/commit/364f73206dc89277496486da6a6b462fb38e1262))
     - Thanks clippy ([`092a6c5`](https://github.com/Byron/dua-cli/commit/092a6c53cdd0b01f4041f7a79c736b27a1c2a3ce))
     - Allow sorting by name in interactive mode ([`73224e6`](https://github.com/Byron/dua-cli/commit/73224e63bc21d1ffa416b3e685a95c04afb72657))
