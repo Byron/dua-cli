@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.30.1 (2025-05-10)
 
 In this release, the size of directories is also taken into consideration, for more realistic sizes similar to what `du` does.
 
@@ -13,7 +13,7 @@ In this release, the size of directories is also taken into consideration, for m
 
 <csr-read-only-do-not-edit/>
 
- - 5 commits contributed to the release.
+ - 6 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -30,6 +30,7 @@ In this release, the size of directories is also taken into consideration, for m
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog for next release. ([`4ed0acf`](https://github.com/Byron/dua-cli/commit/4ed0acfe47836a7dd0dd2e22998c7ea227555fe2))
     - Merge pull request #284 from joehasson/feat/include-directory-inodes-in-size-calculations ([`b5b411b`](https://github.com/Byron/dua-cli/commit/b5b411b2757d61ebdd64f2254cac002234ed1d5d))
     - Include directory inode in directory size aggregation ([`a93b28e`](https://github.com/Byron/dua-cli/commit/a93b28ead02714bb80cda296e4b4ad2a1248ba0e))
     - Merge pull request #283 from Byron/dependabot/cargo/crossbeam-channel-0.5.15 ([`ca6122f`](https://github.com/Byron/dua-cli/commit/ca6122f914d0626a5f51ff0986bcb6a1ff98e9ec))
