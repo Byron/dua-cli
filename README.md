@@ -154,7 +154,7 @@ Launch into interactive mode with the `i` or `interactive` subcommand. Get help 
 shortcuts with `?`.
 Use this mode to explore, and/or to delete files and directories to release disk space.
 
-Please note that great care has been taken to prevent accidential deletions due to a multi-stage
+Please note that great care has been taken to prevent accidental deletions due to a multi-stage
 process, which makes this mode viable for exploration.
 
 ```bash
@@ -200,7 +200,7 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 * There are plenty of examples in `tests/fixtures` which don't render correctly in interactive mode.
   This can be due to graphemes not interpreted correctly. With Chinese characters for instance,
   column sizes are not correctly computed, leading to certain columns not being shown.
-  In other cases, the terminal gets things wrong - I use alacritty, and with certain characaters it
+  In other cases, the terminal gets things wrong - I use alacritty, and with certain characters it
   performs worse than, say iTerm3.
   See https://github.com/minimaxir/big-list-of-naughty-strings/blob/master/blns.txt for the source.
 * In interactive mode, you will need about 60MB of memory for 1 million entries in the graph.
