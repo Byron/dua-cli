@@ -106,7 +106,7 @@ pub enum Command {
         #[clap(value_parser)]
         input: Vec<PathBuf>,
     },
-    /// Aggregrate the consumed space of one or more directories or files
+    /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
     Aggregate {
         /// If set, print additional statistics about the file traversal to stderr
