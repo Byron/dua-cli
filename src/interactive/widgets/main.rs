@@ -59,12 +59,12 @@ impl MainWindow {
         Header.render(header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
-            let (left_pane, right_pane) = content_layout(content_area);
+            let (left_pane, right_pane) = content_layout(content_area, state.ui_split);
             match (&mut self.help_pane, &mut self.mark_pane) {
                 (Some(ref mut pane), None) => (left_pane, Some((right_pane, pane)), None),
                 (None, Some(ref mut pane)) => (left_pane, None, Some((right_pane, pane))),
                 (Some(ref mut help), Some(ref mut mark)) => {
-                    let (top_area, bottom_area) = right_pane_layout(right_pane);
+                    let (top_area, bottom_area) = right_pane_layout(right_pane, state.ui_split);
                     (left_pane, Some((top_area, help)), Some((bottom_area, mark)))
                 }
                 (None, None) => (content_area, None, None),
@@ -143,17 +143,17 @@ impl MainWindow {
     }
 }
 
-fn right_pane_layout(right_pane: Rect) -> (Rect, Rect) {
+fn right_pane_layout(right_pane: Rect, ui_split: bool) -> (Rect, Rect) {
     let regions = Layout::default()
-        .direction(Direction::Vertical)
+        .direction(if ui_split { Direction::Horizontal } else {Direction::Vertical})
         .constraints([Percentage(50), Percentage(50)].as_ref())
         .split(right_pane);
     (regions[0], regions[1])
 }
 
-fn content_layout(content_area: Rect) -> (Rect, Rect) {
+fn content_layout(content_area: Rect, ui_split: bool) -> (Rect, Rect) {
     let regions = Layout::default()
-        .direction(Direction::Horizontal)
+        .direction(if ui_split { Direction::Vertical } else {Direction::Horizontal})
         .constraints([Percentage(50), Percentage(50)].as_ref())
         .split(content_area);
     (regions[0], regions[1])

@@ -220,6 +220,11 @@ impl AppState {
         EntryCheck::new(self.scan.is_some(), self.allow_entry_check)
     }
 
+    fn toggle_ui_split(
+        &mut self,
+    ) {
+        self.ui_split = !self.ui_split;
+    }
     fn process_terminal_event<B>(
         &mut self,
         window: &mut MainWindow,
@@ -272,6 +277,9 @@ impl AppState {
                 if let Some(result) = self.handle_quit(&mut tree_view, window) {
                     return Ok(Some(result?));
                 }
+            }
+            Char('u') => {
+                self.toggle_ui_split();
             }
             _ => {
                 handled = false;
