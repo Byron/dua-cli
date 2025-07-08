@@ -474,8 +474,7 @@ impl MarkPane {
 
 pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
     let entries: Vec<&EntryMark> = marked
-        .iter()
-        .map(|(_k, v)| v)
+        .values()
         .sorted_by(|a, b| Ord::cmp(&a.path, &b.path))
         .collect();
 
