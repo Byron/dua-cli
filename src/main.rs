@@ -1,6 +1,6 @@
 #![forbid(rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory as _, Parser};
 use dua::{canonicalize_ignore_dirs, TraversalSorting};
 use log::info;
 use simplelog::{Config, LevelFilter, WriteLogger};
@@ -140,6 +140,12 @@ fn main() -> Result<()> {
                 writeln!(io::stderr(), "{stats:?}").ok();
             }
             res
+        }
+        Some(Completions { shell }) => {
+            let mut cmd = options::Args::command();
+            let dua = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, dua, &mut io::stdout());
+            return Ok(());
         }
         None => {
             let stdout = io::stdout();
