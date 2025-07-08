@@ -1,3 +1,4 @@
+use clap_complete::Shell;
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
 
@@ -122,5 +123,10 @@ pub enum Command {
         /// One or more input files or directories. If unset, we will use all entries in the current working directory.
         #[clap(value_parser)]
         input: Vec<PathBuf>,
+    },
+    /// Generate shell completions
+    Completions {
+        #[clap()]
+        shell: Shell,
     },
 }
