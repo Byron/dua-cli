@@ -126,7 +126,7 @@ pub enum Command {
     },
     /// Generate shell completions
     Completions {
-        #[clap()]
+        /// The shell to generate a completions-script for
         shell: Shell,
     },
 }

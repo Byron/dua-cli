@@ -143,7 +143,8 @@ fn main() -> Result<()> {
         }
         Some(Completions { shell }) => {
             let mut cmd = options::Args::command();
-            clap_complete::generate(shell, &mut cmd, "dua", &mut io::stdout());
+            let dua = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, dua, &mut io::stdout());
             return Ok(());
         }
         None => {
