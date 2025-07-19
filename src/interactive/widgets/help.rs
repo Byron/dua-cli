@@ -179,7 +179,7 @@ impl HelpPane {
                 );
                 hotkey("<Space>", "Toggle the currently selected entry.", None);
                 hotkey("a", "Toggle all entries.", None);
-                hotkey("u", "Toggle UI split Vertical/Horizontal.", None);
+                hotkey("U", "Toggle UI split Vertical/Horizontal.", None);
                 hotkey(
                     "/",
                     "Git-style glob search, case-insensitive.",

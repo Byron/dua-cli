@@ -278,7 +278,7 @@ impl AppState {
                     return Ok(Some(result?));
                 }
             }
-            Char('u') => {
+            Char('U') => {
                 self.toggle_ui_split();
             }
             _ => {
