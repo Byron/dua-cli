@@ -462,15 +462,13 @@ fn delete_directory_recursively(path: PathBuf) -> Result<(), usize> {
                     }
                 }
             }
-            // Err(ref e) if e.kind() == io::ErrorKind::NotADirectory => {
-            //     // assume file, save IOps
-            //     num_errors += into_error_count(fs::remove_file(path));
-            //     continue;
-            // }
-            Err(_) => {
-                // TODO: Reintroduce commented code once the `io_error_more` feature is stable
-                // num_errors += 1;
+            Err(ref e) if e.kind() == io::ErrorKind::NotADirectory => {
+                // try again with file deletion instead.
                 num_errors += into_error_count(fs::remove_file(path));
+                continue;
+            }
+            Err(_) => {
+                num_errors += 1;
                 continue;
             }
         };

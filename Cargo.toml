@@ -15,6 +15,7 @@ include = [
     "CHANGELOG.md",
     "!**/tests/*",
 ]
+rust-version = "1.83.0"
 
 [features]
 default = ["tui-crossplatform", "trash-move"]
