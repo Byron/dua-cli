@@ -21,6 +21,7 @@ pub struct FooterProps {
     pub format: ByteFormat,
     pub message: Option<String>,
     pub sort_mode: SortMode,
+    pub pending_exit: bool,
 }
 
 impl Footer {
@@ -33,7 +34,20 @@ impl Footer {
             format,
             message,
             sort_mode,
+            pending_exit,
         } = props.borrow();
+
+        if *pending_exit {
+            Paragraph::new(Text::from("Press esc or q again to exit..."))
+                .style(
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .render(area, buf);
+            return;
+        }
 
         let spans = vec![
             Span::from(format!(

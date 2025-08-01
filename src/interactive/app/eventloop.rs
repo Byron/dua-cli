@@ -249,13 +249,21 @@ impl AppState {
 
         let glob_focussed = self.focussed == Glob;
         let mut tree_view = self.tree_view(traversal);
-        let mut handled = true;
-        match key.code {
-            Esc => {
-                if let Some(value) = self.handle_quit(&mut tree_view, window) {
-                    return Ok(Some(value?));
+
+        match (key.code, glob_focussed) {
+            (Esc, _) | (Char('q'), false) => {
+                if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                    return Ok(Some(result?));
                 }
             }
+            _ => {
+                // Reset pending exit state when other keys are pressed.
+                self.pending_exit = false;
+            }
+        }
+
+        let mut handled = true;
+        match key.code {
             Tab => {
                 self.cycle_focus(window);
             }
@@ -267,11 +275,6 @@ impl AppState {
                 return Ok(Some(WalkResult {
                     num_errors: self.stats.io_errors,
                 }))
-            }
-            Char('q') if !glob_focussed => {
-                if let Some(result) = self.handle_quit(&mut tree_view, window) {
-                    return Ok(Some(result?));
-                }
             }
             _ => {
                 handled = false;
@@ -526,6 +529,8 @@ impl AppState {
             Main => {
                 if self.glob_navigation.is_some() {
                     self.quit_glob_mode(tree_view, window);
+                } else if !self.pending_exit {
+                    self.pending_exit = true;
                 } else {
                     return Some(Ok(WalkResult {
                         num_errors: self.stats.io_errors,

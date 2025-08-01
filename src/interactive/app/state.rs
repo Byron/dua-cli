@@ -46,6 +46,7 @@ pub struct AppState {
     pub root_paths: Vec<PathBuf>,
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
+    pub pending_exit: bool,
 }
 
 impl AppState {
@@ -64,6 +65,7 @@ impl AppState {
             walk_options,
             root_paths: input,
             allow_entry_check: true,
+            pending_exit: false,
         }
     }
 }

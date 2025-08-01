@@ -129,6 +129,7 @@ impl MainWindow {
                 traversal_start: *start,
                 elapsed: *elapsed,
                 sort_mode: state.sorting,
+                pending_exit: state.pending_exit,
             },
             footer_area,
             buffer,
