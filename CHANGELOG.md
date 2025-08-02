@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.31.0 (2025-08-02)
 
 This release prominently adds a prompt that shows before quitting the app. When you pressed esc or q, the status bar will show the prompt first. To really quit, you need to press esc or q again. You can also cancel the quit operation by pressing any key else. Meanwhile, ctrl-c still quits the app directly since it's a combination key.
 
@@ -22,7 +22,7 @@ That way, `dua` will not cause users to accidentally quit the app when they only
 
 <csr-read-only-do-not-edit/>
 
- - 10 commits contributed to the release.
+ - 11 commits contributed to the release.
  - 83 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -40,6 +40,7 @@ That way, `dua` will not cause users to accidentally quit the app when they only
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Bump minor version and add changelog notes ([`d238dbb`](https://github.com/Byron/dua-cli/commit/d238dbb12b8491393a41ff5da425497f04c343d0))
     - Update dependencies ([`39ca5e6`](https://github.com/Byron/dua-cli/commit/39ca5e616d28765a79a619015c4f259b82f1ed5f))
     - Prompt before quitting ([`f3c9bf6`](https://github.com/Byron/dua-cli/commit/f3c9bf65b97ac029d444e32fe23f5976b0c480b2))
     - Prompt user before quitting ([`b096939`](https://github.com/Byron/dua-cli/commit/b09693973a34152a15f2dd599ff48ffbd1e8965e))
