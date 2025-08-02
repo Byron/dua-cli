@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+This release prominently adds a prompt that shows before quitting the app. When you pressed esc or q, the status bar will show the prompt first. To really quit, you need to press esc or q again. You can also cancel the quit operation by pressing any key else. Meanwhile, ctrl-c still quits the app directly since it's a combination key.
+
+That way, `dua` will not cause users to accidentally quit the app when they only want to dismiss some other panels. It's especially frustrating if the scan took a long time
+
+### New Features
+
+ - <csr-id-f3c9bf65b97ac029d444e32fe23f5976b0c480b2/> prompt before quitting
+   This release prominently adds a prompt that shows before quitting the app. When you pressed esc or q, the status bar will show the prompt first. To really quit, you need to press esc or q again. You can also cancel the quit operation by pressing any key else. Meanwhile, ctrl-c still quits the app directly since it's a combination key.
+   
+   That way, `dua` will not cause users to accidentally quit the app when they only want to dismiss some other panels. It's especially frustrating if the scan took a long time.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 10 commits contributed to the release.
+ - 83 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Update dependencies ([`39ca5e6`](https://github.com/Byron/dua-cli/commit/39ca5e616d28765a79a619015c4f259b82f1ed5f))
+    - Prompt before quitting ([`f3c9bf6`](https://github.com/Byron/dua-cli/commit/f3c9bf65b97ac029d444e32fe23f5976b0c480b2))
+    - Prompt user before quitting ([`b096939`](https://github.com/Byron/dua-cli/commit/b09693973a34152a15f2dd599ff48ffbd1e8965e))
+    - Re-introduce io::ErrorKind matching. ([`f93f120`](https://github.com/Byron/dua-cli/commit/f93f1205fa4fea33016a66645c8b5ec5c25a4f5c))
+    - Merge pull request #288 from fgimian/completions ([`1b7f535`](https://github.com/Byron/dua-cli/commit/1b7f535eb25be4fba4f64efb21efdd74895dbce0))
+    - Thanks clippy ([`f983e60`](https://github.com/Byron/dua-cli/commit/f983e6080371ed190ae1b3884e4034812d3d528c))
+    - Refactor ([`a0f78b2`](https://github.com/Byron/dua-cli/commit/a0f78b2a9d35097f65d3debb0eeffae8dc15e893))
+    - Add the ability to generate shell completions ([`e919541`](https://github.com/Byron/dua-cli/commit/e9195412c08e47fc518b69b57116754fa2fa5a3e))
+    - Merge pull request #285 from kianmeng/fix-typos ([`63b129b`](https://github.com/Byron/dua-cli/commit/63b129b1addbac7f4b238529875d88062ab68dfb))
+    - Fix typos ([`d9d643e`](https://github.com/Byron/dua-cli/commit/d9d643e63dc7996d88eb54a9dc8bafbf7198c69f))
+</details>
+
 ## 2.30.1 (2025-05-10)
 
 In this release, the size of directories is also taken into consideration, for more realistic sizes similar to what `du` does.
@@ -13,7 +60,7 @@ In this release, the size of directories is also taken into consideration, for m
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
+ - 7 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -30,6 +77,7 @@ In this release, the size of directories is also taken into consideration, for m
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.30.1 ([`ebf906a`](https://github.com/Byron/dua-cli/commit/ebf906af390c330aa5983ba0699127a6eb0e16d5))
     - Prepare changelog for next release. ([`4ed0acf`](https://github.com/Byron/dua-cli/commit/4ed0acfe47836a7dd0dd2e22998c7ea227555fe2))
     - Merge pull request #284 from joehasson/feat/include-directory-inodes-in-size-calculations ([`b5b411b`](https://github.com/Byron/dua-cli/commit/b5b411b2757d61ebdd64f2254cac002234ed1d5d))
     - Include directory inode in directory size aggregation ([`a93b28e`](https://github.com/Byron/dua-cli/commit/a93b28ead02714bb80cda296e4b4ad2a1248ba0e))
