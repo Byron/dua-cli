@@ -95,11 +95,11 @@ jobs:
             rust: stable
             target: x86_64-apple-darwin
           - build: win-msvc
-            os: windows-2019
+            os: windows-2022
             rust: nightly
             target: x86_64-pc-windows-msvc
           - build: win32-msvc
-            os: windows-2019
+            os: windows-2022
             rust: nightly
             target: i686-pc-windows-msvc
 
@@ -128,7 +128,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Use Cross
-        # if: matrix.os != 'windows-2019'
+        # if: matrix.os != 'windows-2022'
         run: |
           cargo install cross
           echo "CARGO=cross" >> $GITHUB_ENV
@@ -187,7 +187,7 @@ jobs:
 
           cp {README.md,LICENSE,CHANGELOG.md} "$staging/"
 
-          if [ "${{ matrix.os }}" = "windows-2019" ]; then
+          if [ "${{ matrix.os }}" = "windows-2022" ]; then
             # cp "target/${{ matrix.target }}/release/${{ env.EXE_NAME }}.exe" "$staging/"
             cp "target/release/${{ env.EXE_NAME }}.exe" "$staging/"
             7z a "$staging.zip" "$staging"
