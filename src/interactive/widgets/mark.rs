@@ -124,13 +124,9 @@ impl MarkPane {
             return Some((self, action));
         }
         match key.code {
-            Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Delete))
-            }
+            Char('r') => return Some(self.prepare_deletion(MarkMode::Delete)),
             #[cfg(feature = "trash-move")]
-            Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Trash))
-            }
+            Char('t') => return Some(self.prepare_deletion(MarkMode::Trash)),
             Char('a') => return None,
             Char('H') => self.change_selection(CursorDirection::ToTop),
             Char('G') => self.change_selection(CursorDirection::ToBottom),
@@ -388,7 +384,7 @@ impl MarkPane {
             Paragraph::new(Text::from(Line::from(vec![
                 #[cfg(feature = "trash-move")]
                 Span::styled(
-                    " Ctrl + t ",
+                    " t ",
                     Style {
                         fg: Color::White.into(),
                         bg: Color::Black.into(),
@@ -398,7 +394,7 @@ impl MarkPane {
                 #[cfg(feature = "trash-move")]
                 Span::styled(" to trash or ", default_style),
                 Span::styled(
-                    " Ctrl + r ",
+                    " r ",
                     Style {
                         fg: Color::LightRed.into(),
                         bg: Color::Black.into(),
