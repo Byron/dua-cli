@@ -299,7 +299,7 @@ impl AppState {
                     }
                 }
                 Main => match key.code {
-                    Char('O') => self.open_that(&tree_view),
+                    Char('o') => self.open_that(&tree_view),
                     Char(' ') => self.mark_entry(
                         CursorMode::KeepPosition,
                         MarkEntryMode::Toggle,
@@ -313,13 +313,11 @@ impl AppState {
                         &tree_view,
                     ),
                     Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
-                    Char('o') | Char('l') | Enter | Right => {
-                        self.enter_node_with_traversal(&tree_view)
-                    }
+                    Char('l') | Enter | Right => self.enter_node_with_traversal(&tree_view),
                     Char('r') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
                     Char('R') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
-                    Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
-                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
+                    Char('h') | Home => self.change_entry_selection(CursorDirection::ToTop),
+                    Char('g') | End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
                     Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         self.change_entry_selection(CursorDirection::PageUp)
@@ -336,16 +334,14 @@ impl AppState {
                     Char('c') => self.cycle_count_sorting(&tree_view),
                     Char('C') => self.toggle_count_column(),
                     Char('n') => self.cycle_name_sorting(&tree_view),
-                    Char('g') | Char('S') => display.byte_vis.cycle(),
+                    Char('S') => display.byte_vis.cycle(),
                     Char('d') => self.mark_entry(
                         CursorMode::Advance,
                         MarkEntryMode::Toggle,
                         window,
                         &tree_view,
                     ),
-                    Char('u') | Char('h') | Backspace | Left => {
-                        self.exit_node_with_traversal(&tree_view)
-                    }
+                    Char('u') | Backspace | Left => self.exit_node_with_traversal(&tree_view),
                     _ => {}
                 },
             };
