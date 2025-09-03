@@ -59,7 +59,7 @@ impl MainWindow {
         Header.render(header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
-            let (left_pane, right_pane) = content_layout(content_area);
+            let (left_pane, right_pane) = content_layout(content_area, state.focussed);
             match (&mut self.help_pane, &mut self.mark_pane) {
                 (Some(ref mut pane), None) => (left_pane, Some((right_pane, pane)), None),
                 (None, Some(ref mut pane)) => (left_pane, None, Some((right_pane, pane))),
@@ -152,10 +152,15 @@ fn right_pane_layout(right_pane: Rect) -> (Rect, Rect) {
     (regions[0], regions[1])
 }
 
-fn content_layout(content_area: Rect) -> (Rect, Rect) {
+fn content_layout(content_area: Rect, focussed: FocussedPane) -> (Rect, Rect) {
+    let constraints = if let Mark = focussed {
+        [Percentage(20), Percentage(85)]
+    } else {
+        [Percentage(85), Percentage(20)]
+    };
     let regions = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Percentage(50), Percentage(50)].as_ref())
+        .constraints(constraints.as_ref())
         .split(content_area);
     (regions[0], regions[1])
 }
