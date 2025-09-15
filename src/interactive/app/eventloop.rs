@@ -294,7 +294,7 @@ impl AppState {
                 Glob => {
                     let glob_pane = window.glob_pane.as_mut().expect("glob pane");
                     match key.code {
-                        Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input),
+                        Enter => self.search_glob_pattern(&mut tree_view, &glob_pane.input, glob_pane.case_sensitive),
                         _ => glob_pane.process_events(key),
                     }
                 }
@@ -476,9 +476,9 @@ impl AppState {
         }
     }
 
-    fn search_glob_pattern(&mut self, tree_view: &mut TreeView<'_>, glob_pattern: &str) {
+    fn search_glob_pattern(&mut self, tree_view: &mut TreeView<'_>, glob_pattern: &str, case_sensitive: bool) {
         use FocussedPane::*;
-        match glob_search(tree_view.tree(), self.navigation.view_root, glob_pattern) {
+        match glob_search(tree_view.tree(), self.navigation.view_root, glob_pattern, case_sensitive) {
             Ok(matches) if matches.is_empty() => {
                 self.message = Some("No match found".into());
             }

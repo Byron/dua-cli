@@ -34,15 +34,21 @@ pub struct GlobPane {
     /// and is treated as 'one character'. If not, it will be off, which isn't the end of the world.
     // TODO: use `tui-textarea` for proper cursor handling, needs native crossterm events.
     cursor_grapheme_idx: usize,
+    /// Whether the glob search should be case-sensitive
+    pub case_sensitive: bool,
 }
 
 impl GlobPane {
     pub fn process_events(&mut self, key: Key) {
         use crosstermion::crossterm::event::KeyCode::*;
+        use crosstermion::crossterm::event::KeyModifiers;
         if key.kind == KeyEventKind::Release {
             return;
         }
         match key.code {
+            Char('i') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.case_sensitive = !self.case_sensitive;
+            }
             Char(to_insert) => {
                 self.enter_char(to_insert);
             }
@@ -113,7 +119,11 @@ impl GlobPane {
             has_focus,
         } = props.borrow();
 
-        let title = "Git-Glob";
+        let title = if self.case_sensitive {
+            "Git-Glob (case-sensitive)"
+        } else {
+            "Git-Glob (case-insensitive)"
+        };
         let block = Block::default()
             .title(title)
             .border_style(*border_style)
@@ -146,7 +156,7 @@ impl GlobPane {
 }
 
 fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
-    let help_text = " search = enter | cancel = esc ";
+    let help_text = " search = enter | case = ^I | cancel = esc ";
     let help_text_block_width = block_width(help_text);
     let bound = Rect {
         width: area.width.saturating_sub(1),
@@ -178,6 +188,7 @@ fn glob_search_neighbours(
     root_index: TreeIndex,
     glob: &gix_glob::Pattern,
     path: &mut BString,
+    case_sensitive: bool,
 ) {
     for node_index in tree.neighbors_directed(root_index, Direction::Outgoing) {
         if let Some(node) = tree.node_weight(node_index) {
@@ -189,27 +200,79 @@ fn glob_search_neighbours(
                 Some(previous_len + 1)
             };
             path.extend_from_slice(gix_path::into_bstr(&node.name).as_ref());
+            let case_mode = if case_sensitive {
+                gix_glob::pattern::Case::Sensitive
+            } else {
+                gix_glob::pattern::Case::Fold
+            };
             if glob.matches_repo_relative_path(
                 path.as_ref(),
                 basename_start,
                 Some(node.is_dir),
-                gix_glob::pattern::Case::Fold,
+                case_mode,
                 gix_glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
             ) {
                 results.push(node_index);
             } else {
-                glob_search_neighbours(results, tree, node_index, glob, path);
+                glob_search_neighbours(results, tree, node_index, glob, path, case_sensitive);
             }
             path.truncate(previous_len);
         }
     }
 }
 
-pub fn glob_search(tree: &Tree, root_index: TreeIndex, glob: &str) -> Result<Vec<TreeIndex>> {
+pub fn glob_search(tree: &Tree, root_index: TreeIndex, glob: &str, case_sensitive: bool) -> Result<Vec<TreeIndex>> {
     let glob = gix_glob::Pattern::from_bytes_without_negation(glob.as_bytes())
         .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
     let mut results = Vec::new();
     let mut path = Default::default();
-    glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path);
+    glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path, case_sensitive);
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crosstermion::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+
+    #[test]
+    fn test_i_key_types_into_input() {
+        let mut glob_pane = GlobPane::default();
+        assert_eq!(glob_pane.input, "");
+        assert!(!glob_pane.case_sensitive); // default is case-insensitive
+
+        // Test that typing 'I' adds it to the input
+        let key_i = Key {
+            code: KeyCode::Char('I'),
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crosstermion::crossterm::event::KeyEventState::empty(),
+        };
+        glob_pane.process_events(key_i);
+        
+        assert_eq!(glob_pane.input, "I");
+        assert!(!glob_pane.case_sensitive); // should remain unchanged
+    }
+
+    #[test]
+    fn test_ctrl_i_toggles_case_sensitivity() {
+        let mut glob_pane = GlobPane::default();
+        assert!(!glob_pane.case_sensitive); // default is case-insensitive
+
+        // Test that Ctrl+I toggles case sensitivity
+        let key_ctrl_i = Key {
+            code: KeyCode::Char('i'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: crosstermion::crossterm::event::KeyEventState::empty(),
+        };
+        glob_pane.process_events(key_ctrl_i);
+        
+        assert_eq!(glob_pane.input, ""); // input should remain empty
+        assert!(glob_pane.case_sensitive); // should toggle to case-sensitive
+        
+        // Test toggling back
+        glob_pane.process_events(key_ctrl_i);
+        assert!(! glob_pane.case_sensitive); // should toggle back to case-insensitive
+    }
 }
