@@ -3,6 +3,7 @@ use bstr::BString;
 use crosstermion::crossterm::event::KeyEventKind;
 use crosstermion::input::Key;
 use dua::traverse::{Tree, TreeIndex};
+use gix_glob::pattern::Case;
 use petgraph::Direction;
 use std::borrow::Borrow;
 use tui::{
@@ -26,7 +27,6 @@ pub struct GlobPaneProps {
     pub has_focus: bool,
 }
 
-#[derive(Default)]
 pub struct GlobPane {
     pub input: String,
     /// The index of the grapheme the cursor currently points to.
@@ -34,15 +34,33 @@ pub struct GlobPane {
     /// and is treated as 'one character'. If not, it will be off, which isn't the end of the world.
     // TODO: use `tui-textarea` for proper cursor handling, needs native crossterm events.
     cursor_grapheme_idx: usize,
+    pub case: Case,
+}
+
+impl Default for GlobPane {
+    fn default() -> Self {
+        GlobPane {
+            input: "".to_string(),
+            cursor_grapheme_idx: 0,
+            case: Case::Fold,
+        }
+    }
 }
 
 impl GlobPane {
     pub fn process_events(&mut self, key: Key) {
         use crosstermion::crossterm::event::KeyCode::*;
+        use crosstermion::crossterm::event::KeyModifiers;
         if key.kind == KeyEventKind::Release {
             return;
         }
         match key.code {
+            Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.case = match self.case {
+                    Case::Sensitive => Case::Fold,
+                    Case::Fold => Case::Sensitive,
+                };
+            }
             Char(to_insert) => {
                 self.enter_char(to_insert);
             }
@@ -113,7 +131,11 @@ impl GlobPane {
             has_focus,
         } = props.borrow();
 
-        let title = "Git-Glob";
+        let title = match self.case {
+            Case::Sensitive => "Git-Glob (case-sensitive)",
+            Case::Fold => "Git-Glob (case-insensitive)",
+        };
+
         let block = Block::default()
             .title(title)
             .border_style(*border_style)
@@ -146,7 +168,7 @@ impl GlobPane {
 }
 
 fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
-    let help_text = " search = enter | cancel = esc ";
+    let help_text = " search = enter | case = ^f | cancel = esc ";
     let help_text_block_width = block_width(help_text);
     let bound = Rect {
         width: area.width.saturating_sub(1),
@@ -178,6 +200,7 @@ fn glob_search_neighbours(
     root_index: TreeIndex,
     glob: &gix_glob::Pattern,
     path: &mut BString,
+    case: Case,
 ) {
     for node_index in tree.neighbors_directed(root_index, Direction::Outgoing) {
         if let Some(node) = tree.node_weight(node_index) {
@@ -193,23 +216,53 @@ fn glob_search_neighbours(
                 path.as_ref(),
                 basename_start,
                 Some(node.is_dir),
-                gix_glob::pattern::Case::Fold,
+                case,
                 gix_glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
             ) {
                 results.push(node_index);
             } else {
-                glob_search_neighbours(results, tree, node_index, glob, path);
+                glob_search_neighbours(results, tree, node_index, glob, path, case);
             }
             path.truncate(previous_len);
         }
     }
 }
 
-pub fn glob_search(tree: &Tree, root_index: TreeIndex, glob: &str) -> Result<Vec<TreeIndex>> {
+pub fn glob_search(
+    tree: &Tree,
+    root_index: TreeIndex,
+    glob: &str,
+    case: gix_glob::pattern::Case,
+) -> Result<Vec<TreeIndex>> {
     let glob = gix_glob::Pattern::from_bytes_without_negation(glob.as_bytes())
         .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
     let mut results = Vec::new();
     let mut path = Default::default();
-    glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path);
+    glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path, case);
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crosstermion::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+
+    #[test]
+    fn ctrl_f_key_types_into_input() {
+        let mut glob_pane = GlobPane::default();
+        assert_eq!(glob_pane.input, "");
+        assert_eq!(glob_pane.case, Case::Fold); // default is case-insensitive
+
+        let ctrl_f = Key {
+            code: KeyCode::Char('f'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: crosstermion::crossterm::event::KeyEventState::empty(),
+        };
+        glob_pane.process_events(ctrl_f);
+        assert_eq!(glob_pane.case, Case::Sensitive);
+
+        glob_pane.process_events(ctrl_f);
+        assert_eq!(glob_pane.case, Case::Fold);
+    }
 }

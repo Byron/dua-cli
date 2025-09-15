@@ -12,7 +12,8 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     use crate::interactive::app::tests::utils::into_events;
 
     let fixture = WritableFixture::from("sample-02");
-    let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&[fixture.root.clone()])?;
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_paths(std::slice::from_ref(&fixture.root))?;
 
     // With a selection of items
     app.process_events(&mut terminal, into_codes("doddd"))?;

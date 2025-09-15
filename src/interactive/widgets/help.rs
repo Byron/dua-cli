@@ -181,7 +181,7 @@ impl HelpPane {
                 hotkey("a", "Toggle all entries.", None);
                 hotkey(
                     "/",
-                    "Git-style glob search, case-insensitive.",
+                    "Git-style glob search. Toggle case with 'I'.",
                     Some("Search starts from the current directory."),
                 );
                 hotkey("r", "Refresh only the selected entry.", None);

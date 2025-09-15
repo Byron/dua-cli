@@ -4,6 +4,7 @@ use crate::interactive::app::tests::utils::{
 use crate::interactive::widgets::glob_search;
 use anyhow::Result;
 use dua::traverse::TreeIndex;
+use gix_glob::pattern::Case;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -35,7 +36,24 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
 #[test]
 fn it_can_do_a_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
-    let result = glob_search(&tree, root_index, "tests/fixtures/sample-02").unwrap();
+    let result = glob_search(&tree, root_index, "tests/fixtures/sample-02", Case::Fold).unwrap();
     let expected = vec![TreeIndex::from(1)];
     assert_eq!(result, expected);
+}
+
+#[test]
+fn it_can_do_a_case_sensitive_glob_search() {
+    let (tree, root_index) = sample_02_tree(false);
+    let result_insensitive =
+        glob_search(&tree, root_index, "TESTS/FIXTURES/SAMPLE-02", Case::Fold).unwrap();
+    assert_eq!(result_insensitive, vec![TreeIndex::from(1)]);
+
+    let result_sensitive = glob_search(
+        &tree,
+        root_index,
+        "TESTS/FIXTURES/SAMPLE-02",
+        Case::Sensitive,
+    )
+    .unwrap();
+    assert!(result_sensitive.is_empty());
 }
