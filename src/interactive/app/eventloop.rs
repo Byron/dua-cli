@@ -64,7 +64,7 @@ impl AppState {
     }
 
     pub fn traverse(&mut self, traversal: &Traversal) -> Result<()> {
-        let traverasal = BackgroundTraversal::start(
+        let bg_traversal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
             self.root_paths.clone(),
@@ -73,7 +73,7 @@ impl AppState {
         )?;
         self.navigation_mut().view_root = traversal.root_index;
         self.scan = Some(FilesystemScan {
-            active_traversal: traverasal,
+            active_traversal: bg_traversal,
             previous_selection: None,
         });
         Ok(())
@@ -165,6 +165,7 @@ impl AppState {
                             let root_index = active_traversal.root_idx;
                             self.recompute_sizes_recursively(traversal, root_index);
                             self.scan = None;
+                            traversal.cost = Some(traversal.start_time.elapsed());
                         }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal)?;
@@ -543,6 +544,11 @@ impl AppState {
             Main => {
                 if self.glob_navigation.is_some() {
                     self.quit_glob_mode(tree_view, window);
+                } else if window.mark_pane.is_none() && !tree_view.traversal.is_costly() {
+                    // If nothing is selected for deletion, quit instantly
+                    return Some(Ok(WalkResult {
+                        num_errors: self.stats.io_errors,
+                    }));
                 } else if !self.pending_exit {
                     self.pending_exit = true;
                 } else {
