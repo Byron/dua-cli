@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.32.2 (2025-10-28)
+
+### Bug Fixes
+
+ - <csr-id-847af46ba643c53b8d5aa7a9a3abd9ff37032311/> don't let 'q' quit instantly if it's still collecting files.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Don't let 'q' quit instantly if it's still collecting files. ([`847af46`](https://github.com/Byron/dua-cli/commit/847af46ba643c53b8d5aa7a9a3abd9ff37032311))
+</details>
+
 ## 2.32.1 (2025-10-28)
 
 'q' to quit is now more usable as it will insta-quit if the traversal took less than 10s and
@@ -20,7 +44,7 @@ This makes it easy to use in 'quick-view' scenarios.
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
+ - 7 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -31,6 +55,7 @@ This makes it easy to use in 'quick-view' scenarios.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.32.1 ([`d55602a`](https://github.com/Byron/dua-cli/commit/d55602a515e9c888243fedbc2f07f54bb2d2cc1c))
     - Prepare next release changelog ([`fb8571f`](https://github.com/Byron/dua-cli/commit/fb8571fec263a27a03700dacdf1d1f51e0e844e7))
     - Merge pull request #297 from Byron/copilot/fix-instant-quit-on-q ([`938ae33`](https://github.com/Byron/dua-cli/commit/938ae33195498ab3451d83dac90eeb80302b0d12))
     - Only quit immediately if the traversal didn't take too long. ([`7f27170`](https://github.com/Byron/dua-cli/commit/7f271701240d89799b3dd6a8f95cc613dd5c1340))
