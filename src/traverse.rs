@@ -93,7 +93,7 @@ impl Traversal {
     }
 
     pub fn is_costly(&self) -> bool {
-        self.cost.is_some_and(|d| d.as_secs_f32() > 10.0)
+        self.cost.is_none_or(|d| d.as_secs_f32() > 10.0)
     }
 }
 
