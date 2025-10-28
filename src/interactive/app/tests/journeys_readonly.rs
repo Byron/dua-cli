@@ -415,3 +415,52 @@ fn simple_user_journey_read_only() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn quit_instantly_when_nothing_marked() -> Result<()> {
+    let short_root = "sample-01";
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&[short_root])?;
+
+    // When pressing 'q' without any items marked for deletion
+    let result = app.process_events(&mut terminal, into_codes("q"))?;
+
+    assert_eq!(
+        result.num_errors, 0,
+        "it should quit instantly without errors"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn quit_requires_two_presses_when_items_marked() -> Result<()> {
+    let short_root = "sample-01";
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&[short_root])?;
+
+    // Mark an item for deletion
+    app.process_events(&mut terminal, into_codes("d"))?;
+
+    assert_eq!(
+        Some(1),
+        app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+        "expecting one marked item"
+    );
+
+    // First 'q' press should set pending_exit
+    app.process_events(&mut terminal, into_codes("q"))?;
+
+    assert!(
+        app.state.pending_exit,
+        "first 'q' should set pending_exit when items are marked"
+    );
+
+    // Second 'q' press should quit
+    let result = app.process_events(&mut terminal, into_codes("q"))?;
+
+    assert_eq!(
+        result.num_errors, 0,
+        "second 'q' should quit the application"
+    );
+
+    Ok(())
+}

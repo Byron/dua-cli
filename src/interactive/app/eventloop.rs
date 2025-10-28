@@ -543,6 +543,11 @@ impl AppState {
             Main => {
                 if self.glob_navigation.is_some() {
                     self.quit_glob_mode(tree_view, window);
+                } else if window.mark_pane.is_none() {
+                    // If nothing is selected for deletion, quit instantly
+                    return Some(Ok(WalkResult {
+                        num_errors: self.stats.io_errors,
+                    }));
                 } else if !self.pending_exit {
                     self.pending_exit = true;
                 } else {
