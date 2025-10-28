@@ -441,8 +441,8 @@ fn quit_requires_two_presses_when_items_marked() -> Result<()> {
     app.process_events(&mut terminal, into_codes("d"))?;
 
     assert_eq!(
-        Some(1),
         app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+        Some(1),
         "expecting one marked item"
     );
 
