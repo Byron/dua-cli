@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use bstr::BString;
 use crosstermion::crossterm::event::KeyEventKind;
 use crosstermion::input::Key;

@@ -6,12 +6,12 @@ use crossbeam::channel::Receiver;
 use crosstermion::input::Event;
 #[cfg(test)]
 use dua::traverse::TraversalStats;
-use dua::{traverse::Traversal, ByteFormat, WalkOptions, WalkResult};
-use tui::{backend::Backend, Terminal};
+use dua::{ByteFormat, WalkOptions, WalkResult, traverse::Traversal};
+use tui::{Terminal, backend::Backend};
 
 use crate::interactive::widgets::MainWindow;
 
-use super::{sorted_entries, state::AppState, DisplayOptions};
+use super::{DisplayOptions, sorted_entries, state::AppState};
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
