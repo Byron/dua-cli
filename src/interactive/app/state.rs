@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use dua::traverse::{BackgroundTraversal, TraversalStats};
 use dua::WalkOptions;
+use dua::traverse::{BackgroundTraversal, TraversalStats};
 
 use crate::interactive::widgets::Column;
 
-use super::{navigation::Navigation, EntryDataBundle, SortMode};
+use super::{EntryDataBundle, SortMode, navigation::Navigation};
 
 #[derive(Default, Copy, Clone, PartialEq)]
 pub enum FocussedPane {

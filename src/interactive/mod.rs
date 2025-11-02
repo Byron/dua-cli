@@ -16,10 +16,10 @@ mod utils {
 
         let mut iter = tree.neighbors_directed(node_idx, petgraph::Incoming);
         while let Some(parent_idx) = iter.next() {
-            if let Some(glob_root) = glob_root {
-                if glob_root == parent_idx {
-                    continue;
-                }
+            if let Some(glob_root) = glob_root
+                && glob_root == parent_idx
+            {
+                continue;
             }
             entries.push(get_entry_or_panic(tree, node_idx));
             node_idx = parent_idx;

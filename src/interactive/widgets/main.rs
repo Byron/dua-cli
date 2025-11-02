@@ -1,11 +1,13 @@
 use crate::interactive::{
+    DisplayOptions,
     state::{AppState, Cursor, FocussedPane},
     widgets::{
-        Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header, HelpPane,
-        HelpPaneProps, MarkPane, MarkPaneProps, COLOR_MARKED,
+        COLOR_MARKED, Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header,
+        HelpPane, HelpPaneProps, MarkPane, MarkPaneProps,
     },
-    DisplayOptions,
 };
+use Constraint::*;
+use FocussedPane::*;
 use std::borrow::Borrow;
 use tui::buffer::Buffer;
 use tui::{
@@ -13,8 +15,6 @@ use tui::{
     style::Modifier,
     style::{Color, Style},
 };
-use Constraint::*;
-use FocussedPane::*;
 
 pub struct MainWindowProps<'a> {
     pub current_path: String,
@@ -61,9 +61,9 @@ impl MainWindow {
         let (entries_area, help_pane, mark_pane) = {
             let (left_pane, right_pane) = content_layout(content_area);
             match (&mut self.help_pane, &mut self.mark_pane) {
-                (Some(ref mut pane), None) => (left_pane, Some((right_pane, pane)), None),
-                (None, Some(ref mut pane)) => (left_pane, None, Some((right_pane, pane))),
-                (Some(ref mut help), Some(ref mut mark)) => {
+                (Some(pane), None) => (left_pane, Some((right_pane, pane)), None),
+                (None, Some(pane)) => (left_pane, None, Some((right_pane, pane))),
+                (Some(help), Some(mark)) => {
                     let (top_area, bottom_area) = right_pane_layout(right_pane);
                     (left_pane, Some((top_area, help)), Some((bottom_area, mark)))
                 }
@@ -72,7 +72,7 @@ impl MainWindow {
         };
 
         let (entries_area, glob_pane) = match &mut self.glob_pane {
-            Some(ref mut glob_pane) => {
+            Some(glob_pane) => {
                 let regions = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Max(256), Length(3)].as_ref())

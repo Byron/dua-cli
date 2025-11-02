@@ -7,14 +7,14 @@ use std::ffi::OsString;
 use crate::interactive::app::tests::utils::{into_codes, into_events};
 use crate::interactive::widgets::Column;
 use crate::interactive::{
+    SortMode,
     app::tests::{
+        FIXTURE_PATH,
         utils::{
             fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
             node_by_index, node_by_name,
         },
-        FIXTURE_PATH,
     },
-    SortMode,
 };
 
 #[test]

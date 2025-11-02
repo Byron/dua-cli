@@ -1,4 +1,4 @@
-use crate::{crossdev, ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult};
+use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, crossdev};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};

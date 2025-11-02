@@ -1,7 +1,7 @@
 #![forbid(rust_2018_idioms, unsafe_code)]
 use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
-use dua::{canonicalize_ignore_dirs, TraversalSorting};
+use dua::{TraversalSorting, canonicalize_ignore_dirs};
 use log::info;
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::fs::OpenOptions;
@@ -65,8 +65,8 @@ fn main() -> Result<()> {
             no_entry_check,
             input,
         }) => {
-            use anyhow::{anyhow, Context};
-            use crosstermion::terminal::{tui::new_terminal, AlternateRawScreen};
+            use anyhow::{Context, anyhow};
+            use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if atty::isnt(atty::Stream::Stderr) {
@@ -201,10 +201,10 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
                 .and_then(|e| e.path().strip_prefix(".").ok().map(ToOwned::to_owned))
         })
         .filter(|p| {
-            if let Ok(meta) = p.symlink_metadata() {
-                if meta.file_type().is_symlink() {
-                    return false;
-                }
+            if let Ok(meta) = p.symlink_metadata()
+                && meta.file_type().is_symlink()
+            {
+                return false;
             };
             true
         })

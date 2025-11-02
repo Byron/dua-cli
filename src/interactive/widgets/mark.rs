@@ -1,15 +1,15 @@
 use crate::interactive::widgets::COUNT;
 use crate::interactive::{
-    app::tree_view::TreeView, fit_string_graphemes_with_ellipsis, widgets::entry_color,
-    CursorDirection,
+    CursorDirection, app::tree_view::TreeView, fit_string_graphemes_with_ellipsis,
+    widgets::entry_color,
 };
 use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
 use crosstermion::input::Key;
-use dua::{traverse::TreeIndex, ByteFormat};
+use dua::{ByteFormat, traverse::TreeIndex};
 use itertools::Itertools;
 use std::{
     borrow::Borrow,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{BTreeMap, btree_map::Entry},
     path::PathBuf,
 };
 use tui::{
@@ -23,9 +23,8 @@ use tui::{
     },
 };
 use tui_react::{
-    draw_text_nowrap_fn,
+    List, ListProps, draw_text_nowrap_fn,
     util::{block_width, rect, rect::line_bound},
-    List, ListProps,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -125,11 +124,11 @@ impl MarkPane {
         }
         match key.code {
             Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Delete))
+                return Some(self.prepare_deletion(MarkMode::Delete));
             }
             #[cfg(feature = "trash-move")]
             Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Trash))
+                return Some(self.prepare_deletion(MarkMode::Trash));
             }
             Char('a') => return None,
             Char('H') => self.change_selection(CursorDirection::ToTop),
@@ -145,7 +144,7 @@ impl MarkPane {
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
             Char('x') | Char('d') | Char(' ') => {
-                return self.remove_selected().map(|s| (s, action))
+                return self.remove_selected().map(|s| (s, action));
             }
             _ => {}
         };

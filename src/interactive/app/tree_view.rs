@@ -1,7 +1,7 @@
-use super::{sorted_entries, EntryDataBundle, SortMode};
-use crate::interactive::{path_of, EntryCheck};
+use super::{EntryDataBundle, SortMode, sorted_entries};
+use crate::interactive::{EntryCheck, path_of};
 use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
-use petgraph::{visit::Bfs, Direction};
+use petgraph::{Direction, visit::Bfs};
 use std::path::{Path, PathBuf};
 
 pub struct TreeView<'a> {

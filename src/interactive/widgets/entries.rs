@@ -1,7 +1,7 @@
 use crate::interactive::widgets::COUNT;
 use crate::interactive::{
-    widgets::{entry_color, EntryMarkMap},
     DisplayOptions, EntryDataBundle, SortMode,
+    widgets::{EntryMarkMap, entry_color},
 };
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
@@ -18,9 +18,8 @@ use tui::{
 };
 use tui_react::util::rect::line_bound;
 use tui_react::{
-    draw_text_nowrap_fn,
+    List, ListProps, draw_text_nowrap_fn,
     util::{block_width, rect},
-    List, ListProps,
 };
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;

@@ -1,10 +1,10 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
-use byte_unit::{n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes, ByteUnit};
+use byte_unit::{ByteUnit, n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{fmt, path::Path};
 
@@ -74,8 +74,8 @@ pub struct ByteFormatDisplay {
 
 impl fmt::Display for ByteFormatDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        use byte_unit::Byte;
         use ByteFormat::*;
+        use byte_unit::Byte;
 
         let format = match self.format {
             Bytes => return write!(f, "{} b", self.bytes),

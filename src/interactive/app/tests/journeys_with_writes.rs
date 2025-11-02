@@ -1,5 +1,5 @@
 use crate::interactive::app::tests::utils::{
-    initialized_app_and_terminal_from_paths, into_codes, WritableFixture,
+    WritableFixture, initialized_app_and_terminal_from_paths, into_codes,
 };
 use anyhow::Result;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

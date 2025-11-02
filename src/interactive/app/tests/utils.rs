@@ -2,8 +2,8 @@ use anyhow::{Context, Error, Result};
 use crossbeam::channel::Receiver;
 use crosstermion::{crossterm::event::KeyCode, input::Event};
 use dua::{
-    traverse::{EntryData, Tree, TreeIndex},
     ByteFormat, TraversalSorting, WalkOptions,
+    traverse::{EntryData, Tree, TreeIndex},
 };
 use itertools::Itertools;
 use jwalk::{DirEntry, WalkDir};
@@ -16,7 +16,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
-use tui::{backend::TestBackend, Terminal};
+use tui::{Terminal, backend::TestBackend};
 
 use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp};
 

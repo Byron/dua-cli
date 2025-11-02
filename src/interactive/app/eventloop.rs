@@ -1,20 +1,20 @@
 use crate::interactive::state::FilesystemScan;
 use crate::interactive::{
+    CursorDirection, CursorMode, DisplayOptions, EntryCheck, MarkEntryMode,
     app::navigation::Navigation,
     state::FocussedPane,
-    widgets::{glob_search, MainWindow, MainWindowProps},
-    CursorDirection, CursorMode, DisplayOptions, EntryCheck, MarkEntryMode,
+    widgets::{MainWindow, MainWindowProps, glob_search},
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crosstermion::input::Event;
 use dua::{
-    traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
     WalkResult,
+    traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
 };
 use std::path::PathBuf;
-use tui::{backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget, Terminal};
+use tui::{Terminal, backend::Backend, buffer::Buffer, layout::Rect, widgets::Widget};
 
 use super::state::{AppState, Cursor};
 use super::tree_view::TreeView;
@@ -232,8 +232,8 @@ impl AppState {
     where
         B: Backend,
     {
-        use crosstermion::crossterm::event::KeyCode::*;
         use FocussedPane::*;
+        use crosstermion::crossterm::event::KeyCode::*;
 
         let key = match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -275,7 +275,7 @@ impl AppState {
             Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
                 return Ok(Some(WalkResult {
                     num_errors: self.stats.io_errors,
-                }))
+                }));
             }
             _ => {
                 handled = false;
@@ -386,10 +386,10 @@ impl AppState {
         });
 
         // If we are displaying the root of the glob search results then cancel the search.
-        if let Some(glob_tree_root) = tree.glob_tree_root {
-            if glob_tree_root == self.navigation().view_root {
-                self.quit_glob_mode(tree, window)
-            }
+        if let Some(glob_tree_root) = tree.glob_tree_root
+            && glob_tree_root == self.navigation().view_root
+        {
+            self.quit_glob_mode(tree, window)
         }
 
         let (paths, remove_root_node, skip_root, use_root_path, index, parent_index) = match what {

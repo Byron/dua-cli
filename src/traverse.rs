@@ -1,8 +1,8 @@
-use crate::{crossdev, get_size_or_panic, inodefilter::InodeFilter, Throttle, WalkOptions};
+use crate::{Throttle, WalkOptions, crossdev, get_size_or_panic, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
 use filesize::PathExt;
-use petgraph::{graph::NodeIndex, stable_graph::StableGraph, Directed, Direction};
+use petgraph::{Directed, Direction, graph::NodeIndex, stable_graph::StableGraph};
 use std::time::Instant;
 use std::{
     fmt,
@@ -300,7 +300,7 @@ impl BackgroundTraversal {
                         let mut mtime: SystemTime = UNIX_EPOCH;
                         let mut file_count = 0u64;
                         match &entry.client_state {
-                            Some(Ok(ref m)) => {
+                            Some(Ok(m)) => {
                                 if self.walk_options.count_hard_links
                                     || self.inodes.add(m)
                                         && (self.walk_options.cross_filesystems
