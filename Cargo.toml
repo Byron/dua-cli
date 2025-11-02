@@ -2,7 +2,7 @@
 name = "dua-cli"
 version = "2.32.2"
 authors = ["Sebastian Thiel <byronimo@gmail.com>"]
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/Byron/dua-cli"
 readme = "README.md"
 description = "A tool to conveniently learn about the disk usage of directories, fast!"
@@ -15,7 +15,6 @@ include = [
     "CHANGELOG.md",
     "!**/tests/*",
 ]
-rust-version = "1.83.0"
 
 [features]
 default = ["tui-crossplatform", "trash-move"]

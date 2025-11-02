@@ -386,11 +386,10 @@ impl AppState {
         });
 
         // If we are displaying the root of the glob search results then cancel the search.
-        if let Some(glob_tree_root) = tree.glob_tree_root {
-            if glob_tree_root == self.navigation().view_root {
+        if let Some(glob_tree_root) = tree.glob_tree_root
+            && glob_tree_root == self.navigation().view_root {
                 self.quit_glob_mode(tree, window)
             }
-        }
 
         let (paths, remove_root_node, skip_root, use_root_path, index, parent_index) = match what {
             Refresh::Selected => {

@@ -1,12 +1,12 @@
 use crate::interactive::{
+    DisplayOptions, EntryDataBundle,
     app::tree_view::TreeView,
     widgets::{Column, GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
-    DisplayOptions, EntryDataBundle,
 };
 use crosstermion::input::Key;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
-use tui::{backend::Backend, Terminal};
+use tui::{Terminal, backend::Backend};
 
 use super::state::{AppState, FocussedPane::*};
 
@@ -212,7 +212,7 @@ impl AppState {
             &mut window.glob_pane,
         ) {
             (Main, Some(_), _, _) => Help,
-            (Help, _, Some(ref mut pane), _) => {
+            (Help, _, Some(pane), _) => {
                 pane.set_focus(true);
                 Mark
             }
@@ -221,7 +221,7 @@ impl AppState {
             (Mark, _, _, Some(_)) => Glob,
             (Mark, _, _, _) => Main,
             (Main, None, None, None) => Main,
-            (Main, None, Some(ref mut pane), _) => {
+            (Main, None, Some(pane), _) => {
                 pane.set_focus(true);
                 Mark
             }
