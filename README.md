@@ -43,6 +43,11 @@ curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh 
 scoop install dua
 ```
 
+#### Windows via [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/)
+```sh
+winget install Byron.dua-cli
+```
+
 #### Pre-built Binaries
 
 See the [releases section][releases] for manual installation of a binary, pre-built for many platforms.
