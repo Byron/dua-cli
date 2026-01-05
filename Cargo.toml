@@ -29,7 +29,7 @@ tui-crossplatform = [
 trash-move = ["trash"]
 
 [dependencies]
-clap = { version = "4.0.29", features = ["derive"] }
+clap = { version = "4.0.29", features = ["derive", "env"] }
 clap_complete = "4.5.54"
 jwalk = "0.8.1"
 byte-unit = "4"
