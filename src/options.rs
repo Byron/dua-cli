@@ -83,7 +83,13 @@ pub struct Args {
     /// One or more absolute directories to ignore. Note that these are not ignored if they are passed as input path.
     ///
     /// Hence, they will only be ignored if they are eventually reached as part of the traversal.
-    #[clap(long = "ignore-dirs", short = 'i', value_parser, global = true, env = "DUA_IGNORE_DIRS")]
+    #[clap(
+        long = "ignore-dirs",
+        short = 'i',
+        value_parser,
+        global = true,
+        env = "DUA_IGNORE_DIRS"
+    )]
     #[cfg_attr(target_os = "linux", clap(default_values = &["/proc", "/dev", "/sys", "/run"]))]
     pub ignore_dirs: Vec<PathBuf>,
 
