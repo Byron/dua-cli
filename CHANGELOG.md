@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.33.0 (2026-01-05)
+
+### New Features
+
+ - <csr-id-85c7c7218cbb70b0626f430afd03ed819387e9e2/> Add environment variable support for all global arguments
+   - `DUA_THREADS` → `--threads`
+   - `DUA_FORMAT` → `--format`
+   - `DUA_APPARENT_SIZE` → `--apparent-size`
+   - `DUA_COUNT_HARD_LINKS` → `--count-hard-links`
+   - `DUA_STAY_ON_FILESYSTEM` → `--stay-on-filesystem`
+   - `DUA_IGNORE_DIRS` → `--ignore-dirs`
+   - `DUA_LOG_FILE` → `--log-file`
+ - <csr-id-2f720cf5610c215dc4fbb7cd270fe055fd403b42/> Mark shared arguments as global for general accessibility
+   - Added `global = true` to all arguments shared between aggregate and interactive subcommands
+   - Removed duplicate `input` fields from Interactive and Aggregate subcommands
+   - Updated main.rs to use opt.input instead of subcommand-specific input
+   - Global arguments now work with both subcommands and can be specified before or after the subcommand
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 10 commits contributed to the release over the course of 64 calendar days.
+ - 69 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #309 from Byron/copilot/add-env-support-global-arguments ([`72f149c`](https://github.com/Byron/dua-cli/commit/72f149ce0aa2c88bad71d22d46b864a38362e10a))
+    - Add environment variable support for all global arguments ([`85c7c72`](https://github.com/Byron/dua-cli/commit/85c7c7218cbb70b0626f430afd03ed819387e9e2))
+    - Merge pull request #307 from Byron/copilot/mark-global-arguments-in-clap ([`a2973a6`](https://github.com/Byron/dua-cli/commit/a2973a655e9c33f08d17dcecde1f6ef6827f1182))
+    - Mark shared arguments as global for general accessibility ([`2f720cf`](https://github.com/Byron/dua-cli/commit/2f720cf5610c215dc4fbb7cd270fe055fd403b42))
+    - Merge pull request #300 from drkane/drkane-patch-1 ([`8570c15`](https://github.com/Byron/dua-cli/commit/8570c1543e3cd0983725f6e1938bf3e73442678a))
+    - Add winget instructions to readme - fixes issue #282 ([`ec159b6`](https://github.com/Byron/dua-cli/commit/ec159b63fe522b8e49f5e89a22cf8a5fcf5db55f))
+    - Merge pull request #298 from Byron/updates ([`4bb7ebd`](https://github.com/Byron/dua-cli/commit/4bb7ebd7028f378b3dda6a439403a35f9ce44318))
+    - Cargo update ([`1a38653`](https://github.com/Byron/dua-cli/commit/1a386532a4b2523ecb81c5d876130227ebd8bea9))
+    - Cargo fmt ([`38d985e`](https://github.com/Byron/dua-cli/commit/38d985eebb9c9a791524b7f7835dde01271827a7))
+    - Upgrade the rustc version and switch to edition 2024 ([`ccd0b74`](https://github.com/Byron/dua-cli/commit/ccd0b74b92a21fef65b8ea94667100c71183ebe9))
+</details>
+
 ## 2.32.2 (2025-10-28)
 
 ### Bug Fixes
@@ -15,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -26,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.32.2 ([`6e91054`](https://github.com/Byron/dua-cli/commit/6e91054b5236c567fdf4bf8b75f74c4934f2a6c6))
     - Don't let 'q' quit instantly if it's still collecting files. ([`847af46`](https://github.com/Byron/dua-cli/commit/847af46ba643c53b8d5aa7a9a3abd9ff37032311))
 </details>
 
