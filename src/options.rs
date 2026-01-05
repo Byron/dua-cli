@@ -53,7 +53,7 @@ pub struct Args {
 
     /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
     /// Set to 1 to use only a single thread.
-    #[clap(short = 't', long = "threads", default_value_t = DEFAULT_THREADS)]
+    #[clap(short = 't', long = "threads", default_value_t = DEFAULT_THREADS, global = true)]
     pub threads: usize,
 
     /// The format with which to print byte counts.
@@ -63,34 +63,35 @@ pub struct Args {
         value_enum,
         default_value_t = dft_format(),
         ignore_case = true,
+        global = true,
     )]
     pub format: ByteFormat,
 
     /// Display apparent size instead of disk usage.
-    #[clap(short = 'A', long)]
+    #[clap(short = 'A', long, global = true)]
     pub apparent_size: bool,
 
     /// Count hard-linked files each time they are seen
-    #[clap(short = 'l', long)]
+    #[clap(short = 'l', long, global = true)]
     pub count_hard_links: bool,
 
     /// If set, we will not cross filesystems or traverse mount points
-    #[clap(short = 'x', long)]
+    #[clap(short = 'x', long, global = true)]
     pub stay_on_filesystem: bool,
 
     /// One or more absolute directories to ignore. Note that these are not ignored if they are passed as input path.
     ///
     /// Hence, they will only be ignored if they are eventually reached as part of the traversal.
-    #[clap(long = "ignore-dirs", short = 'i', value_parser)]
+    #[clap(long = "ignore-dirs", short = 'i', value_parser, global = true)]
     #[cfg_attr(target_os = "linux", clap(default_values = &["/proc", "/dev", "/sys", "/run"]))]
     pub ignore_dirs: Vec<PathBuf>,
 
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-    #[clap(value_parser)]
+    #[clap(value_parser, global = true)]
     pub input: Vec<PathBuf>,
 
     /// Write a log file with debug information, including panics.
-    #[clap(long)]
+    #[clap(long, global = true)]
     pub log_file: Option<PathBuf>,
 }
 
@@ -103,9 +104,6 @@ pub enum Command {
         /// Do not check entries for presence when listing a directory to avoid slugging performance on slow filesystems.
         #[clap(long, short = 'e')]
         no_entry_check: bool,
-        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[clap(value_parser)]
-        input: Vec<PathBuf>,
     },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
@@ -120,9 +118,6 @@ pub enum Command {
         /// If set, no total column will be computed for multiple inputs
         #[clap(long)]
         no_total: bool,
-        /// One or more input files or directories. If unset, we will use all entries in the current working directory.
-        #[clap(value_parser)]
-        input: Vec<PathBuf>,
     },
     /// Generate shell completions
     Completions {

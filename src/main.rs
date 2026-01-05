@@ -59,12 +59,11 @@ fn main() -> Result<()> {
         walk_options.threads = num_cpus::get();
     }
 
+    let cross_filesystems = walk_options.cross_filesystems;
+
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
-        Some(Interactive {
-            no_entry_check,
-            input,
-        }) => {
+        Some(Interactive { no_entry_check }) => {
             use anyhow::{Context, anyhow};
             use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
 
@@ -84,7 +83,7 @@ fn main() -> Result<()> {
                 walk_options,
                 byte_format,
                 !no_entry_check,
-                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
             )?;
             app.traverse()?;
 
@@ -120,7 +119,6 @@ fn main() -> Result<()> {
             );
         }
         Some(Aggregate {
-            input,
             no_total,
             no_sort,
             statistics,
@@ -134,7 +132,7 @@ fn main() -> Result<()> {
                 !no_total,
                 !no_sort,
                 byte_format,
-                extract_paths_maybe_set_cwd(input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{stats:?}").ok();
@@ -157,7 +155,7 @@ fn main() -> Result<()> {
                 true,
                 true,
                 byte_format,
-                extract_paths_maybe_set_cwd(opt.input, !opt.stay_on_filesystem)?,
+                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
             )?
             .0
         }
