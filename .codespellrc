@@ -1,0 +1,3 @@
+[codespell]
+skip = ./.git,./target,./Cargo.lock,./CHANGELOG.md,./tests/fixtures,./tests/snapshots
+ignore-words-list = ratatui

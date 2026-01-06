@@ -68,7 +68,7 @@ fn main() -> Result<()> {
             use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
-            if atty::isnt(atty::Stream::Stderr) {
+            if !atty::is(atty::Stream::Stderr) {
                 return Err(anyhow!(no_tty_msg));
             }
 
