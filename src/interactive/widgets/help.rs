@@ -1,7 +1,7 @@
 use crate::interactive::CursorDirection;
-pub use crosstermion::crossterm::event::KeyCode::*;
-use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
-use crosstermion::input::Key;
+pub use crossterm::event::KeyCode::*;
+use crossterm::event::{KeyEventKind, KeyModifiers};
+use crossterm::event::KeyEvent;
 use std::{borrow::Borrow, cell::RefCell};
 use tui::{
     buffer::Buffer,
@@ -35,7 +35,7 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
-    pub fn process_events(&mut self, key: Key) {
+    pub fn process_events(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
         }

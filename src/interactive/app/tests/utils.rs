@@ -1,6 +1,6 @@
 use anyhow::{Context, Error, Result};
 use crossbeam::channel::Receiver;
-use crosstermion::{crossterm::event::KeyCode, input::Event};
+use crossterm::event::{KeyCode, Event};
 use dua::{
     ByteFormat, TraversalSorting, WalkOptions,
     traverse::{EntryData, Tree, TreeIndex},
@@ -34,7 +34,7 @@ pub fn into_keys<'a>(codes: impl IntoIterator<Item = KeyCode> + 'a) -> Receiver<
     into_events(
         codes
             .into_iter()
-            .map(|code| crosstermion::input::Event::Key(code.into())),
+            .map(|code| Event::Key(code.into())),
     )
 }
 

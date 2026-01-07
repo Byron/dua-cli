@@ -351,16 +351,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crosstermion"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bb8ffe01d18963d7cdeb1b90d80ff1fc2adc8dd05517a8dfce4844f7157ecc4"
-dependencies = [
- "crossterm",
- "ratatui",
-]
-
-[[package]]
 name = "deranged"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -387,7 +377,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "crossbeam",
- "crosstermion",
+ "crossterm",
  "filesize",
  "gix-glob",
  "gix-path",

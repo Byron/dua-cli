@@ -3,8 +3,8 @@ use crate::interactive::{
     CursorDirection, app::tree_view::TreeView, fit_string_graphemes_with_ellipsis,
     widgets::entry_color,
 };
-use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
-use crosstermion::input::Key;
+use crossterm::event::{KeyEventKind, KeyModifiers};
+use crossterm::event::KeyEvent;
 use dua::{ByteFormat, traverse::TreeIndex};
 use itertools::Itertools;
 use std::{
@@ -116,8 +116,8 @@ impl MarkPane {
     pub fn into_paths(self) -> impl Iterator<Item = PathBuf> {
         self.marked.into_values().map(|v| v.path)
     }
-    pub fn process_events(mut self, key: Key) -> Option<(Self, Option<MarkMode>)> {
-        use crosstermion::crossterm::event::KeyCode::*;
+    pub fn process_events(mut self, key: KeyEvent) -> Option<(Self, Option<MarkMode>)> {
+        use crossterm::event::KeyCode::*;
         let action = None;
         if key.kind == KeyEventKind::Release {
             return Some((self, action));

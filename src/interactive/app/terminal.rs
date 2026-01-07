@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::interactive::EntryCheck;
 use anyhow::Result;
 use crossbeam::channel::Receiver;
-use crosstermion::input::Event;
+use crossterm::event::Event;
 #[cfg(test)]
 use dua::traverse::TraversalStats;
 use dua::{ByteFormat, WalkOptions, WalkResult, traverse::Traversal};

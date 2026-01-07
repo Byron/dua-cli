@@ -65,17 +65,26 @@ fn main() -> Result<()> {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { no_entry_check }) => {
             use anyhow::{Context, anyhow};
-            use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
+            use crossterm::{
+                execute,
+                terminal::{EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen},
+            };
+            use tui::{Terminal, backend::CrosstermBackend};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if atty::isnt(atty::Stream::Stderr) {
                 return Err(anyhow!(no_tty_msg));
             }
 
-            let mut terminal = new_terminal(
-                AlternateRawScreen::try_from(io::stderr()).with_context(|| no_tty_msg)?,
-            )
-            .with_context(|| "Could not instantiate terminal")?;
+            // Enable raw mode and alternate screen
+            let mut stderr = io::stderr();
+            enable_raw_mode().with_context(|| no_tty_msg)?;
+            execute!(stderr, EnterAlternateScreen).with_context(|| no_tty_msg)?;
+
+            // Create terminal
+            let backend = CrosstermBackend::new(stderr);
+            let mut terminal = Terminal::new(backend)
+                .with_context(|| "Could not instantiate terminal")?;
 
             let keys_rx = input_channel();
             let mut app = TerminalApp::initialize(
@@ -88,6 +97,10 @@ fn main() -> Result<()> {
             app.traverse()?;
 
             let res = app.process_events(&mut terminal, keys_rx);
+
+            // Cleanup: disable raw mode and leave alternate screen
+            disable_raw_mode().ok();
+            execute!(io::stderr(), LeaveAlternateScreen).ok();
 
             let res = res.map(|r| {
                 (

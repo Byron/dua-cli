@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use bstr::BString;
-use crosstermion::crossterm::event::KeyEventKind;
-use crosstermion::input::Key;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyEvent;
 use dua::traverse::{Tree, TreeIndex};
 use gix_glob::pattern::Case;
 use petgraph::Direction;
@@ -48,9 +48,9 @@ impl Default for GlobPane {
 }
 
 impl GlobPane {
-    pub fn process_events(&mut self, key: Key) {
-        use crosstermion::crossterm::event::KeyCode::*;
-        use crosstermion::crossterm::event::KeyModifiers;
+    pub fn process_events(&mut self, key: KeyEvent) {
+        use crossterm::event::KeyCode::*;
+        use crossterm::event::KeyModifiers;
         if key.kind == KeyEventKind::Release {
             return;
         }
@@ -245,7 +245,7 @@ pub fn glob_search(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crosstermion::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+    use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
 
     #[test]
     fn ctrl_f_key_types_into_input() {
@@ -253,11 +253,11 @@ mod tests {
         assert_eq!(glob_pane.input, "");
         assert_eq!(glob_pane.case, Case::Fold); // default is case-insensitive
 
-        let ctrl_f = Key {
+        let ctrl_f = KeyEvent {
             code: KeyCode::Char('f'),
             modifiers: KeyModifiers::CONTROL,
             kind: KeyEventKind::Press,
-            state: crosstermion::crossterm::event::KeyEventState::empty(),
+            state: crossterm::event::KeyEventState::empty(),
         };
         glob_pane.process_events(ctrl_f);
         assert_eq!(glob_pane.case, Case::Sensitive);
