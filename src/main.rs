@@ -77,12 +77,11 @@ fn main() -> Result<()> {
             }
 
             // Enable raw mode and alternate screen
-            let mut stderr = io::stderr();
             enable_raw_mode().with_context(|| no_tty_msg)?;
-            execute!(stderr, EnterAlternateScreen).with_context(|| no_tty_msg)?;
+            execute!(io::stderr(), EnterAlternateScreen).with_context(|| no_tty_msg)?;
 
             // Create terminal
-            let backend = CrosstermBackend::new(stderr);
+            let backend = CrosstermBackend::new(io::stderr());
             let mut terminal = Terminal::new(backend)
                 .with_context(|| "Could not instantiate terminal")?;
 
