@@ -95,7 +95,7 @@ sudo pacman -S dua-cli
 ```
 
 #### NixOS
-https://search.nixos.org/packages?channel=23.11&show=dua&from=0&size=50&sort=relevance&type=packages&query=dua
+https://search.nixos.org/packages?query=dua
 
 Nix-shell (temporary)
 
