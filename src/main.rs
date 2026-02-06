@@ -30,12 +30,12 @@ fn main() -> Result<()> {
 
     if let Some(log_file) = &opt.log_file {
         log_panics::init();
-        
+
         let log_output = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(log_file)?;
-        
+
         fern::Dispatch::new()
             .level(log::LevelFilter::Debug)
             .format(|formatter_out, log_msg, log_rec| {
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
             })
             .chain(log_output)
             .apply()?;
-        
+
         info!("dua options={opt:#?}");
     }
 
