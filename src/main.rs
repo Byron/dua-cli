@@ -3,8 +3,6 @@ use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use dua::{TraversalSorting, canonicalize_ignore_dirs};
 use log::info;
-use simplelog::{Config, LevelFilter, WriteLogger};
-use std::fs::OpenOptions;
 use std::{fs, io, io::Write, path::PathBuf, process};
 
 #[cfg(feature = "tui-crossplatform")]
@@ -32,14 +30,28 @@ fn main() -> Result<()> {
 
     if let Some(log_file) = &opt.log_file {
         log_panics::init();
-        WriteLogger::init(
-            LevelFilter::Debug,
-            Config::default(),
-            OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(log_file)?,
-        )?;
+
+        let log_output = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file)?;
+
+        fern::Dispatch::new()
+            .level(log::LevelFilter::Debug)
+            .format(|formatter_out, log_msg, log_rec| {
+                let when = jiff::Zoned::now();
+                formatter_out.finish(format_args!(
+                    "[{} {} {}:{}] {}",
+                    when.strftime("%Y-%m-%d %H:%M:%S%.3f %:z"),
+                    log_rec.level(),
+                    log_rec.file().unwrap_or("<unknown>"),
+                    log_rec.line().unwrap_or(0),
+                    log_msg
+                ))
+            })
+            .chain(log_output)
+            .apply()?;
+
         info!("dua options={opt:#?}");
     }
 
