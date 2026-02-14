@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use dua::{TraversalSorting, canonicalize_ignore_dirs};
 use log::info;
-use std::{fs, io, io::Write, path::PathBuf, process};
+use std::{fs, io, io::IsTerminal, io::Write, path::PathBuf, process};
 
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::input::input_channel;
@@ -16,8 +16,9 @@ mod interactive;
 mod options;
 
 fn stderr_if_tty() -> Option<io::Stderr> {
-    if atty::is(atty::Stream::Stderr) {
-        Some(io::stderr())
+    let stderr = io::stderr();
+    if stderr.is_terminal() {
+        Some(stderr)
     } else {
         None
     }
@@ -80,7 +81,7 @@ fn main() -> Result<()> {
             use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
-            if atty::isnt(atty::Stream::Stderr) {
+            if !io::stderr().is_terminal() {
                 return Err(anyhow!(no_tty_msg));
             }
 
