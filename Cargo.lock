@@ -340,16 +340,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crosstermion"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bb8ffe01d18963d7cdeb1b90d80ff1fc2adc8dd05517a8dfce4844f7157ecc4"
-dependencies = [
- "crossterm",
- "ratatui",
-]
-
-[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -366,7 +356,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "crossbeam",
- "crosstermion",
+ "crossterm",
  "fern",
  "filesize",
  "gix-glob",
@@ -385,7 +375,6 @@ dependencies = [
  "pretty_assertions",
  "ratatui",
  "trash",
- "tui-react",
  "unicode-segmentation",
  "unicode-width 0.2.2",
  "wild",
@@ -1185,18 +1174,6 @@ dependencies = [
  "scopeguard",
  "urlencoding",
  "windows",
-]
-
-[[package]]
-name = "tui-react"
-version = "0.23.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2914a701e00f3311d869175d83dbb7da374ba9a22a6876f3aa6af2673d3accc6"
-dependencies = [
- "log",
- "ratatui",
- "unicode-segmentation",
- "unicode-width 0.1.14",
 ]
 
 [[package]]

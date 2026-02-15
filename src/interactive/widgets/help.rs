@@ -1,7 +1,10 @@
 use crate::interactive::CursorDirection;
-pub use crosstermion::crossterm::event::KeyCode::*;
-use crosstermion::crossterm::event::{KeyEventKind, KeyModifiers};
-use crosstermion::input::Key;
+use crate::interactive::widgets::tui_ext::{
+    draw_text_nowrap_fn,
+    util::{block_width, rect},
+};
+pub use crossterm::event::KeyCode::*;
+use crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers};
 use std::{borrow::Borrow, cell::RefCell};
 use tui::{
     buffer::Buffer,
@@ -9,10 +12,6 @@ use tui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget},
-};
-use tui_react::{
-    draw_text_nowrap_fn,
-    util::{block_width, rect},
 };
 
 #[derive(Default, Clone)]
@@ -35,7 +34,7 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
-    pub fn process_events(&mut self, key: Key) {
+    pub fn process_events(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
         }

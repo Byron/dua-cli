@@ -2,8 +2,7 @@ use crate::interactive::app::tests::utils::{
     WritableFixture, initialized_app_and_terminal_from_paths, into_codes,
 };
 use anyhow::Result;
-use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crosstermion::input::Event;
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 
 #[test]

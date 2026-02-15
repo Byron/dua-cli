@@ -1,6 +1,5 @@
 use anyhow::Result;
-use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crosstermion::input::Event;
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 use std::ffi::OsString;
 

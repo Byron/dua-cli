@@ -24,6 +24,17 @@ fn stderr_if_tty() -> Option<io::Stderr> {
     }
 }
 
+#[cfg(feature = "tui-crossplatform")]
+struct InteractiveTerminalGuard;
+
+#[cfg(feature = "tui-crossplatform")]
+impl Drop for InteractiveTerminalGuard {
+    fn drop(&mut self) {
+        crossterm::terminal::disable_raw_mode().ok();
+        crossterm::execute!(io::stderr(), crossterm::terminal::LeaveAlternateScreen).ok();
+    }
+}
+
 fn main() -> Result<()> {
     use options::Command::*;
 
@@ -78,17 +89,23 @@ fn main() -> Result<()> {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive { no_entry_check }) => {
             use anyhow::{Context, anyhow};
-            use crosstermion::terminal::{AlternateRawScreen, tui::new_terminal};
+            use crossterm::{
+                execute,
+                terminal::{EnterAlternateScreen, enable_raw_mode},
+            };
+            use tui::{Terminal, backend::CrosstermBackend};
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
                 return Err(anyhow!(no_tty_msg));
             }
 
-            let mut terminal = new_terminal(
-                AlternateRawScreen::try_from(io::stderr()).with_context(|| no_tty_msg)?,
-            )
-            .with_context(|| "Could not instantiate terminal")?;
+            let mut stderr = io::stderr();
+            enable_raw_mode().with_context(|| no_tty_msg)?;
+            execute!(stderr, EnterAlternateScreen).with_context(|| no_tty_msg)?;
+            let terminal_guard = InteractiveTerminalGuard;
+            let mut terminal = Terminal::new(CrosstermBackend::new(stderr))
+                .with_context(|| "Could not instantiate terminal")?;
 
             let keys_rx = input_channel();
             let mut app = TerminalApp::initialize(
@@ -116,6 +133,7 @@ fn main() -> Result<()> {
             std::mem::forget(app);
 
             drop(terminal);
+            drop(terminal_guard);
             io::stderr().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
