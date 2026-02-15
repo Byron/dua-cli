@@ -7,8 +7,7 @@ use crate::interactive::{
 };
 use anyhow::Result;
 use crossbeam::channel::Receiver;
-use crosstermion::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crosstermion::input::Event;
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use dua::{
     WalkResult,
     traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
@@ -233,7 +232,7 @@ impl AppState {
         B: Backend,
     {
         use FocussedPane::*;
-        use crosstermion::crossterm::event::KeyCode::*;
+        use crossterm::event::KeyCode::*;
 
         let key = match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {

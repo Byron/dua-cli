@@ -5,6 +5,7 @@ mod header;
 mod help;
 mod main;
 mod mark;
+mod tui_ext;
 
 pub use entries::*;
 pub use footer::*;

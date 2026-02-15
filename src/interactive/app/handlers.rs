@@ -3,7 +3,7 @@ use crate::interactive::{
     app::tree_view::TreeView,
     widgets::{Column, GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
 };
-use crosstermion::input::Key;
+use crossterm::event::KeyEvent;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
 use tui::{Terminal, backend::Backend};
@@ -232,7 +232,7 @@ impl AppState {
 
     pub fn dispatch_to_mark_pane<B>(
         &mut self,
-        key: Key,
+        key: KeyEvent,
         window: &mut MainWindow,
         tree_view: &mut TreeView<'_>,
         display: DisplayOptions,
