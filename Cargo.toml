@@ -62,6 +62,8 @@ jiff = "0.2.18"
 log = "0.4.20"
 log-panics = { version = "2", features = ["with-backtrace"] }
 crossbeam = "0.8"
+toml = "0.8"
+dirs = "6"
 
 [[bin]]
 name = "dua"

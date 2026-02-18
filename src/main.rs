@@ -10,6 +10,7 @@ use crate::interactive::input::input_channel;
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::terminal::TerminalApp;
 
+mod config;
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
 mod interactive;
@@ -95,6 +96,8 @@ fn main() -> Result<()> {
             };
             use tui::{Terminal, backend::CrosstermBackend};
 
+            let config = config::Config::load()?;
+
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
                 return Err(anyhow!(no_tty_msg));
@@ -114,6 +117,7 @@ fn main() -> Result<()> {
                 byte_format,
                 !no_entry_check,
                 extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                config.keys.esc_navigates_back,
             )?;
             app.traverse()?;
 

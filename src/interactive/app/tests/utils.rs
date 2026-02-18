@@ -197,6 +197,7 @@ pub fn initialized_app_and_terminal_with_closure(
         ByteFormat::Metric,
         false, /* entry-check */
         input_paths,
+        false, /* esc_navigates_back */
     )?;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;

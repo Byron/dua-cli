@@ -47,10 +47,11 @@ pub struct AppState {
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
     pub pending_exit: bool,
+    pub esc_navigates_back: bool,
 }
 
 impl AppState {
-    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>) -> Self {
+    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>, esc_navigates_back: bool) -> Self {
         AppState {
             navigation: Default::default(),
             glob_navigation: None,
@@ -66,6 +67,7 @@ impl AppState {
             root_paths: input,
             allow_entry_check: true,
             pending_exit: false,
+            esc_navigates_back,
         }
     }
 }

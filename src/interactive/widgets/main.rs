@@ -94,6 +94,7 @@ impl MainWindow {
             let props = HelpPaneProps {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
+                esc_navigates_back: state.esc_navigates_back,
             };
             pane.render(props, help_area, buffer);
         }
@@ -130,6 +131,7 @@ impl MainWindow {
                 elapsed: *elapsed,
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
+                esc_navigates_back: state.esc_navigates_back,
             },
             footer_area,
             buffer,

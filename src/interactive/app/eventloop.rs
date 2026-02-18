@@ -250,15 +250,22 @@ impl AppState {
         let glob_focussed = self.focussed == Glob;
         let mut tree_view = self.tree_view(traversal);
 
-        match (key.code, glob_focussed) {
-            (Esc, _) | (Char('q'), false) => {
-                if let Some(result) = self.handle_quit(&mut tree_view, window) {
-                    return Ok(Some(result?));
+        let esc_navigates_back_in_main =
+            self.esc_navigates_back && key.code == Esc && self.focussed == Main && !glob_focussed;
+
+        if esc_navigates_back_in_main {
+            self.pending_exit = false;
+            self.exit_node_with_traversal(&tree_view);
+        } else {
+            match (key.code, glob_focussed) {
+                (Esc, _) | (Char('q'), false) => {
+                    if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                        return Ok(Some(result?));
+                    }
                 }
-            }
-            _ => {
-                // Reset pending exit state when other keys are pressed.
-                self.pending_exit = false;
+                _ => {
+                    self.pending_exit = false;
+                }
             }
         }
 

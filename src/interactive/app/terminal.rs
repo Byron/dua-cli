@@ -30,6 +30,7 @@ impl TerminalApp {
         byte_format: ByteFormat,
         entry_check: bool,
         input: Vec<PathBuf>,
+        esc_navigates_back: bool,
     ) -> Result<TerminalApp>
     where
         B: Backend,
@@ -40,7 +41,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::new(walk_options, input);
+        let mut state = AppState::new(walk_options, input, esc_navigates_back);
         state.allow_entry_check = entry_check;
         let traversal = Traversal::new();
         #[cfg(test)]

@@ -22,6 +22,7 @@ pub struct HelpPane {
 pub struct HelpPaneProps {
     pub border_style: Style,
     pub has_focus: bool,
+    pub esc_navigates_back: bool,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -59,6 +60,7 @@ impl HelpPane {
     }
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
+        let esc_navigates_back = props.borrow().esc_navigates_back;
         let lines = {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
@@ -107,11 +109,24 @@ impl HelpPane {
 
             title("Pane control");
             {
-                hotkey(
-                    "q/<Esc>",
-                    "Close the current pane.",
-                    Some("Closes the program if no pane is open."),
-                );
+                if esc_navigates_back {
+                    hotkey(
+                        "q",
+                        "Close the current pane. Quit the program from main view.",
+                        None,
+                    );
+                    hotkey(
+                        "<Esc>",
+                        "Close the current pane.",
+                        Some("In main view, ascend to the parent directory."),
+                    );
+                } else {
+                    hotkey(
+                        "q/<Esc>",
+                        "Close the current pane.",
+                        Some("Closes the program if no pane is open."),
+                    );
+                }
                 hotkey(
                     "<Tab>",
                     "Cycle between all open panes.",
@@ -223,6 +238,7 @@ impl HelpPane {
         let HelpPaneProps {
             border_style,
             has_focus,
+            ..
         } = props.borrow();
 
         let title = "Help";
