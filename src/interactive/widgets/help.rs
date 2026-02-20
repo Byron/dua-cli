@@ -112,7 +112,7 @@ impl HelpPane {
                 if esc_navigates_back {
                     hotkey(
                         "q",
-                        "Close the current pane. Quit the program from main view.",
+                        "Close the current pane. In main view, quit (may require confirmation).",
                         None,
                     );
                     hotkey(

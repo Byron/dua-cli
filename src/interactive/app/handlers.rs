@@ -4,6 +4,7 @@ use crate::interactive::{
     widgets::{Column, GlobPane, HelpPane, MainWindow, MarkMode, MarkPane},
 };
 use crossterm::event::KeyEvent;
+use dua::Config;
 use dua::traverse::TreeIndex;
 use std::{fs, io, path::PathBuf};
 use tui::{Terminal, backend::Backend};
@@ -237,6 +238,7 @@ impl AppState {
         tree_view: &mut TreeView<'_>,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
+        config: &Config,
     ) where
         B: Backend,
     {
@@ -248,7 +250,7 @@ impl AppState {
                     let mut entries_deleted = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_delete| {
                         window.mark_pane = Some(pane);
-                        self.draw(window, tree_view, display, terminal).ok();
+                        self.draw(window, tree_view, display, terminal, config).ok();
                         pane = window.mark_pane.take().expect("option to be filled");
                         match self.delete_entry(entry_to_delete, tree_view) {
                             Ok(ed) => {
@@ -268,7 +270,7 @@ impl AppState {
                     let mut entries_trashed = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_trash| {
                         window.mark_pane = Some(pane);
-                        self.draw(window, tree_view, display, terminal).ok();
+                        self.draw(window, tree_view, display, terminal, config).ok();
                         pane = window.mark_pane.take().expect("option to be filled");
                         match self.trash_entry(entry_to_trash, tree_view) {
                             Ok(ed) => {

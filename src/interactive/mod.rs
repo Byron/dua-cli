@@ -4,10 +4,7 @@ pub use app::*;
 pub mod widgets;
 
 mod utils {
-    use dua::{
-        get_entry_or_panic,
-        traverse::{Tree, TreeIndex},
-    };
+    use dua::traverse::{Tree, TreeIndex};
     use std::path::PathBuf;
 
     pub fn path_of(tree: &Tree, mut node_idx: TreeIndex, glob_root: Option<TreeIndex>) -> PathBuf {
@@ -21,11 +18,17 @@ mod utils {
             {
                 continue;
             }
-            entries.push(get_entry_or_panic(tree, node_idx));
+            entries.push(
+                tree.node_weight(node_idx)
+                    .expect("node should always be retrievable with valid index"),
+            );
             node_idx = parent_idx;
             iter = tree.neighbors_directed(node_idx, petgraph::Incoming);
         }
-        entries.push(get_entry_or_panic(tree, node_idx));
+        entries.push(
+            tree.node_weight(node_idx)
+                .expect("node should always be retrievable with valid index"),
+        );
         entries
             .iter()
             .rev()
