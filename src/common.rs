@@ -8,7 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{fmt, path::Path};
 
-pub fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
+/// Return the entry at `node_idx` or panic if the index is invalid for `tree`.
+pub(crate) fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
     tree.node_weight(node_idx)
         .expect("node should always be retrievable with valid index")
 }
@@ -37,6 +38,7 @@ pub enum ByteFormat {
 }
 
 impl ByteFormat {
+    /// Return the content width (without unit suffix) needed to display values in this format.
     pub fn width(self) -> usize {
         use ByteFormat::*;
         match self {
@@ -47,6 +49,7 @@ impl ByteFormat {
             _ => 10,
         }
     }
+    /// Return the full width (value plus unit and separator) used by this format.
     pub fn total_width(self) -> usize {
         use ByteFormat::*;
         const THE_SPACE_BETWEEN_UNIT_AND_NUMBER: usize = 1;
@@ -59,7 +62,8 @@ impl ByteFormat {
             }
             + THE_SPACE_BETWEEN_UNIT_AND_NUMBER
     }
-    pub fn display(self, bytes: u128) -> ByteFormatDisplay {
+    /// Create a display adapter for `bytes` using this format.
+    pub fn display(self, bytes: u128) -> impl fmt::Display {
         ByteFormatDisplay {
             format: self,
             bytes,
@@ -67,7 +71,8 @@ impl ByteFormat {
     }
 }
 
-pub struct ByteFormatDisplay {
+/// A lightweight display adapter created by [`ByteFormat::display`].
+struct ByteFormatDisplay {
     format: ByteFormat,
     bytes: u128,
 }
@@ -115,18 +120,23 @@ impl fmt::Display for ByteFormatDisplay {
 /// Identify the kind of sorting to apply during filesystem iteration
 #[derive(Clone)]
 pub enum TraversalSorting {
+    /// Keep filesystem iteration order as provided by the walker.
     None,
+    /// Sort entries alphabetically by file name during iteration.
     AlphabeticalByFileName,
 }
 
 /// Throttle access to an optional `io::Write` to the specified `Duration`
 #[derive(Debug)]
-pub struct Throttle {
+pub(crate) struct Throttle {
     trigger: Arc<AtomicBool>,
 }
 
 impl Throttle {
-    pub fn new(duration: Duration, initial_sleep: Option<Duration>) -> Self {
+    /// Create a new throttle that allows updates at most once per `duration`.
+    ///
+    /// If `initial_sleep` is set, the first update is delayed by that amount.
+    pub(crate) fn new(duration: Duration, initial_sleep: Option<Duration>) -> Self {
         let instance = Self {
             trigger: Default::default(),
         };
@@ -145,7 +155,8 @@ impl Throttle {
         instance
     }
 
-    pub fn throttled<F>(&self, f: F)
+    /// Execute `f` only if the throttle currently allows an update.
+    pub(crate) fn throttled<F>(&self, f: F)
     where
         F: FnOnce(),
     {
@@ -155,7 +166,7 @@ impl Throttle {
     }
 
     /// Return `true` if we are not currently throttled.
-    pub fn can_update(&self) -> bool {
+    pub(crate) fn can_update(&self) -> bool {
         self.trigger.swap(false, Ordering::Relaxed)
     }
 }
@@ -166,17 +177,31 @@ pub struct WalkOptions {
     /// The amount of threads to use. Refer to [`WalkDir::num_threads()`](https://docs.rs/jwalk/0.4.0/jwalk/struct.WalkDir.html#method.num_threads)
     /// for more information.
     pub threads: usize,
+    /// If `true`, count every hard-link occurrence independently.
     pub count_hard_links: bool,
+    /// If `true`, use apparent size (`metadata.len()`), not allocated blocks on disk.
     pub apparent_size: bool,
+    /// Sorting mode applied by the filesystem walker.
     pub sorting: TraversalSorting,
+    /// If `false`, traversal is constrained to the root filesystem/device.
     pub cross_filesystems: bool,
+    /// Canonicalized directories to skip from traversal.
     pub ignore_dirs: BTreeSet<PathBuf>,
 }
 
 type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
-    pub fn iter_from_path(&self, root: &Path, root_device_id: u64, skip_root: bool) -> WalkDir {
+    /// Create an iterator over `root` honoring this walk configuration.
+    ///
+    /// `root_device_id` is used to filter entries when `cross_filesystems == false`.
+    /// If `skip_root` is `true`, the root directory itself is omitted from yielded entries.
+    pub(crate) fn iter_from_path(
+        &self,
+        root: &Path,
+        root_device_id: u64,
+        skip_root: bool,
+    ) -> WalkDir {
         let ignore_dirs = self.ignore_dirs.clone();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
         WalkDir::new(root)
@@ -239,11 +264,17 @@ pub struct WalkResult {
 }
 
 impl WalkResult {
+    /// Convert traversal result into a process exit code.
+    ///
+    /// Returns `0` if no I/O errors occurred, otherwise `1`.
     pub fn to_exit_code(&self) -> i32 {
         i32::from(self.num_errors > 0)
     }
 }
 
+/// Canonicalize user-provided ignore directory paths.
+///
+/// Non-canonicalizable paths are ignored.
 pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> BTreeSet<PathBuf> {
     let dirs = ignore_dirs
         .iter()

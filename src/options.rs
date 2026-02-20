@@ -131,4 +131,18 @@ pub enum Command {
         /// The shell to generate a completions-script for
         shell: Shell,
     },
+    /// Configuration related commands
+    Config {
+        /// Operation to perform on configuration.
+        #[clap(subcommand)]
+        command: ConfigCommand,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub enum ConfigCommand {
+    /// Open the configuration file in `$EDITOR`.
+    ///
+    /// If the file does not exist, it will be created with default values first.
+    Edit,
 }

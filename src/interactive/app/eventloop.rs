@@ -9,7 +9,7 @@ use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use dua::{
-    WalkResult,
+    Config, WalkResult,
     traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
 };
 use std::path::PathBuf;
@@ -35,6 +35,7 @@ impl AppState {
         tree_view: &TreeView<'_>,
         display: DisplayOptions,
         terminal: &mut Terminal<B>,
+        config: &Config,
     ) -> Result<()>
     where
         B: Backend,
@@ -47,6 +48,7 @@ impl AppState {
             elapsed: self.stats.elapsed,
             display,
             state: self,
+            config,
         };
 
         let mut cursor = Cursor::default();
@@ -89,12 +91,13 @@ impl AppState {
         traversal: &mut Traversal,
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
+        config: &Config,
     ) -> Result<()>
     where
         B: Backend,
     {
         let tree_view = self.tree_view(traversal);
-        self.draw(window, &tree_view, *display, terminal)?;
+        self.draw(window, &tree_view, *display, terminal, config)?;
         Ok(())
     }
 
@@ -106,15 +109,16 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         events: Receiver<Event>,
+        config: &Config,
     ) -> Result<WalkResult>
     where
         B: Backend,
     {
-        self.refresh_screen(window, traversal, display, terminal)?;
+        self.refresh_screen(window, traversal, display, terminal, config)?;
 
         loop {
             if let Some(result) =
-                self.process_event(window, traversal, display, terminal, &events)?
+                self.process_event(window, traversal, display, terminal, &events, config)?
             {
                 return Ok(result);
             }
@@ -128,6 +132,7 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         events: &Receiver<Event>,
+        config: &Config,
     ) -> Result<Option<WalkResult>>
     where
         B: Backend,
@@ -147,7 +152,9 @@ impl AppState {
                         traversal,
                         display,
                         terminal,
-                        event)?;
+                        event,
+                        config,
+                    )?;
                     if let Some(res) = res {
                         return Ok(Some(res));
                     }
@@ -167,7 +174,7 @@ impl AppState {
                             traversal.cost = Some(traversal.start_time.elapsed());
                         }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
-                        self.refresh_screen(window, traversal, display, terminal)?;
+                        self.refresh_screen(window, traversal, display, terminal, config)?;
                     };
                 }
             }
@@ -178,7 +185,7 @@ impl AppState {
                 }));
             };
             let result =
-                self.process_terminal_event(window, traversal, display, terminal, event)?;
+                self.process_terminal_event(window, traversal, display, terminal, event, config)?;
             if let Some(processing_result) = result {
                 return Ok(Some(processing_result));
             }
@@ -227,6 +234,7 @@ impl AppState {
         display: &mut DisplayOptions,
         terminal: &mut Terminal<B>,
         event: Event,
+        config: &Config,
     ) -> Result<Option<WalkResult>>
     where
         B: Backend,
@@ -250,15 +258,22 @@ impl AppState {
         let glob_focussed = self.focussed == Glob;
         let mut tree_view = self.tree_view(traversal);
 
-        match (key.code, glob_focussed) {
-            (Esc, _) | (Char('q'), false) => {
-                if let Some(result) = self.handle_quit(&mut tree_view, window) {
-                    return Ok(Some(result?));
+        let esc_navigates_back_in_main =
+            config.keys.esc_navigates_back && key.code == Esc && self.focussed == Main;
+
+        if esc_navigates_back_in_main {
+            self.pending_exit = false;
+            self.exit_node_with_traversal(&tree_view);
+        } else {
+            match (key.code, glob_focussed) {
+                (Esc, _) | (Char('q'), false) => {
+                    if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                        return Ok(Some(result?));
+                    }
                 }
-            }
-            _ => {
-                // Reset pending exit state when other keys are pressed.
-                self.pending_exit = false;
+                _ => {
+                    self.pending_exit = false;
+                }
             }
         }
 
@@ -283,7 +298,14 @@ impl AppState {
 
         if !handled {
             match self.focussed {
-                Mark => self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, terminal),
+                Mark => self.dispatch_to_mark_pane(
+                    key,
+                    window,
+                    &mut tree_view,
+                    *display,
+                    terminal,
+                    config,
+                ),
                 Help => {
                     window
                         .help_pane
@@ -354,7 +376,7 @@ impl AppState {
                 },
             };
         }
-        self.draw(window, &tree_view, *display, terminal)?;
+        self.draw(window, &tree_view, *display, terminal, config)?;
 
         Ok(None)
     }

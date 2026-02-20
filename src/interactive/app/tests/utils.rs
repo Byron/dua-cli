@@ -2,7 +2,7 @@ use anyhow::{Context, Error, Result};
 use crossbeam::channel::Receiver;
 use crossterm::event::{Event, KeyCode};
 use dua::{
-    ByteFormat, TraversalSorting, WalkOptions,
+    ByteFormat, Config, TraversalSorting, WalkOptions,
     traverse::{EntryData, Tree, TreeIndex},
 };
 use itertools::Itertools;
@@ -197,6 +197,7 @@ pub fn initialized_app_and_terminal_with_closure(
         ByteFormat::Metric,
         false, /* entry-check */
         input_paths,
+        Config::default(),
     )?;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;

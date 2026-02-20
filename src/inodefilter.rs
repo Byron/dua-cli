@@ -1,20 +1,23 @@
 use std::collections::HashMap;
 
+/// Tracks seen `(device, inode)` pairs to avoid double-counting hard-linked files.
 #[derive(Debug, Default, Clone)]
-pub struct InodeFilter {
+pub(crate) struct InodeFilter {
     inner: HashMap<(u64, u64), u64>,
 }
 
 impl InodeFilter {
     #[cfg(unix)]
-    pub fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
+    /// Register file metadata and return `true` if this link should be counted.
+    pub(crate) fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
         use std::os::unix::fs::MetadataExt;
 
         self.add_dev_inode((metadata.dev(), metadata.ino()), metadata.nlink())
     }
 
     #[cfg(windows)]
-    pub fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
+    /// Register file metadata and return `true` if this link should be counted.
+    pub(crate) fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
         use std::os::windows::fs::MetadataExt;
 
         if let (Some(dev), Some(inode), Some(nlinks)) = (
@@ -29,11 +32,16 @@ impl InodeFilter {
     }
 
     #[cfg(not(any(unix, windows)))]
-    pub fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
+    /// Register file metadata and return `true` if this link should be counted.
+    pub(crate) fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
         true
     }
 
-    pub fn add_dev_inode(&mut self, dev_inode: (u64, u64), nlinks: u64) -> bool {
+    /// Register a `(device, inode)` with its hard-link count.
+    ///
+    /// Returns `true` for the first observation that should contribute to size/count,
+    /// and `false` for subsequent links.
+    pub(crate) fn add_dev_inode(&mut self, dev_inode: (u64, u64), nlinks: u64) -> bool {
         if nlinks <= 1 {
             return true;
         }

@@ -1,9 +1,14 @@
 #![forbid(rust_2018_idioms, unsafe_code)]
-use anyhow::Result;
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{CommandFactory as _, Parser};
 use dua::{TraversalSorting, canonicalize_ignore_dirs};
 use log::info;
-use std::{fs, io, io::IsTerminal, io::Write, path::PathBuf, process};
+use std::{
+    fs, io,
+    io::{IsTerminal, Write},
+    path::{Path, PathBuf},
+    process,
+};
 
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::input::input_channel;
@@ -95,6 +100,8 @@ fn main() -> Result<()> {
             };
             use tui::{Terminal, backend::CrosstermBackend};
 
+            let config = dua::Config::load()?;
+
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
                 return Err(anyhow!(no_tty_msg));
@@ -114,6 +121,7 @@ fn main() -> Result<()> {
                 byte_format,
                 !no_entry_check,
                 extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                config,
             )?;
             app.traverse()?;
 
@@ -174,6 +182,12 @@ fn main() -> Result<()> {
             let mut cmd = options::Args::command();
             let dua = cmd.get_name().to_string();
             clap_complete::generate(shell, &mut cmd, dua, &mut io::stdout());
+            return Ok(());
+        }
+        Some(Config {
+            command: options::ConfigCommand::Edit,
+        }) => {
+            edit_config()?;
             return Ok(());
         }
         None => {
@@ -240,4 +254,75 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
         .collect();
     v.sort();
     Ok(v)
+}
+
+fn edit_config() -> Result<()> {
+    let path = dua::Config::path()?;
+
+    ensure_default_config_file(&path)?;
+
+    let editor = std::env::var("EDITOR").map_err(|_| {
+        anyhow!(
+            "$EDITOR is not set or is illformed UTF8. Created default configuration at {}",
+            path.display()
+        )
+    })?;
+
+    let Some(mut editor_parts) = shlex::split(&editor) else {
+        return Err(anyhow!(
+            "$EDITOR has invalid shell quoting. Created default configuration at {}",
+            path.display()
+        ));
+    };
+
+    if editor_parts.is_empty() {
+        bail!(
+            "$EDITOR is empty. Created default configuration at {}",
+            path.display()
+        )
+    };
+
+    let editor_program = editor_parts.remove(0);
+    let status = std::process::Command::new(&editor_program)
+        .args(editor_parts)
+        .arg(&path)
+        .status()
+        .with_context(|| {
+            format!(
+                "Failed to launch editor {editor_program:?} (from $EDITOR={editor:?}) for {}",
+                path.display()
+            )
+        })?;
+
+    if status.success() {
+        println!("Successfully edited '{}'", path.display());
+        return Ok(());
+    }
+
+    Err(anyhow!(
+        "Editor {editor_program:?} (from $EDITOR={editor:?}) exited with status {status} while editing {}",
+        path.display()
+    ))
+}
+
+fn ensure_default_config_file(path: &Path) -> Result<()> {
+    if let Some(parent_dir) = path.parent() {
+        fs::create_dir_all(parent_dir).with_context(|| {
+            format!(
+                "Could not create configuration directory {}",
+                parent_dir.display()
+            )
+        })?;
+    }
+
+    if !path.exists() {
+        fs::write(path, dua::Config::default_file_content()).with_context(|| {
+            format!(
+                "Could not write default configuration to {}",
+                path.display()
+            )
+        })?;
+    }
+
+    Ok(())
 }

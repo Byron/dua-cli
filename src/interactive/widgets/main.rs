@@ -24,6 +24,7 @@ pub struct MainWindowProps<'a> {
     pub elapsed: Option<std::time::Duration>,
     pub display: DisplayOptions,
     pub state: &'a AppState,
+    pub config: &'a dua::Config,
 }
 
 #[derive(Default)]
@@ -50,6 +51,7 @@ impl MainWindow {
             elapsed,
             display,
             state,
+            config,
         } = props.borrow();
 
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
@@ -94,6 +96,7 @@ impl MainWindow {
             let props = HelpPaneProps {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
+                esc_navigates_back: config.keys.esc_navigates_back,
             };
             pane.render(props, help_area, buffer);
         }
@@ -130,6 +133,7 @@ impl MainWindow {
                 elapsed: *elapsed,
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
+                esc_navigates_back: config.keys.esc_navigates_back,
             },
             footer_area,
             buffer,

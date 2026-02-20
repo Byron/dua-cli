@@ -4,6 +4,7 @@ use crate::interactive::EntryCheck;
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crossterm::event::Event;
+use dua::Config;
 #[cfg(test)]
 use dua::traverse::TraversalStats;
 use dua::{ByteFormat, WalkOptions, WalkResult, traverse::Traversal};
@@ -15,6 +16,7 @@ use super::{DisplayOptions, sorted_entries, state::AppState};
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
+    pub config: Config,
     pub traversal: Traversal,
     #[cfg(test)]
     pub stats: TraversalStats,
@@ -30,6 +32,7 @@ impl TerminalApp {
         byte_format: ByteFormat,
         entry_check: bool,
         input: Vec<PathBuf>,
+        config: Config,
     ) -> Result<TerminalApp>
     where
         B: Backend,
@@ -57,6 +60,7 @@ impl TerminalApp {
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 
         let app = TerminalApp {
+            config,
             state,
             display,
             traversal,
@@ -86,6 +90,7 @@ impl TerminalApp {
             &mut self.display,
             terminal,
             events,
+            &self.config,
         )
     }
 }
@@ -112,6 +117,7 @@ mod tests {
                     &mut self.display,
                     terminal,
                     &events,
+                    &self.config,
                 )?;
             }
             Ok(WalkResult {
