@@ -43,11 +43,9 @@ impl Config {
     }
 
     fn path() -> Option<PathBuf> {
-        // Use $XDG_CONFIG_HOME if set, otherwise ~/.config (standard for CLI tools on all platforms).
-        let config_dir = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .or_else(|| dirs::home_dir().map(|h| h.join(".config")))?;
+        // Use the OS-specific configuration directory (e.g. $XDG_CONFIG_HOME, %APPDATA%, or
+        // ~/Library/Application Support) as provided by the `dirs` crate.
+        let config_dir = dirs::config_dir()?;
         Some(config_dir.join("dua-cli").join("config.toml"))
     }
 }

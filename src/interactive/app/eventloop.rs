@@ -251,7 +251,7 @@ impl AppState {
         let mut tree_view = self.tree_view(traversal);
 
         let esc_navigates_back_in_main =
-            self.esc_navigates_back && key.code == Esc && self.focussed == Main && !glob_focussed;
+            self.esc_navigates_back && key.code == Esc && self.focussed == Main;
 
         if esc_navigates_back_in_main {
             self.pending_exit = false;
