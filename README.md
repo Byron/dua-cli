@@ -67,6 +67,9 @@ For _Unix_…
 ```
 cargo install dua-cli
 
+# Install without cloning the repository
+cargo install --git https://github.com/Byron/dua-cli/
+
 # And if you don't need a terminal user interface (most compatible)
 cargo install dua-cli --no-default-features
 
