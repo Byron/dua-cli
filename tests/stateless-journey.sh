@@ -113,3 +113,41 @@ WITH_FAILURE=1
     }
   )
 )
+
+(with "the install script"
+  (sandbox
+    mkdir fakebin
+    cat > fakebin/curl <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    cat > fakebin/tar <<'EOF'
+#!/bin/sh
+echo "stub tar failure" >&2
+exit 1
+EOF
+    chmod +x fakebin/curl fakebin/tar
+    rm -rf /tmp/dua-install-home /tmp/dua-cargo-home
+    it "uses CARGO_HOME for the default install location" && {
+      WITH_SNAPSHOT="$snapshot/failure-install-script-defaults-to-cargo-home" \
+      PATH="$PWD/fakebin:$PATH" \
+      HOME=/tmp/dua-install-home \
+      CARGO_HOME=/tmp/dua-cargo-home \
+      expect_run ${WITH_FAILURE} sh "$root/../ci/install.sh" \
+        --git Byron/dua-cli \
+        --crate dua \
+        --tag v2.29.0 \
+        --target does-not-exist
+    }
+    it "falls back to HOME/.cargo/bin when CARGO_HOME is unset" && {
+      WITH_SNAPSHOT="$snapshot/failure-install-script-defaults-to-home-cargo-bin" \
+      PATH="$PWD/fakebin:$PATH" \
+      HOME=/tmp/dua-install-home \
+      expect_run ${WITH_FAILURE} sh "$root/../ci/install.sh" \
+        --git Byron/dua-cli \
+        --crate dua \
+        --tag v2.29.0 \
+        --target does-not-exist
+    }
+  )
+)

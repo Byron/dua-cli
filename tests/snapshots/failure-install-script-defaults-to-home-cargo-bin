@@ -1,0 +1,7 @@
+install.sh: GitHub repository: https://github.com/Byron/dua-cli
+install.sh: Crate: dua
+install.sh: Tag: v2.29.0
+install.sh: Target: does-not-exist
+install.sh: Installing to: /tmp/dua-install-home/.cargo/bin
+install.sh: Downloading: https://github.com/Byron/dua-cli/releases/download/v2.29.0/dua-v2.29.0-does-not-exist.tar.gz
+stub tar failure
