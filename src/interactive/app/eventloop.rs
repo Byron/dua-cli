@@ -260,6 +260,8 @@ impl AppState {
         let glob_focussed = self.focussed == Glob;
         let mut tree_view = self.tree_view(traversal);
 
+        let prev_view_root = self.navigation().view_root;
+
         let esc_navigates_back_in_main =
             config.keys.esc_navigates_back && key.code == Esc && self.focussed == Main;
 
@@ -279,7 +281,6 @@ impl AppState {
             }
         }
 
-        let prev_view_root = self.navigation().view_root;
         let mut handled = true;
         match key.code {
             Tab => {
