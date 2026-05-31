@@ -191,6 +191,11 @@ impl HelpPane {
                     "Mark the currently selected entry for deletion and move down.",
                     None,
                 );
+                hotkey(
+                    "Shift + x",
+                    "Mark all entries matching the active heuristic for deletion.",
+                    None,
+                );
                 hotkey("<Space>", "Toggle the currently selected entry.", None);
                 hotkey("a", "Toggle all entries.", None);
                 hotkey(
