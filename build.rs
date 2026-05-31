@@ -15,7 +15,7 @@ fn main() {
             .unwrap()
             .filter_map(Result::ok)
             .map(|e| e.path())
-            .filter(|p| p.extension().map_or(false, |ext| ext == "toml"))
+            .filter(|p| p.extension().is_some_and(|ext| ext == "toml"))
             .collect();
         
         entries.sort();

@@ -47,12 +47,11 @@ impl Heuristic {
         for rule_group in &self.match_rules {
             let mut group_matched = false;
             for rule in rule_group.split('|').map(|s| s.trim()) {
-                if rule.starts_with("-f ") {
-                    let file_name = &rule[3..];
+                if let Some(file_name) = rule.strip_prefix("-f ") {
                     // Support glob in file name
                     if file_name.contains('*') || file_name.contains('?') {
-                        if let Some(pattern) = Pattern::from_bytes(file_name.as_bytes()) {
-                            if entries.clone().any(|(is_dir, name)| {
+                        if let Some(pattern) = Pattern::from_bytes(file_name.as_bytes())
+                            && entries.clone().any(|(is_dir, name)| {
                                 !is_dir && pattern.matches(
                                     bstr::BStr::new(name.as_encoded_bytes()),
                                     if IGNORE_CASE {
@@ -61,10 +60,10 @@ impl Heuristic {
                                         gix_glob::wildmatch::Mode::empty()
                                     },
                                 )
-                            }) {
-                                group_matched = true;
-                                break;
-                            }
+                            })
+                        {
+                            group_matched = true;
+                            break;
                         }
                     } else if entries.clone().any(|(is_dir, name)| {
                         !is_dir && if IGNORE_CASE {
@@ -76,18 +75,17 @@ impl Heuristic {
                         group_matched = true;
                         break;
                     }
-                } else if rule.starts_with("-d ") {
-                    let dir_name = &rule[3..];
-                    if entries.clone().any(|(is_dir, name)| {
+                } else if let Some(dir_name) = rule.strip_prefix("-d ")
+                    && entries.clone().any(|(is_dir, name)| {
                         is_dir && if IGNORE_CASE {
                             name.to_string_lossy().eq_ignore_ascii_case(dir_name)
                         } else {
                             name == dir_name
                         }
-                    }) {
-                        group_matched = true;
-                        break;
-                    }
+                    })
+                {
+                    group_matched = true;
+                    break;
                 }
             }
             if !group_matched {

@@ -241,7 +241,7 @@ fn draw_bottom_right_help(
 
 fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
     let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
-    let help_text_block_width = block_width(&help_text);
+    let help_text_block_width = block_width(help_text);
     let bound = Rect {
         width: area.width.saturating_sub(1),
         ..area
@@ -250,7 +250,7 @@ fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
         draw_text_nowrap_fn(
             rect::snap_to_right(bound, help_text_block_width),
             buf,
-            &help_text,
+            help_text,
             |_, _, _| Style::default(),
         );
     }

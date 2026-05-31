@@ -423,7 +423,6 @@ impl AppState {
             };
         }
         if prev_view_root != self.navigation().view_root {
-            drop(tree_view);
             self.check_heuristics();
             let tree_view = self.tree_view(traversal);
             self.draw(window, &tree_view, *display, terminal, config)?;
