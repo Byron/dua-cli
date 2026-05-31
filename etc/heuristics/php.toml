@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-php"
+description = "Clean up PHP vendor directory"
+enabled = true
+match = [
+    "-f composer.json",
+    "-d vendor"
+]
+patterns = [
+    "vendor/"
+]

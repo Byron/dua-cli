@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-elixir"
+description = "Clean up Elixir build and deps"
+enabled = true
+match = [
+    "-f mix.exs"
+]
+patterns = [
+    "_build/",
+    "deps/"
+]

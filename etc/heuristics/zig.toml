@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-zig"
+description = "Clean up Zig cache and output"
+enabled = true
+match = [
+    "-f build.zig"
+]
+patterns = [
+    "zig-cache/",
+    "zig-out/"
+]

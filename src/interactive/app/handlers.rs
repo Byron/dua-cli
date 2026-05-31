@@ -99,6 +99,17 @@ impl AppState {
         self.enter_node(new_entries)
     }
 
+    pub fn update_heuristics(&mut self, tree_view: &TreeView<'_>) {
+        self.active_heuristic = None;
+        let path = crate::interactive::path_of(tree_view.tree(), self.navigation().view_root, self.glob_navigation.as_ref().map(|n| n.view_root));
+        for heuristic in dua::heuristics::load_heuristics() {
+            if heuristic.matches(&path) {
+                self.active_heuristic = Some(heuristic);
+                break;
+            }
+        }
+    }
+
     pub fn enter_node(&mut self, entries_at_selected: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
         if let Some((previously_selected, new_entries)) = entries_at_selected {
             match self
@@ -370,7 +381,7 @@ impl AppState {
         self.glob_navigation.as_ref().map(|e| e.tree_root)
     }
 
-    fn mark_entry_by_index(
+    pub fn mark_entry_by_index(
         &mut self,
         index: TreeIndex,
         mode: MarkEntryMode,

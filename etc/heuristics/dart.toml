@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-dart"
+description = "Clean up Dart/Flutter build directories"
+enabled = true
+match = [
+    "-f pubspec.yaml"
+]
+patterns = [
+    "build/",
+    ".dart_tool/"
+]

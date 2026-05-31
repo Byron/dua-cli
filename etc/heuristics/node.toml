@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-node"
+description = "Clean up Node.js modules"
+enabled = true
+match = [
+    "-f package.json",
+    "-d node_modules"
+]
+patterns = [
+    "node_modules/"
+]

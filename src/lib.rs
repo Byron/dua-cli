@@ -15,6 +15,7 @@ mod inodefilter;
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;
 
+pub mod heuristics;
 pub use aggregate::aggregate;
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;

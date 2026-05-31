@@ -1,0 +1,11 @@
+[[heuristics]]
+name = "clean-rust"
+description = "Clean up rust build flow"
+enabled = true
+match = [
+    "-f Cargo.toml",
+    "-d target"
+]
+patterns = [
+    "target/"
+]

@@ -1,0 +1,24 @@
+[[heuristics]]
+name = "clean-java-maven"
+description = "Clean up Maven target directory"
+enabled = true
+match = [
+    "-f pom.xml",
+    "-d target"
+]
+patterns = [
+    "target/"
+]
+
+[[heuristics]]
+name = "clean-java-gradle"
+description = "Clean up Gradle build directory"
+enabled = true
+match = [
+    "-f build.gradle | -f build.gradle.kts",
+    "-d build"
+]
+patterns = [
+    "build/",
+    ".gradle/"
+]

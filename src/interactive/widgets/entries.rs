@@ -6,7 +6,7 @@ use crate::interactive::widgets::tui_ext::{
 };
 use crate::interactive::{
     DisplayOptions, EntryDataBundle, SortMode,
-    widgets::{EntryMarkMap, entry_color},
+    widgets::EntryMarkMap,
 };
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
@@ -34,6 +34,7 @@ pub struct EntriesProps<'a> {
     pub is_focussed: bool,
     pub sort_mode: SortMode,
     pub show_columns: &'a HashSet<Column>,
+    pub active_heuristic: Option<dua::heuristics::Heuristic>,
 }
 
 #[derive(Default)]
@@ -58,6 +59,7 @@ impl Entries {
             is_focussed,
             sort_mode,
             show_columns,
+            active_heuristic,
         } = props.borrow();
         let list = &mut self.list;
 
@@ -90,6 +92,10 @@ impl Entries {
             let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+            let is_heuristic_match = active_heuristic.as_ref().map(|h| {
+                let name_str = name.to_string_lossy();
+                h.patterns.iter().any(|p| p.trim_end_matches('/') == name_str)
+            }).unwrap_or(false);
             let is_selected = selected == &Some(*node_idx);
             if is_selected {
                 scroll_offset = Some(idx);
@@ -129,7 +135,7 @@ impl Entries {
                 name_with_prefix(name.to_string_lossy(), *is_dir),
                 available_width,
             );
-            let style = name_style(is_marked, *exists, *is_dir, text_style);
+            let style = name_style(is_marked, *exists, *is_dir, is_heuristic_match, text_style);
             columns.push(name_column(name, area, style));
 
             columns_with_separators(columns, percentage_style, false)
@@ -149,7 +155,7 @@ impl Entries {
 
         if *is_focussed {
             let bound = draw_top_right_help(area, &title, buf);
-            draw_bottom_right_help(bound, buf);
+            draw_bottom_right_help(bound, buf, active_heuristic.as_ref());
         }
     }
 }
@@ -189,15 +195,19 @@ fn title(
     )
 }
 
-fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
+fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer, active_heuristic: Option<&dua::heuristics::Heuristic>) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-    let help_text = " mark-move = d | mark-toggle = space | toggle-all = a ";
-    let help_text_block_width = block_width(help_text);
+    let help_text = if let Some(h) = active_heuristic {
+        format!(" {} = X | mark-move = d | mark-toggle = space | toggle-all = a ", h.name)
+    } else {
+        " mark-move = d | mark-toggle = space | toggle-all = a ".to_string()
+    };
+    let help_text_block_width = block_width(&help_text);
     if help_text_block_width <= bound.width {
         draw_text_nowrap_fn(
             rect::snap_to_right(bound, help_text_block_width),
             buf,
-            help_text,
+            &help_text,
             |_, _, _| Style::default(),
         );
     }
@@ -205,7 +215,7 @@ fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
 
 fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
     let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
-    let help_text_block_width = block_width(help_text);
+    let help_text_block_width = block_width(&help_text);
     let bound = Rect {
         width: area.width.saturating_sub(1),
         ..area
@@ -214,7 +224,7 @@ fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
         draw_text_nowrap_fn(
             rect::snap_to_right(bound, help_text_block_width),
             buf,
-            help_text,
+            &help_text,
             |_, _, _| Style::default(),
         );
     }
@@ -322,12 +332,18 @@ fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
     }
 }
 
-fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Style {
+fn name_style(is_marked: bool, exists: bool, is_dir: bool, is_heuristic_match: bool, style: Style) -> Style {
     let fg = if !exists {
         // non-existing - always red!
         Some(Color::Red)
     } else {
-        entry_color(style.fg, !is_dir, is_marked)
+        if is_marked {
+            crate::interactive::widgets::entry_color(style.fg, !is_dir, is_marked)
+        } else if is_heuristic_match {
+            Some(Color::Yellow)
+        } else {
+            crate::interactive::widgets::entry_color(style.fg, !is_dir, is_marked)
+        }
     };
     Style { fg, ..style }
 }

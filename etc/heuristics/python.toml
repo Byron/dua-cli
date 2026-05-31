@@ -1,0 +1,16 @@
+[[heuristics]]
+name = "clean-python"
+description = "Clean up Python virtual environments and caches"
+enabled = true
+match = [
+    "-f pyproject.toml | -f requirements.txt | -f setup.py",
+]
+patterns = [
+    ".venv/",
+    "venv/",
+    "env/",
+    "__pycache__/",
+    ".pytest_cache/",
+    ".mypy_cache/",
+    ".ruff_cache/"
+]

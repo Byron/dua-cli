@@ -114,6 +114,7 @@ impl AppState {
     where
         B: Backend,
     {
+        self.check_heuristics(traversal);
         self.refresh_screen(window, traversal, display, terminal, config)?;
 
         loop {
@@ -123,6 +124,11 @@ impl AppState {
                 return Ok(result);
             }
         }
+    }
+
+    fn check_heuristics(&mut self, traversal: &mut Traversal) {
+        let tree_view = self.tree_view(traversal);
+        self.update_heuristics(&tree_view);
     }
 
     pub fn process_event<B>(
@@ -174,6 +180,7 @@ impl AppState {
                             traversal.cost = Some(traversal.start_time.elapsed());
                         }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
+        self.check_heuristics(traversal);
                         self.refresh_screen(window, traversal, display, terminal, config)?;
                     };
                 }
@@ -277,6 +284,7 @@ impl AppState {
             }
         }
 
+        let prev_view_root = self.navigation().view_root;
         let mut handled = true;
         match key.code {
             Tab => {
@@ -326,6 +334,16 @@ impl AppState {
                 }
                 Main => match key.code {
                     Char('O') => self.open_that(&tree_view),
+                    Char('X') => {
+                        if let Some(heuristic) = self.active_heuristic.clone() {
+                            for pattern in &heuristic.patterns {
+                                let pattern_trimmed = pattern.trim_end_matches('/');
+                                if let Some(entry) = self.entries.iter().find(|e| e.name.to_string_lossy() == pattern_trimmed) {
+                                    self.mark_entry_by_index(entry.index, MarkEntryMode::MarkForDeletion, window, &tree_view);
+                                }
+                            }
+                        }
+                    }
                     Char(' ') => self.mark_entry(
                         CursorMode::KeepPosition,
                         MarkEntryMode::Toggle,
@@ -376,7 +394,14 @@ impl AppState {
                 },
             };
         }
+        if prev_view_root != self.navigation().view_root {
+            drop(tree_view);
+            self.check_heuristics(traversal);
+            let tree_view = self.tree_view(traversal);
+            self.draw(window, &tree_view, *display, terminal, config)?;
+        } else {
         self.draw(window, &tree_view, *display, terminal, config)?;
+        }
 
         Ok(None)
     }

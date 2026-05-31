@@ -1,0 +1,10 @@
+[[heuristics]]
+name = "clean-macos"
+description = "Clean up macOS .DS_Store files"
+enabled = true
+match = [
+    "-f .DS_Store"
+]
+patterns = [
+    ".DS_Store"
+]
