@@ -52,36 +52,39 @@ impl Heuristic {
                     if file_name.contains('*') || file_name.contains('?') {
                         if let Some(pattern) = Pattern::from_bytes(file_name.as_bytes())
                             && entries.clone().any(|(is_dir, name)| {
-                                !is_dir && pattern.matches(
-                                    bstr::BStr::new(name.as_encoded_bytes()),
-                                    if IGNORE_CASE {
-                                        gix_glob::wildmatch::Mode::IGNORE_CASE
-                                    } else {
-                                        gix_glob::wildmatch::Mode::empty()
-                                    },
-                                )
+                                !is_dir
+                                    && pattern.matches(
+                                        bstr::BStr::new(name.as_encoded_bytes()),
+                                        if IGNORE_CASE {
+                                            gix_glob::wildmatch::Mode::IGNORE_CASE
+                                        } else {
+                                            gix_glob::wildmatch::Mode::empty()
+                                        },
+                                    )
                             })
                         {
                             group_matched = true;
                             break;
                         }
                     } else if entries.clone().any(|(is_dir, name)| {
-                        !is_dir && if IGNORE_CASE {
-                            name.to_string_lossy().eq_ignore_ascii_case(file_name)
-                        } else {
-                            name == file_name
-                        }
+                        !is_dir
+                            && if IGNORE_CASE {
+                                name.to_string_lossy().eq_ignore_ascii_case(file_name)
+                            } else {
+                                name == file_name
+                            }
                     }) {
                         group_matched = true;
                         break;
                     }
                 } else if let Some(dir_name) = rule.strip_prefix("-d ")
                     && entries.clone().any(|(is_dir, name)| {
-                        is_dir && if IGNORE_CASE {
-                            name.to_string_lossy().eq_ignore_ascii_case(dir_name)
-                        } else {
-                            name == dir_name
-                        }
+                        is_dir
+                            && if IGNORE_CASE {
+                                name.to_string_lossy().eq_ignore_ascii_case(dir_name)
+                            } else {
+                                name == dir_name
+                            }
                     })
                 {
                     group_matched = true;

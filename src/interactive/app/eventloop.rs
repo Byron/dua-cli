@@ -339,22 +339,35 @@ impl AppState {
                                 let pattern_trimmed = pattern.trim_end_matches('/');
                                 let mut to_mark = Vec::new();
                                 for entry in &self.entries {
-                                    let is_match = if pattern_trimmed.contains('*') || pattern_trimmed.contains('?') {
-                                        if let Some(pattern) = gix_glob::Pattern::from_bytes(pattern_trimmed.as_bytes()) {
+                                    let is_match = if pattern_trimmed.contains('*')
+                                        || pattern_trimmed.contains('?')
+                                    {
+                                        if let Some(pattern) = gix_glob::Pattern::from_bytes(
+                                            pattern_trimmed.as_bytes(),
+                                        ) {
                                             let mode = if cfg!(any(windows, target_os = "macos")) {
                                                 gix_glob::wildmatch::Mode::IGNORE_CASE
                                             } else {
                                                 gix_glob::wildmatch::Mode::empty()
                                             };
-                                            pattern.matches(bstr::BStr::new(entry.name.as_os_str().as_encoded_bytes()), mode)
+                                            pattern.matches(
+                                                bstr::BStr::new(
+                                                    entry.name.as_os_str().as_encoded_bytes(),
+                                                ),
+                                                mode,
+                                            )
                                         } else {
                                             false
                                         }
                                     } else {
                                         if cfg!(any(windows, target_os = "macos")) {
-                                            entry.name.to_string_lossy().eq_ignore_ascii_case(pattern_trimmed)
+                                            entry
+                                                .name
+                                                .to_string_lossy()
+                                                .eq_ignore_ascii_case(pattern_trimmed)
                                         } else {
-                                            entry.name.as_os_str() == std::ffi::OsStr::new(pattern_trimmed)
+                                            entry.name.as_os_str()
+                                                == std::ffi::OsStr::new(pattern_trimmed)
                                         }
                                     };
                                     if is_match {

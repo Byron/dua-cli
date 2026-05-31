@@ -95,13 +95,18 @@ impl Entries {
                     h.patterns.iter().any(|p| {
                         let p_trimmed = p.trim_end_matches('/');
                         if p_trimmed.contains('*') || p_trimmed.contains('?') {
-                            if let Some(pattern) = gix_glob::Pattern::from_bytes(p_trimmed.as_bytes()) {
+                            if let Some(pattern) =
+                                gix_glob::Pattern::from_bytes(p_trimmed.as_bytes())
+                            {
                                 let mode = if cfg!(any(windows, target_os = "macos")) {
                                     gix_glob::wildmatch::Mode::IGNORE_CASE
                                 } else {
                                     gix_glob::wildmatch::Mode::empty()
                                 };
-                                pattern.matches(bstr::BStr::new(name.as_os_str().as_encoded_bytes()), mode)
+                                pattern.matches(
+                                    bstr::BStr::new(name.as_os_str().as_encoded_bytes()),
+                                    mode,
+                                )
                             } else {
                                 false
                             }

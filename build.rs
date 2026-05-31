@@ -17,12 +17,15 @@ fn main() {
             .map(|e| e.path())
             .filter(|p| p.extension().is_some_and(|ext| ext == "toml"))
             .collect();
-        
+
         entries.sort();
 
         for path in entries {
             let path_str = path.to_str().unwrap().replace('\\', "/");
-            includes.push_str(&format!("    include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{}\")),\n", path_str));
+            includes.push_str(&format!(
+                "    include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{}\")),\n",
+                path_str
+            ));
         }
     }
 
