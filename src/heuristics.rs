@@ -4,6 +4,11 @@ use serde::Deserialize;
 use std::ffi::OsStr;
 use std::sync::OnceLock;
 
+#[cfg(any(windows, target_os = "macos"))]
+const IGNORE_CASE: bool = true;
+#[cfg(not(any(windows, target_os = "macos")))]
+const IGNORE_CASE: bool = false;
+
 #[derive(Debug, Deserialize, Clone)]
 /// Configuration for heuristics.
 pub struct HeuristicConfig {
@@ -50,20 +55,36 @@ impl Heuristic {
                             if entries.clone().any(|(is_dir, name)| {
                                 !is_dir && pattern.matches(
                                     bstr::BStr::new(name.as_encoded_bytes()),
-                                    gix_glob::wildmatch::Mode::empty(),
+                                    if IGNORE_CASE {
+                                        gix_glob::wildmatch::Mode::IGNORE_CASE
+                                    } else {
+                                        gix_glob::wildmatch::Mode::empty()
+                                    },
                                 )
                             }) {
                                 group_matched = true;
                                 break;
                             }
                         }
-                    } else if entries.clone().any(|(is_dir, name)| !is_dir && name == file_name) {
+                    } else if entries.clone().any(|(is_dir, name)| {
+                        !is_dir && if IGNORE_CASE {
+                            name.to_string_lossy().eq_ignore_ascii_case(file_name)
+                        } else {
+                            name == file_name
+                        }
+                    }) {
                         group_matched = true;
                         break;
                     }
                 } else if rule.starts_with("-d ") {
                     let dir_name = &rule[3..];
-                    if entries.clone().any(|(is_dir, name)| is_dir && name == dir_name) {
+                    if entries.clone().any(|(is_dir, name)| {
+                        is_dir && if IGNORE_CASE {
+                            name.to_string_lossy().eq_ignore_ascii_case(dir_name)
+                        } else {
+                            name == dir_name
+                        }
+                    }) {
                         group_matched = true;
                         break;
                     }
@@ -82,17 +103,7 @@ pub fn load_heuristics() -> &'static [Heuristic] {
     static HEURISTICS: OnceLock<Vec<Heuristic>> = OnceLock::new();
     HEURISTICS.get_or_init(|| {
         let mut all = Vec::new();
-        let configs = [
-            include_str!("../etc/heuristics/rust.toml"),
-            include_str!("../etc/heuristics/node.toml"),
-            include_str!("../etc/heuristics/python.toml"),
-            include_str!("../etc/heuristics/java.toml"),
-            include_str!("../etc/heuristics/php.toml"),
-            include_str!("../etc/heuristics/dart.toml"),
-            include_str!("../etc/heuristics/elixir.toml"),
-            include_str!("../etc/heuristics/zig.toml"),
-            include_str!("../etc/heuristics/macos.toml"),
-        ];
+        let configs = include!(concat!(env!("OUT_DIR"), "/heuristics_includes.rs"));
 
         for config_str in configs {
             if let Ok(config) = toml::from_str::<HeuristicConfig>(config_str) {

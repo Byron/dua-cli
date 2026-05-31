@@ -366,6 +366,7 @@ impl AppState {
             self.navigation_mut().select(idx);
         }
         tree_view.recompute_sizes_recursively(parent_idx);
+        self.update_heuristics();
 
         entries_deleted
     }

@@ -337,13 +337,33 @@ impl AppState {
                         if let Some(heuristic) = self.active_heuristic.clone() {
                             for pattern in &heuristic.patterns {
                                 let pattern_trimmed = pattern.trim_end_matches('/');
-                                if let Some(entry) = self
-                                    .entries
-                                    .iter()
-                                    .find(|e| e.name.as_os_str() == std::ffi::OsStr::new(pattern_trimmed))
-                                {
+                                let mut to_mark = Vec::new();
+                                for entry in &self.entries {
+                                    let is_match = if pattern_trimmed.contains('*') || pattern_trimmed.contains('?') {
+                                        if let Some(pattern) = gix_glob::Pattern::from_bytes(pattern_trimmed.as_bytes()) {
+                                            let mode = if cfg!(any(windows, target_os = "macos")) {
+                                                gix_glob::wildmatch::Mode::IGNORE_CASE
+                                            } else {
+                                                gix_glob::wildmatch::Mode::empty()
+                                            };
+                                            pattern.matches(bstr::BStr::new(entry.name.as_os_str().as_encoded_bytes()), mode)
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        if cfg!(any(windows, target_os = "macos")) {
+                                            entry.name.to_string_lossy().eq_ignore_ascii_case(pattern_trimmed)
+                                        } else {
+                                            entry.name.as_os_str() == std::ffi::OsStr::new(pattern_trimmed)
+                                        }
+                                    };
+                                    if is_match {
+                                        to_mark.push(entry.index);
+                                    }
+                                }
+                                for index in to_mark {
                                     self.mark_entry_by_index(
-                                        entry.index,
+                                        index,
                                         MarkEntryMode::MarkForDeletion,
                                         window,
                                         &tree_view,
