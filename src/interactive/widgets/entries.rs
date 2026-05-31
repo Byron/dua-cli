@@ -92,10 +92,9 @@ impl Entries {
             let is_heuristic_match = active_heuristic
                 .as_ref()
                 .map(|h| {
-                    let name_str = name.to_string_lossy();
                     h.patterns
                         .iter()
-                        .any(|p| p.trim_end_matches('/') == name_str)
+                        .any(|p| std::ffi::OsStr::new(p.trim_end_matches('/')) == name.as_os_str())
                 })
                 .unwrap_or(false);
             let is_selected = selected == &Some(*node_idx);

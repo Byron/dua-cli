@@ -114,7 +114,7 @@ impl AppState {
     where
         B: Backend,
     {
-        self.check_heuristics(traversal);
+        self.check_heuristics();
         self.refresh_screen(window, traversal, display, terminal, config)?;
 
         loop {
@@ -126,9 +126,8 @@ impl AppState {
         }
     }
 
-    fn check_heuristics(&mut self, traversal: &mut Traversal) {
-        let tree_view = self.tree_view(traversal);
-        self.update_heuristics(&tree_view);
+    fn check_heuristics(&mut self) {
+        self.update_heuristics();
     }
 
     pub fn process_event<B>(
@@ -180,7 +179,7 @@ impl AppState {
                                 traversal.cost = Some(traversal.start_time.elapsed());
                             }
                             self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
-            self.check_heuristics(traversal);
+            self.check_heuristics();
                             self.refresh_screen(window, traversal, display, terminal, config)?;
                         };
                     }
@@ -341,7 +340,7 @@ impl AppState {
                                 if let Some(entry) = self
                                     .entries
                                     .iter()
-                                    .find(|e| e.name.to_string_lossy() == pattern_trimmed)
+                                    .find(|e| e.name.as_os_str() == std::ffi::OsStr::new(pattern_trimmed))
                                 {
                                     self.mark_entry_by_index(
                                         entry.index,
@@ -405,7 +404,7 @@ impl AppState {
         }
         if prev_view_root != self.navigation().view_root {
             drop(tree_view);
-            self.check_heuristics(traversal);
+            self.check_heuristics();
             let tree_view = self.tree_view(traversal);
             self.draw(window, &tree_view, *display, terminal, config)?;
         } else {
