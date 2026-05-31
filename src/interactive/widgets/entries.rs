@@ -4,7 +4,10 @@ use crate::interactive::widgets::tui_ext::{
     List, ListProps, draw_text_nowrap_fn,
     util::{block_width, rect},
 };
-use crate::interactive::{DisplayOptions, EntryDataBundle, SortMode, widgets::EntryMarkMap};
+use crate::interactive::{
+    DisplayOptions, EntryDataBundle, SortMode,
+    widgets::{EntryMarkMap, entry_color},
+};
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
@@ -31,7 +34,7 @@ pub struct EntriesProps<'a> {
     pub is_focussed: bool,
     pub sort_mode: SortMode,
     pub show_columns: &'a HashSet<Column>,
-    pub active_heuristic: Option<dua::heuristics::Heuristic>,
+    pub active_heuristic: Option<&'static dua::heuristics::Heuristic>,
 }
 
 #[derive(Default)]
@@ -90,35 +93,7 @@ impl Entries {
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
             let is_heuristic_match = active_heuristic
-                .as_ref()
-                .map(|h| {
-                    h.patterns.iter().any(|p| {
-                        let p_trimmed = p.trim_end_matches('/');
-                        if p_trimmed.contains('*') || p_trimmed.contains('?') {
-                            if let Some(pattern) =
-                                gix_glob::Pattern::from_bytes(p_trimmed.as_bytes())
-                            {
-                                let mode = if cfg!(any(windows, target_os = "macos")) {
-                                    gix_glob::wildmatch::Mode::IGNORE_CASE
-                                } else {
-                                    gix_glob::wildmatch::Mode::empty()
-                                };
-                                pattern.matches(
-                                    bstr::BStr::new(name.as_os_str().as_encoded_bytes()),
-                                    mode,
-                                )
-                            } else {
-                                false
-                            }
-                        } else {
-                            if cfg!(any(windows, target_os = "macos")) {
-                                name.to_string_lossy().eq_ignore_ascii_case(p_trimmed)
-                            } else {
-                                name.as_os_str() == std::ffi::OsStr::new(p_trimmed)
-                            }
-                        }
-                    })
-                })
+                .map(|h| h.is_match(*is_dir, name.as_os_str()))
                 .unwrap_or(false);
             let is_selected = selected == &Some(*node_idx);
             if is_selected {
@@ -179,7 +154,7 @@ impl Entries {
 
         if *is_focussed {
             let bound = draw_top_right_help(area, &title, buf);
-            draw_bottom_right_help(bound, buf, active_heuristic.as_ref());
+            draw_bottom_right_help(bound, buf, *active_heuristic);
         }
     }
 }
@@ -373,14 +348,10 @@ fn name_style(
     let fg = if !exists {
         // non-existing - always red!
         Some(Color::Red)
+    } else if !is_marked && is_heuristic_match {
+        Some(Color::Yellow)
     } else {
-        if is_marked {
-            crate::interactive::widgets::entry_color(style.fg, !is_dir, is_marked)
-        } else if is_heuristic_match {
-            Some(Color::Yellow)
-        } else {
-            crate::interactive::widgets::entry_color(style.fg, !is_dir, is_marked)
-        }
+        entry_color(style.fg, !is_dir, is_marked)
     };
     Style { fg, ..style }
 }

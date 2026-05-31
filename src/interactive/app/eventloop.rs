@@ -114,7 +114,7 @@ impl AppState {
     where
         B: Backend,
     {
-        self.check_heuristics();
+        self.update_heuristics();
         self.refresh_screen(window, traversal, display, terminal, config)?;
 
         loop {
@@ -124,10 +124,6 @@ impl AppState {
                 return Ok(result);
             }
         }
-    }
-
-    fn check_heuristics(&mut self) {
-        self.update_heuristics();
     }
 
     pub fn process_event<B>(
@@ -148,42 +144,42 @@ impl AppState {
         }) = self.scan.as_mut()
         {
             crossbeam::select! {
-                    recv(events) -> event => {
-                        let Ok(event) = event else {
-                            return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
-                        };
-                        let res = self.process_terminal_event(
-                            window,
-                            traversal,
-                            display,
-                            terminal,
-                            event,
-                            config,
-                        )?;
-                        if let Some(res) = res {
-                            return Ok(Some(res));
-                        }
-                    },
-                    recv(&active_traversal.event_rx) -> event => {
-                        let Ok(event) = event else {
-                            return Ok(None);
-                        };
-
-                        if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
-                            self.stats = active_traversal.stats;
-                            let previous_selection = previous_selection.clone();
-                            if is_finished {
-                                let root_index = active_traversal.root_idx;
-                                self.recompute_sizes_recursively(traversal, root_index);
-                                self.scan = None;
-                                traversal.cost = Some(traversal.start_time.elapsed());
-                            }
-                            self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
-            self.check_heuristics();
-                            self.refresh_screen(window, traversal, display, terminal, config)?;
-                        };
+                recv(events) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
+                    };
+                    let res = self.process_terminal_event(
+                        window,
+                        traversal,
+                        display,
+                        terminal,
+                        event,
+                        config,
+                    )?;
+                    if let Some(res) = res {
+                        return Ok(Some(res));
                     }
+                },
+                recv(&active_traversal.event_rx) -> event => {
+                    let Ok(event) = event else {
+                        return Ok(None);
+                    };
+
+                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                        self.stats = active_traversal.stats;
+                        let previous_selection = previous_selection.clone();
+                        if is_finished {
+                            let root_index = active_traversal.root_idx;
+                            self.recompute_sizes_recursively(traversal, root_index);
+                            self.scan = None;
+                            traversal.cost = Some(traversal.start_time.elapsed());
+                        }
+                        self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
+                        self.update_heuristics();
+                        self.refresh_screen(window, traversal, display, terminal, config)?;
+                    };
                 }
+            }
         } else {
             let Ok(event) = events.recv() else {
                 return Ok(Some(WalkResult {
@@ -334,54 +330,20 @@ impl AppState {
                 Main => match key.code {
                     Char('O') => self.open_that(&tree_view),
                     Char('X') => {
-                        if let Some(heuristic) = self.active_heuristic.clone() {
-                            for pattern in &heuristic.patterns {
-                                let pattern_trimmed = pattern.trim_end_matches('/');
-                                let mut to_mark = Vec::new();
-                                for entry in &self.entries {
-                                    let is_match = if pattern_trimmed.contains('*')
-                                        || pattern_trimmed.contains('?')
-                                    {
-                                        if let Some(pattern) = gix_glob::Pattern::from_bytes(
-                                            pattern_trimmed.as_bytes(),
-                                        ) {
-                                            let mode = if cfg!(any(windows, target_os = "macos")) {
-                                                gix_glob::wildmatch::Mode::IGNORE_CASE
-                                            } else {
-                                                gix_glob::wildmatch::Mode::empty()
-                                            };
-                                            pattern.matches(
-                                                bstr::BStr::new(
-                                                    entry.name.as_os_str().as_encoded_bytes(),
-                                                ),
-                                                mode,
-                                            )
-                                        } else {
-                                            false
-                                        }
-                                    } else {
-                                        if cfg!(any(windows, target_os = "macos")) {
-                                            entry
-                                                .name
-                                                .to_string_lossy()
-                                                .eq_ignore_ascii_case(pattern_trimmed)
-                                        } else {
-                                            entry.name.as_os_str()
-                                                == std::ffi::OsStr::new(pattern_trimmed)
-                                        }
-                                    };
-                                    if is_match {
-                                        to_mark.push(entry.index);
-                                    }
+                        if let Some(heuristic) = self.active_heuristic {
+                            let mut to_mark = Vec::new();
+                            for entry in &self.entries {
+                                if heuristic.is_match(entry.is_dir, entry.name.as_os_str()) {
+                                    to_mark.push(entry.index);
                                 }
-                                for index in to_mark {
-                                    self.mark_entry_by_index(
-                                        index,
-                                        MarkEntryMode::MarkForDeletion,
-                                        window,
-                                        &tree_view,
-                                    );
-                                }
+                            }
+                            for index in to_mark {
+                                self.mark_entry_by_index(
+                                    index,
+                                    MarkEntryMode::MarkForDeletion,
+                                    window,
+                                    &tree_view,
+                                );
                             }
                         }
                     }
@@ -436,12 +398,9 @@ impl AppState {
             };
         }
         if prev_view_root != self.navigation().view_root {
-            self.check_heuristics();
-            let tree_view = self.tree_view(traversal);
-            self.draw(window, &tree_view, *display, terminal, config)?;
-        } else {
-            self.draw(window, &tree_view, *display, terminal, config)?;
+            self.update_heuristics();
         }
+        self.draw(window, &tree_view, *display, terminal, config)?;
 
         Ok(None)
     }

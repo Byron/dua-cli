@@ -104,7 +104,7 @@ impl AppState {
         let entries = self.entries.iter().map(|e| (e.is_dir, e.name.as_os_str()));
         for heuristic in dua::heuristics::load_heuristics() {
             if heuristic.matches(entries.clone()) {
-                self.active_heuristic = Some(heuristic.clone());
+                self.active_heuristic = Some(heuristic);
                 break;
             }
         }

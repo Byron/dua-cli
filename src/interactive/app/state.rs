@@ -47,7 +47,7 @@ pub struct AppState {
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
     pub pending_exit: bool,
-    pub active_heuristic: Option<dua::heuristics::Heuristic>,
+    pub active_heuristic: Option<&'static dua::heuristics::Heuristic>,
 }
 
 impl AppState {

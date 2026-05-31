@@ -112,7 +112,7 @@ impl MainWindow {
             is_focussed: matches!(state.focussed, Main),
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
-            active_heuristic: state.active_heuristic.clone(),
+            active_heuristic: state.active_heuristic,
         };
         self.entries_pane.render(props, entries_area, buffer);
 

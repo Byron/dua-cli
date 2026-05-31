@@ -38,6 +38,34 @@ fn default_true() -> bool {
 }
 
 impl Heuristic {
+    /// Check if the heuristic matches a single entry.
+    pub fn is_match(&self, is_dir: bool, name: &std::ffi::OsStr) -> bool {
+        self.patterns.iter().any(|p| {
+            if p.ends_with('/') && !is_dir {
+                return false;
+            }
+            let p_trimmed = p.trim_end_matches('/');
+            if p_trimmed.contains('*') || p_trimmed.contains('?') {
+                if let Some(pattern) = Pattern::from_bytes(p_trimmed.as_bytes()) {
+                    let mode = if IGNORE_CASE {
+                        gix_glob::wildmatch::Mode::IGNORE_CASE
+                    } else {
+                        gix_glob::wildmatch::Mode::empty()
+                    };
+                    pattern.matches(bstr::BStr::new(name.as_encoded_bytes()), mode)
+                } else {
+                    false
+                }
+            } else {
+                if IGNORE_CASE {
+                    name.to_string_lossy().eq_ignore_ascii_case(p_trimmed)
+                } else {
+                    name == std::ffi::OsStr::new(p_trimmed)
+                }
+            }
+        })
+    }
+
     /// Check if the heuristic matches the given directory entries.
     pub fn matches<'a>(&self, entries: impl Iterator<Item = (bool, &'a OsStr)> + Clone) -> bool {
         if !self.enabled {
@@ -107,10 +135,45 @@ pub fn load_heuristics() -> &'static [Heuristic] {
         let configs = include!(concat!(env!("OUT_DIR"), "/heuristics_includes.rs"));
 
         for config_str in configs {
-            if let Ok(config) = toml::from_str::<HeuristicConfig>(config_str) {
-                all.extend(config.heuristics);
+            match toml::from_str::<HeuristicConfig>(config_str) {
+                Ok(config) => all.extend(config.heuristics),
+                Err(err) => panic!("Failed to parse built-in heuristic config: {err}"),
             }
         }
         all
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn test_is_match() {
+        let heuristic = Heuristic {
+            name: "test".to_string(),
+            description: "test description".to_string(),
+            enabled: true,
+            match_rules: vec![],
+            patterns: vec![
+                "target/".to_string(),
+                "*.log".to_string(),
+                "node_modules".to_string(),
+            ],
+        };
+
+        // Pattern ending with '/' must only match directories
+        assert!(heuristic.is_match(true, OsStr::new("target")));
+        assert!(!heuristic.is_match(false, OsStr::new("target")));
+
+        // Pattern not ending with '/' matches both files and directories
+        assert!(heuristic.is_match(true, OsStr::new("node_modules")));
+        assert!(heuristic.is_match(false, OsStr::new("node_modules")));
+
+        // Glob pattern matches correctly
+        assert!(heuristic.is_match(false, OsStr::new("error.log")));
+        assert!(heuristic.is_match(true, OsStr::new("error.log")));
+        assert!(!heuristic.is_match(false, OsStr::new("error.txt")));
+    }
 }
