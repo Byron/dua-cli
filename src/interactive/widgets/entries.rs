@@ -4,10 +4,7 @@ use crate::interactive::widgets::tui_ext::{
     List, ListProps, draw_text_nowrap_fn,
     util::{block_width, rect},
 };
-use crate::interactive::{
-    DisplayOptions, EntryDataBundle, SortMode,
-    widgets::EntryMarkMap,
-};
+use crate::interactive::{DisplayOptions, EntryDataBundle, SortMode, widgets::EntryMarkMap};
 use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
@@ -92,10 +89,15 @@ impl Entries {
             let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-            let is_heuristic_match = active_heuristic.as_ref().map(|h| {
-                let name_str = name.to_string_lossy();
-                h.patterns.iter().any(|p| p.trim_end_matches('/') == name_str)
-            }).unwrap_or(false);
+            let is_heuristic_match = active_heuristic
+                .as_ref()
+                .map(|h| {
+                    let name_str = name.to_string_lossy();
+                    h.patterns
+                        .iter()
+                        .any(|p| p.trim_end_matches('/') == name_str)
+                })
+                .unwrap_or(false);
             let is_selected = selected == &Some(*node_idx);
             if is_selected {
                 scroll_offset = Some(idx);
@@ -195,10 +197,17 @@ fn title(
     )
 }
 
-fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer, active_heuristic: Option<&dua::heuristics::Heuristic>) {
+fn draw_bottom_right_help(
+    bound: Rect,
+    buf: &mut Buffer,
+    active_heuristic: Option<&dua::heuristics::Heuristic>,
+) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
     let help_text = if let Some(h) = active_heuristic {
-        format!(" {} = X | mark-move = d | mark-toggle = space | toggle-all = a ", h.name)
+        format!(
+            " {} = X | mark-move = d | mark-toggle = space | toggle-all = a ",
+            h.name
+        )
     } else {
         " mark-move = d | mark-toggle = space | toggle-all = a ".to_string()
     };
@@ -332,7 +341,13 @@ fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
     }
 }
 
-fn name_style(is_marked: bool, exists: bool, is_dir: bool, is_heuristic_match: bool, style: Style) -> Style {
+fn name_style(
+    is_marked: bool,
+    exists: bool,
+    is_dir: bool,
+    is_heuristic_match: bool,
+    style: Style,
+) -> Style {
     let fg = if !exists {
         // non-existing - always red!
         Some(Color::Red)

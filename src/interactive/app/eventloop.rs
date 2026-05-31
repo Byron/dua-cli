@@ -149,42 +149,42 @@ impl AppState {
         }) = self.scan.as_mut()
         {
             crossbeam::select! {
-                recv(events) -> event => {
-                    let Ok(event) = event else {
-                        return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
-                    };
-                    let res = self.process_terminal_event(
-                        window,
-                        traversal,
-                        display,
-                        terminal,
-                        event,
-                        config,
-                    )?;
-                    if let Some(res) = res {
-                        return Ok(Some(res));
-                    }
-                },
-                recv(&active_traversal.event_rx) -> event => {
-                    let Ok(event) = event else {
-                        return Ok(None);
-                    };
-
-                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
-                        self.stats = active_traversal.stats;
-                        let previous_selection = previous_selection.clone();
-                        if is_finished {
-                            let root_index = active_traversal.root_idx;
-                            self.recompute_sizes_recursively(traversal, root_index);
-                            self.scan = None;
-                            traversal.cost = Some(traversal.start_time.elapsed());
+                    recv(events) -> event => {
+                        let Ok(event) = event else {
+                            return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
+                        };
+                        let res = self.process_terminal_event(
+                            window,
+                            traversal,
+                            display,
+                            terminal,
+                            event,
+                            config,
+                        )?;
+                        if let Some(res) = res {
+                            return Ok(Some(res));
                         }
-                        self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
-        self.check_heuristics(traversal);
-                        self.refresh_screen(window, traversal, display, terminal, config)?;
-                    };
+                    },
+                    recv(&active_traversal.event_rx) -> event => {
+                        let Ok(event) = event else {
+                            return Ok(None);
+                        };
+
+                        if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                            self.stats = active_traversal.stats;
+                            let previous_selection = previous_selection.clone();
+                            if is_finished {
+                                let root_index = active_traversal.root_idx;
+                                self.recompute_sizes_recursively(traversal, root_index);
+                                self.scan = None;
+                                traversal.cost = Some(traversal.start_time.elapsed());
+                            }
+                            self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
+            self.check_heuristics(traversal);
+                            self.refresh_screen(window, traversal, display, terminal, config)?;
+                        };
+                    }
                 }
-            }
         } else {
             let Ok(event) = events.recv() else {
                 return Ok(Some(WalkResult {
@@ -338,8 +338,17 @@ impl AppState {
                         if let Some(heuristic) = self.active_heuristic.clone() {
                             for pattern in &heuristic.patterns {
                                 let pattern_trimmed = pattern.trim_end_matches('/');
-                                if let Some(entry) = self.entries.iter().find(|e| e.name.to_string_lossy() == pattern_trimmed) {
-                                    self.mark_entry_by_index(entry.index, MarkEntryMode::MarkForDeletion, window, &tree_view);
+                                if let Some(entry) = self
+                                    .entries
+                                    .iter()
+                                    .find(|e| e.name.to_string_lossy() == pattern_trimmed)
+                                {
+                                    self.mark_entry_by_index(
+                                        entry.index,
+                                        MarkEntryMode::MarkForDeletion,
+                                        window,
+                                        &tree_view,
+                                    );
                                 }
                             }
                         }
@@ -400,7 +409,7 @@ impl AppState {
             let tree_view = self.tree_view(traversal);
             self.draw(window, &tree_view, *display, terminal, config)?;
         } else {
-        self.draw(window, &tree_view, *display, terminal, config)?;
+            self.draw(window, &tree_view, *display, terminal, config)?;
         }
 
         Ok(None)

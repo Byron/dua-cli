@@ -101,7 +101,11 @@ impl AppState {
 
     pub fn update_heuristics(&mut self, tree_view: &TreeView<'_>) {
         self.active_heuristic = None;
-        let path = crate::interactive::path_of(tree_view.tree(), self.navigation().view_root, self.glob_navigation.as_ref().map(|n| n.view_root));
+        let path = crate::interactive::path_of(
+            tree_view.tree(),
+            self.navigation().view_root,
+            self.glob_navigation.as_ref().map(|n| n.view_root),
+        );
         for heuristic in dua::heuristics::load_heuristics() {
             if heuristic.matches(&path) {
                 self.active_heuristic = Some(heuristic);

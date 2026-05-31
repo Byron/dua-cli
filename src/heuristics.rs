@@ -1,41 +1,43 @@
 //! Heuristics for cleaning up common project directories.
+use gix_glob::Pattern;
 use serde::Deserialize;
 use std::path::Path;
-use gix_glob::Pattern;
 
 #[derive(Debug, Deserialize, Clone)]
 /// Configuration for heuristics.
 pub struct HeuristicConfig {
-/// List of heuristics.
+    /// List of heuristics.
     pub heuristics: Vec<Heuristic>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 /// A heuristic for cleaning up directories.
 pub struct Heuristic {
-/// Name of the heuristic.
+    /// Name of the heuristic.
     pub name: String,
-/// Description of the heuristic.
+    /// Description of the heuristic.
     pub description: String,
     #[serde(default = "default_true")]
-/// Whether the heuristic is enabled.
+    /// Whether the heuristic is enabled.
     pub enabled: bool,
     #[serde(rename = "match")]
-/// Rules to match the heuristic.
+    /// Rules to match the heuristic.
     pub match_rules: Vec<String>,
-/// Patterns to clean up.
+    /// Patterns to clean up.
     pub patterns: Vec<String>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 impl Heuristic {
-/// Check if the heuristic matches the given directory.
+    /// Check if the heuristic matches the given directory.
     pub fn matches(&self, dir: &Path) -> bool {
         if !self.enabled {
             return false;
         }
-        
+
         for rule_group in &self.match_rules {
             let mut group_matched = false;
             for rule in rule_group.split('|').map(|s| s.trim()) {
@@ -91,7 +93,7 @@ pub fn load_heuristics() -> Vec<Heuristic> {
         include_str!("../etc/heuristics/zig.toml"),
         include_str!("../etc/heuristics/macos.toml"),
     ];
-    
+
     for config_str in configs {
         if let Ok(config) = toml::from_str::<HeuristicConfig>(config_str) {
             all.extend(config.heuristics);
