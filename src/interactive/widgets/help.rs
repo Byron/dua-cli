@@ -1,4 +1,5 @@
 use crate::interactive::CursorDirection;
+use crate::interactive::widgets::Language;
 use crate::interactive::widgets::tui_ext::{
     draw_text_nowrap_fn,
     util::{block_width, rect},
@@ -23,6 +24,7 @@ pub struct HelpPaneProps {
     pub border_style: Style,
     pub has_focus: bool,
     pub esc_navigates_back: bool,
+    pub language: Language,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -61,6 +63,7 @@ impl HelpPane {
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let esc_navigates_back = props.borrow().esc_navigates_back;
+        let t = props.borrow().language.help_text();
         let lines = {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
@@ -107,139 +110,75 @@ impl HelpPane {
                 }
             };
 
-            title("Pane control");
+            title(t.pane_control_title);
             {
                 if esc_navigates_back {
-                    hotkey(
-                        "q",
-                        "Close the current pane. In main view, quit (may require confirmation).",
-                        None,
-                    );
-                    hotkey(
-                        "<Esc>",
-                        "Close the current pane.",
-                        Some("In main view, ascend to the parent directory."),
-                    );
+                    hotkey("q", t.pane_q_quit, None);
+                    hotkey("<Esc>", t.pane_esc_close, Some(t.pane_esc_close_2));
                 } else {
-                    hotkey(
-                        "q/<Esc>",
-                        "Close the current pane.",
-                        Some("Closes the program if no pane is open."),
-                    );
+                    hotkey("q/<Esc>", t.pane_qesc_close, Some(t.pane_qesc_close_2));
                 }
-                hotkey(
-                    "<Tab>",
-                    "Cycle between all open panes.",
-                    Some("Activate 'Marked Items' pane to delete selected files."),
-                );
-                hotkey("?", "Show or hide this help pane.", None);
+                hotkey("<Tab>", t.pane_tab, Some(t.pane_tab_2));
+                hotkey("?", t.pane_help_toggle, None);
                 spacer();
             }
-            title("Navigation");
+            title(t.nav_title);
             {
-                hotkey("j/<Down>", "Move down 1 entry.", None);
-                hotkey("k/<Up>", "Move up 1 entry.", None);
-                hotkey("o/l/<Enter>", "Descent into the selected directory.", None);
+                hotkey("j/<Down>", t.nav_down, None);
+                hotkey("k/<Up>", t.nav_up, None);
+                hotkey("o/l/<Enter>", t.nav_descend, None);
                 hotkey("<Right>", "^", None);
-                hotkey(
-                    "u/h/<Left>",
-                    "Ascent one level into the parent directory.",
-                    None,
-                );
+                hotkey("u/h/<Left>", t.nav_ascend, None);
                 hotkey("<Backspace>", "^", None);
-                hotkey("Ctrl + d", "Move down 10 entries.", None);
+                hotkey("Ctrl + d", t.nav_down10, None);
                 hotkey("<Page Down>", "^", None);
-                hotkey("Ctrl + u", "Move up 10 entries.", None);
+                hotkey("Ctrl + u", t.nav_up10, None);
                 hotkey("<Page Up>", "^", None);
-                hotkey("H/<Home>", "Move to the top of the list.", None);
-                hotkey("G/<End>", "Move to the bottom of the list.", None);
+                hotkey("H/<Home>", t.nav_top, None);
+                hotkey("G/<End>", t.nav_bottom, None);
                 spacer();
             }
-            title("Display");
+            title(t.disp_title);
             {
-                hotkey("s", "Toggle sort by size descending/ascending.", None);
-                hotkey(
-                    "m",
-                    "Toggle sort by modified time descending/ascending.",
-                    None,
-                );
-                hotkey(
-                    "M",
-                    "Show modified time or cycle mtime sort mode.",
-                    Some("While sorting by mtime: entry, deep newest, deep oldest."),
-                );
-                hotkey("c", "Toggle sort by entries descending/ascending.", None);
-                hotkey("C", "Show/hide entry count.", None);
-                hotkey("n", "Toggle sort by name ascending/descending.", None);
-                hotkey(
-                    "g/S",
-                    "Cycle through percentage display and bar options.",
-                    None,
-                );
+                hotkey("s", t.disp_sort_size, None);
+                hotkey("m", t.disp_sort_mtime, None);
+                hotkey("M", t.disp_show_mtime, Some(t.disp_show_mtime_2));
+                hotkey("c", t.disp_sort_count, None);
+                hotkey("C", t.disp_show_count, None);
+                hotkey("n", t.disp_sort_name, None);
+                hotkey("g/S", t.disp_cycle_bar, None);
                 spacer();
             }
-            title("Open/Mark/Search");
+            title(t.oms_title);
             {
-                hotkey(
-                    "O",
-                    "Open the selected entry with the associated program.",
-                    None,
-                );
-                hotkey(
-                    "d",
-                    "Toggle the currently selected entry and move down.",
-                    None,
-                );
-                hotkey(
-                    "x",
-                    "Mark the currently selected entry for deletion and move down.",
-                    None,
-                );
-                hotkey("<Space>", "Toggle the currently selected entry.", None);
-                hotkey("X", "Mark cleanup candidates in the current view.", None);
-                hotkey("t", "Toggle cleanup-candidate detection.", None);
+                hotkey("O", t.oms_open, None);
+                hotkey("d", t.oms_toggle_down, None);
+                hotkey("x", t.oms_mark_down, None);
+                hotkey("<Space>", t.oms_toggle, None);
+                hotkey("X", t.oms_mark_cleanup, None);
+                hotkey("t", t.oms_toggle_cleanup, None);
                 #[cfg(feature = "git")]
-                hotkey("I", "Mark Git-ignored entries in the current view.", None);
+                hotkey("I", t.oms_mark_gitignored, None);
                 #[cfg(feature = "git")]
-                hotkey("i", "Toggle Git-ignored entry detection.", None);
-                hotkey("a", "Toggle all entries.", None);
-                hotkey(
-                    "/",
-                    "Git-style glob search. Toggle case with 'I'.",
-                    Some("Search starts from the current directory."),
-                );
-                hotkey("r", "Refresh only the selected entry.", None);
-                hotkey("R", "Refresh all entries in the current view.", None);
+                hotkey("i", t.oms_toggle_gitignored, None);
+                hotkey("a", t.oms_toggle_all, None);
+                hotkey("/", t.oms_search, Some(t.oms_search_2));
+                hotkey("r", t.oms_refresh_one, None);
+                hotkey("R", t.oms_refresh_all, None);
                 spacer();
             }
-            title("Mark entries pane");
+            title(t.mark_title);
             {
-                hotkey(
-                    "x/d/<Space>",
-                    "Remove the selected entry from the list.",
-                    None,
-                );
-                hotkey("a", "Remove all entries from the list.", None);
-                hotkey(
-                    "Ctrl + r",
-                    "Permanently delete all marked entries without prompt.",
-                    Some("This operation cannot be undone!"),
-                );
+                hotkey("x/d/<Space>", t.mark_remove, None);
+                hotkey("a", t.mark_remove_all, None);
+                hotkey("Ctrl + r", t.mark_delete, Some(t.mark_delete_2));
                 #[cfg(feature = "trash-move")]
-                hotkey(
-                    "Ctrl + t",
-                    "Move all marked entries to the trash bin.",
-                    Some("The entries can be restored from the trash bin."),
-                );
+                hotkey("Ctrl + t", t.mark_trash, Some(t.mark_trash_2));
                 spacer();
             }
-            title("Application control");
+            title(t.app_title);
             {
-                hotkey(
-                    "Ctrl + c",
-                    "Close the application. No questions asked!",
-                    None,
-                );
+                hotkey("Ctrl + c", t.app_quit, None);
                 spacer();
             }
             lines.into_inner()
@@ -251,7 +190,7 @@ impl HelpPane {
             ..
         } = props.borrow();
 
-        let title = "Help";
+        let title = t.block_title;
         let block = Block::default()
             .title(title)
             .border_style(*border_style)
@@ -283,5 +222,52 @@ impl HelpPane {
         Paragraph::new(Text::from(lines))
             .scroll((self.scroll, 0))
             .render(area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rendered(language: Language) -> String {
+        let area = Rect::new(0, 0, 120, 80);
+        let mut buf = Buffer::empty(area);
+        HelpPane::default().render(
+            HelpPaneProps {
+                border_style: Style::default(),
+                has_focus: false,
+                esc_navigates_back: false,
+                language,
+            },
+            area,
+            &mut buf,
+        );
+        buf.content.iter().map(|cell| cell.symbol()).collect()
+    }
+
+    #[test]
+    fn english_is_the_default_rendering() {
+        let text = rendered(Language::English);
+        assert!(text.contains("Help"));
+        assert!(text.contains("Navigation"));
+        assert!(text.contains("Ctrl + c"));
+    }
+
+    #[test]
+    fn japanese_replaces_the_english_strings() {
+        let en = rendered(Language::English);
+        let ja = rendered(Language::Japanese);
+        // The Japanese rendering differs and no longer shows the English titles,
+        // while untranslated key names stay put.
+        assert_ne!(en, ja);
+        assert!(!ja.contains("Help"));
+        assert!(!ja.contains("Navigation"));
+        assert!(!ja.contains("Display"));
+        assert!(ja.contains("Ctrl + c"));
+        // The Japanese strings are actually rendered. The backend pads wide
+        // glyphs with a trailing cell, so collapse whitespace before matching.
+        let ja_collapsed: String = ja.split_whitespace().collect();
+        assert!(ja_collapsed.contains("ヘルプ"));
+        assert!(ja_collapsed.contains("ナビゲーション"));
     }
 }

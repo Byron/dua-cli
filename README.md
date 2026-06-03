@@ -181,6 +181,14 @@ dua i
 dua interactive
 ```
 
+The help screen can be localized via the standard POSIX locale environment variables, in the
+usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; currently
+Japanese (`ja`) is also available:
+
+```bash
+LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
+```
+
 ### Configuration
 
 `dua` can read an optional configuration file from your OS-specific config directory:

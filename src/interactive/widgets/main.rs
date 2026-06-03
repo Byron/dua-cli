@@ -3,7 +3,7 @@ use crate::interactive::{
     state::{AppState, Cursor, FocussedPane},
     widgets::{
         COLOR_MARKED, Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header,
-        HelpPane, HelpPaneProps, MarkPane, MarkPaneProps,
+        HelpPane, HelpPaneProps, Language, MarkPane, MarkPaneProps,
     },
 };
 use Constraint::*;
@@ -97,6 +97,7 @@ impl MainWindow {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
                 esc_navigates_back: config.keys.esc_navigates_back,
+                language: Language::from_env(),
             };
             pane.render(props, help_area, buffer);
         }
