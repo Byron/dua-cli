@@ -125,6 +125,42 @@ impl AppState {
         }
     }
 
+    pub fn process_events_once<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        events: Receiver<Event>,
+        config: &Config,
+    ) -> Result<WalkResult>
+    where
+        B: Backend,
+    {
+        self.refresh_screen(window, traversal, display, terminal, config)?;
+
+        let (_keep_alive, no_events) = crossbeam::channel::bounded(0);
+        while self.scan.is_some() {
+            if let Some(result) =
+                self.process_event(window, traversal, display, terminal, &no_events, config)?
+            {
+                return Ok(result);
+            }
+        }
+
+        while let Ok(event) = events.try_recv() {
+            if let Some(result) =
+                self.process_terminal_event(window, traversal, display, terminal, event, config)?
+            {
+                return Ok(result);
+            }
+        }
+
+        Ok(WalkResult {
+            num_errors: self.stats.io_errors,
+        })
+    }
+
     pub fn process_event<B>(
         &mut self,
         window: &mut MainWindow,

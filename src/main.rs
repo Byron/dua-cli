@@ -11,7 +11,7 @@ use std::{
 };
 
 #[cfg(feature = "tui-crossplatform")]
-use crate::interactive::input::input_channel;
+use crate::interactive::input::{input_channel, input_channel_from_chars};
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::terminal::TerminalApp;
 
@@ -30,13 +30,21 @@ fn stderr_if_tty() -> Option<io::Stderr> {
 }
 
 #[cfg(feature = "tui-crossplatform")]
-struct InteractiveTerminalGuard;
+struct InteractiveTerminalGuard {
+    raw_mode: bool,
+    alternate_screen: bool,
+}
 
 #[cfg(feature = "tui-crossplatform")]
 impl Drop for InteractiveTerminalGuard {
     fn drop(&mut self) {
-        crossterm::terminal::disable_raw_mode().ok();
-        crossterm::execute!(io::stderr(), crossterm::terminal::LeaveAlternateScreen).ok();
+        crossterm::execute!(io::stderr(), crossterm::cursor::Show).ok();
+        if self.raw_mode {
+            crossterm::terminal::disable_raw_mode().ok();
+        }
+        if self.alternate_screen {
+            crossterm::execute!(io::stderr(), crossterm::terminal::LeaveAlternateScreen).ok();
+        }
     }
 }
 
@@ -92,7 +100,10 @@ fn main() -> Result<()> {
 
     let res = match opt.command {
         #[cfg(feature = "tui-crossplatform")]
-        Some(Interactive { no_entry_check }) => {
+        Some(Interactive {
+            no_entry_check,
+            once,
+        }) => {
             use anyhow::{Context, anyhow};
             use crossterm::{
                 execute,
@@ -108,13 +119,22 @@ fn main() -> Result<()> {
             }
 
             let mut stderr = io::stderr();
-            enable_raw_mode().with_context(|| no_tty_msg)?;
-            execute!(stderr, EnterAlternateScreen).with_context(|| no_tty_msg)?;
-            let terminal_guard = InteractiveTerminalGuard;
+            let terminal_guard = if once.is_some() {
+                InteractiveTerminalGuard {
+                    raw_mode: false,
+                    alternate_screen: false,
+                }
+            } else {
+                enable_raw_mode().with_context(|| no_tty_msg)?;
+                execute!(stderr, EnterAlternateScreen).with_context(|| no_tty_msg)?;
+                InteractiveTerminalGuard {
+                    raw_mode: true,
+                    alternate_screen: true,
+                }
+            };
             let mut terminal = Terminal::new(CrosstermBackend::new(stderr))
                 .with_context(|| "Could not instantiate terminal")?;
 
-            let keys_rx = input_channel();
             let mut app = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
@@ -125,7 +145,12 @@ fn main() -> Result<()> {
             )?;
             app.traverse()?;
 
-            let res = app.process_events(&mut terminal, keys_rx);
+            let res = match once {
+                Some(input) => {
+                    app.process_events_once(&mut terminal, input_channel_from_chars(input.as_str()))
+                }
+                None => app.process_events(&mut terminal, input_channel()),
+            };
 
             let res = res.map(|r| {
                 (

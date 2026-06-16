@@ -174,6 +174,19 @@ pub fn fixture_str(p: impl AsRef<Path>) -> String {
 
 pub fn initialized_app_and_terminal_with_closure(
     fixture_paths: &[impl AsRef<Path>],
+    convert: impl FnMut(&Path) -> PathBuf,
+) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+    let (mut terminal, mut app) =
+        untraversed_app_and_terminal_with_closure(fixture_paths, convert)?;
+    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
+    app.traverse()?;
+    app.run_until_traversed(&mut terminal, key_receive)?;
+
+    Ok((terminal, app))
+}
+
+pub fn untraversed_app_and_terminal_with_closure(
+    fixture_paths: &[impl AsRef<Path>],
     mut convert: impl FnMut(&Path) -> PathBuf,
 ) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
     let mut terminal = new_test_terminal()?;
@@ -188,10 +201,9 @@ pub fn initialized_app_and_terminal_with_closure(
         ignore_dirs: Default::default(),
     };
 
-    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
 
-    let mut app = TerminalApp::initialize(
+    let app = TerminalApp::initialize(
         &mut terminal,
         walk_options,
         ByteFormat::Metric,
@@ -199,8 +211,6 @@ pub fn initialized_app_and_terminal_with_closure(
         input_paths,
         Config::default(),
     )?;
-    app.traverse()?;
-    app.run_until_traversed(&mut terminal, key_receive)?;
 
     Ok((terminal, app))
 }
@@ -224,6 +234,14 @@ pub fn initialized_app_and_terminal_from_fixture(
     #[allow(clippy::redundant_closure)]
     // doesn't actually work that way due to borrowchk - probably a bug
     initialized_app_and_terminal_with_closure(fixture_paths, |p| fixture(p))
+}
+
+pub fn untraversed_app_and_terminal_from_fixture(
+    fixture_paths: &[&str],
+) -> Result<(Terminal<TestBackend>, TerminalApp), Error> {
+    #[allow(clippy::redundant_closure)]
+    // doesn't actually work that way due to borrowchk - probably a bug
+    untraversed_app_and_terminal_with_closure(fixture_paths, |p| fixture(p))
 }
 
 pub fn sample_01_tree() -> Tree {

@@ -111,6 +111,9 @@ pub enum Command {
         /// Do not check entries for presence when listing a directory to avoid slugging performance on slow filesystems.
         #[clap(long, short = 'e')]
         no_entry_check: bool,
+        /// Exit automatically after traversal, optionally replaying the given single-character keys first.
+        #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "")]
+        once: Option<String>,
     },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]

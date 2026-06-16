@@ -93,6 +93,24 @@ impl TerminalApp {
             &self.config,
         )
     }
+
+    pub fn process_events_once<B>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+        events: Receiver<Event>,
+    ) -> Result<WalkResult>
+    where
+        B: Backend,
+    {
+        self.state.process_events_once(
+            &mut self.window,
+            &mut self.traversal,
+            &mut self.display,
+            terminal,
+            events,
+            &self.config,
+        )
+    }
 }
 
 #[cfg(test)]
