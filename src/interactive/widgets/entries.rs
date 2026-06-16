@@ -36,8 +36,10 @@ pub struct EntriesProps<'a> {
     pub entries: &'a [EntryDataBundle],
     /// Entries currently marked for action, if marking is active.
     pub marked: Option<&'a EntryMarkMap>,
-    /// Entry indices that match known cleanup-directory names.
-    pub cleanup_candidates: &'a BTreeSet<TreeIndex>,
+    /// Entry indices that match known cleanup-directory names, if enabled.
+    pub cleanup_candidates: Option<&'a BTreeSet<TreeIndex>>,
+    /// Entry indices ignored by the current git repository, if enabled.
+    pub gitignored_entries: Option<&'a BTreeSet<TreeIndex>>,
     /// Border style for the entries pane.
     pub border_style: Style,
     /// Whether this pane currently owns keyboard focus.
@@ -67,6 +69,7 @@ impl Entries {
             selected,
             marked,
             cleanup_candidates,
+            gitignored_entries,
             border_style,
             is_focussed,
             sort_mode,
@@ -103,7 +106,8 @@ impl Entries {
             let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
-            let is_cleanup_candidate = cleanup_candidates.contains(node_idx);
+            let is_cleanup_candidate = cleanup_candidates.is_some_and(|c| c.contains(node_idx));
+            let is_gitignored = gitignored_entries.is_some_and(|g| g.contains(node_idx));
             let is_selected = selected == &Some(*node_idx);
             if is_selected {
                 scroll_offset = Some(idx);
@@ -146,6 +150,7 @@ impl Entries {
             let style = name_style(
                 is_marked,
                 is_cleanup_candidate,
+                is_gitignored,
                 *exists,
                 *is_dir,
                 text_style,
@@ -211,13 +216,18 @@ fn title(
 
 fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-    let help_text = " mark-move = d | mark-toggle = space | cleanup = X | all = a ";
-    let help_text_block_width = block_width(help_text);
+    let mut help_text = " mark-move = d | mark-toggle = space | cleanup = X".to_string();
+    if cfg!(feature = "git") {
+        help_text.push_str(" | gitignore = I");
+    }
+    help_text.push_str(" | all = a ");
+
+    let help_text_block_width = block_width(&help_text);
     if help_text_block_width <= bound.width {
         draw_text_nowrap_fn(
             rect::snap_to_right(bound, help_text_block_width),
             buf,
-            help_text,
+            &help_text,
             |_, _, _| Style::default(),
         );
     }
@@ -345,18 +355,23 @@ fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
 fn name_style(
     is_marked: bool,
     is_cleanup_candidate: bool,
+    is_gitignored: bool,
     exists: bool,
     is_dir: bool,
     style: Style,
 ) -> Style {
+    let mut style = style;
     let fg = if !exists {
         // non-existing - always red!
         Some(Color::Red)
     } else if is_cleanup_candidate && !is_marked {
-        Some(Color::LightMagenta)
+        Some(Color::Magenta)
     } else {
         entry_color(style.fg, !is_dir, is_marked)
     };
+    if is_gitignored && !is_marked && exists {
+        style.add_modifier.insert(Modifier::DIM);
+    }
     Style { fg, ..style }
 }
 
@@ -442,9 +457,10 @@ fn shorten_input(input: Cow<'_, str>, width: usize) -> Cow<'_, str> {
 mod entries_test {
     use std::collections::HashSet;
 
-    use super::{shorten_input, show_mtime_column};
+    use super::{name_style, shorten_input, show_mtime_column};
     use crate::interactive::widgets::Column;
     use crate::interactive::{MTimeSort, SortMode};
+    use tui::style::{Color, Modifier, Style};
 
     #[test]
     fn test_shorten_string_middle() {
@@ -485,6 +501,63 @@ mod entries_test {
         assert!(
             show_mtime_column(&SortMode::SizeDescending, &show_columns,),
             "explicitly enabling the mtime column shows it for non-mtime sorts",
+        );
+    }
+
+    #[test]
+    fn name_style_prioritizes_missing_gitignored_and_cleanup_states() {
+        let style = Style::default();
+        let is_marked = false;
+        let is_cleanup_candidate = true;
+        let is_gitignored = true;
+        let exists = true;
+        let is_dir = true;
+
+        assert_eq!(
+            name_style(
+                is_marked,
+                is_cleanup_candidate,
+                is_gitignored,
+                !exists,
+                is_dir,
+                style
+            )
+            .fg,
+            Some(Color::Red),
+            "missing entries stay red"
+        );
+
+        let gitignored = name_style(
+            is_marked,
+            !is_cleanup_candidate,
+            is_gitignored,
+            exists,
+            is_dir,
+            style,
+        );
+        assert_eq!(
+            gitignored.fg,
+            Some(Color::Cyan),
+            "gitignored entries keep the regular directory color"
+        );
+        assert!(gitignored.add_modifier.contains(Modifier::DIM));
+
+        let cleanup = name_style(
+            is_marked,
+            is_cleanup_candidate,
+            !is_gitignored,
+            exists,
+            is_dir,
+            style,
+        );
+        assert_eq!(
+            cleanup.fg,
+            Some(Color::Magenta),
+            "cleanup candidates use a distinct foreground color"
+        );
+        assert!(
+            !cleanup.add_modifier.contains(Modifier::DIM),
+            "cleanup candidates are colored without dimming unless they are gitignored"
         );
     }
 }

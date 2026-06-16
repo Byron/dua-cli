@@ -2,6 +2,7 @@ mod bytevis;
 mod cleanup;
 mod common;
 mod eventloop;
+mod gitignore;
 mod handlers;
 pub mod input;
 mod navigation;

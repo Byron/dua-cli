@@ -6,7 +6,7 @@ use crate::interactive::{
 use crossterm::event::KeyEvent;
 use dua::Config;
 use dua::traverse::TreeIndex;
-use std::{fs, io, path::PathBuf};
+use std::{collections::BTreeSet, fs, io, path::PathBuf};
 use tui::{Terminal, backend::Backend};
 
 use super::state::{AppState, FocussedPane::*};
@@ -55,7 +55,7 @@ impl AppState {
 
     pub fn exit_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
         let entries = self.entries_for_exit_node(tree_view);
-        self.exit_node(entries);
+        self.exit_node(entries, tree_view);
     }
 
     fn entries_for_exit_node(
@@ -72,12 +72,17 @@ impl AppState {
             })
     }
 
-    pub fn exit_node(&mut self, entries: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
+    pub fn exit_node(
+        &mut self,
+        entries: Option<(TreeIndex, Vec<EntryDataBundle>)>,
+        tree_view: &TreeView<'_>,
+    ) {
         match entries {
             Some((parent_idx, entries)) => {
                 self.navigation_mut().exit_node(parent_idx, &entries);
                 self.entries = entries;
-                self.update_cleanup_candidates();
+                self.update_entry_annotations(tree_view);
+                self.reset_message();
             }
             None => self.message = Some("Top level reached".into()),
         }
@@ -97,10 +102,14 @@ impl AppState {
 
     pub fn enter_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
         let new_entries = self.entries_for_enter_node(tree_view);
-        self.enter_node(new_entries)
+        self.enter_node(new_entries, tree_view)
     }
 
-    pub fn enter_node(&mut self, entries_at_selected: Option<(TreeIndex, Vec<EntryDataBundle>)>) {
+    pub fn enter_node(
+        &mut self,
+        entries_at_selected: Option<(TreeIndex, Vec<EntryDataBundle>)>,
+        tree_view: &TreeView<'_>,
+    ) {
         if let Some((previously_selected, new_entries)) = entries_at_selected {
             match self
                 .navigation()
@@ -110,7 +119,8 @@ impl AppState {
                     self.navigation_mut()
                         .enter_node(previously_selected, selected);
                     self.entries = new_entries;
-                    self.update_cleanup_candidates();
+                    self.update_entry_annotations(tree_view);
+                    self.reset_message();
                 }
                 None => self.message = Some("Entry is a file or an empty directory".into()),
             }
@@ -129,7 +139,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
-        self.update_cleanup_candidates();
+        self.update_entry_annotations(tree_view);
     }
 
     pub fn cycle_mtime_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -139,7 +149,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
-        self.update_cleanup_candidates();
+        self.update_entry_annotations(tree_view);
     }
 
     pub fn cycle_count_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -149,7 +159,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
-        self.update_cleanup_candidates();
+        self.update_entry_annotations(tree_view);
     }
 
     pub fn cycle_name_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -159,7 +169,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
-        self.update_cleanup_candidates();
+        self.update_entry_annotations(tree_view);
     }
 
     pub fn cycle_mtime_sort_mode(&mut self, tree_view: &TreeView<'_>) {
@@ -177,6 +187,19 @@ impl AppState {
 
     pub fn toggle_count_column(&mut self) {
         self.toggle_column(Column::Count);
+    }
+
+    pub fn toggle_cleanup_candidates(&mut self, tree_view: &TreeView<'_>) {
+        self.cleanup_candidates = self.cleanup_candidates.is_none().then(BTreeSet::new);
+        self.update_entry_annotations(tree_view);
+        self.reset_message();
+    }
+
+    #[cfg(feature = "git")]
+    pub fn toggle_gitignored_entries(&mut self, tree_view: &TreeView<'_>) {
+        self.gitignored_entries = self.gitignored_entries.is_none().then(BTreeSet::new);
+        self.update_entry_annotations(tree_view);
+        self.reset_message();
     }
 
     fn toggle_column(&mut self, column: Column) {
@@ -200,13 +223,11 @@ impl AppState {
     pub fn reset_message(&mut self) {
         if self.scan.is_some() {
             self.message = Some("-> scanning <-".into());
-        } else if !self.cleanup_candidates.is_empty() {
-            self.message = Some(format!(
-                "{} cleanup candidates (X)",
-                self.cleanup_candidates.len()
-            ));
         } else {
-            self.message = None;
+            self.message = annotation_message(
+                self.cleanup_candidates.as_ref().map_or(0, BTreeSet::len),
+                self.gitignored_entries.as_ref().map_or(0, BTreeSet::len),
+            );
         }
     }
 
@@ -363,8 +384,8 @@ impl AppState {
                 self.sorting,
                 self.entry_check(),
             );
-            self.update_cleanup_candidates();
         }
+        self.update_entry_annotations(tree_view);
 
         if self
             .navigation()
@@ -385,7 +406,7 @@ impl AppState {
         let entries = tree_view.sorted_entries(root, self.sorting, self.entry_check());
         self.navigation_mut().exit_node(root, &entries);
         self.entries = entries;
-        self.update_cleanup_candidates();
+        self.update_entry_annotations(tree_view);
     }
 
     pub fn glob_root(&self) -> Option<TreeIndex> {
@@ -444,12 +465,49 @@ impl AppState {
     }
 
     pub fn mark_cleanup_candidates(&mut self, window: &mut MainWindow, tree_view: &TreeView<'_>) {
+        match self.cleanup_candidates.clone() {
+            Some(cleanup_candidates) => self.mark_annotation_candidates(
+                cleanup_candidates,
+                "No cleanup candidates in view",
+                "Cleanup candidates are already marked",
+                "cleanup candidates",
+                window,
+                tree_view,
+            ),
+            None => self.message = Some("Cleanup candidate detection is disabled".into()),
+        }
+    }
+
+    #[cfg(feature = "git")]
+    pub fn mark_gitignored_entries(&mut self, window: &mut MainWindow, tree_view: &TreeView<'_>) {
+        match self.gitignored_entries.clone() {
+            Some(gitignored_entries) => self.mark_annotation_candidates(
+                gitignored_entries,
+                "No gitignored entries in view",
+                "Gitignored entries are already marked",
+                "gitignored entries",
+                window,
+                tree_view,
+            ),
+            None => self.message = Some("Gitignored entry detection is disabled".into()),
+        }
+    }
+
+    fn mark_annotation_candidates(
+        &mut self,
+        annotation_candidates: BTreeSet<TreeIndex>,
+        none_in_view_message: &str,
+        already_marked_message: &str,
+        marked_label: &str,
+        window: &mut MainWindow,
+        tree_view: &TreeView<'_>,
+    ) {
         let already_marked = window.mark_pane.as_ref().map(|pane| pane.marked());
         let candidates = self
             .entries
             .iter()
             .filter_map(|entry| {
-                let is_candidate = self.cleanup_candidates.contains(&entry.index);
+                let is_candidate = annotation_candidates.contains(&entry.index);
                 let is_marked = already_marked
                     .map(|marked| marked.contains_key(&entry.index))
                     .unwrap_or(false);
@@ -462,22 +520,36 @@ impl AppState {
         }
 
         if candidates.is_empty() {
-            self.message = Some(if self.cleanup_candidates.is_empty() {
-                "No cleanup candidates in view".into()
+            self.message = Some(if annotation_candidates.is_empty() {
+                none_in_view_message.into()
             } else {
-                "Cleanup candidates are already marked".into()
+                already_marked_message.into()
             });
         } else {
-            self.message = Some(format!("Marked {} cleanup candidates", candidates.len()));
+            self.message = Some(format!("Marked {} {marked_label}", candidates.len()));
         }
     }
 
-    pub fn update_cleanup_candidates(&mut self) {
-        self.cleanup_candidates = if self.glob_navigation.is_some() {
-            Default::default()
+    pub fn update_entry_annotations(&mut self, tree_view: &TreeView<'_>) {
+        if self.glob_navigation.is_some() {
+            if self.cleanup_candidates.is_some() {
+                self.cleanup_candidates = Some(Default::default());
+            }
+            if self.gitignored_entries.is_some() {
+                self.gitignored_entries = Some(Default::default());
+            }
         } else {
-            super::cleanup::cleanup_candidates(&self.entries)
-        };
+            if self.cleanup_candidates.is_some() {
+                self.cleanup_candidates = Some(super::cleanup::cleanup_candidates(&self.entries));
+            }
+            if self.gitignored_entries.is_some() {
+                self.gitignored_entries = Some(super::gitignore::gitignored_entries(
+                    tree_view,
+                    self.navigation().view_root,
+                    &self.entries,
+                ));
+            }
+        }
     }
 }
 
@@ -486,6 +558,26 @@ fn into_error_count(res: Result<(), io::Error>) -> usize {
         Ok(_) => 0,
         Err(c) => c,
     }
+}
+
+fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<String> {
+    let count = cleanup_count + gitignored_count;
+    if count == 0 {
+        return None;
+    }
+
+    let key_hint = match (cleanup_count > 0, gitignored_count > 0) {
+        (true, true) => "X|I",
+        (true, false) => "X",
+        (false, true) => "I",
+        (false, false) => unreachable!("count is non-zero"),
+    };
+    let label = if count == 1 {
+        "cleanup candidate"
+    } else {
+        "cleanup candidates"
+    };
+    Some(format!("{count} {label} ({key_hint})"))
 }
 
 fn io_err_to_usize(err: io::Error) -> usize {

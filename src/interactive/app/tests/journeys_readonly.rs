@@ -491,6 +491,22 @@ fn once_allows_replayed_quit_to_exit() -> Result<()> {
 }
 
 #[test]
+fn once_waits_for_replayed_refresh_to_finish() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+
+    let result = app.process_events_once(&mut terminal, into_codes("R"))?;
+
+    assert_eq!(result.num_errors, 0);
+    assert!(
+        app.state.scan.is_none(),
+        "once mode should wait for refreshes started by replayed events"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn quit_instantly_when_nothing_marked() -> Result<()> {
     let short_root = "sample-01";
     let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&[short_root])?;

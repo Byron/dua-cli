@@ -37,8 +37,10 @@ pub struct AppState {
     pub glob_navigation: Option<Navigation>,
     /// Entries currently displayed in the active view.
     pub entries: Vec<EntryDataBundle>,
-    /// Displayed entries that match known cleanup-directory names.
-    pub cleanup_candidates: BTreeSet<dua::traverse::TreeIndex>,
+    /// Displayed entries that match known cleanup-directory names, or `None` if disabled.
+    pub cleanup_candidates: Option<BTreeSet<dua::traverse::TreeIndex>>,
+    /// Displayed entries ignored by the current git repository, or `None` if disabled.
+    pub gitignored_entries: Option<BTreeSet<dua::traverse::TreeIndex>>,
     /// Active ordering for `entries`.
     pub sorting: SortMode,
     /// Optional columns explicitly enabled by the user.
@@ -69,7 +71,8 @@ impl AppState {
             navigation: Default::default(),
             glob_navigation: None,
             entries: vec![],
-            cleanup_candidates: BTreeSet::new(),
+            cleanup_candidates: Some(BTreeSet::new()),
+            gitignored_entries: Some(BTreeSet::new()),
             sorting: Default::default(),
             show_columns: Default::default(),
             message: None,
