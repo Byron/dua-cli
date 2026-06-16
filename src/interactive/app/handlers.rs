@@ -156,8 +156,17 @@ impl AppState {
         );
     }
 
-    pub fn toggle_mtime_column(&mut self) {
-        self.toggle_column(Column::MTime);
+    pub fn cycle_mtime_sort_mode(&mut self, tree_view: &TreeView<'_>) {
+        if self.sorting.mtime_sort().is_some() {
+            self.sorting.cycle_mtime_sort();
+            self.entries = tree_view.sorted_entries(
+                self.navigation().view_root,
+                self.sorting,
+                self.entry_check(),
+            );
+        } else {
+            self.toggle_column(Column::MTime);
+        }
     }
 
     pub fn toggle_count_column(&mut self) {

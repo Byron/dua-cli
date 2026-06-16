@@ -358,7 +358,7 @@ impl AppState {
                     }
                     Char('s') => self.cycle_sorting(&tree_view),
                     Char('m') => self.cycle_mtime_sorting(&tree_view),
-                    Char('M') => self.toggle_mtime_column(),
+                    Char('M') => self.cycle_mtime_sort_mode(&tree_view),
                     Char('c') => self.cycle_count_sorting(&tree_view),
                     Char('C') => self.toggle_count_column(),
                     Char('n') => self.cycle_name_sorting(&tree_view),
