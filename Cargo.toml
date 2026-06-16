@@ -84,6 +84,7 @@ build-override = { opt-level = 3 }
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+tempfile = "=3.10.1"
 
 [lints.clippy]
 all = "deny"

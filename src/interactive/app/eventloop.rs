@@ -205,6 +205,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
 
         if !self.received_events {
             let previously_selected_entry =
@@ -339,6 +340,7 @@ impl AppState {
                         &tree_view,
                     ),
                     Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
+                    Char('X') => self.mark_cleanup_candidates(window, &tree_view),
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
@@ -478,6 +480,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
         self.scan = Some(FilesystemScan {
@@ -605,6 +608,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
     }
 }
 

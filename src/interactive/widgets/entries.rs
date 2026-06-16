@@ -12,7 +12,7 @@ use chrono::DateTime;
 use dua::traverse::TreeIndex;
 use itertools::Itertools;
 use std::borrow::{Borrow, Cow};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::time::SystemTime;
 use tui::{
     buffer::Buffer,
@@ -24,15 +24,27 @@ use tui::{
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+/// Inputs used to render the entries pane.
 pub struct EntriesProps<'a> {
+    /// Path shown in the entries pane title.
     pub current_path: String,
+    /// Size display mode used for byte and percentage columns.
     pub display: DisplayOptions,
+    /// Currently selected tree entry, if one is selected.
     pub selected: Option<TreeIndex>,
+    /// Entries to display in the pane, already sorted for the current view.
     pub entries: &'a [EntryDataBundle],
+    /// Entries currently marked for action, if marking is active.
     pub marked: Option<&'a EntryMarkMap>,
+    /// Entry indices that match known cleanup-directory names.
+    pub cleanup_candidates: &'a BTreeSet<TreeIndex>,
+    /// Border style for the entries pane.
     pub border_style: Style,
+    /// Whether this pane currently owns keyboard focus.
     pub is_focussed: bool,
+    /// Active sort mode, used for column visibility and highlighting.
     pub sort_mode: SortMode,
+    /// Columns explicitly enabled in addition to columns implied by sorting.
     pub show_columns: &'a HashSet<Column>,
 }
 
@@ -54,6 +66,7 @@ impl Entries {
             entries,
             selected,
             marked,
+            cleanup_candidates,
             border_style,
             is_focussed,
             sort_mode,
@@ -90,6 +103,7 @@ impl Entries {
             let name = bundle.name.as_path();
 
             let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+            let is_cleanup_candidate = cleanup_candidates.contains(node_idx);
             let is_selected = selected == &Some(*node_idx);
             if is_selected {
                 scroll_offset = Some(idx);
@@ -129,7 +143,13 @@ impl Entries {
                 name_with_prefix(name.to_string_lossy(), *is_dir),
                 available_width,
             );
-            let style = name_style(is_marked, *exists, *is_dir, text_style);
+            let style = name_style(
+                is_marked,
+                is_cleanup_candidate,
+                *exists,
+                *is_dir,
+                text_style,
+            );
             columns.push(name_column(name, area, style));
 
             columns_with_separators(columns, percentage_style, false)
@@ -191,7 +211,7 @@ fn title(
 
 fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-    let help_text = " mark-move = d | mark-toggle = space | toggle-all = a ";
+    let help_text = " mark-move = d | mark-toggle = space | cleanup = X | all = a ";
     let help_text_block_width = block_width(help_text);
     if help_text_block_width <= bound.width {
         draw_text_nowrap_fn(
@@ -322,10 +342,18 @@ fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
     }
 }
 
-fn name_style(is_marked: bool, exists: bool, is_dir: bool, style: Style) -> Style {
+fn name_style(
+    is_marked: bool,
+    is_cleanup_candidate: bool,
+    exists: bool,
+    is_dir: bool,
+    style: Style,
+) -> Style {
     let fg = if !exists {
         // non-existing - always red!
         Some(Color::Red)
+    } else if is_cleanup_candidate && !is_marked {
+        Some(Color::LightMagenta)
     } else {
         entry_color(style.fg, !is_dir, is_marked)
     };

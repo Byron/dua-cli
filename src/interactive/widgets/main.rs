@@ -107,6 +107,7 @@ impl MainWindow {
             display: *display,
             entries: &state.entries,
             marked,
+            cleanup_candidates: &state.cleanup_candidates,
             selected: state.navigation().selected,
             border_style: entries_style,
             is_focussed: matches!(state.focussed, Main),

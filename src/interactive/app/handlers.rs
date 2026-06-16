@@ -77,6 +77,7 @@ impl AppState {
             Some((parent_idx, entries)) => {
                 self.navigation_mut().exit_node(parent_idx, &entries);
                 self.entries = entries;
+                self.update_cleanup_candidates();
             }
             None => self.message = Some("Top level reached".into()),
         }
@@ -109,6 +110,7 @@ impl AppState {
                     self.navigation_mut()
                         .enter_node(previously_selected, selected);
                     self.entries = new_entries;
+                    self.update_cleanup_candidates();
                 }
                 None => self.message = Some("Entry is a file or an empty directory".into()),
             }
@@ -127,6 +129,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
     }
 
     pub fn cycle_mtime_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -136,6 +139,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
     }
 
     pub fn cycle_count_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -145,6 +149,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
     }
 
     pub fn cycle_name_sorting(&mut self, tree_view: &TreeView<'_>) {
@@ -154,6 +159,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_cleanup_candidates();
     }
 
     pub fn cycle_mtime_sort_mode(&mut self, tree_view: &TreeView<'_>) {
@@ -194,6 +200,11 @@ impl AppState {
     pub fn reset_message(&mut self) {
         if self.scan.is_some() {
             self.message = Some("-> scanning <-".into());
+        } else if !self.cleanup_candidates.is_empty() {
+            self.message = Some(format!(
+                "{} cleanup candidates (X)",
+                self.cleanup_candidates.len()
+            ));
         } else {
             self.message = None;
         }
@@ -352,6 +363,7 @@ impl AppState {
                 self.sorting,
                 self.entry_check(),
             );
+            self.update_cleanup_candidates();
         }
 
         if self
@@ -373,6 +385,7 @@ impl AppState {
         let entries = tree_view.sorted_entries(root, self.sorting, self.entry_check());
         self.navigation_mut().exit_node(root, &entries);
         self.entries = entries;
+        self.update_cleanup_candidates();
     }
 
     pub fn glob_root(&self) -> Option<TreeIndex> {
@@ -428,6 +441,43 @@ impl AppState {
         for index in self.entries.iter().map(|e| e.index).collect::<Vec<_>>() {
             self.mark_entry_by_index(index, mode, window, tree_view);
         }
+    }
+
+    pub fn mark_cleanup_candidates(&mut self, window: &mut MainWindow, tree_view: &TreeView<'_>) {
+        let already_marked = window.mark_pane.as_ref().map(|pane| pane.marked());
+        let candidates = self
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                let is_candidate = self.cleanup_candidates.contains(&entry.index);
+                let is_marked = already_marked
+                    .map(|marked| marked.contains_key(&entry.index))
+                    .unwrap_or(false);
+                (is_candidate && !is_marked).then_some(entry.index)
+            })
+            .collect::<Vec<_>>();
+
+        for index in &candidates {
+            self.mark_entry_by_index(*index, MarkEntryMode::MarkForDeletion, window, tree_view);
+        }
+
+        if candidates.is_empty() {
+            self.message = Some(if self.cleanup_candidates.is_empty() {
+                "No cleanup candidates in view".into()
+            } else {
+                "Cleanup candidates are already marked".into()
+            });
+        } else {
+            self.message = Some(format!("Marked {} cleanup candidates", candidates.len()));
+        }
+    }
+
+    pub fn update_cleanup_candidates(&mut self) {
+        self.cleanup_candidates = if self.glob_navigation.is_some() {
+            Default::default()
+        } else {
+            super::cleanup::cleanup_candidates(&self.entries)
+        };
     }
 }
 

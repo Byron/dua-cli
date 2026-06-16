@@ -196,6 +196,11 @@ impl HelpPane {
                     None,
                 );
                 hotkey("<Space>", "Toggle the currently selected entry.", None);
+                hotkey(
+                    "Shift + x",
+                    "Mark cleanup candidates in the current view.",
+                    None,
+                );
                 hotkey("a", "Toggle all entries.", None);
                 hotkey(
                     "/",

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 
 use dua::WalkOptions;
@@ -31,21 +31,35 @@ pub struct FilesystemScan {
 }
 
 pub struct AppState {
+    /// Navigation state for the main traversal view.
     pub navigation: Navigation,
+    /// Navigation state for an active glob-filtered view, if one is open.
     pub glob_navigation: Option<Navigation>,
+    /// Entries currently displayed in the active view.
     pub entries: Vec<EntryDataBundle>,
+    /// Displayed entries that match known cleanup-directory names.
+    pub cleanup_candidates: BTreeSet<dua::traverse::TreeIndex>,
+    /// Active ordering for `entries`.
     pub sorting: SortMode,
+    /// Optional columns explicitly enabled by the user.
     pub show_columns: HashSet<Column>,
+    /// Status message shown in the footer.
     pub message: Option<String>,
+    /// Pane that currently receives keyboard input.
     pub focussed: FocussedPane,
+    /// Whether user input or terminal events have arrived since the current scan started.
     pub received_events: bool,
+    /// Active background filesystem traversal, if a scan or refresh is running.
     pub scan: Option<FilesystemScan>,
+    /// Latest traversal progress and error counters.
     pub stats: TraversalStats,
+    /// Options used when starting filesystem walks.
     pub walk_options: WalkOptions,
     /// The paths used in the initial traversal, at least 1.
     pub root_paths: Vec<PathBuf>,
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
+    /// Whether the next quit/back action should exit the app.
     pub pending_exit: bool,
 }
 
@@ -55,6 +69,7 @@ impl AppState {
             navigation: Default::default(),
             glob_navigation: None,
             entries: vec![],
+            cleanup_candidates: BTreeSet::new(),
             sorting: Default::default(),
             show_columns: Default::default(),
             message: None,

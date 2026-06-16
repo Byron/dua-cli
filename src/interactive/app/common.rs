@@ -96,13 +96,25 @@ impl SortMode {
     }
 }
 
+/// Filesystem entry data prepared for interactive views.
 pub struct EntryDataBundle {
+    /// Index of this entry in the traversal tree.
     pub index: TreeIndex,
+    /// Display path for this entry in the current view.
+    ///
+    /// This is usually the entry name relative to its parent, but may be a
+    /// multi-component path when the current view needs to show entries outside
+    /// their immediate parent. Use `file_name()` when only the basename matters.
     pub name: PathBuf,
+    /// Entry size in bytes, including recursive child sizes for directories.
     pub size: u128,
+    /// Modification time used by the active view or sort mode.
     pub mtime: SystemTime,
+    /// Recursive child entry count for directories, or `None` for files.
     pub entry_count: Option<u64>,
+    /// Whether this entry currently resolves to a directory.
     pub is_dir: bool,
+    /// Whether this entry still exists when metadata is checked for the view.
     pub exists: bool,
 }
 
