@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.35.0 (2026-06-16)
+
+### New Features
+
+ - <csr-id-a346eff59949f51b84e66c4ab5a6d818a30400c2/> Add gitignore-aware cleanup marking
+   Ignored files and directories are detected from the repository’s ignore rules, including `.gitignore`. Git-ignored entries are shown dimmed in the entries list.
+   
+   Press `I` to mark all currently visible Git-ignored entries, or `i` to disable Git support.
+   
+   Ignored directories are handled recursively: if a directory such as `target/` is ignored, entries shown after entering that directory are treated as ignored as well.
+   
+   Git-ignored entries are separate from built-in cleanup candidates. An entry can be both Git-ignored and a cleanup candidate; in that case, both visual styles apply.
+ - <csr-id-a6482de5a5efc924cd89bfc005f3f56ce0c086bc/> add `dua i --once[="keys"]` to make it easier to debug interactive mode in the real.
+   Run interactive mode once, print the final TUI to the main terminal screen, then exit.
+   
+   ```bash
+   dua i --once
+   dua i --once=<keys>
+   ```
+   
+   `<keys>` is optional. Each character is replayed after traversal finishes:
+   
+   ```bash
+   dua i --once=jko
+   ```
+   
+   Acts like pressing `j`, `k`, then `o`.
+   
+   Because `--once` does not use the alternate screen, the output stays visible in scrollback.
+ - <csr-id-cb11cac4f564e14a4739faa68ad92fec0c8fab8b/> add interactive cleanup candidate marking with `X`
+   Interactive mode can now highlight and select common cleanup directories in the current view with `shift + X`.
+   
+   When browsing a directory, `dua` detects existing directories with well-known cleanup names, including:
+   
+   - `target`
+   - `node_modules`
+   - `__pycache__`
+   - `.pytest_cache`
+   - `.mypy_cache`
+   - `.ruff_cache`
+   - `.tox`
+   - `.venv`
+   - `venv`
+   
+   Press `X` to mark all detected cleanup candidates in the current directory.
+   The marked entries then appear in the mark pane, where they can be reviewed before using the existing delete or trash actions.
+   
+   Cleanup detection is intentionally conservative. Ambiguous names such as `build` and `dist` are not selected automatically.
+ - <csr-id-5991f981782ebcb8c02e5b36eb3151aab0e9d40c/> cycle modified time display modes
+   Users can now enable the modified-time column without changing the current sort:
+   
+   1. Press `M` while sorting by size, count, or name.
+   2. The modified-time column is shown.
+   3. Press `M` again to hide it.
+   
+   To sort by modified time:
+   
+   1. Press `m` to sort by mtime descending.
+   2. Press `m` again to sort by mtime ascending.
+   3. Press `M` while mtime sorting is active to cycle the mtime strategy:
+      - normal entry mtime
+      - newest descendant mtime
+      - oldest descendant mtime
+   
+   The selected mtime strategy is preserved when toggling between ascending and descending mtime sort.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 2 unique issues were worked on: [#328](https://github.com/Byron/dua-cli/issues/328), [#331](https://github.com/Byron/dua-cli/issues/331)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#328](https://github.com/Byron/dua-cli/issues/328)**
+    - Add interactive cleanup candidate marking with `X` ([`cb11cac`](https://github.com/Byron/dua-cli/commit/cb11cac4f564e14a4739faa68ad92fec0c8fab8b))
+ * **[#331](https://github.com/Byron/dua-cli/issues/331)**
+    - Cycle modified time display modes ([`5991f98`](https://github.com/Byron/dua-cli/commit/5991f981782ebcb8c02e5b36eb3151aab0e9d40c))
+ * **Uncategorized**
+    - Merge pull request #338 from Byron/auto-clean ([`7c31299`](https://github.com/Byron/dua-cli/commit/7c312997094da38567cf7bebe04c34a6cc953384))
+    - Add gitignore-aware cleanup marking ([`a346eff`](https://github.com/Byron/dua-cli/commit/a346eff59949f51b84e66c4ab5a6d818a30400c2))
+    - Add `dua i --once[="keys"]` to make it easier to debug interactive mode in the real. ([`a6482de`](https://github.com/Byron/dua-cli/commit/a6482de5a5efc924cd89bfc005f3f56ce0c086bc))
+    - Merge pull request #337 from Byron/recursive-mod-date ([`99840d0`](https://github.com/Byron/dua-cli/commit/99840d08b8518207590883fbb0bab765b0a4675e))
+</details>
+
 ## 2.34.0 (2026-02-20)
 
 <csr-id-3dc120fcf193945546ad62f91ae7792c4830c151/>
@@ -24,17 +115,6 @@ Configuration defaults and behavior in this release:
 
 You are welcome to contribute more settings as you see fit.
 
-### Chore
-
-- <csr-id-3dc120fcf193945546ad62f91ae7792c4830c151/> Replace simplelog with fern and jiff for timestamped logging
-  Note that this changes the log format from
-
-      04:41:37 [INFO]
-
-  to
-
-      [2026-02-06 05:41:32.146 +01:00 INFO src/main.rs:55]
-
 ### New Features
 
  - <csr-id-c72cb529a6191aa76d180d3dff1af2c2bd29e31c/> add `dua` configuration file, with setting for ESC going back only.
@@ -45,15 +125,11 @@ You are welcome to contribute more settings as you see fit.
    Channel 23.11 was for Nov. 2023.
    This update removes explicitly specifying a channel in the query, defaulting to the current latest stable NixOS nixpkgs channel (at the time of writing `25.11`
 
-### Refactor
-
-- <csr-id-a1aaaa59a5a1e7b4cee7affdb0ff4fb2f3da4fc3/> remove crosstermion and tui-react dependencies
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 17 commits contributed to the release over the course of 45 calendar days.
+ - 18 commits contributed to the release over the course of 45 calendar days.
  - 45 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -65,6 +141,7 @@ You are welcome to contribute more settings as you see fit.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.34.0 ([`19df299`](https://github.com/Byron/dua-cli/commit/19df299c07d83b6dbe48edd7e7cdf7e9d1afdc51))
     - Merge pull request #320 from tonisives/feat/disable-esc ([`9d2fac5`](https://github.com/Byron/dua-cli/commit/9d2fac55c30d6bb02dfe2961de6183b7b607d6d4))
     - Prepare changelog for upcoming release ([`9496afe`](https://github.com/Byron/dua-cli/commit/9496afe47e6832152282b65b903177f4ad0e12e4))
     - Refactor ([`f275703`](https://github.com/Byron/dua-cli/commit/f2757037548f9765e2c8b5ee132fe3417e00cce8))
@@ -121,9 +198,6 @@ You are welcome to contribute more settings as you see fit.
     - Cargo fmt ([`38d985e`](https://github.com/Byron/dua-cli/commit/38d985eebb9c9a791524b7f7835dde01271827a7))
     - Upgrade the rustc version and switch to edition 2024 ([`ccd0b74`](https://github.com/Byron/dua-cli/commit/ccd0b74b92a21fef65b8ea94667100c71183ebe9))
 </details>
-
-<csr-unknown>
-DUA_FORMAT → --formatDUA_APPARENT_SIZE → --apparent-sizeDUA_COUNT_HARD_LINKS → --count-hard-linksDUA_STAY_ON_FILESYSTEM → --stay-on-filesystemDUA_IGNORE_DIRS → --ignore-dirsDUA_LOG_FILE → --log-fileAdded global = true to all arguments shared between aggregate and interactive subcommandsRemoved duplicate input fields from Interactive and Aggregate subcommandsUpdated main.rs to use opt.input instead of subcommand-specific inputGlobal arguments now work with both subcommands and can be specified before or after the subcommand<csr-unknown/>
 
 ## 2.32.2 (2025-10-28)
 
@@ -313,10 +387,6 @@ In this release, the size of directories is also taken into consideration, for m
    16 threads for example take 4.1s on a workload, whereas this only takes
    550ms with 3 threads.
 
-### Style
-
-- <csr-id-c1dc1b26735279e976d36597bfe45eb3557458fe/> simplify some statements for readability
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -360,11 +430,6 @@ In this release, the size of directories is also taken into consideration, for m
  - <csr-id-4efb5d0cd46c00f13d06dfcb13279f2c5d852d95/> enable "chrono" in `trash` crate
    This hopefully adds deletion dates to trashed files.
 
-### Other
-
-- <csr-id-44d25a64475ff861875fe97c4612356eb697f4bf/> update actions/upload-artifact to v4
-  The release workflow failed because actions/upload-artifact@v1 doesn't work anymore.
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -392,20 +457,6 @@ In this release, the size of directories is also taken into consideration, for m
 <csr-id-25a6ad73a6571bffe7fac56c61ff2e52ccda0b53/>
 <csr-id-c66e585ec73707d113d481ae2627187c9071539d/>
 <csr-id-fa203b1b955b896d989eb46e72f13fd5e6cd6120/>
-
-### Chore
-
-- <csr-id-25a6ad73a6571bffe7fac56c61ff2e52ccda0b53/> upgrade `gix-glob` and `trash`
-
-### Other
-
-- <csr-id-c66e585ec73707d113d481ae2627187c9071539d/> add x-cmd install steps
-  Hi, I've added instructions on how to install dua using x-cmd to the README file.
-  - [x-cmd](https://www.x-cmd.com/) is a **toolbox for Posix Shell**, offering a lightweight package manager built using shell and awk.
-  ```sh
-  x env use dua
-  ```
-- <csr-id-fa203b1b955b896d989eb46e72f13fd5e6cd6120/> Auto submit new manifest to winget-pkgs
 
 ### Commit Statistics
 
@@ -471,10 +522,6 @@ This is a maintenance release without user-facing changes.
 ### Bug Fixes
 
  - <csr-id-46ebf149548f10c1b144f596aa715062787fd141/> clippy warning
-
-### Other
-
-- <csr-id-f0b9a8e07b24d963116da4dfaa3338a4d4e8a3bf/> update version in install instructions
 
 ### Commit Statistics
 
@@ -796,10 +843,6 @@ This is a maintenance release without user-facing changes.
 <csr-id-e992659db17f275b48e555afd6b18df737401f01/>
 <csr-id-729e7e92410b138f2778ef70f0f59a439028ac29/>
 
-### Chore
-
-- <csr-id-e992659db17f275b48e555afd6b18df737401f01/> remove obsolete `tui-shared` feature
-
 ### New Features
 
  - <csr-id-6fbe17ff51360d62086aa265a0baa9288175cb84/> add `--log-file` flag to keep track of some debug info, which includes panics.
@@ -823,22 +866,6 @@ This is a maintenance release without user-facing changes.
    Also note that ignored directories are now logged when using a `--log-file`.
  - <csr-id-20e85c1ebe7ce3a5254fe2675a52cb5d321f1e34/> consistent language across the application and improved style of the Help pane.
    Generally, what was called `entry` is now called `item`, consistently.
-
-### Other
-
-- <csr-id-729e7e92410b138f2778ef70f0f59a439028ac29/> clarify that (and why) `termion` isn't supported anymore in README.md
-  This was triggered by `crossterm` essentially breaking event handling
-  on Windows, which is when I decided to just use the seemingly more
-  powerful crossterm events natively.
-
-  Overall, this made event handling more complex, but also allows users of
-  `crosstermion` (the crate that actually dropped `termion` support) to
-  write even more interactive applications without worrying about
-  the always out-of-date intermediate layer.
-
-  Interestingly, the `crosstermion` crate adds some useful features around event handling,
-  but also optimizes build times thanks to `termion`, which is something that
-  on my current machine I don't notice anymore, so the value of it diminished greatly.
 
 ### Commit Statistics
 
@@ -1333,14 +1360,6 @@ Happy holidays!
    filesystem, which should improve its performance visibly whenever multiple
    filesystems are involved.
 
-### Other
-
-- <csr-id-fe956ca6f244613762bb48de79eac1f6fa399e1b/> don't recurse on cross-device filesystems
-  Like it says in the title. Right now, if you pass `-x`, dua doesn't
-  count files on other devices, but it still enumerates them. However, a
-  good reason to use `-x` is if you have network mounts that are slow, so
-  this fixes that.
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -1472,16 +1491,6 @@ Happy holidays!
 Update all dependencies to the latest version. This most notably changes the look of the CLI
 to something without color by default thanks to the upgrade to `clap` 4.
 
-### Chore
-
-- <csr-id-946806e7390799807361562b038fb12eeb2ddf11/> replace `colored` dependency with `owo-colors`.
-  The latter provide zero-allocation coloring in the terminal and
-  may improve compile times a little.
-
-### Refactor
-
-- <csr-id-d3fa946029ef44e5032762ff265180c23a629316/> colored path printing; fix size column format
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -1525,13 +1534,6 @@ to something without color by default thanks to the upgrade to `clap` 4.
 
 - Remove a duplicate draw call which would have doubled the time it takes to refresh on user input.
   This might have been noticable when large amounts of files are displayed.
-
-### Other
-
-- <csr-id-6a636d542594a76ef8b2faf2ec6347e4c8cb6b38/> switch from colored to owo-colors
-  owo-colors is well-maintained, zero-allocation, zero-dependencies crate
-  for terminal colors. Also it works on any type that implements Display trait,
-  not just on strings.
 
 ### New Features
 
@@ -1729,8 +1731,6 @@ thanks to an upgrade in the `open` crate which powers this feauture.
  - <csr-id-aa2646d5ae4d931ef15787a9723daa007add4a91/> dependency update; upgrade to trash v2.1.1 .
    The trash upgrade makes sure that trashed items on mount points
    on freedesktop are actually restorable.
- - <csr-id-75b3eed98f14d918f474f73caa3cdedd5af927ad/> broken or non-existing root path will still print the valid results.
-   Previously it would fail completely without printing anything.
 
 ### Commit Statistics
 
@@ -2256,10 +2256,6 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 <csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/>
 
-### Other
-
-- <csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/> deduplicate code
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -2297,10 +2293,6 @@ Make `dua` less prone to hanging by ignoring certain special directories on linu
 
 - Allow usage of the feature introduced in v2.13 by writing the TUI to stderr instead of stdout.
   That way the output can be redirected.
-
-### Other
-
-- <csr-id-02dd1b72c8fe741fb153094fdb08816f7f593c6f/> deduplicate code
 
 ### Commit Statistics
 
@@ -2518,10 +2510,6 @@ YANKED.
 - The `-x/--stay-on-filesystem` flag is now respected for multiple root paths, as in `dua -x
 path-FS1/ path-FS2/`, as such `dua` will stay in FS1 if the CWD is in FS1.
 
-### Other
-
-- <csr-id-59315b7c63b7328fa70bfe5fc43fdbe9dc5f92e7/> add MacPorts install instructions
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -2594,10 +2582,6 @@ path-FS1/ path-FS2/`, as such `dua` will stay in FS1 if the CWD is in FS1.
 Fix --version flag.
 It looks like the latest BETAs of clap removed setting the version implicitly.
 
-### Other
-
-- <csr-id-9384cdb5b95e5260f46ccd23e7ca276304190a34/> fix typo
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -2659,10 +2643,6 @@ Fix build.
 
 A breaking change in jwalk can cause builds to fail. This prevents the issue from spreading at least
 with dua-cli.
-
-### Other
-
-- <csr-id-dc100c8b4a838c92f39d5a67da7eea06e7dec9af/> bump itertools 0.9.0 -> 0.10.0
 
 ### Commit Statistics
 
@@ -3381,10 +3361,6 @@ This is also the first release with github releases: https://github.com/Byron/du
 
 Upgrade to filesize 0.2.0 from 0.1.0; update dependency versions
 
-### Other
-
-- <csr-id-45d1ef31181cd9b430d855a4fe23550ea97e685e/> Update Fedora instructions
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
@@ -4052,35 +4028,6 @@ Interactive visualization of directory sizes with an option to queue their delet
 A sub-command bringing up a terminal user interface to allow drilling into directories, and clearing them out, all using the keyboard exclusively.
 
 ### Other
-
-- <csr-id-c67abaec3c573dbfaf31be22693220a49a67b262/> first test to fully verify deletion
-- <csr-id-a128eb4a6e675f148a203ac66de075ee0c0def1c/> Move parts of the tests into their own files
-- <csr-id-ef8cf5636f782024372f044af80f06ed030168b0/> recursive deletion - tests can begin
-- <csr-id-dacb897405c06f9468faa860e27f47d1d0e548bb/> simple recursive copy - deletion would like depth-first though ;)
-- <csr-id-51ce1ed159d59c6e221af4df9a3f7da41b1820cb/> Basic for test with writable directory
-  Would have loved to use a crate with basic utilities, but there is
-  no internet here :(
-- <csr-id-6cbd4866b18de91d3702a55c45650615d67f5f30/> Make marker selection feel right
-- <csr-id-7ad2130bada27098e2d24f06650873a53b159f87/> Nicer colors for warn window in selection
-- <csr-id-49edb7654ce3380bcde28630645af3740cf1a07a/> Warning window follows user selection
-- <csr-id-984bf4fcce05cd5d495511123c2c3b6906b96f6d/> Fix handling of deleting the first index in the mark list
-- <csr-id-b4a2e0ee8f267ee50f92433e826fa9e42ff618db/> more prominent selection in mark pane
-- <csr-id-b4669c0214a1bc858cf437a65583af7e4b9ec277/> Rustic way of handling the mark panes disappearance
-
-- <csr-id-fcde45752a9b86ed606b78f522f6b6dd0de25457/> don't show warning if nothing is marked anymore
-  this can happen if the user removes all entries. The pane stays open
-  in this case, which is a little inconsistent, but not worth fixing
-  as it's certainly not the common case.
-
-  If it should be fixed, the 'key()' function should become consuming
-  to possible delete the pane.
-
-- <csr-id-01dd8e284224e42b59f317cd922d388f23def829/> Actually hook up spacebar in mark pane
-- <csr-id-d42573e63a120c8c5a253b7be52f9c68fb72274b/> Make help window pretty again
-- <csr-id-c0aa567e81b54913df464c9b500fe7a20ada0ea5/> Better handling of what is selected after removing a marked entry
-- <csr-id-f9a9cdf9f827a5e08b1bcc6035f908fdb971c9fd/> Don't try to go down as marked items are removed
-
-### Other Features
 
 - Single Unit Mode, see [reddit](https://www.reddit.com/r/rust/comments/bvjtan/introducing_dua_a_parallel_du_for_humans/epsroxg/)
 
