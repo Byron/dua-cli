@@ -163,7 +163,11 @@ impl HelpPane {
                     "Toggle sort by modified time descending/ascending.",
                     None,
                 );
-                hotkey("M", "Show/hide modified time.", None);
+                hotkey(
+                    "M",
+                    "Show modified time or cycle mtime sort mode.",
+                    Some("While sorting by mtime: entry, deep newest, deep oldest."),
+                );
                 hotkey("c", "Toggle sort by entries descending/ascending.", None);
                 hotkey("C", "Show/hide entry count.", None);
                 hotkey("n", "Toggle sort by name ascending/descending.", None);

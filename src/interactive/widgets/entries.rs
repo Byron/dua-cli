@@ -358,7 +358,7 @@ fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
     Style {
         fg: match (sort_mode, column) {
             (SortMode::SizeAscending | SortMode::SizeDescending, Column::Bytes)
-            | (SortMode::MTimeAscending | SortMode::MTimeDescending, Column::MTime)
+            | (SortMode::MTimeAscending(_) | SortMode::MTimeDescending(_), Column::MTime)
             | (SortMode::CountAscending | SortMode::CountDescending, Column::Count) => {
                 Color::Green.into()
             }
@@ -371,7 +371,7 @@ fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
 fn show_mtime_column(sort_mode: &SortMode, show_columns: &HashSet<Column>) -> bool {
     matches!(
         sort_mode,
-        SortMode::MTimeAscending | SortMode::MTimeDescending
+        SortMode::MTimeAscending(_) | SortMode::MTimeDescending(_)
     ) || show_columns.contains(&Column::MTime)
 }
 
@@ -412,7 +412,11 @@ fn shorten_input(input: Cow<'_, str>, width: usize) -> Cow<'_, str> {
 
 #[cfg(test)]
 mod entries_test {
-    use super::shorten_input;
+    use std::collections::HashSet;
+
+    use super::{shorten_input, show_mtime_column};
+    use crate::interactive::widgets::Column;
+    use crate::interactive::{MTimeSort, SortMode};
 
     #[test]
     fn test_shorten_string_middle() {
@@ -439,5 +443,20 @@ mod entries_test {
         ] {
             assert_eq!(shorten_input(input.into(), target_length), expected);
         }
+    }
+
+    #[test]
+    fn sorting_by_mtime_shows_column_like_count_sorting() {
+        let mut show_columns = HashSet::new();
+        assert!(
+            show_mtime_column(&SortMode::MTimeDescending(MTimeSort::Entry), &show_columns,),
+            "mtime sorting shows the mtime column even when it is not explicitly enabled",
+        );
+
+        show_columns.insert(Column::MTime);
+        assert!(
+            show_mtime_column(&SortMode::SizeDescending, &show_columns,),
+            "explicitly enabling the mtime column shows it for non-mtime sorts",
+        );
     }
 }
