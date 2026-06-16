@@ -1,5 +1,5 @@
 use crossbeam::channel::Receiver;
-pub use crossterm::event::Event;
+pub use crossterm::event::{Event, KeyCode};
 
 enum Action<T> {
     Continue,
@@ -28,5 +28,19 @@ pub fn input_channel() -> Receiver<Event> {
         }
         Ok(())
     });
+    key_receive
+}
+
+/// Return a receiver that yields one character-key event for each character in `input`.
+pub fn input_channel_from_chars(input: &str) -> Receiver<Event> {
+    let (key_send, key_receive) = crossbeam::channel::unbounded();
+    for event in input
+        .chars()
+        .map(|character| Event::Key(KeyCode::Char(character).into()))
+    {
+        if key_send.send(event).is_err() {
+            break;
+        }
+    }
     key_receive
 }

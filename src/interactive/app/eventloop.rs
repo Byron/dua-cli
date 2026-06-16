@@ -125,6 +125,67 @@ impl AppState {
         }
     }
 
+    pub fn process_events_once<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        events: Receiver<Event>,
+        config: &Config,
+    ) -> Result<WalkResult>
+    where
+        B: Backend,
+    {
+        self.refresh_screen(window, traversal, display, terminal, config)?;
+
+        if let Some(result) =
+            self.process_events_until_traversed(window, traversal, display, terminal, config)?
+        {
+            return Ok(result);
+        }
+
+        while let Ok(event) = events.try_recv() {
+            if let Some(result) =
+                self.process_terminal_event(window, traversal, display, terminal, event, config)?
+            {
+                return Ok(result);
+            }
+        }
+
+        if let Some(result) =
+            self.process_events_until_traversed(window, traversal, display, terminal, config)?
+        {
+            return Ok(result);
+        }
+
+        Ok(WalkResult {
+            num_errors: self.stats.io_errors,
+        })
+    }
+
+    fn process_events_until_traversed<B>(
+        &mut self,
+        window: &mut MainWindow,
+        traversal: &mut Traversal,
+        display: &mut DisplayOptions,
+        terminal: &mut Terminal<B>,
+        config: &Config,
+    ) -> Result<Option<WalkResult>>
+    where
+        B: Backend,
+    {
+        let (_keep_alive, no_events) = crossbeam::channel::bounded(0);
+        while self.scan.is_some() {
+            if let Some(result) =
+                self.process_event(window, traversal, display, terminal, &no_events, config)?
+            {
+                return Ok(Some(result));
+            }
+        }
+        Ok(None)
+    }
+
     pub fn process_event<B>(
         &mut self,
         window: &mut MainWindow,
@@ -205,6 +266,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_entry_annotations(&tree_view);
 
         if !self.received_events {
             let previously_selected_entry =
@@ -339,13 +401,20 @@ impl AppState {
                         &tree_view,
                     ),
                     Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
+                    Char('t') => self.toggle_cleanup_candidates(&tree_view),
+                    Char('X') => self.mark_cleanup_candidates(window, &tree_view),
+                    #[cfg(feature = "git")]
+                    Char('i') => self.toggle_gitignored_entries(&tree_view),
+                    #[cfg(feature = "git")]
+                    Char('I') => self.mark_gitignored_entries(window, &tree_view),
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)
                     }
                     Char('r') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
                     Char('R') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
                     Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
-                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
+                    Char('G') => self.change_entry_selection(CursorDirection::ToBottom),
+                    End => self.change_entry_selection(CursorDirection::ToBottom),
                     PageUp => self.change_entry_selection(CursorDirection::PageUp),
                     Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         self.change_entry_selection(CursorDirection::PageUp)
@@ -478,6 +547,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_entry_annotations(tree);
         self.navigation_mut().selected = self.entries.first().map(|e| e.index);
 
         self.scan = Some(FilesystemScan {
@@ -548,7 +618,7 @@ impl AppState {
                     .selected
                     .map(|previously_selected| (previously_selected, new_entries));
 
-                self.enter_node(new_entries);
+                self.enter_node(new_entries, &glob_tree_view);
                 self.focussed = Main;
             }
             Err(err) => self.message = Some(err.to_string()),
@@ -605,6 +675,7 @@ impl AppState {
             self.sorting,
             self.entry_check(),
         );
+        self.update_entry_annotations(tree_view);
     }
 }
 

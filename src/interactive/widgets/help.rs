@@ -181,7 +181,7 @@ impl HelpPane {
             title("Open/Mark/Search");
             {
                 hotkey(
-                    "Shift + o",
+                    "O",
                     "Open the selected entry with the associated program.",
                     None,
                 );
@@ -196,6 +196,12 @@ impl HelpPane {
                     None,
                 );
                 hotkey("<Space>", "Toggle the currently selected entry.", None);
+                hotkey("X", "Mark cleanup candidates in the current view.", None);
+                hotkey("t", "Toggle cleanup-candidate detection.", None);
+                #[cfg(feature = "git")]
+                hotkey("I", "Mark Git-ignored entries in the current view.", None);
+                #[cfg(feature = "git")]
+                hotkey("i", "Toggle Git-ignored entry detection.", None);
                 hotkey("a", "Toggle all entries.", None);
                 hotkey(
                     "/",

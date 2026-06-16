@@ -11,7 +11,7 @@ use crate::interactive::{
         FIXTURE_PATH,
         utils::{
             fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
-            node_by_index, node_by_name,
+            node_by_index, node_by_name, untraversed_app_and_terminal_from_fixture,
         },
     },
 };
@@ -442,6 +442,66 @@ fn simple_user_journey_read_only() -> Result<()> {
         // tend to just work when they compile, and while experimenting, tests can be in the way.
         // However, if Dua should be more widely used, we need CI and these tests written.
     }
+
+    Ok(())
+}
+
+#[test]
+fn once_finishes_traversal_without_user_events() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+
+    let result = app.process_events_once(&mut terminal, into_events([]))?;
+
+    assert_eq!(result.num_errors, 0);
+    assert!(
+        app.state.scan.is_none(),
+        "once mode should stop after traversal completes"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn once_replays_user_events_after_traversal() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+
+    app.process_events_once(&mut terminal, into_codes("n"))?;
+
+    assert_eq!(
+        app.state.sorting,
+        SortMode::NameAscending,
+        "once mode should replay supplied key events after traversal"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn once_allows_replayed_quit_to_exit() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+
+    let result = app.process_events_once(&mut terminal, into_codes("q"))?;
+
+    assert_eq!(result.num_errors, 0);
+
+    Ok(())
+}
+
+#[test]
+fn once_waits_for_replayed_refresh_to_finish() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+
+    let result = app.process_events_once(&mut terminal, into_codes("R"))?;
+
+    assert_eq!(result.num_errors, 0);
+    assert!(
+        app.state.scan.is_none(),
+        "once mode should wait for refreshes started by replayed events"
+    );
 
     Ok(())
 }
