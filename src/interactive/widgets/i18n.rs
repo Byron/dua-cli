@@ -3,8 +3,9 @@
 //! The language is selected from the standard POSIX locale environment
 //! variables, honouring their conventional precedence
 //! `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default and is used
-//! whenever no supported language is detected. Only the help pane is
-//! translated; no extra dependencies are involved.
+//! whenever no supported language is detected, or when the supported language
+//! explicitly requests a non-UTF-8 codeset. Only the help pane is translated;
+//! no extra dependencies are involved.
 
 /// A language the help pane can be rendered in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -17,11 +18,11 @@ pub enum Language {
 impl Language {
     /// Detect the language from the process environment.
     pub fn from_env() -> Self {
-        detect(
-            std::env::var("LC_ALL").ok().as_deref(),
-            std::env::var("LC_MESSAGES").ok().as_deref(),
-            std::env::var("LANG").ok().as_deref(),
-        )
+        detect([
+            std::env::var("LC_ALL").ok(),
+            std::env::var("LC_MESSAGES").ok(),
+            std::env::var("LANG").ok(),
+        ])
     }
 
     /// The translated strings for this language.
@@ -37,21 +38,39 @@ impl Language {
 ///
 /// Empty values are treated as unset (as glibc does) and fall through to the
 /// next variable. The language code is the part before the first `_`, `.` or
-/// `@`, so `ja_JP.UTF-8`, `ja.UTF-8`, `ja@modifier` and `ja` all map to
-/// [`Language::Japanese`]. Everything else (including `C`/`POSIX` and unset)
-/// maps to [`Language::English`].
-fn detect(lc_all: Option<&str>, lc_messages: Option<&str>, lang: Option<&str>) -> Language {
-    let locale = [lc_all, lc_messages, lang]
+/// `@`. Missing codesets are treated as UTF-8, so `ja`, `ja_JP`,
+/// `ja_JP.UTF-8`, `ja.UTF8` and `ja_JP.UTF-8@modifier` map to
+/// [`Language::Japanese`]. Explicit non-UTF-8 Japanese codesets such as
+/// `ja_JP.SJIS` map to [`Language::English`].
+fn detect<S>(locales: impl IntoIterator<Item = Option<S>>) -> Language
+where
+    S: AsRef<str>,
+{
+    let locale = locales
         .into_iter()
         .flatten()
-        .find(|value| !value.is_empty());
+        .find(|value| !value.as_ref().is_empty());
     match locale {
-        Some(locale) => match locale.split(['_', '.', '@']).next().unwrap_or(locale) {
-            "ja" => Language::Japanese,
-            _ => Language::English,
-        },
+        Some(locale) if is_japanese_utf8(locale.as_ref()) => Language::Japanese,
+        Some(_) => Language::English,
         None => Language::English,
     }
+}
+
+fn is_japanese_utf8(locale: &str) -> bool {
+    let locale = locale.split_once('@').map_or(locale, |(locale, _)| locale);
+    let (language_region, codeset) = match locale.split_once('.') {
+        Some((language_region, codeset)) => (language_region, Some(codeset)),
+        None => (locale, None),
+    };
+    let language = language_region
+        .split_once('_')
+        .map_or(language_region, |(language, _)| language);
+    language == "ja" && codeset.is_none_or(is_utf8_codeset)
+}
+
+fn is_utf8_codeset(codeset: &str) -> bool {
+    codeset.eq_ignore_ascii_case("utf-8") || codeset.eq_ignore_ascii_case("utf8")
 }
 
 /// Every translatable string of the help pane, in render order.
@@ -258,43 +277,68 @@ mod tests {
 
     #[test]
     fn defaults_to_english_when_unset() {
-        assert_eq!(detect(None, None, None), Language::English);
+        assert_eq!(detect([None::<&str>, None, None]), Language::English);
     }
 
     #[test]
-    fn lang_selects_japanese() {
-        assert_eq!(detect(None, None, Some("ja_JP.UTF-8")), Language::Japanese);
-        assert_eq!(detect(None, None, Some("ja")), Language::Japanese);
-        assert_eq!(detect(None, None, Some("ja.UTF-8")), Language::Japanese);
-        assert_eq!(detect(None, None, Some("ja@modifier")), Language::Japanese);
+    fn japanese_locale_selects_japanese_when_codeset_is_missing_or_utf8() {
+        assert_eq!(
+            detect([None, None, Some("ja_JP.UTF-8")]),
+            Language::Japanese
+        );
+        assert_eq!(detect([None, None, Some("ja")]), Language::Japanese);
+        assert_eq!(detect([None, None, Some("ja_JP")]), Language::Japanese);
+        assert_eq!(
+            detect([None, None, Some("ja@modifier")]),
+            Language::Japanese
+        );
+        assert_eq!(detect([None, None, Some("ja_JP.utf8")]), Language::Japanese);
+        assert_eq!(detect([None, None, Some("ja.UTF-8")]), Language::Japanese);
+        assert_eq!(
+            detect([None, None, Some("ja_JP.UTF-8@modifier")]),
+            Language::Japanese
+        );
+    }
+
+    #[test]
+    fn explicit_non_utf8_japanese_locales_are_english() {
+        assert_eq!(
+            detect([None, None, Some("ja_JP.SJIS")]),
+            Language::English,
+            "there is no plan to support other charsets right now, but contributions are welcome"
+        );
+        assert_eq!(
+            detect([None, None, Some("ja_JP.EUC-JP")]),
+            Language::English
+        );
     }
 
     #[test]
     fn non_japanese_locales_are_english() {
-        assert_eq!(detect(None, None, Some("en_US.UTF-8")), Language::English);
-        assert_eq!(detect(None, None, Some("C")), Language::English);
-        assert_eq!(detect(None, None, Some("POSIX")), Language::English);
+        assert_eq!(detect([None, None, Some("en_US.UTF-8")]), Language::English);
+        assert_eq!(detect([None, None, Some("C")]), Language::English);
+        assert_eq!(detect([None, None, Some("POSIX")]), Language::English);
     }
 
     #[test]
     fn precedence_lc_all_over_lc_messages_over_lang() {
         // LC_ALL wins over everything.
         assert_eq!(
-            detect(
+            detect([
                 Some("ja_JP.UTF-8"),
                 Some("en_US.UTF-8"),
                 Some("en_US.UTF-8")
-            ),
+            ]),
             Language::Japanese
         );
         // LC_ALL wins even when it selects English.
         assert_eq!(
-            detect(Some("C"), Some("ja_JP.UTF-8"), Some("ja_JP.UTF-8")),
+            detect([Some("C"), Some("ja_JP.UTF-8"), Some("ja_JP.UTF-8")]),
             Language::English
         );
         // LC_MESSAGES wins over LANG.
         assert_eq!(
-            detect(None, Some("ja_JP.UTF-8"), Some("en_US.UTF-8")),
+            detect([None, Some("ja_JP.UTF-8"), Some("en_US.UTF-8")]),
             Language::Japanese
         );
     }
@@ -303,10 +347,10 @@ mod tests {
     fn empty_values_are_treated_as_unset() {
         // Empty LC_ALL/LC_MESSAGES fall through to LANG.
         assert_eq!(
-            detect(Some(""), Some(""), Some("ja_JP.UTF-8")),
+            detect([Some(""), Some(""), Some("ja_JP.UTF-8")]),
             Language::Japanese
         );
         // All empty falls back to the default.
-        assert_eq!(detect(Some(""), Some(""), Some("")), Language::English);
+        assert_eq!(detect([Some(""), Some(""), Some("")]), Language::English);
     }
 }

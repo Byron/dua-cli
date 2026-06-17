@@ -257,17 +257,21 @@ mod tests {
     fn japanese_replaces_the_english_strings() {
         let en = rendered(Language::English);
         let ja = rendered(Language::Japanese);
-        // The Japanese rendering differs and no longer shows the English titles,
-        // while untranslated key names stay put.
-        assert_ne!(en, ja);
+        assert_ne!(
+            en, ja,
+            "The Japanese rendering differs and no longer shows the English titles, while untranslated key names stay put"
+        );
         assert!(!ja.contains("Help"));
         assert!(!ja.contains("Navigation"));
         assert!(!ja.contains("Display"));
         assert!(ja.contains("Ctrl + c"));
-        // The Japanese strings are actually rendered. The backend pads wide
-        // glyphs with a trailing cell, so collapse whitespace before matching.
+
+        // The backend pads wide glyphs with a trailing cell, so collapse whitespace before matching.
         let ja_collapsed: String = ja.split_whitespace().collect();
-        assert!(ja_collapsed.contains("ヘルプ"));
+        assert!(
+            ja_collapsed.contains("ヘルプ"),
+            "The Japanese strings are actually rendered."
+        );
         assert!(ja_collapsed.contains("ナビゲーション"));
     }
 }

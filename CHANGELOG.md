@@ -7,11 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### New Features
-
-- Optional localization of the interactive help screen, selected from the standard POSIX locale
-  environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the default; Japanese
-  (`ja`) is now available, e.g. `LANG=ja_JP.UTF-8 dua i`.
+The headline feature is the optional localization of the interactive help screen, selected from the standard POSIX locale
+environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the default; Japanese
+(`ja`) is now available for UTF-8 locales and locales without an explicit codeset, e.g. `LANG=ja_JP.UTF-8 dua i`.
 
 ## 2.35.0 (2026-06-16)
 
@@ -103,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Add `dua i --once[="keys"]` to make it easier to debug interactive mode in the real. ([`a6482de`](https://github.com/Byron/dua-cli/commit/a6482de5a5efc924cd89bfc005f3f56ce0c086bc))
     - Merge pull request #337 from Byron/recursive-mod-date ([`99840d0`](https://github.com/Byron/dua-cli/commit/99840d08b8518207590883fbb0bab765b0a4675e))
 </details>
+
 ## 2.34.0 (2026-02-20)
 
 <csr-id-3dc120fcf193945546ad62f91ae7792c4830c151/>
@@ -4366,3 +4365,4 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
+
