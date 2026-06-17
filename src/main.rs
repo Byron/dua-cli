@@ -80,27 +80,16 @@ fn main() -> Result<()> {
         info!("dua options={opt:#?}");
     }
 
-    let byte_format: dua::ByteFormat = opt.format.into();
-    let mut walk_options = dua::WalkOptions {
-        threads: opt.threads,
-        apparent_size: opt.apparent_size,
-        count_hard_links: opt.count_hard_links,
-        sorting: TraversalSorting::None,
-        cross_filesystems: !opt.stay_on_filesystem,
-        ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
-    };
+    let options::Args {
+        command,
+        traversal,
+        log_file: _used_above,
+    } = opt;
 
-    if walk_options.threads == 0 {
-        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
-        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
-        walk_options.threads = num_cpus::get();
-    }
-
-    let cross_filesystems = walk_options.cross_filesystems;
-
-    let res = match opt.command {
+    let res = match command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive {
+            traversal,
             no_entry_check,
             once,
         }) => {
@@ -112,6 +101,9 @@ fn main() -> Result<()> {
             use tui::{Terminal, backend::CrosstermBackend};
 
             let config = dua::Config::load()?;
+            let byte_format = traversal.byte_format(&config);
+            let walk_options = walk_options_from(&traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -140,7 +132,7 @@ fn main() -> Result<()> {
                 walk_options,
                 byte_format,
                 !no_entry_check,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
                 config,
             )?;
             app.traverse()?;
@@ -183,10 +175,15 @@ fn main() -> Result<()> {
             );
         }
         Some(Aggregate {
+            traversal,
             no_total,
             no_sort,
             statistics,
         }) => {
+            let config = dua::Config::load()?;
+            let byte_format = traversal.byte_format(&config);
+            let walk_options = walk_options_from(&traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
@@ -196,7 +193,7 @@ fn main() -> Result<()> {
                 !no_total,
                 !no_sort,
                 byte_format,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{stats:?}").ok();
@@ -216,6 +213,10 @@ fn main() -> Result<()> {
             return Ok(());
         }
         None => {
+            let config = dua::Config::load()?;
+            let byte_format = traversal.byte_format(&config);
+            let walk_options = walk_options_from(&traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             dua::aggregate(
@@ -225,13 +226,32 @@ fn main() -> Result<()> {
                 true,
                 true,
                 byte_format,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
             )?
             .0
         }
     };
 
     process::exit(res.to_exit_code());
+}
+
+fn walk_options_from(traversal: &options::TraversalArgs) -> dua::WalkOptions {
+    let mut walk_options = dua::WalkOptions {
+        threads: traversal.threads,
+        apparent_size: traversal.apparent_size,
+        count_hard_links: traversal.count_hard_links,
+        sorting: TraversalSorting::None,
+        cross_filesystems: !traversal.stay_on_filesystem,
+        ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
+    };
+
+    if walk_options.threads == 0 {
+        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
+        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
+        walk_options.threads = num_cpus::get();
+    }
+
+    walk_options
 }
 
 fn extract_paths_maybe_set_cwd(
