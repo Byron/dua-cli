@@ -12,12 +12,17 @@ use std::path::PathBuf;
 /// Expected TOML structure:
 ///
 /// ```toml
+/// format = "binary"
+///
 /// [keys]
 /// esc_navigates_back = true
 /// ```
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Byte count format to use when `--format` and `DUA_FORMAT` are not set.
+    pub format: Option<crate::ByteFormat>,
+
     /// Keybinding-related settings.
     pub keys: KeysConfig,
 }
@@ -88,6 +93,10 @@ impl Config {
         concat!(
             "# dua-cli configuration\n",
             "#\n",
+            "# Byte count format to use when --format and DUA_FORMAT are not set.\n",
+            "# Supported values: metric, binary, bytes, gb, gib, mb, mib.\n",
+            "# format = \"binary\"\n",
+            "#\n",
             "[keys]\n",
             "# If true, pressing <Esc> in the main pane ascends to the parent directory.\n",
             "# If false, <Esc> follows the default quit behavior.\n",
@@ -109,5 +118,26 @@ impl Config {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| anyhow!("platform config directory is unavailable"))?;
         Ok(config_dir.join("dua-cli").join("config.toml"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn parses_configured_byte_format() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.format, Some(crate::ByteFormat::MB));
+        assert!(!config.keys.esc_navigates_back);
     }
 }
