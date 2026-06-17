@@ -80,30 +80,20 @@ fn main() -> Result<()> {
         info!("dua options={opt:#?}");
     }
 
-    let byte_format: dua::ByteFormat = opt.format.into();
-    let mut walk_options = dua::WalkOptions {
-        threads: opt.threads,
-        apparent_size: opt.apparent_size,
-        count_hard_links: opt.count_hard_links,
-        sorting: TraversalSorting::None,
-        cross_filesystems: !opt.stay_on_filesystem,
-        ignore_dirs: canonicalize_ignore_dirs(&opt.ignore_dirs),
-    };
+    let options::Args {
+        command,
+        traversal: global_traversal,
+        log_file: _used_above,
+    } = opt;
 
-    if walk_options.threads == 0 {
-        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
-        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
-        walk_options.threads = num_cpus::get();
-    }
-
-    let cross_filesystems = walk_options.cross_filesystems;
-
-    let res = match opt.command {
+    let res = match command {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive {
+            traversal: subcommand_traversal,
             no_entry_check,
             once,
         }) => {
+            let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
             use anyhow::{Context, anyhow};
             use crossterm::{
                 execute,
@@ -112,6 +102,9 @@ fn main() -> Result<()> {
             use tui::{Terminal, backend::CrosstermBackend};
 
             let config = dua::Config::load()?;
+            let byte_format = traversal.byte_format(&config);
+            let walk_options = walk_options_from(&traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -140,7 +133,7 @@ fn main() -> Result<()> {
                 walk_options,
                 byte_format,
                 !no_entry_check,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
                 config,
             )?;
             app.traverse()?;
@@ -183,10 +176,16 @@ fn main() -> Result<()> {
             );
         }
         Some(Aggregate {
+            traversal: subcommand_traversal,
             no_total,
             no_sort,
             statistics,
         }) => {
+            let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
+            let config = dua::Config::load()?;
+            let byte_format = traversal.byte_format(&config);
+            let walk_options = walk_options_from(&traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
@@ -196,7 +195,7 @@ fn main() -> Result<()> {
                 !no_total,
                 !no_sort,
                 byte_format,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{stats:?}").ok();
@@ -209,13 +208,21 @@ fn main() -> Result<()> {
             clap_complete::generate(shell, &mut cmd, dua, &mut io::stdout());
             return Ok(());
         }
-        Some(Config {
-            command: options::ConfigCommand::Edit,
-        }) => {
-            edit_config()?;
-            return Ok(());
-        }
+        Some(Config { command }) => match command {
+            options::ConfigCommand::Edit => {
+                edit_config()?;
+                return Ok(());
+            }
+            options::ConfigCommand::ShowDefault { reset_with_default } => {
+                show_default_config(reset_with_default)?;
+                return Ok(());
+            }
+        },
         None => {
+            let config = dua::Config::load()?;
+            let byte_format = global_traversal.byte_format(&config);
+            let walk_options = walk_options_from(&global_traversal);
+            let cross_filesystems = walk_options.cross_filesystems;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             dua::aggregate(
@@ -225,13 +232,64 @@ fn main() -> Result<()> {
                 true,
                 true,
                 byte_format,
-                extract_paths_maybe_set_cwd(opt.input, cross_filesystems)?,
+                extract_paths_maybe_set_cwd(global_traversal.input, cross_filesystems)?,
             )?
             .0
         }
     };
 
     process::exit(res.to_exit_code());
+}
+
+fn is_default_ignore_dirs(list: &[PathBuf]) -> bool {
+    let defaults = options::DEFAULT_IGNORE_DIRS;
+    list.len() == defaults.len()
+        && list
+            .iter()
+            .zip(defaults)
+            .all(|(input, default)| input == Path::new(default))
+}
+
+fn merge_traversal_args(
+    global: &options::TraversalArgs,
+    subcommand: &options::TraversalArgs,
+) -> options::TraversalArgs {
+    options::TraversalArgs {
+        threads: if global.threads != options::DEFAULT_THREADS {
+            global.threads
+        } else {
+            subcommand.threads
+        },
+        format: global.format.or(subcommand.format),
+        apparent_size: global.apparent_size || subcommand.apparent_size,
+        count_hard_links: global.count_hard_links || subcommand.count_hard_links,
+        stay_on_filesystem: global.stay_on_filesystem || subcommand.stay_on_filesystem,
+        ignore_dirs: if !is_default_ignore_dirs(&global.ignore_dirs) {
+            global.ignore_dirs.clone()
+        } else {
+            subcommand.ignore_dirs.clone()
+        },
+        input: subcommand.input.clone(),
+    }
+}
+
+fn walk_options_from(traversal: &options::TraversalArgs) -> dua::WalkOptions {
+    let mut walk_options = dua::WalkOptions {
+        threads: traversal.threads,
+        apparent_size: traversal.apparent_size,
+        count_hard_links: traversal.count_hard_links,
+        sorting: TraversalSorting::None,
+        cross_filesystems: !traversal.stay_on_filesystem,
+        ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
+    };
+
+    if walk_options.threads == 0 {
+        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
+        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
+        walk_options.threads = num_cpus::get();
+    }
+
+    walk_options
 }
 
 fn extract_paths_maybe_set_cwd(
@@ -330,7 +388,27 @@ fn edit_config() -> Result<()> {
     ))
 }
 
+fn show_default_config(overwrite_with_default: bool) -> Result<()> {
+    print!("{}", dua::Config::default_file_content());
+
+    if overwrite_with_default {
+        let path = dua::Config::path()?;
+        write_default_config_file(&path)?;
+        eprintln!("Reset configuration at '{}'", path.display());
+    }
+
+    Ok(())
+}
+
 fn ensure_default_config_file(path: &Path) -> Result<()> {
+    if path.exists() {
+        return Ok(());
+    }
+
+    write_default_config_file(path)
+}
+
+fn write_default_config_file(path: &Path) -> Result<()> {
     if let Some(parent_dir) = path.parent() {
         fs::create_dir_all(parent_dir).with_context(|| {
             format!(
@@ -340,14 +418,176 @@ fn ensure_default_config_file(path: &Path) -> Result<()> {
         })?;
     }
 
-    if !path.exists() {
-        fs::write(path, dua::Config::default_file_content()).with_context(|| {
-            format!(
-                "Could not write default configuration to {}",
-                path.display()
-            )
-        })?;
-    }
+    fs::write(path, dua::Config::default_file_content()).with_context(|| {
+        format!(
+            "Could not write default configuration to {}",
+            path.display()
+        )
+    })?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge_traversal_args, write_default_config_file};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn write_default_config_file_overwrites_existing_config() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("dua-cli").join("config.toml");
+        fs::create_dir_all(path.parent().expect("config parent")).expect("config directory");
+        fs::write(&path, "old config").expect("existing config");
+
+        write_default_config_file(&path).expect("default config written");
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("default config"),
+            dua::Config::default_file_content()
+        );
+    }
+
+    #[test]
+    fn merge_traversal_args_prefers_global_threads() {
+        let global = super::options::TraversalArgs {
+            threads: 8,
+            format: None,
+            apparent_size: true,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![],
+            input: vec![],
+        };
+
+        let subcommand = super::options::TraversalArgs {
+            threads: 2,
+            format: None,
+            apparent_size: false,
+            count_hard_links: true,
+            stay_on_filesystem: true,
+            ignore_dirs: vec![],
+            input: vec![PathBuf::from("subcommand-input")],
+        };
+
+        let merged = merge_traversal_args(&global, &subcommand);
+
+        assert_eq!(merged.threads, 8);
+        assert_eq!(merged.input, subcommand.input);
+    }
+
+    #[test]
+    fn merge_traversal_args_uses_subcommand_threads_when_global_is_default() {
+        let global = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![],
+            input: vec![],
+        };
+
+        let subcommand = super::options::TraversalArgs {
+            threads: 6,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![],
+            input: vec![],
+        };
+
+        let merged = merge_traversal_args(&global, &subcommand);
+
+        assert_eq!(merged.threads, 6);
+    }
+
+    #[test]
+    fn merge_traversal_args_uses_global_format_and_or_booleans() {
+        let global = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: Some(super::options::ByteFormat::MB),
+            apparent_size: true,
+            count_hard_links: false,
+            stay_on_filesystem: true,
+            ignore_dirs: vec![],
+            input: vec![],
+        };
+
+        let subcommand = super::options::TraversalArgs {
+            threads: 4,
+            format: Some(super::options::ByteFormat::GB),
+            apparent_size: false,
+            count_hard_links: true,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![],
+            input: vec![],
+        };
+
+        let merged = merge_traversal_args(&global, &subcommand);
+
+        assert_eq!(merged.format, Some(super::options::ByteFormat::MB));
+        assert!(merged.apparent_size);
+        assert!(merged.count_hard_links);
+        assert!(merged.stay_on_filesystem);
+    }
+
+    #[test]
+    fn merge_traversal_args_prefers_global_ignore_dirs_when_custom() {
+        let global = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![PathBuf::from("/custom-global-ignore")],
+            input: vec![],
+        };
+
+        let subcommand = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
+            input: vec![],
+        };
+
+        let merged = merge_traversal_args(&global, &subcommand);
+
+        assert_eq!(merged.ignore_dirs, global.ignore_dirs);
+    }
+
+    #[test]
+    fn merge_traversal_args_uses_subcommand_ignore_dirs_when_global_is_default() {
+        let global = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: super::options::DEFAULT_IGNORE_DIRS
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
+            input: vec![],
+        };
+
+        let subcommand = super::options::TraversalArgs {
+            threads: super::options::DEFAULT_THREADS,
+            format: None,
+            apparent_size: false,
+            count_hard_links: false,
+            stay_on_filesystem: false,
+            ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
+            input: vec![],
+        };
+
+        let merged = merge_traversal_args(&global, &subcommand);
+
+        assert_eq!(merged.ignore_dirs, subcommand.ignore_dirs);
+    }
 }

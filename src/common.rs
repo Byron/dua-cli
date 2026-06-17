@@ -1,6 +1,7 @@
 use crate::crossdev;
 use crate::traverse::{EntryData, Tree, TreeIndex};
 use byte_unit::{ByteUnit, n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes};
+use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,21 +20,28 @@ pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u128 {
 }
 
 /// Specifies a way to format bytes
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub enum ByteFormat {
     /// metric format, based on 1000.
+    #[serde(rename = "metric")]
     Metric,
     /// binary format, based on 1024
+    #[serde(rename = "binary")]
     Binary,
     /// raw bytes, without additional formatting
+    #[serde(rename = "bytes")]
     Bytes,
     /// only gigabytes without smart-unit
+    #[serde(rename = "gb")]
     GB,
     /// only gibibytes without smart-unit
+    #[serde(rename = "gib")]
     GiB,
     /// only megabytes without smart-unit
+    #[serde(rename = "mb")]
     MB,
     /// only mebibytes without smart-unit
+    #[serde(rename = "mib")]
     MiB,
 }
 
