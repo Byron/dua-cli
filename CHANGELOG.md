@@ -5,13 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.36.0 (2026-06-17)
 
 The headline feature is the optional localization of the interactive help screen, selected from the standard POSIX locale
 environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the default; Japanese
 (`ja`) is now available for UTF-8 locales and locales without an explicit codeset, e.g. `LANG=ja_JP.UTF-8 dua i`.
 
+### Bug Fixes
+
+ - <csr-id-08bda9ff2eaa06b9a5ec5943cc3dc653b828cdb5/> Make `message` color yellow, instead of red.
+   It's less alarming, red should only be used to signal 'danger'.
+ - <csr-id-d02a65ef733fb2a71178cdc4892eb283ef0f9fc6/> don't show unapplicable global options in `config` subcommand.
+
+### New Features
+
+ - <csr-id-db3e267d7aaff9eedf0d44021811b71b6cef74dc/> add `config show-default` sub-command with option to reset configuration file
+   Add `dua config show-default` to print the current built-in default
+   configuration, making newly introduced configuration keys discoverable without
+   opening the editor.
+   
+   Support `dua config show-default --overwrite-with-default` to overwrite the active configuration
+   file with the built-in defaults while keeping stdout reserved for the default
+   TOML content.
+ - <csr-id-c1a759fea60d79d0e2d3eb3ce077fbf901ce7145/> allow to set the `format` in the configuration file.
+ - <csr-id-e902598d052d018d6b5c85840470275d3d8e345b/> optional i18n for the interactive help screen
+   Localize the interactive help pane via the standard POSIX locale
+   environment variables, honoring the usual precedence
+   LC_ALL > LC_MESSAGES > LANG, with English as the default. Japanese is
+   the first added translation. No new dependencies; only the help screen
+   is translated.
+   
+   - New `i18n` module: a `Language` enum, env detection split into a pure
+     `detect()` plus a thin `from_env()`, and an `EN`/`JA` translation table.
+   - The help pane resolves the language with `Language::from_env()` when it
+     is rendered (only while the pane is open).
+   - Key names, the `^` continuation markers and the symbolic legend stay
+     untranslated; the block title is localized.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 11 commits contributed to the release.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#336](https://github.com/Byron/dua-cli/issues/336)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#336](https://github.com/Byron/dua-cli/issues/336)**
+    - Don't show unapplicable global options in `config` subcommand. ([`d02a65e`](https://github.com/Byron/dua-cli/commit/d02a65ef733fb2a71178cdc4892eb283ef0f9fc6))
+ * **Uncategorized**
+    - Merge pull request #339 from Byron/fix-336 ([`9975c07`](https://github.com/Byron/dua-cli/commit/9975c078a3d6f7e1677b349ce973e9237c7dd915))
+    - Make `message` color yellow, instead of red. ([`08bda9f`](https://github.com/Byron/dua-cli/commit/08bda9ff2eaa06b9a5ec5943cc3dc653b828cdb5))
+    - Address auto-review ([`e5627c0`](https://github.com/Byron/dua-cli/commit/e5627c0887d9d8b97116e03df2001a80aad55344))
+    - Add `config show-default` sub-command with option to reset configuration file ([`db3e267`](https://github.com/Byron/dua-cli/commit/db3e267d7aaff9eedf0d44021811b71b6cef74dc))
+    - Allow to set the `format` in the configuration file. ([`c1a759f`](https://github.com/Byron/dua-cli/commit/c1a759fea60d79d0e2d3eb3ce077fbf901ce7145))
+    - Merge pull request #334 from bellsmarket/feat/help-i18n ([`c171b44`](https://github.com/Byron/dua-cli/commit/c171b444b91a4c6877ce2e591c5b2e9dc23a2bae))
+    - Address auto-review comments ([`e180b1f`](https://github.com/Byron/dua-cli/commit/e180b1f31c5441830e4d90ac481d2319a67cca26))
+    - Review ([`71f4532`](https://github.com/Byron/dua-cli/commit/71f4532952d3c8cced61ac5486594e57d5af7867))
+    - Optional i18n for the interactive help screen ([`e902598`](https://github.com/Byron/dua-cli/commit/e902598d052d018d6b5c85840470275d3d8e345b))
+    - Merge pull request #333 from xfocus3/fix/install-respects-cargo-home-279 ([`d4f5671`](https://github.com/Byron/dua-cli/commit/d4f56717f4835881c70fc7b9a0255a71661b5c8b))
+</details>
+
 ## 2.35.0 (2026-06-16)
+
+### Bug Fixes
+
+ - <csr-id-ea756c61828ac13e13853d84747dfef5a82d7a48/> respect CARGO_HOME in install script
 
 ### New Features
 
@@ -71,9 +135,9 @@ environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the d
    1. Press `m` to sort by mtime descending.
    2. Press `m` again to sort by mtime ascending.
    3. Press `M` while mtime sorting is active to cycle the mtime strategy:
-      - normal entry mtime
-      - newest descendant mtime
-      - oldest descendant mtime
+   - normal entry mtime
+   - newest descendant mtime
+   - oldest descendant mtime
    
    The selected mtime strategy is preserved when toggling between ascending and descending mtime sort.
 
@@ -81,8 +145,8 @@ environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the d
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
- - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 8 commits contributed to the release.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 2 unique issues were worked on: [#328](https://github.com/Byron/dua-cli/issues/328), [#331](https://github.com/Byron/dua-cli/issues/331)
 
 ### Commit Details
@@ -96,10 +160,12 @@ environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the d
  * **[#331](https://github.com/Byron/dua-cli/issues/331)**
     - Cycle modified time display modes ([`5991f98`](https://github.com/Byron/dua-cli/commit/5991f981782ebcb8c02e5b36eb3151aab0e9d40c))
  * **Uncategorized**
+    - Release dua-cli v2.35.0 ([`26c8da1`](https://github.com/Byron/dua-cli/commit/26c8da12ba36eb1676606cc6bfe67e13cb84b2ed))
     - Merge pull request #338 from Byron/auto-clean ([`7c31299`](https://github.com/Byron/dua-cli/commit/7c312997094da38567cf7bebe04c34a6cc953384))
     - Add gitignore-aware cleanup marking ([`a346eff`](https://github.com/Byron/dua-cli/commit/a346eff59949f51b84e66c4ab5a6d818a30400c2))
     - Add `dua i --once[="keys"]` to make it easier to debug interactive mode in the real. ([`a6482de`](https://github.com/Byron/dua-cli/commit/a6482de5a5efc924cd89bfc005f3f56ce0c086bc))
     - Merge pull request #337 from Byron/recursive-mod-date ([`99840d0`](https://github.com/Byron/dua-cli/commit/99840d08b8518207590883fbb0bab765b0a4675e))
+    - Respect CARGO_HOME in install script ([`ea756c6`](https://github.com/Byron/dua-cli/commit/ea756c61828ac13e13853d84747dfef5a82d7a48))
 </details>
 
 ## 2.34.0 (2026-02-20)
