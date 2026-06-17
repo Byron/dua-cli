@@ -38,19 +38,20 @@ fn dft_format() -> ByteFormat {
 /// For some reason, on MacOS, too many threads are bad and 3 is the best these days on M4.
 /// On M1 it was more like 4, but close enough.
 #[cfg(target_os = "macos")]
-const DEFAULT_THREADS: usize = 3;
+pub(crate) const DEFAULT_THREADS: usize = 3;
 
 #[cfg(not(target_os = "macos"))]
-const DEFAULT_THREADS: usize = 0;
+pub(crate) const DEFAULT_THREADS: usize = 0;
+
+#[cfg(target_os = "linux")]
+pub(crate) const DEFAULT_IGNORE_DIRS: &[&str] = &["/proc", "/dev", "/sys", "/run"];
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) const DEFAULT_IGNORE_DIRS: &[&str] = &[];
 
 /// A tool to learn about disk usage, fast!
 #[derive(Debug, clap::Parser)]
-#[command(
-    name = "dua",
-    version,
-    args_conflicts_with_subcommands = true,
-    subcommand_precedence_over_arg = true
-)]
+#[command(name = "dua", version, subcommand_precedence_over_arg = true)]
 #[command(override_usage = "dua [FLAGS] [OPTIONS] [SUBCOMMAND] [INPUT]...")]
 pub struct Args {
     #[clap(subcommand)]
@@ -134,7 +135,7 @@ pub struct TraversalArgs {
         env = "DUA_IGNORE_DIRS",
         help_heading = "Traversal Options"
     )]
-    #[cfg_attr(target_os = "linux", clap(default_values = &["/proc", "/dev", "/sys", "/run"]))]
+    #[cfg_attr(target_os = "linux", clap(default_values = DEFAULT_IGNORE_DIRS))]
     pub ignore_dirs: Vec<PathBuf>,
 
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
@@ -199,8 +200,8 @@ pub enum ConfigCommand {
         /// Destructively overwrite the active configuration file with the default configuration.
         ///
         /// Local changes will be lost without option to recover.
-        #[clap(long)]
-        overwrite_with_default: bool,
+        #[clap(long = "reset-with-default", visible_alias = "reset")]
+        reset_with_default: bool,
     },
 }
 
@@ -227,6 +228,23 @@ mod tests {
     }
 
     #[test]
+    fn traversal_options_before_aggregate_still_parse_as_subcommand() {
+        let args = Args::try_parse_from(["dua", "--format", "metric", "aggregate", "--stats", "."])
+            .expect("root traversal options can precede aggregate");
+
+        let Some(super::Command::Aggregate {
+            statistics,
+            traversal,
+            ..
+        }) = args.command
+        else {
+            panic!("expected aggregate subcommand");
+        };
+        assert!(statistics);
+        assert_eq!(traversal.input, [std::path::PathBuf::from(".")]);
+    }
+
+    #[test]
     fn traversal_options_are_rejected_after_config_edit() {
         let err = Args::try_parse_from(["dua", "config", "edit", "--format", "metric"])
             .expect_err("config edit should not accept traversal options");
@@ -241,9 +259,9 @@ mod tests {
     }
 
     #[test]
-    fn config_show_default_accepts_overwrite_with_default() {
+    fn config_show_default_accepts_reset() {
         Args::try_parse_from(["dua", "config", "show-default"]).expect("show-default is available");
-        Args::try_parse_from(["dua", "config", "show-default", "--overwrite-with-default"])
+        Args::try_parse_from(["dua", "config", "show-default", "--reset"])
             .expect("show-default accepts reset");
     }
 
