@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+The headline feature is the optional localization of the interactive help screen, selected from the standard POSIX locale
+environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the default; Japanese
+(`ja`) is now available for UTF-8 locales and locales without an explicit codeset, e.g. `LANG=ja_JP.UTF-8 dua i`.
+
 ## 2.35.0 (2026-06-16)
 
 ### New Features
