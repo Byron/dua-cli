@@ -192,6 +192,16 @@ pub enum ConfigCommand {
     ///
     /// If the file does not exist, it will be created with default values first.
     Edit,
+    /// Print the default configuration file.
+    ///
+    /// Use `--reset` to overwrite the active configuration file with these defaults.
+    ShowDefault {
+        /// Destructively overwrite the active configuration file with the default configuration.
+        ///
+        /// Local changes will be lost without option to recover.
+        #[clap(long)]
+        overwrite_with_default: bool,
+    },
 }
 
 #[cfg(test)]
@@ -228,6 +238,13 @@ mod tests {
     fn log_file_is_accepted_by_config_edit() {
         Args::try_parse_from(["dua", "config", "edit", "--log-file", "dua.log"])
             .expect("log-file is globally available");
+    }
+
+    #[test]
+    fn config_show_default_accepts_overwrite_with_default() {
+        Args::try_parse_from(["dua", "config", "show-default"]).expect("show-default is available");
+        Args::try_parse_from(["dua", "config", "show-default", "--overwrite-with-default"])
+            .expect("show-default accepts reset");
     }
 
     #[test]

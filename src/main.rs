@@ -206,12 +206,18 @@ fn main() -> Result<()> {
             clap_complete::generate(shell, &mut cmd, dua, &mut io::stdout());
             return Ok(());
         }
-        Some(Config {
-            command: options::ConfigCommand::Edit,
-        }) => {
-            edit_config()?;
-            return Ok(());
-        }
+        Some(Config { command }) => match command {
+            options::ConfigCommand::Edit => {
+                edit_config()?;
+                return Ok(());
+            }
+            options::ConfigCommand::ShowDefault {
+                overwrite_with_default,
+            } => {
+                show_default_config(overwrite_with_default)?;
+                return Ok(());
+            }
+        },
         None => {
             let config = dua::Config::load()?;
             let byte_format = traversal.byte_format(&config);
@@ -350,7 +356,27 @@ fn edit_config() -> Result<()> {
     ))
 }
 
+fn show_default_config(overwrite_with_default: bool) -> Result<()> {
+    print!("{}", dua::Config::default_file_content());
+
+    if overwrite_with_default {
+        let path = dua::Config::path()?;
+        write_default_config_file(&path)?;
+        eprintln!("Reset configuration at '{}'", path.display());
+    }
+
+    Ok(())
+}
+
 fn ensure_default_config_file(path: &Path) -> Result<()> {
+    if path.exists() {
+        return Ok(());
+    }
+
+    write_default_config_file(path)
+}
+
+fn write_default_config_file(path: &Path) -> Result<()> {
     if let Some(parent_dir) = path.parent() {
         fs::create_dir_all(parent_dir).with_context(|| {
             format!(
@@ -360,14 +386,33 @@ fn ensure_default_config_file(path: &Path) -> Result<()> {
         })?;
     }
 
-    if !path.exists() {
-        fs::write(path, dua::Config::default_file_content()).with_context(|| {
-            format!(
-                "Could not write default configuration to {}",
-                path.display()
-            )
-        })?;
-    }
+    fs::write(path, dua::Config::default_file_content()).with_context(|| {
+        format!(
+            "Could not write default configuration to {}",
+            path.display()
+        )
+    })?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_default_config_file;
+    use std::fs;
+
+    #[test]
+    fn write_default_config_file_overwrites_existing_config() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("dua-cli").join("config.toml");
+        fs::create_dir_all(path.parent().expect("config parent")).expect("config directory");
+        fs::write(&path, "old config").expect("existing config");
+
+        write_default_config_file(&path).expect("default config written");
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("default config"),
+            dua::Config::default_file_content()
+        );
+    }
 }
