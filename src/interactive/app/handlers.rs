@@ -234,7 +234,7 @@ impl AppState {
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {
         self.focussed = match self.focussed {
             Main | Mark | Glob => {
-                window.help_pane = Some(HelpPane::default());
+                window.help_pane = Some(HelpPane::with_locale_from_env());
                 Help
             }
             Help => {

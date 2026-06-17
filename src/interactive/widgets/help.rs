@@ -18,13 +18,13 @@ use tui::{
 #[derive(Default, Clone)]
 pub struct HelpPane {
     pub scroll: u16,
+    pub language: Language,
 }
 
 pub struct HelpPaneProps {
     pub border_style: Style,
     pub has_focus: bool,
     pub esc_navigates_back: bool,
-    pub language: Language,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -37,6 +37,13 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
+    pub fn with_locale_from_env() -> Self {
+        HelpPane {
+            language: Language::from_env(),
+            ..Default::default()
+        }
+    }
+
     pub fn process_events(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
@@ -63,7 +70,7 @@ impl HelpPane {
 
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let esc_navigates_back = props.borrow().esc_navigates_back;
-        let t = props.borrow().language.help_text();
+        let t = self.language.help_text();
         let lines = {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
@@ -232,12 +239,15 @@ mod tests {
     fn rendered(language: Language) -> String {
         let area = Rect::new(0, 0, 120, 80);
         let mut buf = Buffer::empty(area);
-        HelpPane::default().render(
+        HelpPane {
+            language,
+            ..Default::default()
+        }
+        .render(
             HelpPaneProps {
                 border_style: Style::default(),
                 has_focus: false,
                 esc_navigates_back: false,
-                language,
             },
             area,
             &mut buf,
