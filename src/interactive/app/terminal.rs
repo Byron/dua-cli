@@ -44,6 +44,9 @@ impl TerminalApp {
         let window = MainWindow::default();
 
         let mut state = AppState::new(walk_options, input);
+        if config.gitignore == Some(false) {
+            state.gitignored_entries = None;
+        }
         state.allow_entry_check = entry_check;
         let traversal = Traversal::new();
         #[cfg(test)]

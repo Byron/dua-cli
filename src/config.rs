@@ -14,6 +14,11 @@ use std::path::PathBuf;
 /// ```toml
 /// format = "binary"
 ///
+/// # Git-related features to enable in interactive mode.
+/// # Supported values: true, false.
+/// # If unset, behavior defaults to enabled.
+/// # gitignore = true
+///
 /// [keys]
 /// esc_navigates_back = true
 /// ```
@@ -25,6 +30,12 @@ pub struct Config {
 
     /// Keybinding-related settings.
     pub keys: KeysConfig,
+
+    /// Whether Git-ignored entry detection is enabled.
+    ///
+    /// Supported values: `true` and `false`.
+    /// If unset, defaults to `true`.
+    pub gitignore: Option<bool>,
 }
 
 /// Keyboard interaction settings.
@@ -97,6 +108,11 @@ impl Config {
             "# Supported values: metric, binary, bytes, gb, gib, mb, mib.\n",
             "# format = \"binary\"\n",
             "#\n",
+            "# Controls whether Git-ignored entry detection is enabled in interactive mode.\n",
+            "# Supported values: true, false.\n",
+            "# If unset, behavior defaults to true.\n",
+            "# gitignore = true\n",
+            "#\n",
             "[keys]\n",
             "# If true, pressing <Esc> in the main pane ascends to the parent directory.\n",
             "# If false, <Esc> follows the default quit behavior.\n",
@@ -139,5 +155,36 @@ mod tests {
 
         assert_eq!(config.format, Some(crate::ByteFormat::MB));
         assert!(!config.keys.esc_navigates_back);
+    }
+
+    #[test]
+    fn parses_configured_gitignore() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+            gitignore = false
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.gitignore, Some(false));
+    }
+
+    #[test]
+    fn gitignore_defaults_to_enabled() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.gitignore, None);
     }
 }
