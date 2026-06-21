@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.37.0 (2026-06-21)
 
 The hallmark change in this release is support for "precious files", a form
 of Git-ignored file that `gitoxide` doesn't consider expendable.
@@ -63,7 +63,7 @@ of Git-ignored file that `gitoxide` doesn't consider expendable.
 
 <csr-read-only-do-not-edit/>
 
- - 5 commits contributed to the release.
+ - 6 commits contributed to the release.
  - 4 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -75,6 +75,7 @@ of Git-ignored file that `gitoxide` doesn't consider expendable.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog prior to release ([`fbeb7a1`](https://github.com/Byron/dua-cli/commit/fbeb7a10fef481bf4e72762d5045a87d0ce1ff7d))
     - Merge pull request #340 from Byron/precious-support ([`568eb05`](https://github.com/Byron/dua-cli/commit/568eb05c042b58e61f7385cc318e67c571fedeea))
     - Make cleanup heuristics configurable ([`b572b96`](https://github.com/Byron/dua-cli/commit/b572b9603ac32489bc2c94e8f0e03852ab1a0400))
     - Allow disabling Git support using the configuration file. ([`9b96b02`](https://github.com/Byron/dua-cli/commit/9b96b02930bc72b6b3f868d9855a33df8b84135e))
@@ -4509,3 +4510,4 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
+
