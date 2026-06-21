@@ -286,7 +286,7 @@ impl WalkResult {
 pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> BTreeSet<PathBuf> {
     let dirs = ignore_dirs
         .iter()
-        .map(gix_path::realpath)
+        .map(gix::path::realpath)
         .filter_map(Result::ok)
         .collect();
     log::info!("Ignoring canonicalized {dirs:?}");
@@ -297,7 +297,7 @@ fn ignore_directory(path: &Path, ignore_dirs: &BTreeSet<PathBuf>, cwd: &Path) ->
     if ignore_dirs.is_empty() {
         return false;
     }
-    let path = gix_path::realpath_opts(path, cwd, 32);
+    let path = gix::path::realpath_opts(path, cwd, 32);
     path.map(|path| {
         let ignored = ignore_dirs.contains(&path);
         if ignored {

@@ -576,7 +576,7 @@ impl AppState {
         &mut self,
         tree_view: &mut TreeView<'_>,
         glob_pattern: &str,
-        case: gix_glob::pattern::Case,
+        case: gix::glob::pattern::Case,
     ) {
         use FocussedPane::*;
         match glob_search(
