@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+The hallmark change in this release is support for "precious files", a form
+of Git-ignored file that `gitoxide` doesn't consider expendable.
+
+### Chore
+
+ - <csr-id-199f16a8064bfc89e6773286d6ed31fd9b25f120/> remove the `git` Cargo feature
+   For simpler code, and nobody needed that anyway. Can be re-introduced
+   if that changes.
+
+### New Features
+
+ - <csr-id-b572b9603ac32489bc2c94e8f0e03852ab1a0400/> make cleanup heuristics configurable
+   Add `cleanup_heuristics` configuration option for interactive mode,
+   to allow turning it off mainly as it default to 'on'.
+ - <csr-id-9b96b02930bc72b6b3f868d9855a33df8b84135e/> Allow disabling Git support using the configuration file.
+   **`gitignore` Configuration Option**
+   
+   A new config option, `gitignore`, now lets users control Git-ignored entry
+   detection in interactive mode. It is defined as an optional boolean in the
+   config (`Option<bool>`), and if left unset it defaults to enabled behavior (same
+   as previous behavior).
+   
+   **Usage**
+   
+   You can control it in your config file as follows:
+   
+   ```toml
+   gitignore = true
+   
+   gitignore = false
+   ```
+   
+   **Motivation**
+   
+   This makes Git-ignored behavior configurable without requiring feature flags or
+   build-time changes, while preserving existing behavior for users who do not set
+   the option.
+ - <csr-id-be06d778d521f64d720b41d2bd30fedb5db85ef9/> enable precious ignore syntax through Gitoixde
+   When opening the Git repository for ignored-entry
+   detection, add a config override so precious ignore syntax works out of the box.
+   
+   **Usage**
+   
+   ```gitignore
+   preciousFile
+   $preciousFile
+   disposable
+   ```
+   
+   Now `preciousFile` won't show up in `dua` for auto-marking,
+   only `disposable` will.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 4 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #340 from Byron/precious-support ([`568eb05`](https://github.com/Byron/dua-cli/commit/568eb05c042b58e61f7385cc318e67c571fedeea))
+    - Make cleanup heuristics configurable ([`b572b96`](https://github.com/Byron/dua-cli/commit/b572b9603ac32489bc2c94e8f0e03852ab1a0400))
+    - Allow disabling Git support using the configuration file. ([`9b96b02`](https://github.com/Byron/dua-cli/commit/9b96b02930bc72b6b3f868d9855a33df8b84135e))
+    - Remove the `git` Cargo feature ([`199f16a`](https://github.com/Byron/dua-cli/commit/199f16a8064bfc89e6773286d6ed31fd9b25f120))
+    - Enable precious ignore syntax through gix ([`be06d77`](https://github.com/Byron/dua-cli/commit/be06d778d521f64d720b41d2bd30fedb5db85ef9))
+</details>
+
 ## 2.36.0 (2026-06-17)
 
 The headline feature is the optional localization of the interactive help screen, selected from the standard POSIX locale
@@ -36,17 +113,17 @@ environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the d
    is translated.
    
    - New `i18n` module: a `Language` enum, env detection split into a pure
-     `detect()` plus a thin `from_env()`, and an `EN`/`JA` translation table.
+   `detect()` plus a thin `from_env()`, and an `EN`/`JA` translation table.
    - The help pane resolves the language with `Language::from_env()` when it
-     is rendered (only while the pane is open).
+   is rendered (only while the pane is open).
    - Key names, the `^` continuation markers and the symbolic legend stay
-     untranslated; the block title is localized.
+   untranslated; the block title is localized.
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 11 commits contributed to the release.
+ - 12 commits contributed to the release.
  - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#336](https://github.com/Byron/dua-cli/issues/336)
 
@@ -59,6 +136,7 @@ environment variables (`LC_ALL` > `LC_MESSAGES` > `LANG`). English remains the d
  * **[#336](https://github.com/Byron/dua-cli/issues/336)**
     - Don't show unapplicable global options in `config` subcommand. ([`d02a65e`](https://github.com/Byron/dua-cli/commit/d02a65ef733fb2a71178cdc4892eb283ef0f9fc6))
  * **Uncategorized**
+    - Release dua-cli v2.36.0 ([`b14fa90`](https://github.com/Byron/dua-cli/commit/b14fa9070a48a105033f97f5293168b73fca70cf))
     - Merge pull request #339 from Byron/fix-336 ([`9975c07`](https://github.com/Byron/dua-cli/commit/9975c078a3d6f7e1677b349ce973e9237c7dd915))
     - Make `message` color yellow, instead of red. ([`08bda9f`](https://github.com/Byron/dua-cli/commit/08bda9ff2eaa06b9a5ec5943cc3dc653b828cdb5))
     - Address auto-review ([`e5627c0`](https://github.com/Byron/dua-cli/commit/e5627c0887d9d8b97116e03df2001a80aad55344))
@@ -4431,4 +4509,3 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
-
