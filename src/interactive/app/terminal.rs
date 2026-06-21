@@ -47,6 +47,9 @@ impl TerminalApp {
         if config.gitignore == Some(false) {
             state.gitignored_entries = None;
         }
+        if config.cleanup_heuristics == Some(false) {
+            state.cleanup_candidates = None;
+        }
         state.allow_entry_check = entry_check;
         let traversal = Traversal::new();
         #[cfg(test)]

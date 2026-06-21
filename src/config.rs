@@ -14,10 +14,15 @@ use std::path::PathBuf;
 /// ```toml
 /// format = "binary"
 ///
-/// # Git-related features to enable in interactive mode.
+/// # Controls whether Git-ignored entry detection is enabled in interactive mode.
 /// # Supported values: true, false.
-/// # If unset, behavior defaults to enabled.
+/// # If unset, behavior defaults to true.
 /// # gitignore = true
+///
+/// # Controls whether cleanup heuristics are enabled in interactive mode.
+/// # Supported values: true, false.
+/// # If unset, behavior defaults to true.
+/// # cleanup_heuristics = true
 ///
 /// [keys]
 /// esc_navigates_back = true
@@ -36,6 +41,12 @@ pub struct Config {
     /// Supported values: `true` and `false`.
     /// If unset, defaults to `true`.
     pub gitignore: Option<bool>,
+
+    /// Whether cleanup heuristics are enabled.
+    ///
+    /// Supported values: `true` and `false`.
+    /// If unset, defaults to `true`.
+    pub cleanup_heuristics: Option<bool>,
 }
 
 /// Keyboard interaction settings.
@@ -113,6 +124,11 @@ impl Config {
             "# If unset, behavior defaults to true.\n",
             "# gitignore = true\n",
             "#\n",
+            "# Controls whether cleanup heuristics are enabled in interactive mode.\n",
+            "# Supported values: true, false.\n",
+            "# If unset, behavior defaults to true.\n",
+            "# cleanup_heuristics = true\n",
+            "#\n",
             "[keys]\n",
             "# If true, pressing <Esc> in the main pane ascends to the parent directory.\n",
             "# If false, <Esc> follows the default quit behavior.\n",
@@ -186,5 +202,36 @@ mod tests {
         .expect("valid config");
 
         assert_eq!(config.gitignore, None);
+    }
+
+    #[test]
+    fn parses_configured_cleanup_heuristics() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+            cleanup_heuristics = false
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.cleanup_heuristics, Some(false));
+    }
+
+    #[test]
+    fn cleanup_heuristics_defaults_to_enabled() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.cleanup_heuristics, None);
     }
 }
