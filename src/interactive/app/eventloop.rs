@@ -403,9 +403,7 @@ impl AppState {
                     Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
                     Char('t') => self.toggle_cleanup_candidates(&tree_view),
                     Char('X') => self.mark_cleanup_candidates(window, &tree_view),
-                    #[cfg(feature = "git")]
                     Char('i') => self.toggle_gitignored_entries(&tree_view),
-                    #[cfg(feature = "git")]
                     Char('I') => self.mark_gitignored_entries(window, &tree_view),
                     Char('o') | Char('l') | Enter | Right => {
                         self.enter_node_with_traversal(&tree_view)

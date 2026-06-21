@@ -78,7 +78,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
 }
 
 #[test]
-#[cfg(all(feature = "git", not(target_os = "windows")))]
+#[cfg(unix)]
 fn gitignored_entries_are_marked_with_dedicated_key() -> Result<()> {
     let fixture = TempDir::new()?;
     let root = fixture.path();

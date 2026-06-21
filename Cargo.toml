@@ -17,8 +17,7 @@ include = [
 ]
 
 [features]
-default = ["tui-crossplatform", "trash-move", "git"]
-git = []
+default = ["tui-crossplatform", "trash-move"]
 tui-crossplatform = [
     "crossterm",
     "tui",

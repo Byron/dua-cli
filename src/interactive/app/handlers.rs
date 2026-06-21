@@ -195,7 +195,6 @@ impl AppState {
         self.reset_message();
     }
 
-    #[cfg(feature = "git")]
     pub fn toggle_gitignored_entries(&mut self, tree_view: &TreeView<'_>) {
         self.gitignored_entries = self.gitignored_entries.is_none().then(BTreeSet::new);
         self.update_entry_annotations(tree_view);
@@ -478,7 +477,6 @@ impl AppState {
         }
     }
 
-    #[cfg(feature = "git")]
     pub fn mark_gitignored_entries(&mut self, window: &mut MainWindow, tree_view: &TreeView<'_>) {
         match self.gitignored_entries.clone() {
             Some(gitignored_entries) => self.mark_annotation_candidates(

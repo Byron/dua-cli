@@ -217,9 +217,7 @@ fn title(
 fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
     let mut help_text = " mark-move = d | mark-toggle = space | cleanup = X".to_string();
-    if cfg!(feature = "git") {
-        help_text.push_str(" | gitignore = I");
-    }
+    help_text.push_str(" | gitignore = I");
     help_text.push_str(" | all = a ");
 
     let help_text_block_width = block_width(&help_text);

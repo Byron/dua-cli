@@ -5,7 +5,6 @@ use gix::ignore::Kind;
 
 use super::{EntryDataBundle, tree_view::TreeView};
 
-#[cfg(feature = "git")]
 pub fn gitignored_entries(
     tree_view: &TreeView<'_>,
     view_root: TreeIndex,
@@ -83,13 +82,4 @@ pub fn gitignored_entries(
                 .then_some(entry.index)
         })
         .collect()
-}
-
-#[cfg(not(feature = "git"))]
-pub fn gitignored_entries(
-    _tree_view: &TreeView<'_>,
-    _view_root: TreeIndex,
-    _entries: &[EntryDataBundle],
-) -> BTreeSet<TreeIndex> {
-    BTreeSet::new()
 }

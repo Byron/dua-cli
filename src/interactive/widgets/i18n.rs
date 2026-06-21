@@ -118,9 +118,7 @@ pub struct HelpText {
     pub oms_toggle: &'static str,
     pub oms_mark_cleanup: &'static str,
     pub oms_toggle_cleanup: &'static str,
-    #[cfg(feature = "git")]
     pub oms_mark_gitignored: &'static str,
-    #[cfg(feature = "git")]
     pub oms_toggle_gitignored: &'static str,
     pub oms_toggle_all: &'static str,
     pub oms_search: &'static str,
@@ -182,9 +180,7 @@ const EN: HelpText = HelpText {
     oms_toggle: "Toggle the currently selected entry.",
     oms_mark_cleanup: "Mark cleanup candidates in the current view.",
     oms_toggle_cleanup: "Toggle cleanup-candidate detection.",
-    #[cfg(feature = "git")]
     oms_mark_gitignored: "Mark Git-ignored entries in the current view.",
-    #[cfg(feature = "git")]
     oms_toggle_gitignored: "Toggle Git-ignored entry detection.",
     oms_toggle_all: "Toggle all entries.",
     oms_search: "Git-style glob search. Toggle case with 'I'.",
@@ -246,9 +242,7 @@ const JA: HelpText = HelpText {
     oms_toggle: "選択中のエントリを切り替える。",
     oms_mark_cleanup: "現在のビューのクリーンアップ候補をマークする。",
     oms_toggle_cleanup: "クリーンアップ候補の検出を切り替える。",
-    #[cfg(feature = "git")]
     oms_mark_gitignored: "現在のビューの Git 無視エントリをマークする。",
-    #[cfg(feature = "git")]
     oms_toggle_gitignored: "Git 無視エントリの検出を切り替える。",
     oms_toggle_all: "すべてのエントリを切り替える。",
     oms_search: "Git 形式の glob 検索。'I' で大文字小文字を切り替える。",
