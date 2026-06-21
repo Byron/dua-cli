@@ -6,7 +6,7 @@ use anyhow::{Context, Result, anyhow};
 use bstr::BString;
 use crossterm::event::{KeyEvent, KeyEventKind};
 use dua::traverse::{Tree, TreeIndex};
-use gix_glob::pattern::Case;
+use gix::glob::pattern::Case;
 use petgraph::Direction;
 use std::borrow::Borrow;
 use tui::{
@@ -197,7 +197,7 @@ fn glob_search_neighbours(
     results: &mut Vec<TreeIndex>,
     tree: &Tree,
     root_index: TreeIndex,
-    glob: &gix_glob::Pattern,
+    glob: &gix::glob::Pattern,
     path: &mut BString,
     case: Case,
 ) {
@@ -210,13 +210,13 @@ fn glob_search_neighbours(
                 path.push(b'/');
                 Some(previous_len + 1)
             };
-            path.extend_from_slice(gix_path::into_bstr(&node.name).as_ref());
+            path.extend_from_slice(gix::path::into_bstr(&node.name).as_ref());
             if glob.matches_repo_relative_path(
                 path.as_ref(),
                 basename_start,
                 Some(node.is_dir),
                 case,
-                gix_glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
+                gix::glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
             ) {
                 results.push(node_index);
             } else {
@@ -231,9 +231,9 @@ pub fn glob_search(
     tree: &Tree,
     root_index: TreeIndex,
     glob: &str,
-    case: gix_glob::pattern::Case,
+    case: gix::glob::pattern::Case,
 ) -> Result<Vec<TreeIndex>> {
-    let glob = gix_glob::Pattern::from_bytes_without_negation(glob.as_bytes())
+    let glob = gix::glob::Pattern::from_bytes_without_negation(glob.as_bytes())
         .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
     let mut results = Vec::new();
     let mut path = Default::default();

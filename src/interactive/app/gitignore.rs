@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
 use dua::traverse::TreeIndex;
+use gix::ignore::Kind;
 
 use super::{EntryDataBundle, tree_view::TreeView};
 
-#[cfg(feature = "git")]
 pub fn gitignored_entries(
     tree_view: &TreeView<'_>,
     view_root: TreeIndex,
@@ -28,6 +28,13 @@ pub fn gitignored_entries(
         }
     }
 
+    fn open_options(trust: gix::sec::Trust) -> gix::open::Options {
+        use gix::sec::trust::DefaultForLevel;
+
+        gix::open::Options::default_for_level(trust)
+            .config_overrides(["gitoxide.parsePrecious=true"])
+    }
+
     let current_path = tree_view.path_of(view_root);
     let current_path = if current_path.as_os_str().is_empty() {
         Path::new(".").to_owned()
@@ -35,9 +42,16 @@ pub fn gitignored_entries(
         current_path
     };
 
-    let Ok(repo) = gix::discover(&current_path) else {
+    let trust_map = gix::sec::trust::Mapping {
+        full: open_options(gix::sec::Trust::Full),
+        reduced: open_options(gix::sec::Trust::Reduced),
+    };
+    let Ok(repo) =
+        gix::ThreadSafeRepository::discover_opts(&current_path, Default::default(), trust_map)
+    else {
         return BTreeSet::new();
     };
+    let repo = repo.to_thread_local();
     let Ok(cwd) = std::env::current_dir() else {
         return BTreeSet::new();
     };
@@ -62,16 +76,10 @@ pub fn gitignored_entries(
             let path = absolute_path(tree_view.path_of(entry.index), &cwd);
             let relative_path = path.strip_prefix(&workdir).ok()?;
             let platform = excludes.at_path(relative_path, Some(mode(entry))).ok()?;
-            platform.is_excluded().then_some(entry.index)
+            platform
+                .excluded_kind()
+                .is_some_and(|kind| matches!(kind, Kind::Expendable))
+                .then_some(entry.index)
         })
         .collect()
-}
-
-#[cfg(not(feature = "git"))]
-pub fn gitignored_entries(
-    _tree_view: &TreeView<'_>,
-    _view_root: TreeIndex,
-    _entries: &[EntryDataBundle],
-) -> BTreeSet<TreeIndex> {
-    BTreeSet::new()
 }

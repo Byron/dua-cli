@@ -78,7 +78,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
 }
 
 #[test]
-#[cfg(all(feature = "git", not(target_os = "windows")))]
+#[cfg(unix)]
 fn gitignored_entries_are_marked_with_dedicated_key() -> Result<()> {
     let fixture = TempDir::new()?;
     let root = fixture.path();
@@ -99,7 +99,8 @@ fn gitignored_entries_are_marked_with_dedicated_key() -> Result<()> {
 ignored_dir/
 ignored-link
 target/
-*.tmp
+remove.tmp
+$precious.tmp
 !keep.tmp
 ",
     )?;
@@ -107,6 +108,7 @@ target/
     fs::create_dir_all(root.join("ignored_dir"))?;
     fs::write(root.join("ignored_dir/file"), [])?;
     fs::write(root.join("remove.tmp"), [])?;
+    fs::write(root.join("precious.tmp"), [])?;
     fs::write(root.join("keep.tmp"), [])?;
     std::os::unix::fs::symlink(root.join("keep.tmp"), root.join("ignored-link"))?;
     fs::create_dir_all(root.join("target/debug"))?;
@@ -155,6 +157,7 @@ target/
             "ignored.log".to_string(),
             "ignored_dir".to_string(),
             "ignored-link".to_string(),
+            // "precious.tmp".to_string(), # precious file is notably absent from highlighted files
             "remove.tmp".to_string(),
             "target".to_string(),
         ])
@@ -215,7 +218,7 @@ target/
     assert_eq!(
         target_gitignored_names,
         BTreeSet::from(["debug".to_string(), "output.bin".to_string()]),
-        "entries inside an ignored directory are ignored as well as we use `gix::discover()`"
+        "entries inside an ignored directory are ignored as well as we use repository discovery"
     );
 
     app.process_events(&mut terminal, into_codes("u"))?;

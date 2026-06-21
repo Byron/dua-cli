@@ -14,6 +14,16 @@ use std::path::PathBuf;
 /// ```toml
 /// format = "binary"
 ///
+/// # Controls whether Git-ignored entry detection is enabled in interactive mode.
+/// # Supported values: true, false.
+/// # If unset, behavior defaults to true.
+/// # gitignore = true
+///
+/// # Controls whether cleanup heuristics are enabled in interactive mode.
+/// # Supported values: true, false.
+/// # If unset, behavior defaults to true.
+/// # cleanup_heuristics = true
+///
 /// [keys]
 /// esc_navigates_back = true
 /// ```
@@ -25,6 +35,18 @@ pub struct Config {
 
     /// Keybinding-related settings.
     pub keys: KeysConfig,
+
+    /// Whether Git-ignored entry detection is enabled.
+    ///
+    /// Supported values: `true` and `false`.
+    /// If unset, defaults to `true`.
+    pub gitignore: Option<bool>,
+
+    /// Whether cleanup heuristics are enabled.
+    ///
+    /// Supported values: `true` and `false`.
+    /// If unset, defaults to `true`.
+    pub cleanup_heuristics: Option<bool>,
 }
 
 /// Keyboard interaction settings.
@@ -97,6 +119,16 @@ impl Config {
             "# Supported values: metric, binary, bytes, gb, gib, mb, mib.\n",
             "# format = \"binary\"\n",
             "#\n",
+            "# Controls whether Git-ignored entry detection is enabled in interactive mode.\n",
+            "# Supported values: true, false.\n",
+            "# If unset, behavior defaults to true.\n",
+            "# gitignore = true\n",
+            "#\n",
+            "# Controls whether cleanup heuristics are enabled in interactive mode.\n",
+            "# Supported values: true, false.\n",
+            "# If unset, behavior defaults to true.\n",
+            "# cleanup_heuristics = true\n",
+            "#\n",
             "[keys]\n",
             "# If true, pressing <Esc> in the main pane ascends to the parent directory.\n",
             "# If false, <Esc> follows the default quit behavior.\n",
@@ -139,5 +171,67 @@ mod tests {
 
         assert_eq!(config.format, Some(crate::ByteFormat::MB));
         assert!(!config.keys.esc_navigates_back);
+    }
+
+    #[test]
+    fn parses_configured_gitignore() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+            gitignore = false
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.gitignore, Some(false));
+    }
+
+    #[test]
+    fn gitignore_defaults_to_enabled() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.gitignore, None);
+    }
+
+    #[test]
+    fn parses_configured_cleanup_heuristics() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+            cleanup_heuristics = false
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.cleanup_heuristics, Some(false));
+    }
+
+    #[test]
+    fn cleanup_heuristics_defaults_to_enabled() {
+        let config: Config = toml::from_str(
+            r#"
+            format = "mb"
+
+            [keys]
+            esc_navigates_back = false
+            "#,
+        )
+        .expect("valid config");
+
+        assert_eq!(config.cleanup_heuristics, None);
     }
 }

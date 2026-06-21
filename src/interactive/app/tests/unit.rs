@@ -7,7 +7,7 @@ use crate::interactive::{EntryCheck, MTimeSort, SortMode, sorted_entries};
 use anyhow::Result;
 use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
 use dua::{TraversalSorting, WalkOptions};
-use gix_glob::pattern::Case;
+use gix::glob::pattern::Case;
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
 use std::time::Instant;

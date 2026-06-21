@@ -164,9 +164,7 @@ impl HelpPane {
                 hotkey("<Space>", t.oms_toggle, None);
                 hotkey("X", t.oms_mark_cleanup, None);
                 hotkey("t", t.oms_toggle_cleanup, None);
-                #[cfg(feature = "git")]
                 hotkey("I", t.oms_mark_gitignored, None);
-                #[cfg(feature = "git")]
                 hotkey("i", t.oms_toggle_gitignored, None);
                 hotkey("a", t.oms_toggle_all, None);
                 hotkey("/", t.oms_search, Some(t.oms_search_2));
