@@ -102,6 +102,10 @@ jobs:
             os: windows-2022
             rust: nightly
             target: i686-pc-windows-msvc
+          - name: windows-arm64
+            os: windows-2022
+            target: aarch64-pc-windows-msvc
+            use_cross: nightly
 
     steps:
       - name: Checkout repository
