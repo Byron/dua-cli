@@ -76,7 +76,7 @@ jobs:
       EXE_NAME: dua
     strategy:
       matrix:
-        build: [linux, linux-arm, linux-arm64, macos, win-msvc, win32-msvc]
+        build: [linux, linux-arm, linux-arm64, macos, win-msvc, win32-msvc, win-msvc-arm]
         include:
           - build: linux
             os: ubuntu-latest
@@ -102,10 +102,10 @@ jobs:
             os: windows-2022
             rust: nightly
             target: i686-pc-windows-msvc
-          - name: windows-arm64
+          - build: win-msvc-arm
             os: windows-2022
+            rust: nightly
             target: aarch64-pc-windows-msvc
-            use_cross: nightly
 
     steps:
       - name: Checkout repository
