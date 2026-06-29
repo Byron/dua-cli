@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.37.1 (2026-06-29)
+
+### Bug Fixes
+
+ - <csr-id-a83583c40b3cea909823510a0ccf6c92255c0e02/> degrade entries title on narrow terminals
+   improve the interactive top-bar so narrow terminal
+   sizes degrade gracefully. Statistics should disappear when the current path
+   needs the space, and the path should compact by removing the fewest consecutive
+   middle components needed to fit.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 7 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #344 from Byron/interactive-path-display-degradation ([`157996b`](https://github.com/Byron/dua-cli/commit/157996be3292081d46f9e0db30598bad0e5c700c))
+    - Degrade entries title on narrow terminals ([`a83583c`](https://github.com/Byron/dua-cli/commit/a83583c40b3cea909823510a0ccf6c92255c0e02))
+    - Merge pull request #341 from knightmare2600/main ([`68989b6`](https://github.com/Byron/dua-cli/commit/68989b6e2909051edc08b001273d88b7797d282f))
+    - Review - more consistent naming, add name to build array ([`2ade4e7`](https://github.com/Byron/dua-cli/commit/2ade4e703f4a5dc40cb3676e859b8c6757e97902))
+    - Update release.yml ([`a506c74`](https://github.com/Byron/dua-cli/commit/a506c74de36f663e9cb71e8de4afb51da60f6eb9))
+</details>
+
 ## 2.37.0 (2026-06-21)
 
 The hallmark change in this release is support for "precious files", a form
@@ -63,7 +96,7 @@ of Git-ignored file that `gitoxide` doesn't consider expendable.
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
+ - 7 commits contributed to the release.
  - 4 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -75,6 +108,7 @@ of Git-ignored file that `gitoxide` doesn't consider expendable.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.37.0 ([`41a21e6`](https://github.com/Byron/dua-cli/commit/41a21e6f36ba69357b836b48a81ee5e60ce95c4e))
     - Prepare changelog prior to release ([`fbeb7a1`](https://github.com/Byron/dua-cli/commit/fbeb7a10fef481bf4e72762d5045a87d0ce1ff7d))
     - Merge pull request #340 from Byron/precious-support ([`568eb05`](https://github.com/Byron/dua-cli/commit/568eb05c042b58e61f7385cc318e67c571fedeea))
     - Make cleanup heuristics configurable ([`b572b96`](https://github.com/Byron/dua-cli/commit/b572b9603ac32489bc2c94e8f0e03852ab1a0400))
