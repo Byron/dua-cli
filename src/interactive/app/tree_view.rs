@@ -61,7 +61,7 @@ impl TreeView<'_> {
         )
     }
 
-    pub fn current_path(&self, view_root: TreeIndex) -> String {
+    pub fn current_path(&self, view_root: TreeIndex) -> PathBuf {
         current_path(&self.traversal.tree, view_root, self.glob_tree_root)
     }
 
@@ -124,12 +124,11 @@ fn current_path(
     tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
     root: petgraph::stable_graph::NodeIndex,
     glob_root: Option<TreeIndex>,
-) -> String {
-    match path_of(tree, root, glob_root).to_string_lossy().to_string() {
-        ref p if p.is_empty() => Path::new(".")
+) -> PathBuf {
+    match path_of(tree, root, glob_root) {
+        ref p if p.as_os_str().is_empty() => Path::new(".")
             .canonicalize()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| String::from(".")),
+            .unwrap_or_else(|_| PathBuf::from(".")),
         p => p,
     }
 }
