@@ -9,6 +9,7 @@ use crate::interactive::{
 use Constraint::*;
 use FocussedPane::*;
 use std::borrow::Borrow;
+use std::path::PathBuf;
 use tui::buffer::Buffer;
 use tui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,7 +18,7 @@ use tui::{
 };
 
 pub struct MainWindowProps<'a> {
-    pub current_path: String,
+    pub current_path: PathBuf,
     pub entries_traversed: u64,
     pub total_bytes: u128,
     pub start: std::time::Instant,
