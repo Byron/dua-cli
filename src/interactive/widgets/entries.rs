@@ -476,7 +476,15 @@ fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
 fn style(is_selected: bool, is_focussed: bool) -> Style {
     let mut style = Style::default();
     if is_selected {
-        style.add_modifier.insert(Modifier::REVERSED);
+        // Under NO_COLOR, crossterm still emits empty SGR color wrappers that
+        // collapse to CSI 0 m and reset attributes. REVERSED is therefore
+        // cancelled after ratatui paints it. Prefer UNDERLINED (plus BOLD when
+        // focused) so the cursor line stays visible without relying on color.
+        if std::env::var_os("NO_COLOR").is_some() {
+            style.add_modifier.insert(Modifier::UNDERLINED);
+        } else {
+            style.add_modifier.insert(Modifier::REVERSED);
+        }
     }
     if is_focussed & is_selected {
         style.add_modifier.insert(Modifier::BOLD);
