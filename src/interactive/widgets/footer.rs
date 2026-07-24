@@ -66,11 +66,12 @@ impl Footer {
                     Some(elapsed) => format!("in {:.02}s", elapsed.as_secs_f32()),
                     None => {
                         let elapsed = traversal_start.elapsed();
-                        format!(
-                            "in {:.0}s ({:.0}/s)",
-                            elapsed.as_secs_f32(),
+                        let rate = if elapsed.is_zero() {
+                            0.0
+                        } else {
                             *entries_traversed as f32 / elapsed.as_secs_f32()
-                        )
+                        };
+                        format!("in {:.0}s ({:.0}/s)", elapsed.as_secs_f32(), rate)
                     }
                 }
             ))

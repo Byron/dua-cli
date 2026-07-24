@@ -177,17 +177,21 @@ fn main() -> Result<()> {
             io::stderr().flush().ok();
 
             // Exit 'quickly' to avoid having to not have to deal with slightly different types in the other match branches
-            std::process::exit(
-                res.map(|(walk_result, paths)| {
+            let exit_code = match res {
+                Ok((walk_result, paths)) => {
                     if let Some(paths) = paths {
                         for path in paths {
                             println!("{}", path.display())
                         }
                     }
                     walk_result.to_exit_code()
-                })
-                .unwrap_or(0),
-            );
+                }
+                Err(err) => {
+                    eprintln!("{err:#}");
+                    1
+                }
+            };
+            std::process::exit(exit_code);
         }
         Some(Aggregate {
             traversal: subcommand_traversal,

@@ -75,9 +75,12 @@ impl CursorDirection {
 }
 
 impl AppState {
-    pub fn open_that(&self, tree_view: &TreeView<'_>) {
+    pub fn open_that(&mut self, tree_view: &TreeView<'_>) {
         if let Some(idx) = self.navigation().selected {
-            open::that(tree_view.path_of(idx)).ok();
+            let path = tree_view.path_of(idx);
+            if let Err(err) = open::that(&path) {
+                self.message = Some(format!("Failed to open {}: {err}", path.display()));
+            }
         }
     }
 
@@ -655,23 +658,26 @@ impl AppState {
 }
 
 fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<String> {
-    let count = cleanup_count + gitignored_count;
-    if count == 0 {
-        return None;
+    match (cleanup_count, gitignored_count) {
+        (0, 0) => None,
+        (cleanup, 0) => {
+            let label = if cleanup == 1 {
+                "cleanup candidate"
+            } else {
+                "cleanup candidates"
+            };
+            Some(format!("{cleanup} {label} (X)"))
+        }
+        (0, gitignored) => {
+            let label = if gitignored == 1 {
+                "gitignored entry"
+            } else {
+                "gitignored entries"
+            };
+            Some(format!("{gitignored} {label} (I)"))
+        }
+        (cleanup, gitignored) => Some(format!("{cleanup} cleanup, {gitignored} gitignored (X|I)")),
     }
-
-    let key_hint = match (cleanup_count > 0, gitignored_count > 0) {
-        (true, true) => "X|I",
-        (true, false) => "X",
-        (false, true) => "I",
-        (false, false) => unreachable!("count is non-zero"),
-    };
-    let label = if count == 1 {
-        "cleanup candidate"
-    } else {
-        "cleanup candidates"
-    };
-    Some(format!("{count} {label} ({key_hint})"))
 }
 
 fn io_err_to_usize(err: io::Error) -> usize {

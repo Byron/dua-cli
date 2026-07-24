@@ -172,7 +172,7 @@ $precious.tmp
     );
     assert_eq!(
         app.state.message.as_deref(),
-        Some("6 cleanup candidates (X|I)"),
+        Some("1 cleanup, 5 gitignored (X|I)"),
         "footer message advertises both cleanup and gitignore shortcuts"
     );
     app.process_events(&mut terminal, into_codes("i"))?;
@@ -188,7 +188,7 @@ $precious.tmp
     app.process_events(&mut terminal, into_codes("i"))?;
     assert_eq!(
         app.state.message.as_deref(),
-        Some("6 cleanup candidates (X|I)"),
+        Some("1 cleanup, 5 gitignored (X|I)"),
         "gitignored entry detection can be enabled again"
     );
 
