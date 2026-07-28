@@ -443,7 +443,7 @@ impl AppState {
             .tree()
             .node_weight(index)
             .map_or(0, |entry| entry.size);
-        let mut stats = delete_directory_recursively(path_to_delete);
+        let mut stats = delete_directory_recursively(path_to_delete, self.walk_options.threads);
         if stats.errors == 0 {
             stats.entries = self.delete_entries_in_traversal(index, tree_view);
             stats.bytes = bytes;
@@ -694,13 +694,18 @@ fn io_err_to_usize(err: io::Error) -> usize {
 /// (issue #43). Files and symlinks are removed as they are encountered;
 /// directories are collected and removed deepest-first so each `remove_dir`
 /// sees an empty directory.
-fn delete_directory_recursively(path: PathBuf) -> EntryDeletionStats {
+fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionStats {
     let mut stats = EntryDeletionStats::default();
     let mut dirs: Vec<(PathBuf, u128, usize)> = Vec::new();
 
     for entry in jwalk::WalkDir::new(&path)
         .follow_links(false)
         .skip_hidden(false)
+        .parallelism(if threads == 1 {
+            jwalk::Parallelism::Serial
+        } else {
+            jwalk::Parallelism::RayonNewPool(threads)
+        })
     {
         match entry {
             Ok(entry) => {
@@ -720,7 +725,7 @@ fn delete_directory_recursively(path: PathBuf) -> EntryDeletionStats {
     }
 
     // Remove directories deepest-first so parents are empty when removed.
-    dirs.sort_by(|a, b| b.2.cmp(&a.2));
+    dirs.sort_by(|a, b| a.2.cmp(&b.2).reverse());
     for (dir, bytes, _) in dirs {
         record_removal(
             fs::remove_dir(&dir).or_else(|_| fs::remove_file(dir)),
@@ -772,7 +777,7 @@ mod delete_directory_recursively_tests {
         let file = dir.path().join("a.txt");
         fs::write(&file, b"hello").unwrap();
 
-        let stats = delete_directory_recursively(file.clone());
+        let stats = delete_directory_recursively(file.clone(), 1);
 
         assert_eq!(stats.errors, 0);
         assert_eq!(stats.entries, 1);
@@ -788,7 +793,7 @@ mod delete_directory_recursively_tests {
         fs::write(root.join("top.txt"), b"12345").unwrap();
         fs::write(nested.join("deep.txt"), b"abc").unwrap();
 
-        let stats = delete_directory_recursively(root.clone());
+        let stats = delete_directory_recursively(root.clone(), 1);
 
         assert_eq!(stats.errors, 0);
         // top.txt + deep.txt + nested dir + root dir
@@ -807,7 +812,7 @@ mod delete_directory_recursively_tests {
         let link = dir.path().join("link");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
-        let stats = delete_directory_recursively(link.clone());
+        let stats = delete_directory_recursively(link.clone(), 1);
 
         assert_eq!(stats.errors, 0);
         assert!(!link.exists(), "the symlink itself should be gone");
@@ -822,7 +827,7 @@ mod delete_directory_recursively_tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("does-not-exist");
 
-        let stats = delete_directory_recursively(missing);
+        let stats = delete_directory_recursively(missing, 1);
 
         assert_eq!(stats.entries, 0);
         assert!(stats.errors > 0);
