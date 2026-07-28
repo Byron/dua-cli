@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.39.0 (2026-07-28)
 
 The main feature this release is parallel deletion, both for collecting files to be deleted as well as the deletion itself. On my local disk, it now reaches 144k files/s overall deletion performance.
 
@@ -43,7 +43,7 @@ The main feature this release is parallel deletion, both for collecting files to
    Behaviour preserved:
    - Symlinks are removed without following them (remove_file on the link).
    - Directories are removed deepest-first so each remove_dir sees an
-     empty directory.
+   empty directory.
    - Error counting and byte accounting unchanged.
    
    Adds unit tests covering: single file, nested tree, symlink safety,
@@ -58,7 +58,7 @@ The main feature this release is parallel deletion, both for collecting files to
 
 <csr-read-only-do-not-edit/>
 
- - 9 commits contributed to the release over the course of 4 calendar days.
+ - 10 commits contributed to the release over the course of 4 calendar days.
  - 8 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -70,6 +70,7 @@ The main feature this release is parallel deletion, both for collecting files to
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog for release ([`254ea4f`](https://github.com/Byron/dua-cli/commit/254ea4f9dea1429023941e3d2e7a7699f84f04d1))
     - Merge pull request #353 from Solaris-star/fix/43-jwalk-parallel-deletion ([`0f55a5c`](https://github.com/Byron/dua-cli/commit/0f55a5ce8673e7206a9e20257f0a789be9b0b929))
     - Delete files in parallel ([`b04f9f3`](https://github.com/Byron/dua-cli/commit/b04f9f3662a17a473a3a59de0b0122c618341345))
     - Review ([`cd82444`](https://github.com/Byron/dua-cli/commit/cd82444b1484ad3467630bf4e67297a25a14df2b))
@@ -4716,3 +4717,4 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
+
