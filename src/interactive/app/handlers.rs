@@ -6,10 +6,12 @@ use crate::interactive::{
 use crossterm::event::KeyEvent;
 use dua::Config;
 use dua::traverse::TreeIndex;
+use jwalk::rayon::prelude::*;
 use std::{
     collections::BTreeSet,
     fs, io,
     path::PathBuf,
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tui::{Terminal, backend::Backend};
@@ -690,21 +692,28 @@ fn io_err_to_usize(err: io::Error) -> usize {
 
 /// Remove `path` and everything beneath it, returning deletion statistics.
 ///
-/// Uses [`jwalk`] for a parallel traversal that does **not** follow symlinks
-/// (issue #43). Files and symlinks are removed as they are encountered;
+/// Uses [`jwalk`] for a parallel traversal that does **not** follow symlinks.
+/// Files and symlinks are removed in parallel;
 /// directories are collected and removed deepest-first so each `remove_dir`
 /// sees an empty directory.
 fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionStats {
     let mut stats = EntryDeletionStats::default();
     let mut dirs: Vec<(PathBuf, u128, usize)> = Vec::new();
+    let mut files: Vec<(PathBuf, u128)> = Vec::new();
+    let pool = Arc::new(
+        jwalk::rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .stack_size(512 * 1024)
+            .build()
+            .expect("fields we set cannot fail"),
+    );
 
     for entry in jwalk::WalkDir::new(&path)
         .follow_links(false)
         .skip_hidden(false)
-        .parallelism(if threads == 1 {
-            jwalk::Parallelism::Serial
-        } else {
-            jwalk::Parallelism::RayonNewPool(threads)
+        .parallelism(jwalk::Parallelism::RayonExistingPool {
+            pool: pool.clone(),
+            busy_timeout: None,
         })
     {
         match entry {
@@ -717,12 +726,31 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
                     dirs.push((entry_path, bytes, entry.depth));
                 } else {
                     // Regular file or symlink — remove without following.
-                    record_removal(fs::remove_file(&entry_path), bytes, &mut stats);
+                    files.push((entry_path, bytes));
                 }
             }
             Err(_) => stats.errors += 1,
         }
     }
+
+    let file_stats = pool.install(|| {
+        files
+            .into_par_iter()
+            .map(|(path, bytes)| {
+                let mut stats = EntryDeletionStats::default();
+                record_removal(fs::remove_file(path), bytes, &mut stats);
+                stats
+            })
+            .reduce(EntryDeletionStats::default, |mut total, stats| {
+                total.entries += stats.entries;
+                total.bytes += stats.bytes;
+                total.errors += stats.errors;
+                total
+            })
+    });
+    stats.entries += file_stats.entries;
+    stats.bytes += file_stats.bytes;
+    stats.errors += file_stats.errors;
 
     // Remove directories deepest-first so parents are empty when removed.
     dirs.sort_by(|a, b| a.2.cmp(&b.2).reverse());
