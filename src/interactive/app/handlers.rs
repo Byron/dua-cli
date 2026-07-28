@@ -688,47 +688,40 @@ fn io_err_to_usize(err: io::Error) -> usize {
     }
 }
 
-// TODO: could use jwalk for this
-// see https://github.com/Byron/dua-cli/issues/43
+/// Remove `path` and everything beneath it, returning deletion statistics.
+///
+/// Uses [`jwalk`] for a parallel traversal that does **not** follow symlinks
+/// (issue #43). Files and symlinks are removed as they are encountered;
+/// directories are collected and removed deepest-first so each `remove_dir`
+/// sees an empty directory.
 fn delete_directory_recursively(path: PathBuf) -> EntryDeletionStats {
-    let mut files_or_dirs = vec![path];
-    let mut dirs = Vec::new();
     let mut stats = EntryDeletionStats::default();
-    while let Some(path) = files_or_dirs.pop() {
-        let assume_symlink_to_try_deletion = true;
-        let metadata = path.symlink_metadata();
-        let bytes = metadata.as_ref().map_or(0, |metadata| metadata.len()) as u128;
-        let is_symlink = metadata
-            .map(|m| m.file_type().is_symlink())
-            .unwrap_or(assume_symlink_to_try_deletion);
-        if is_symlink {
-            // do not follow symlinks
-            record_removal(fs::remove_file(&path), bytes, &mut stats);
-            continue;
-        }
-        match fs::read_dir(&path) {
-            Ok(iterator) => {
-                dirs.push((path, bytes));
-                for entry in iterator {
-                    match entry.map_err(io_err_to_usize) {
-                        Ok(entry) => files_or_dirs.push(entry.path()),
-                        Err(c) => stats.errors += c,
-                    }
+    let mut dirs: Vec<(PathBuf, u128, usize)> = Vec::new();
+
+    for entry in jwalk::WalkDir::new(&path)
+        .follow_links(false)
+        .skip_hidden(false)
+    {
+        match entry {
+            Ok(entry) => {
+                let entry_path = entry.path();
+                let bytes = fs::symlink_metadata(&entry_path).map_or(0, |m| m.len()) as u128;
+                if entry.file_type.is_dir() {
+                    // Real directory (symlinks to dirs report is_symlink, not
+                    // is_dir, when follow_links is false): remove after children.
+                    dirs.push((entry_path, bytes, entry.depth));
+                } else {
+                    // Regular file or symlink — remove without following.
+                    record_removal(fs::remove_file(&entry_path), bytes, &mut stats);
                 }
             }
-            Err(ref e) if e.kind() == io::ErrorKind::NotADirectory => {
-                // try again with file deletion instead.
-                record_removal(fs::remove_file(path), bytes, &mut stats);
-                continue;
-            }
-            Err(_) => {
-                stats.errors += 1;
-                continue;
-            }
-        };
+            Err(_) => stats.errors += 1,
+        }
     }
 
-    for (dir, bytes) in dirs.into_iter().rev() {
+    // Remove directories deepest-first so parents are empty when removed.
+    dirs.sort_by(|a, b| b.2.cmp(&a.2));
+    for (dir, bytes, _) in dirs {
         record_removal(
             fs::remove_dir(&dir).or_else(|_| fs::remove_file(dir)),
             bytes,
@@ -766,5 +759,72 @@ mod deletion_notification_tests {
         assert_eq!(stats.entries, 1);
         assert_eq!(stats.bytes, 42);
         assert_eq!(stats.errors, 1);
+    }
+}
+
+#[cfg(test)]
+mod delete_directory_recursively_tests {
+    use super::*;
+
+    #[test]
+    fn removes_a_single_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        fs::write(&file, b"hello").unwrap();
+
+        let stats = delete_directory_recursively(file.clone());
+
+        assert_eq!(stats.errors, 0);
+        assert_eq!(stats.entries, 1);
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn removes_a_nested_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        let nested = root.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(root.join("top.txt"), b"12345").unwrap();
+        fs::write(nested.join("deep.txt"), b"abc").unwrap();
+
+        let stats = delete_directory_recursively(root.clone());
+
+        assert_eq!(stats.errors, 0);
+        // top.txt + deep.txt + nested dir + root dir
+        assert_eq!(stats.entries, 4);
+        assert!(!root.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removes_symlink_without_following_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("keep.txt"), b"keep").unwrap();
+
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let stats = delete_directory_recursively(link.clone());
+
+        assert_eq!(stats.errors, 0);
+        assert!(!link.exists(), "the symlink itself should be gone");
+        assert!(
+            target.join("keep.txt").exists(),
+            "the symlink target must not be deleted"
+        );
+    }
+
+    #[test]
+    fn reports_an_error_for_a_missing_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("does-not-exist");
+
+        let stats = delete_directory_recursively(missing);
+
+        assert_eq!(stats.entries, 0);
+        assert!(stats.errors > 0);
     }
 }
