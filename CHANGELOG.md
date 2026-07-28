@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+The main feature this release is parallel deletion, both for collecting files to be deleted as well as the deletion itself. On my local disk, it now reaches 144k files/s overall deletion performance.
+
+### New Features
+
+ - <csr-id-b04f9f3662a17a473a3a59de0b0122c618341345/> delete files in parallel
+   Recursive deletion now uses the same worker count selected with `--threads` for
+   the initial filesystem scan, to accelerate the collection of files to be deleted,
+   as well as the deletion of files.
+   
+   <!-- agent -->
+   When marked directories are deleted, `dua` now:
+   
+   1. walks the selected tree without (following symbolic links as usual)
+   2. collects regular files and symbolic links;
+   3. removes those entries *across the configured workers*;
+   4. removes directories from deepest to shallowest after their contents are gone on *a single thread*.
+   
+   A value of `1` keeps deletion effectively serial. Larger values allow
+   independent file removals to overlap, which is most useful for large directory
+   trees or filesystems with concurrent metadata operations.
+
+### Bug Fixes
+
+ - <csr-id-f2a957a81a24b066677ec0b4b7b31ea4ab736173/> open errors and cleanup/gitignored footer labels
+
+### Refactor
+
+ - <csr-id-7e9d0a8bed224efd68c7520109f1cf646700c867/> use jwalk for parallel, symlink-safe deletion
+   Replace the hand-rolled stack traversal in delete_directory_recursively
+   with a jwalk WalkDir (follow_links=false, skip_hidden=false). This is
+   the same walker the rest of dua uses for scanning, so deletion now
+   benefits from parallel traversal on multi-core machines.
+   
+   Behaviour preserved:
+   - Symlinks are removed without following them (remove_file on the link).
+   - Directories are removed deepest-first so each remove_dir sees an
+     empty directory.
+   - Error counting and byte accounting unchanged.
+   
+   Adds unit tests covering: single file, nested tree, symlink safety,
+   and missing-path error reporting.
+
+### Test
+
+ - <csr-id-48fb6df5e096fb96b8ad757f3ddf1fcc1c8392c1/> Make traversal tree tests filesystem-independent
+   That way, tests will work locally.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release over the course of 4 calendar days.
+ - 8 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #353 from Solaris-star/fix/43-jwalk-parallel-deletion ([`0f55a5c`](https://github.com/Byron/dua-cli/commit/0f55a5ce8673e7206a9e20257f0a789be9b0b929))
+    - Delete files in parallel ([`b04f9f3`](https://github.com/Byron/dua-cli/commit/b04f9f3662a17a473a3a59de0b0122c618341345))
+    - Review ([`cd82444`](https://github.com/Byron/dua-cli/commit/cd82444b1484ad3467630bf4e67297a25a14df2b))
+    - Make traversal tree tests filesystem-independent ([`48fb6df`](https://github.com/Byron/dua-cli/commit/48fb6df5e096fb96b8ad757f3ddf1fcc1c8392c1))
+    - Use jwalk for parallel, symlink-safe deletion ([`7e9d0a8`](https://github.com/Byron/dua-cli/commit/7e9d0a8bed224efd68c7520109f1cf646700c867))
+    - Merge pull request #352 from l0rush1/main ([`496bd78`](https://github.com/Byron/dua-cli/commit/496bd789e2e382d8d3a2ddfdda7b51e3017cd602))
+    - Rustfmt annotation_message match arm ([`3dba5a4`](https://github.com/Byron/dua-cli/commit/3dba5a4814339a15a74382443947704079743e79))
+    - Open errors and cleanup/gitignored footer labels ([`f2a957a`](https://github.com/Byron/dua-cli/commit/f2a957a81a24b066677ec0b4b7b31ea4ab736173))
+    - Fix: interactive exit code and footer entries/s ([`1b3f60d`](https://github.com/Byron/dua-cli/commit/1b3f60de81aa131424d1e6ad9cfc3432eea1846e))
+</details>
+
 ## 2.38.1 (2026-07-20)
 
 This release fixes a long-standing bug where `NO_COLOR=1` would make all styling disapear, including
@@ -18,7 +94,7 @@ the selection indicator itself. Now it's usable, finally.
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 6 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#238](https://github.com/Byron/dua-cli/issues/238)
@@ -32,6 +108,7 @@ the selection indicator itself. Now it's usable, finally.
  * **[#238](https://github.com/Byron/dua-cli/issues/238)**
     - Only strip colors when `NO_COLOR` is enabled ([`ad19f3f`](https://github.com/Byron/dua-cli/commit/ad19f3fe13322d548f645c16f30f3ac4553f812b))
  * **Uncategorized**
+    - Release dua-cli v2.38.1 ([`5131bfe`](https://github.com/Byron/dua-cli/commit/5131bfed2c33548c863e42f8bfe437bc13d0c18a))
     - Prepare changelog prior to release ([`9c89430`](https://github.com/Byron/dua-cli/commit/9c89430c6a6e4425fa540aa90ec89c39dd7a3d43))
     - Merge pull request #351 from Byron/fix-colors ([`9c9364d`](https://github.com/Byron/dua-cli/commit/9c9364ddff40096c099c59518bfc5ff6ac22ab15))
 </details>
@@ -4639,4 +4716,3 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
-
