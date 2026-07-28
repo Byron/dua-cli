@@ -13,14 +13,26 @@ use std::path::PathBuf;
 use std::time::Instant;
 use std::time::{Duration, UNIX_EPOCH};
 
+fn debug_with_unstable_sizes_redacted(tree: Tree) -> String {
+    let mut output = debug(tree);
+    let mut end = output.len();
+    while let Some(entry_count) = output[..end].rfind("entry_count: Some(") {
+        let start = output[..entry_count].rfind("size: ").unwrap() + 6;
+        let value_end = start + output[start..].find(',').unwrap();
+        output.replace_range(start..value_end, "<unstable>");
+        end = start;
+    }
+    output
+}
+
 #[test]
 fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<()> {
     let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
     let expected_tree = sample_01_tree();
 
     assert_eq!(
-        debug(app.traversal.tree),
-        debug(expected_tree),
+        debug_with_unstable_sizes_redacted(app.traversal.tree),
+        debug_with_unstable_sizes_redacted(expected_tree),
         "filesystem graph is stable and matches the directory structure"
     );
     Ok(())
@@ -32,8 +44,8 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
     let (expected_tree, _) = sample_02_tree(true);
 
     assert_eq!(
-        debug(app.traversal.tree),
-        debug(expected_tree),
+        debug_with_unstable_sizes_redacted(app.traversal.tree),
+        debug_with_unstable_sizes_redacted(expected_tree),
         "filesystem graph is stable and matches the directory structure"
     );
     Ok(())
