@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.39.1 (2026-07-30)
 
 This release is merely to allow attestations to be used, and you should be able to validate the binary origin with:
 
@@ -15,7 +15,7 @@ This release is merely to allow attestations to be used, and you should be able 
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 2 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -27,6 +27,7 @@ This release is merely to allow attestations to be used, and you should be able 
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare next release with attestations ([`953a87a`](https://github.com/Byron/dua-cli/commit/953a87a43d2faa65a0fa99b5a8965a361e7f9a31))
     - Merge pull request #354 from Vam-si-krish/ci/release-provenance ([`2d11eb9`](https://github.com/Byron/dua-cli/commit/2d11eb9b812079d0621b4f512e7bf28a0d0db83e))
     - Review ([`ddfd0fb`](https://github.com/Byron/dua-cli/commit/ddfd0fb9d423a587d4f9a838851a679b224f093b))
     - Add provenance attestations for release archives ([`f374d9c`](https://github.com/Byron/dua-cli/commit/f374d9c136e1d069a5b520e9a6e6646861a27243))
