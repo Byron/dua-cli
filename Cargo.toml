@@ -30,7 +30,6 @@ trash-move = ["trash"]
 [dependencies]
 clap = { version = "4.0.29", features = ["derive", "env"] }
 clap_complete = "4.5.54"
-jwalk = "0.8.1"
 byte-unit = "4"
 petgraph = "0.8.3"
 itertools = "0.14.0"
@@ -90,4 +89,5 @@ pretty_assertions = "1.0.0"
 tempfile = "3.27.0"
 
 [lints.clippy]
-all = "deny"
+all = "warn"
+pedantic = { level = "warn", priority = -1 }

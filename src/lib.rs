@@ -11,6 +11,8 @@ mod config;
 pub use config::Config;
 mod crossdev;
 mod inodefilter;
+mod walk;
+pub use walk::{Entry as WalkEntry, Order as WalkOrder, Walk, walk};
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;

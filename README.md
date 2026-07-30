@@ -240,10 +240,6 @@ Maintaining both backends seemed more cumbersome than it's worth and add complex
 but I never liked that it seems to have dropped out of support.
 Thus `crossterm` is the only remaining backend and it's very actively developed.
 
-### Acknowledgements
-
-Thanks to [jwalk][jwalk], all there was left to do is to write a command-line interface. As `jwalk` matures, **dua** should benefit instantly.
-
 ### Limitations
 
 - Does not show symbolic links at all if no path is provided when invoking `dua`
@@ -281,5 +277,4 @@ Thanks to [jwalk][jwalk], all there was left to do is to write a command-line in
 
 [petgraph]: https://crates.io/crates/petgraph
 [rustup]: https://rustup.rs/
-[jwalk]: https://crates.io/crates/jwalk
 [tui]: https://github.com/fdehau/tui-rs

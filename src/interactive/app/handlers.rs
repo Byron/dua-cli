@@ -6,12 +6,12 @@ use crate::interactive::{
 use crossterm::event::KeyEvent;
 use dua::Config;
 use dua::traverse::TreeIndex;
-use jwalk::rayon::prelude::*;
 use std::{
     collections::BTreeSet,
     fs, io,
     path::PathBuf,
-    sync::Arc,
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
     time::{Duration, Instant},
 };
 use tui::{Terminal, backend::Backend};
@@ -692,7 +692,7 @@ fn io_err_to_usize(err: io::Error) -> usize {
 
 /// Remove `path` and everything beneath it, returning deletion statistics.
 ///
-/// Uses [`jwalk`] for a parallel traversal that does **not** follow symlinks.
+/// Uses the work-stealing walker for a parallel traversal that does **not** follow symlinks.
 /// Files and symlinks are removed in parallel;
 /// directories are collected and removed deepest-first so each `remove_dir`
 /// sees an empty directory.
@@ -700,26 +700,12 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
     let mut stats = EntryDeletionStats::default();
     let mut dirs: Vec<(PathBuf, u128, usize)> = Vec::new();
     let mut files: Vec<(PathBuf, u128)> = Vec::new();
-    let pool = Arc::new(
-        jwalk::rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .stack_size(512 * 1024)
-            .build()
-            .expect("fields we set cannot fail"),
-    );
 
-    for entry in jwalk::WalkDir::new(&path)
-        .follow_links(false)
-        .skip_hidden(false)
-        .parallelism(jwalk::Parallelism::RayonExistingPool {
-            pool: pool.clone(),
-            busy_timeout: None,
-        })
-    {
+    for entry in dua::walk(&path, threads, dua::WalkOrder::Completion, |_| true) {
         match entry {
             Ok(entry) => {
                 let entry_path = entry.path();
-                let bytes = fs::symlink_metadata(&entry_path).map_or(0, |m| m.len()) as u128;
+                let bytes = entry.metadata.as_ref().map_or(0, |m| m.len()) as u128;
                 if entry.file_type.is_dir() {
                     // Real directory (symlinks to dirs report is_symlink, not
                     // is_dir, when follow_links is false): remove after children.
@@ -733,15 +719,26 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
         }
     }
 
-    let file_stats = pool.install(|| {
-        files
-            .into_par_iter()
-            .map(|(path, bytes)| {
-                let mut stats = EntryDeletionStats::default();
-                record_removal(fs::remove_file(path), bytes, &mut stats);
-                stats
+    let next_file = AtomicUsize::new(0);
+    let file_stats = thread::scope(|scope| {
+        let handles = (0..threads.max(1).min(files.len()))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut total = EntryDeletionStats::default();
+                    while let Some((path, bytes)) =
+                        files.get(next_file.fetch_add(1, Ordering::Relaxed))
+                    {
+                        record_removal(fs::remove_file(path), *bytes, &mut total);
+                    }
+                    total
+                })
             })
-            .reduce(EntryDeletionStats::default, |mut total, stats| {
+            .collect::<Vec<_>>();
+
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("deletion worker does not panic"))
+            .fold(EntryDeletionStats::default(), |mut total, stats| {
                 total.entries += stats.entries;
                 total.bytes += stats.bytes;
                 total.errors += stats.errors;

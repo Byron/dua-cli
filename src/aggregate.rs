@@ -41,7 +41,12 @@ pub fn aggregate(
                 continue;
             }
         };
-        for entry in walk_options.iter_from_path(path.as_ref(), device_id, false) {
+        for entry in walk_options.iter_from_path(
+            path.as_ref(),
+            device_id,
+            false,
+            crate::walk::Order::Completion,
+        ) {
             stats.entries_traversed += 1;
             progress.throttled(|| {
                 if let Some(err) = err.as_mut() {
@@ -50,8 +55,8 @@ pub fn aggregate(
             });
             match entry {
                 Ok(entry) => {
-                    let file_size = match entry.client_state {
-                        Some(Ok(ref m))
+                    let file_size = match &entry.metadata {
+                        Ok(m)
                             if (walk_options.count_hard_links || inodes.add(m))
                                 && (walk_options.cross_filesystems
                                     || crossdev::is_same_device(device_id, m)) =>
@@ -65,12 +70,11 @@ pub fn aggregate(
                                 })
                             }
                         }
-                        Some(Ok(_)) => 0,
-                        Some(Err(_)) => {
+                        Ok(_) => 0,
+                        Err(_) => {
                             num_errors += 1;
                             0
                         }
-                        None => 0, // ignore directory
                     } as u128;
                     stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                     stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);

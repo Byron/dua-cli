@@ -1,5 +1,4 @@
-use crate::crossdev;
-use crate::traverse::{EntryData, Tree, TreeIndex};
+use crate::{crossdev, walk};
 use byte_unit::{ByteUnit, n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes};
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -8,16 +7,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{fmt, path::Path};
-
-/// Return the entry at `node_idx` or panic if the index is invalid for `tree`.
-pub(crate) fn get_entry_or_panic(tree: &Tree, node_idx: TreeIndex) -> &EntryData {
-    tree.node_weight(node_idx)
-        .expect("node should always be retrievable with valid index")
-}
-
-pub(crate) fn get_size_or_panic(tree: &Tree, node_idx: TreeIndex) -> u128 {
-    get_entry_or_panic(tree, node_idx).size
-}
 
 /// Specifies a way to format bytes
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -125,15 +114,6 @@ impl fmt::Display for ByteFormatDisplay {
     }
 }
 
-/// Identify the kind of sorting to apply during filesystem iteration
-#[derive(Clone)]
-pub enum TraversalSorting {
-    /// Keep filesystem iteration order as provided by the walker.
-    None,
-    /// Sort entries alphabetically by file name during iteration.
-    AlphabeticalByFileName,
-}
-
 /// Throttle access to an optional `io::Write` to the specified `Duration`
 #[derive(Debug)]
 pub(crate) struct Throttle {
@@ -182,22 +162,17 @@ impl Throttle {
 /// Configures a filesystem walk, including output and formatting options.
 #[derive(Clone)]
 pub struct WalkOptions {
-    /// The amount of threads to use. Refer to [`WalkDir::num_threads()`](https://docs.rs/jwalk/0.4.0/jwalk/struct.WalkDir.html#method.num_threads)
-    /// for more information.
+    /// The amount of filesystem worker threads to use.
     pub threads: usize,
     /// If `true`, count every hard-link occurrence independently.
     pub count_hard_links: bool,
     /// If `true`, use apparent size (`metadata.len()`), not allocated blocks on disk.
     pub apparent_size: bool,
-    /// Sorting mode applied by the filesystem walker.
-    pub sorting: TraversalSorting,
     /// If `false`, traversal is constrained to the root filesystem/device.
     pub cross_filesystems: bool,
     /// Canonicalized directories to skip from traversal.
     pub ignore_dirs: BTreeSet<PathBuf>,
 }
-
-type WalkDir = jwalk::WalkDirGeneric<((), Option<Result<std::fs::Metadata, jwalk::Error>>)>;
 
 impl WalkOptions {
     /// Create an iterator over `root` honoring this walk configuration.
@@ -209,58 +184,21 @@ impl WalkOptions {
         root: &Path,
         root_device_id: u64,
         skip_root: bool,
-    ) -> WalkDir {
+        order: walk::Order,
+    ) -> impl Iterator<Item = std::io::Result<walk::Entry>> {
         let ignore_dirs = self.ignore_dirs.clone();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
-        WalkDir::new(root)
-            .follow_links(false)
-            .min_depth(if skip_root { 1 } else { 0 })
-            .sort(match self.sorting {
-                TraversalSorting::None => false,
-                TraversalSorting::AlphabeticalByFileName => true,
-            })
-            .skip_hidden(false)
-            .process_read_dir({
-                let cross_filesystems = self.cross_filesystems;
-                move |_, _, _, dir_entry_results| {
-                    dir_entry_results.iter_mut().for_each(|dir_entry_result| {
-                        if let Ok(dir_entry) = dir_entry_result {
-                            let metadata = dir_entry.metadata();
-
-                            if dir_entry.file_type.is_dir() {
-                                let ok_for_fs = cross_filesystems
-                                    || metadata
-                                        .as_ref()
-                                        .map(|m| crossdev::is_same_device(root_device_id, m))
-                                        .unwrap_or(true);
-                                if !ok_for_fs
-                                    || ignore_directory(&dir_entry.path(), &ignore_dirs, &cwd)
-                                {
-                                    dir_entry.read_children_path = None;
-                                }
-                            }
-
-                            dir_entry.client_state = Some(metadata);
-                        }
-                    })
-                }
-            })
-            .parallelism(match self.threads {
-                0 => jwalk::Parallelism::RayonDefaultPool {
-                    busy_timeout: std::time::Duration::from_secs(1),
-                },
-                1 => jwalk::Parallelism::Serial,
-                _ => jwalk::Parallelism::RayonExistingPool {
-                    pool: jwalk::rayon::ThreadPoolBuilder::new()
-                        .stack_size(128 * 1024)
-                        .num_threads(self.threads)
-                        .thread_name(|idx| format!("dua-fs-walk-{idx}"))
-                        .build()
-                        .expect("fields we set cannot fail")
-                        .into(),
-                    busy_timeout: None,
-                },
-            })
+        let cross_filesystems = self.cross_filesystems;
+        walk::walk(root, self.threads, order, move |entry| {
+            (cross_filesystems
+                || entry.metadata.as_ref().map_or(true, |metadata| {
+                    crossdev::is_same_device(root_device_id, metadata)
+                }))
+                && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
+        })
+        .filter(move |entry| {
+            !skip_root || entry.as_ref().map(|entry| entry.depth > 0).unwrap_or(true)
+        })
     }
 }
 
@@ -359,5 +297,31 @@ mod tests {
                 "result='{expected_result}' for path='{path}' and ignore_dir='{ignore_dirs:?}' "
             );
         }
+    }
+
+    #[test]
+    fn explicitly_selected_ignored_root_is_traversed() {
+        let root = tempfile::tempdir().unwrap();
+        let child = root.path().join("child");
+        std::fs::create_dir(&child).unwrap();
+        let options = WalkOptions {
+            threads: 2,
+            count_hard_links: false,
+            apparent_size: false,
+            cross_filesystems: true,
+            ignore_dirs: canonicalize_ignore_dirs(&[root.path().to_owned()]),
+        };
+
+        let paths = options
+            .iter_from_path(
+                root.path(),
+                crossdev::init(root.path()).unwrap(),
+                false,
+                walk::Order::Completion,
+            )
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+
+        assert!(paths.contains(&child));
     }
 }

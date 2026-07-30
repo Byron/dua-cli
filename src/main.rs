@@ -1,7 +1,7 @@
 #![forbid(rust_2018_idioms, unsafe_code)]
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{CommandFactory as _, Parser};
-use dua::{TraversalSorting, canonicalize_ignore_dirs};
+use dua::canonicalize_ignore_dirs;
 use log::info;
 use std::{
     fs, io,
@@ -296,14 +296,11 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> dua::WalkOptions {
         threads: traversal.threads,
         apparent_size: traversal.apparent_size,
         count_hard_links: traversal.count_hard_links,
-        sorting: TraversalSorting::None,
         cross_filesystems: !traversal.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
     };
 
     if walk_options.threads == 0 {
-        // avoid using the global rayon pool, as it will keep a lot of threads alive after we are done.
-        // Also means that we will spin up a bunch of threads per root path, instead of reusing them.
         walk_options.threads = num_cpus::get();
     }
 
@@ -469,8 +466,9 @@ mod tests {
 
     #[test]
     fn merge_traversal_args_prefers_global_threads() {
+        let custom_threads = super::options::DEFAULT_THREADS + 1;
         let global = super::options::TraversalArgs {
-            threads: 8,
+            threads: custom_threads,
             format: None,
             apparent_size: true,
             count_hard_links: false,
@@ -491,7 +489,7 @@ mod tests {
 
         let merged = merge_traversal_args(&global, &subcommand);
 
-        assert_eq!(merged.threads, 8);
+        assert_eq!(merged.threads, custom_threads);
         assert_eq!(merged.input, subcommand.input);
     }
 

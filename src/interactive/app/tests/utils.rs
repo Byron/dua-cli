@@ -2,16 +2,14 @@ use anyhow::{Context, Error, Result};
 use crossbeam::channel::Receiver;
 use crossterm::event::{Event, KeyCode};
 use dua::{
-    ByteFormat, Config, TraversalSorting, WalkOptions,
+    ByteFormat, Config, WalkOptions,
     traverse::{EntryData, Tree, TreeIndex},
 };
 use itertools::Itertools;
-use jwalk::{DirEntry, WalkDir};
 use petgraph::prelude::NodeIndex;
 use std::{
     env::temp_dir,
     ffi::OsStr,
-    fmt,
     fs::{copy, create_dir_all, remove_dir, remove_file},
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -90,13 +88,10 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
-    for entry in WalkDir::new(&path)
-        .parallelism(jwalk::Parallelism::Serial)
-        .into_iter()
-    {
-        let entry: DirEntry<_> = entry?;
+    for entry in dua::walk(path.as_ref(), 1, dua::WalkOrder::Completion, |_| true) {
+        let entry = entry?;
         let p = entry.path();
-        match p.is_dir() {
+        match entry.file_type.is_dir() {
             true => dirs.push(p),
             false => files.push(p),
         }
@@ -117,18 +112,15 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
-    for entry in WalkDir::new(&src)
-        .parallelism(jwalk::Parallelism::Serial)
-        .into_iter()
-    {
-        let entry: DirEntry<_> = entry?;
+    for entry in dua::walk(src.as_ref(), 1, dua::WalkOrder::ParentFirst, |_| true) {
+        let entry = entry?;
         let entry_path = entry.path();
         entry_path
             .strip_prefix(&src)
             .map_err(Error::from)
             .and_then(|relative_entry_path| {
                 let dst = dst.as_ref().join(relative_entry_path);
-                if entry_path.is_dir() {
+                if entry.file_type.is_dir() {
                     create_dir_all(dst).map_err(Into::into)
                 } else {
                     copy(&entry_path, dst)
@@ -196,7 +188,6 @@ pub fn untraversed_app_and_terminal_with_closure(
         threads: 1,
         apparent_size: true,
         count_hard_links: false,
-        sorting: TraversalSorting::AlphabeticalByFileName,
         cross_filesystems: false,
         ignore_dirs: Default::default(),
     };
@@ -365,8 +356,4 @@ pub fn make_add_node(
         }
         n
     }
-}
-
-pub fn debug(item: impl fmt::Debug) -> String {
-    format!("{item:#?}")
 }

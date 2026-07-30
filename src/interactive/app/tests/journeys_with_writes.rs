@@ -5,7 +5,7 @@ use crate::interactive::app::tests::utils::{
 use crate::interactive::terminal::TerminalApp;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use dua::{ByteFormat, Config, TraversalSorting, WalkOptions};
+use dua::{ByteFormat, Config, WalkOptions};
 use pretty_assertions::assert_eq;
 use std::{collections::BTreeSet, fs};
 use tempfile::TempDir;
@@ -120,7 +120,6 @@ $precious.tmp
         threads: 1,
         apparent_size: true,
         count_hard_links: false,
-        sorting: TraversalSorting::AlphabeticalByFileName,
         cross_filesystems: false,
         ignore_dirs: Default::default(),
     };
@@ -257,7 +256,6 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         threads: 1,
         apparent_size: true,
         count_hard_links: false,
-        sorting: TraversalSorting::AlphabeticalByFileName,
         cross_filesystems: false,
         ignore_dirs: Default::default(),
     };
