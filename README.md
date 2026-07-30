@@ -60,7 +60,7 @@ Release archives include build provenance attestations. After downloading an arc
 was built by this repository with the [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify ./dua-v2.29.0-aarch64-apple-darwin.tar.gz --repo Byron/dua-cli
+gh attestation verify ./dua-v2.39.1-aarch64-apple-darwin.tar.gz --repo Byron/dua-cli
 ```
 
 [releases]: https://github.com/Byron/dua-cli/releases
