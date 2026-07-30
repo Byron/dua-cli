@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+This release is merely to allow attestations to be used, and you should be able to validate the binary origin with:
+
+- `gh attestation verify ./dua-v2.39.1-aarch64-apple-darwin.tar.gz --repo Byron/dua-cli`
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 2 days passed between releases.
+ - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #354 from Vam-si-krish/ci/release-provenance ([`2d11eb9`](https://github.com/Byron/dua-cli/commit/2d11eb9b812079d0621b4f512e7bf28a0d0db83e))
+    - Review ([`ddfd0fb`](https://github.com/Byron/dua-cli/commit/ddfd0fb9d423a587d4f9a838851a679b224f093b))
+    - Add provenance attestations for release archives ([`f374d9c`](https://github.com/Byron/dua-cli/commit/f374d9c136e1d069a5b520e9a6e6646861a27243))
+</details>
+
 ## 2.39.0 (2026-07-28)
 
 The main feature this release is parallel deletion, both for collecting files to be deleted as well as the deletion itself. On my local disk, it now reaches 144k files/s overall deletion performance.
@@ -58,7 +85,7 @@ The main feature this release is parallel deletion, both for collecting files to
 
 <csr-read-only-do-not-edit/>
 
- - 10 commits contributed to the release over the course of 4 calendar days.
+ - 11 commits contributed to the release over the course of 4 calendar days.
  - 8 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -70,6 +97,7 @@ The main feature this release is parallel deletion, both for collecting files to
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.39.0 ([`bc52fa5`](https://github.com/Byron/dua-cli/commit/bc52fa5c81b8bec854af656f97840fd7eea7db1f))
     - Prepare changelog for release ([`254ea4f`](https://github.com/Byron/dua-cli/commit/254ea4f9dea1429023941e3d2e7a7699f84f04d1))
     - Merge pull request #353 from Solaris-star/fix/43-jwalk-parallel-deletion ([`0f55a5c`](https://github.com/Byron/dua-cli/commit/0f55a5ce8673e7206a9e20257f0a789be9b0b929))
     - Delete files in parallel ([`b04f9f3`](https://github.com/Byron/dua-cli/commit/b04f9f3662a17a473a3a59de0b0122c618341345))
