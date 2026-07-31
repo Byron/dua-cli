@@ -6,7 +6,6 @@ use tui::{
     widgets::{Block, ListItem, ListState},
 };
 use unicode_width::UnicodeWidthChar;
-use unicode_width::UnicodeWidthStr;
 
 #[derive(Default)]
 pub struct List {
@@ -72,14 +71,15 @@ pub fn draw_text_nowrap_fn(
 }
 
 pub mod util {
-    use super::*;
+    use super::Rect;
+    use unicode_width::UnicodeWidthStr;
 
     pub fn block_width(text: &str) -> u16 {
         text.width() as u16
     }
 
     pub mod rect {
-        use super::*;
+        use super::Rect;
 
         pub fn snap_to_right(area: Rect, width: u16) -> Rect {
             Rect {

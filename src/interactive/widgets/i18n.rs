@@ -52,8 +52,7 @@ where
         .find(|value| !value.as_ref().is_empty());
     match locale {
         Some(locale) if is_japanese_utf8(locale.as_ref()) => Language::Japanese,
-        Some(_) => Language::English,
-        None => Language::English,
+        _ => Language::English,
     }
 }
 

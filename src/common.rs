@@ -36,19 +36,19 @@ pub enum ByteFormat {
 
 impl ByteFormat {
     /// Return the content width (without unit suffix) needed to display values in this format.
+    #[must_use]
     pub fn width(self) -> usize {
-        use ByteFormat::*;
+        use ByteFormat::{Binary, Bytes, MB, MiB};
         match self {
-            Metric => 10,
             Binary => 11,
-            Bytes => 12,
-            MiB | MB => 12,
+            Bytes | MB | MiB => 12,
             _ => 10,
         }
     }
     /// Return the full width (value plus unit and separator) used by this format.
+    #[must_use]
     pub fn total_width(self) -> usize {
-        use ByteFormat::*;
+        use ByteFormat::{Binary, Bytes, GB, GiB, MB, Metric, MiB};
         const THE_SPACE_BETWEEN_UNIT_AND_NUMBER: usize = 1;
 
         self.width()
@@ -60,6 +60,7 @@ impl ByteFormat {
             + THE_SPACE_BETWEEN_UNIT_AND_NUMBER
     }
     /// Create a display adapter for `bytes` using this format.
+    #[must_use]
     pub fn display(self, bytes: u128) -> impl fmt::Display {
         ByteFormatDisplay {
             format: self,
@@ -74,9 +75,13 @@ struct ByteFormatDisplay {
     bytes: u128,
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "byte_unit requires floating-point conversion"
+)]
 impl fmt::Display for ByteFormatDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        use ByteFormat::*;
+        use ByteFormat::{Binary, Bytes, GB, GiB, MB, Metric, MiB};
         use byte_unit::Byte;
 
         let format = match self.format {
@@ -105,7 +110,6 @@ impl fmt::Display for ByteFormatDisplay {
                 unit,
                 unit_width = match self.format {
                     Binary => 3,
-                    Metric => 2,
                     _ => 2,
                 }
             ),
@@ -126,13 +130,13 @@ impl Throttle {
     /// If `initial_sleep` is set, the first update is delayed by that amount.
     pub(crate) fn new(duration: Duration, initial_sleep: Option<Duration>) -> Self {
         let instance = Self {
-            trigger: Default::default(),
+            trigger: Arc::default(),
         };
 
         let trigger = Arc::downgrade(&instance.trigger);
         std::thread::spawn(move || {
             if let Some(duration) = initial_sleep {
-                std::thread::sleep(duration)
+                std::thread::sleep(duration);
             }
             while let Some(t) = trigger.upgrade() {
                 t.store(true, Ordering::Relaxed);
@@ -149,7 +153,7 @@ impl Throttle {
         F: FnOnce(),
     {
         if self.can_update() {
-            f()
+            f();
         }
     }
 
@@ -196,16 +200,14 @@ impl WalkOptions {
                 }))
                 && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
         })
-        .filter(move |entry| {
-            !skip_root || entry.as_ref().map(|entry| entry.depth > 0).unwrap_or(true)
-        })
+        .filter(move |entry| !skip_root || entry.as_ref().map_or(true, |entry| entry.depth > 0))
     }
 }
 
 /// Information we gather during a filesystem walk
 #[derive(Default)]
 pub struct WalkResult {
-    /// The amount of io::errors we encountered. Can happen when fetching meta-data, or when reading the directory contents.
+    /// The amount of `io::errors` we encountered. Can happen when fetching meta-data, or when reading the directory contents.
     pub num_errors: u64,
 }
 
@@ -213,6 +215,7 @@ impl WalkResult {
     /// Convert traversal result into a process exit code.
     ///
     /// Returns `0` if no I/O errors occurred, otherwise `1`.
+    #[must_use]
     pub fn to_exit_code(&self) -> i32 {
         i32::from(self.num_errors > 0)
     }
@@ -236,14 +239,13 @@ fn ignore_directory(path: &Path, ignore_dirs: &BTreeSet<PathBuf>, cwd: &Path) ->
         return false;
     }
     let path = gix::path::realpath_opts(path, cwd, 32);
-    path.map(|path| {
+    path.is_ok_and(|path| {
         let ignored = ignore_dirs.contains(&path);
         if ignored {
-            log::debug!("Ignored {path:?}");
+            log::debug!("Ignored {}", path.display());
         }
         ignored
     })
-    .unwrap_or(false)
 }
 
 #[cfg(test)]

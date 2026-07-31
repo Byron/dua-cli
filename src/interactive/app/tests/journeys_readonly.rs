@@ -205,13 +205,13 @@ fn simple_user_journey_read_only() -> Result<()> {
     // Glob pane open/close
     {
         app.process_events(&mut terminal, into_codes("/"))?;
-        assert!(app.window.glob_pane.is_some(), "'/' shows the glob pane");
+        assert!(app.window.glob.is_some(), "'/' shows the glob pane");
 
         app.process_events(
             &mut terminal,
             into_events([Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))]),
         )?;
-        assert!(app.window.glob_pane.is_none(), "ESC closes the glob pane");
+        assert!(app.window.glob.is_none(), "ESC closes the glob pane");
     }
 
     // explicit full refresh
@@ -341,12 +341,12 @@ fn simple_user_journey_read_only() -> Result<()> {
         {
             assert_eq!(
                 Some(1),
-                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                app.window.mark.as_ref().map(|p| p.marked().len()),
                 "it marks only a single node",
             );
             assert!(
                 app.window
-                    .mark_pane
+                    .mark
                     .as_ref()
                     .is_some_and(|p| p.marked().contains_key(&previously_selected_index)),
                 "it marks the selected node"
@@ -364,7 +364,7 @@ fn simple_user_journey_read_only() -> Result<()> {
 
             assert_eq!(
                 Some(2),
-                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                app.window.mark.as_ref().map(|p| p.marked().len()),
                 "it marks the currently selected, second node",
             );
 
@@ -381,13 +381,13 @@ fn simple_user_journey_read_only() -> Result<()> {
 
             assert_eq!(
                 Some(1),
-                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                app.window.mark.as_ref().map(|p| p.marked().len()),
                 "it toggled the previous selected item off",
             );
 
             assert!(
                 app.window
-                    .mark_pane
+                    .mark
                     .as_ref()
                     .is_some_and(|p| p.marked().contains_key(&previously_selected_index)),
                 "it leaves the first selected item marked"
@@ -399,7 +399,7 @@ fn simple_user_journey_read_only() -> Result<()> {
 
             assert_eq!(
                 None,
-                app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+                app.window.mark.as_ref().map(|p| p.marked().len()),
                 "it toggles the item off",
             );
 
@@ -417,13 +417,13 @@ fn simple_user_journey_read_only() -> Result<()> {
         app.process_events(&mut terminal, into_codes(" j "))?;
         assert_eq!(
             Some(false),
-            app.window.mark_pane.as_ref().map(|p| p.has_focus()),
+            app.window.mark.as_ref().map(|pane| pane.has_focus()),
             "the marker pane starts out without focus",
         );
 
         assert_eq!(
             Some(2),
-            app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+            app.window.mark.as_ref().map(|p| p.marked().len()),
             "it has two items marked",
         );
 
@@ -432,7 +432,7 @@ fn simple_user_journey_read_only() -> Result<()> {
         {
             assert_eq!(
                 Some(true),
-                app.window.mark_pane.as_ref().map(|p| p.has_focus()),
+                app.window.mark.as_ref().map(|pane| pane.has_focus()),
                 "after tabbing into it, it has focus",
             );
         }
@@ -543,7 +543,7 @@ fn quit_requires_two_presses_when_items_marked() -> Result<()> {
     app.process_events(&mut terminal, into_codes("d"))?;
 
     assert_eq!(
-        app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+        app.window.mark.as_ref().map(|p| p.marked().len()),
         Some(1),
         "expecting one marked item"
     );

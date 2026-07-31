@@ -6,8 +6,8 @@ use crate::interactive::{
         HelpPane, HelpPaneProps, MarkPane, MarkPaneProps,
     },
 };
-use Constraint::*;
-use FocussedPane::*;
+use Constraint::{Length, Max, Percentage};
+use FocussedPane::{Glob, Help, Main, Mark};
 use std::borrow::Borrow;
 use std::path::PathBuf;
 use tui::buffer::Buffer;
@@ -30,10 +30,10 @@ pub struct MainWindowProps<'a> {
 
 #[derive(Default)]
 pub struct MainWindow {
-    pub help_pane: Option<HelpPane>,
-    pub entries_pane: Entries,
-    pub mark_pane: Option<MarkPane>,
-    pub glob_pane: Option<GlobPane>,
+    pub help: Option<HelpPane>,
+    pub entries: Entries,
+    pub mark: Option<MarkPane>,
+    pub glob: Option<GlobPane>,
 }
 
 impl MainWindow {
@@ -59,11 +59,11 @@ impl MainWindow {
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
         let header_bg_color = header_background_color(self.is_anything_marked(), state.focussed);
-        Header.render(header_bg_color, header_area, buffer);
+        Header::render(header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
             let (left_pane, right_pane) = content_layout(content_area);
-            match (&mut self.help_pane, &mut self.mark_pane) {
+            match (&mut self.help, &mut self.mark) {
                 (Some(pane), None) => (left_pane, Some((right_pane, pane)), None),
                 (None, Some(pane)) => (left_pane, None, Some((right_pane, pane))),
                 (Some(help), Some(mark)) => {
@@ -74,7 +74,7 @@ impl MainWindow {
             }
         };
 
-        let (entries_area, glob_pane) = match &mut self.glob_pane {
+        let (entries_area, glob_pane) = match &mut self.glob {
             Some(glob_pane) => {
                 let regions = Layout::default()
                     .direction(Direction::Vertical)
@@ -102,7 +102,7 @@ impl MainWindow {
             pane.render(props, help_area, buffer);
         }
 
-        let marked = self.mark_pane.as_ref().map(|p| p.marked());
+        let marked = self.mark.as_ref().map(|pane| pane.marked());
         let props = EntriesProps {
             current_path: current_path.clone(),
             display: *display,
@@ -116,7 +116,7 @@ impl MainWindow {
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
         };
-        self.entries_pane.render(props, entries_area, buffer);
+        self.entries.render(props, entries_area, buffer);
 
         if let Some((glob_area, pane)) = glob_pane {
             let props = GlobPaneProps {
@@ -126,7 +126,7 @@ impl MainWindow {
             pane.render(props, glob_area, buffer, cursor);
         }
 
-        Footer.render(
+        Footer::render(
             FooterProps {
                 total_bytes: *total_bytes,
                 format: display.byte_format,
@@ -144,10 +144,10 @@ impl MainWindow {
     }
 
     fn is_anything_marked(&self) -> bool {
-        self.mark_pane
+        self.mark
             .as_ref()
-            .map(|p| p.marked())
-            .is_none_or(|m| m.is_empty())
+            .map(|pane| pane.marked())
+            .is_none_or(|marked| marked.is_empty())
     }
 }
 

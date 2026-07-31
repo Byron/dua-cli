@@ -10,6 +10,7 @@ use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
 use gix::glob::pattern::Case;
 use petgraph::algo::is_isomorphic_matching;
 use pretty_assertions::assert_eq;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Instant;
 use std::time::{Duration, UNIX_EPOCH};
@@ -29,7 +30,7 @@ fn trees_match(left: &Tree, right: &Tree) -> bool {
                 && left.metadata_io_error == right.metadata_io_error
                 && (left.entry_count.is_some() || left.size == right.size)
         },
-        |_, _| true,
+        |(), ()| true,
     )
 }
 
@@ -185,7 +186,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
             apparent_size: true,
             count_hard_links: false,
             cross_filesystems: false,
-            ignore_dirs: Default::default(),
+            ignore_dirs: BTreeSet::default(),
         },
         Vec::new(),
     );

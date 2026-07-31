@@ -26,7 +26,7 @@ pub struct FooterProps {
 }
 
 impl Footer {
-    pub fn render(&self, props: impl Borrow<FooterProps>, area: Rect, buf: &mut Buffer) {
+    pub fn render(props: impl Borrow<FooterProps>, area: Rect, buf: &mut Buffer) {
         let FooterProps {
             total_bytes,
             entries_traversed,
@@ -62,17 +62,16 @@ impl Footer {
                 sort_mode_label(*sort_mode),
                 format.display(*total_bytes),
                 entries_traversed,
-                progress = match elapsed {
-                    Some(elapsed) => format!("in {:.02}s", elapsed.as_secs_f32()),
-                    None => {
-                        let elapsed = traversal_start.elapsed();
-                        let rate = if elapsed.is_zero() {
-                            0.0
-                        } else {
-                            *entries_traversed as f32 / elapsed.as_secs_f32()
-                        };
-                        format!("in {:.0}s ({:.0}/s)", elapsed.as_secs_f32(), rate)
-                    }
+                progress = if let Some(elapsed) = elapsed {
+                    format!("in {:.02}s", elapsed.as_secs_f32())
+                } else {
+                    let elapsed = traversal_start.elapsed();
+                    let rate = if elapsed.is_zero() {
+                        0.0
+                    } else {
+                        *entries_traversed as f32 / elapsed.as_secs_f32()
+                    };
+                    format!("in {:.0}s ({:.0}/s)", elapsed.as_secs_f32(), rate)
                 }
             ))
             .into(),

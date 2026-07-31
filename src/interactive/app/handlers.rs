@@ -18,7 +18,10 @@ use tui::{Terminal, backend::Backend};
 
 use super::{
     notification,
-    state::{AppState, FocussedPane::*},
+    state::{
+        AppState,
+        FocussedPane::{Glob, Help, Main, Mark},
+    },
 };
 
 #[derive(Copy, Clone)]
@@ -64,7 +67,7 @@ pub enum CursorDirection {
 
 impl CursorDirection {
     pub fn move_cursor(&self, n: usize) -> usize {
-        use CursorDirection::*;
+        use CursorDirection::{Down, PageDown, PageUp, ToBottom, ToTop, Up};
         match self {
             ToTop => 0,
             ToBottom => usize::MAX,
@@ -135,7 +138,7 @@ impl AppState {
 
     pub fn enter_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
         let new_entries = self.entries_for_enter_node(tree_view);
-        self.enter_node(new_entries, tree_view)
+        self.enter_node(new_entries, tree_view);
     }
 
     pub fn enter_node(
@@ -245,7 +248,7 @@ impl AppState {
     pub fn toggle_glob_search(&mut self, window: &mut MainWindow) {
         self.focussed = match self.focussed {
             Main | Mark | Help => {
-                window.glob_pane = Some(GlobPane::default());
+                window.glob = Some(GlobPane::default());
                 Glob
             }
             Glob => unreachable!("BUG: glob pane must catch the input leading here"),
@@ -266,41 +269,32 @@ impl AppState {
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {
         self.focussed = match self.focussed {
             Main | Mark | Glob => {
-                window.help_pane = Some(HelpPane::with_locale_from_env());
+                window.help = Some(HelpPane::with_locale_from_env());
                 Help
             }
             Help => {
-                window.help_pane = None;
+                window.help = None;
                 Main
             }
         }
     }
     pub fn cycle_focus(&mut self, window: &mut MainWindow) {
-        if let Some(p) = window.mark_pane.as_mut() {
-            p.set_focus(false)
-        };
+        if let Some(p) = window.mark.as_mut() {
+            p.set_focus(false);
+        }
         self.focussed = match (
             self.focussed,
-            &window.help_pane,
-            &mut window.mark_pane,
-            &mut window.glob_pane,
+            &window.help,
+            &mut window.mark,
+            &mut window.glob,
         ) {
             (Main, Some(_), _, _) => Help,
-            (Help, _, Some(pane), _) => {
+            (Help, _, Some(pane), _) | (Main, None, Some(pane), _) => {
                 pane.set_focus(true);
                 Mark
             }
-            (Help, _, _, Some(_)) => Glob,
-            (Help, _, None, None) => Main,
-            (Mark, _, _, Some(_)) => Glob,
-            (Mark, _, _, _) => Main,
-            (Main, None, None, None) => Main,
-            (Main, None, Some(pane), _) => {
-                pane.set_focus(true);
-                Mark
-            }
-            (Main, None, None, Some(_)) => Glob,
-            (Glob, _, _, _) => Main,
+            (Help | Mark, _, _, Some(_)) | (Main, None, None, Some(_)) => Glob,
+            (Help, _, None, None) | (Mark | Glob, _, _, _) | (Main, None, None, None) => Main,
         };
     }
 
@@ -315,8 +309,8 @@ impl AppState {
     ) where
         B: Backend,
     {
-        let res = window.mark_pane.take().and_then(|p| p.process_events(key));
-        window.mark_pane = match res {
+        let res = window.mark.take().and_then(|p| p.process_events(key));
+        window.mark = match res {
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
                     self.message = Some("Deleting items...".to_string());
@@ -325,9 +319,9 @@ impl AppState {
                     let mut bytes_deleted = 0;
                     let mut errors = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_delete| {
-                        window.mark_pane = Some(pane);
+                        window.mark = Some(pane);
                         self.draw(window, tree_view, display, terminal, config).ok();
-                        pane = window.mark_pane.take().expect("option to be filled");
+                        pane = window.mark.take().expect("option to be filled");
                         match self.delete_entry(entry_to_delete, tree_view) {
                             Ok(stats) => {
                                 entries_deleted += stats.entries;
@@ -365,9 +359,9 @@ impl AppState {
                     let mut bytes_trashed = 0;
                     let mut errors = 0;
                     let res = pane.iterate_deletable_items(|mut pane, entry_to_trash| {
-                        window.mark_pane = Some(pane);
+                        window.mark = Some(pane);
                         self.draw(window, tree_view, display, terminal, config).ok();
-                        pane = window.mark_pane.take().expect("option to be filled");
+                        pane = window.mark.take().expect("option to be filled");
                         let entry_size = tree_view
                             .tree()
                             .node_weight(entry_to_trash)
@@ -403,7 +397,7 @@ impl AppState {
             },
             None => None,
         };
-        if window.mark_pane.is_none() {
+        if window.mark.is_none() {
             self.focussed = Main;
         }
     }
@@ -483,14 +477,14 @@ impl AppState {
         let entries_deleted =
             tree_view.remove_entries(index, true /* remove node at `index` */);
 
-        if !tree_view.exists(self.navigation().view_root) {
-            self.go_to_root(tree_view);
-        } else {
+        if tree_view.exists(self.navigation().view_root) {
             self.entries = tree_view.sorted_entries(
                 self.navigation().view_root,
                 self.sorting,
                 self.entry_check(),
             );
+        } else {
+            self.go_to_root(tree_view);
         }
         self.update_entry_annotations(tree_view);
 
@@ -537,11 +531,10 @@ impl AppState {
             MarkEntryMode::Toggle => true,
             MarkEntryMode::MarkForDeletion => false,
         };
-        if let Some(pane) = window.mark_pane.take() {
-            window.mark_pane = pane.toggle_index(index, tree_view, is_dir, should_toggle);
+        if let Some(pane) = window.mark.take() {
+            window.mark = pane.toggle_index(index, tree_view, is_dir, should_toggle);
         } else {
-            window.mark_pane =
-                MarkPane::default().toggle_index(index, tree_view, is_dir, should_toggle)
+            window.mark = MarkPane::default().toggle_index(index, tree_view, is_dir, should_toggle);
         }
     }
 
@@ -554,9 +547,9 @@ impl AppState {
     ) {
         if let Some(index) = self.navigation().selected {
             self.mark_entry_by_index(index, mode, window, tree_view);
-        };
+        }
         if let CursorMode::Advance = cursor {
-            self.change_entry_selection(CursorDirection::Down)
+            self.change_entry_selection(CursorDirection::Down);
         }
     }
 
@@ -608,15 +601,14 @@ impl AppState {
         window: &mut MainWindow,
         tree_view: &TreeView<'_>,
     ) {
-        let already_marked = window.mark_pane.as_ref().map(|pane| pane.marked());
+        let already_marked = window.mark.as_ref().map(MarkPane::marked);
         let candidates = self
             .entries
             .iter()
             .filter_map(|entry| {
                 let is_candidate = annotation_candidates.contains(&entry.index);
-                let is_marked = already_marked
-                    .map(|marked| marked.contains_key(&entry.index))
-                    .unwrap_or(false);
+                let is_marked =
+                    already_marked.is_some_and(|marked| marked.contains_key(&entry.index));
                 (is_candidate && !is_marked).then_some(entry.index)
             })
             .collect::<Vec<_>>();
@@ -639,10 +631,10 @@ impl AppState {
     pub fn update_entry_annotations(&mut self, tree_view: &TreeView<'_>) {
         if self.glob_navigation.is_some() {
             if self.cleanup_candidates.is_some() {
-                self.cleanup_candidates = Some(Default::default());
+                self.cleanup_candidates = Some(BTreeSet::default());
             }
             if self.gitignored_entries.is_some() {
-                self.gitignored_entries = Some(Default::default());
+                self.gitignored_entries = Some(BTreeSet::default());
             }
         } else {
             if self.cleanup_candidates.is_some() {
@@ -683,11 +675,7 @@ fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<S
 }
 
 fn io_err_to_usize(err: io::Error) -> usize {
-    if err.kind() == io::ErrorKind::NotFound {
-        0
-    } else {
-        1
-    }
+    usize::from(err.kind() != io::ErrorKind::NotFound)
 }
 
 /// Remove `path` and everything beneath it, returning deletion statistics.
@@ -705,7 +693,7 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
         match entry {
             Ok(entry) => {
                 let entry_path = entry.path();
-                let bytes = entry.metadata.as_ref().map_or(0, |m| m.len()) as u128;
+                let bytes = u128::from(entry.metadata.as_ref().map_or(0, std::fs::Metadata::len));
                 if entry.file_type.is_dir() {
                     // Real directory (symlinks to dirs report is_symlink, not
                     // is_dir, when follow_links is false): remove after children.

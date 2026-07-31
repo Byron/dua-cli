@@ -46,9 +46,11 @@ pub fn gitignored_entries(
         full: open_options(gix::sec::Trust::Full),
         reduced: open_options(gix::sec::Trust::Reduced),
     };
-    let Ok(repo) =
-        gix::ThreadSafeRepository::discover_opts(&current_path, Default::default(), trust_map)
-    else {
+    let Ok(repo) = gix::ThreadSafeRepository::discover_opts(
+        &current_path,
+        gix::discover::upwards::Options::default(),
+        trust_map,
+    ) else {
         return BTreeSet::new();
     };
     let repo = repo.to_thread_local();

@@ -108,7 +108,7 @@ impl Entries {
             let exists = &bundle.exists;
             let name = bundle.name.as_path();
 
-            let is_marked = marked.map(|m| m.contains_key(node_idx)).unwrap_or(false);
+            let is_marked = marked.is_some_and(|m| m.contains_key(node_idx));
             let is_cleanup_candidate = cleanup_candidates.is_some_and(|c| c.contains(node_idx));
             let is_gitignored = gitignored_entries.is_some_and(|g| g.contains(node_idx));
             let is_selected = selected == &Some(*node_idx);
@@ -120,7 +120,7 @@ impl Entries {
             let percentage_style = percentage_style(fraction, text_style);
 
             let mut columns = Vec::new();
-            if show_mtime_column(sort_mode, show_columns) {
+            if show_mtime_column(*sort_mode, show_columns) {
                 columns.push(mtime_column(
                     bundle.mtime,
                     column_style(Column::MTime, *sort_mode, text_style),
@@ -132,7 +132,7 @@ impl Entries {
                 column_style(Column::Bytes, *sort_mode, text_style),
             ));
             columns.push(percentage_column(*display, fraction, percentage_style));
-            if show_count_column(sort_mode, show_columns) {
+            if show_count_column(*sort_mode, show_columns) {
                 columns.push(count_column(
                     bundle.entry_count,
                     column_style(Column::Count, *sort_mode, text_style),
@@ -190,8 +190,7 @@ fn entry_in_view(
         entries
             .iter()
             .find_position(|b| b.index == selected)
-            .map(|(idx, _)| idx)
-            .unwrap_or(0)
+            .map_or(0, |(idx, _)| idx)
     })
 }
 
@@ -273,8 +272,7 @@ fn compact_path(current_path: &Path, width: usize) -> Cow<'_, str> {
     let keep_ends = true;
     path.compact_by_removing_components(width, keep_ends)
         .or_else(|| path.compact_by_removing_components(width, !keep_ends))
-        .map(Cow::Owned)
-        .unwrap_or_else(|| shorten_input(current_path_display, width))
+        .map_or_else(|| shorten_input(current_path_display, width), Cow::Owned)
 }
 
 /// Parsed path data reused while evaluating component-removal candidates.
@@ -342,7 +340,7 @@ impl<'a> DisplayPath<'a> {
     /// removable end, which is a fallback for very narrow widths.
     fn compact_by_removing_components(&self, width: usize, keep_ends: bool) -> Option<String> {
         let component_count = self.components.len();
-        let path_center = component_count as isize - 1;
+        let path_center = component_count.cast_signed() - 1;
         let (first_start, last_start) = if keep_ends {
             (1, component_count.checked_sub(2)?)
         } else {
@@ -380,7 +378,7 @@ impl<'a> DisplayPath<'a> {
 
             let end = lower;
             let removed_components = end - start;
-            let removed_center = (start * 2 + removed_components - 1) as isize;
+            let removed_center = (start * 2 + removed_components - 1).cast_signed();
             let center_distance = (removed_center - path_center).abs();
             let candidate_width = self.candidate_width(start, end);
             if best.as_ref().is_none_or(
@@ -503,7 +501,7 @@ fn columns_with_separators(
     for (idx, column) in columns.into_iter().enumerate() {
         columns_with_separators.push(column);
         if insert_last_separator || idx != column_count - 1 {
-            columns_with_separators.push(Span::styled(" | ", style))
+            columns_with_separators.push(Span::styled(" | ", style));
         }
     }
     columns_with_separators
@@ -523,7 +521,7 @@ fn count_column(entry_count: Option<u64>, style: Style) -> Span<'static> {
                 Some(count) => {
                     COUNT.format(count as f64)
                 }
-                None => "".to_string(),
+                None => String::new(),
             }
         ),
         style,
@@ -633,14 +631,14 @@ fn column_style(column: Column, sort_mode: SortMode, style: Style) -> Style {
     }
 }
 
-fn show_mtime_column(sort_mode: &SortMode, show_columns: &HashSet<Column>) -> bool {
+fn show_mtime_column(sort_mode: SortMode, show_columns: &HashSet<Column>) -> bool {
     matches!(
         sort_mode,
         SortMode::MTimeAscending(_) | SortMode::MTimeDescending(_)
     ) || show_columns.contains(&Column::MTime)
 }
 
-fn show_count_column(sort_mode: &SortMode, show_columns: &HashSet<Column>) -> bool {
+fn show_count_column(sort_mode: SortMode, show_columns: &HashSet<Column>) -> bool {
     matches!(
         sort_mode,
         SortMode::CountAscending | SortMode::CountDescending
@@ -861,13 +859,13 @@ mod entries_test {
     fn sorting_by_mtime_shows_column_like_count_sorting() {
         let mut show_columns = HashSet::new();
         assert!(
-            show_mtime_column(&SortMode::MTimeDescending(MTimeSort::Entry), &show_columns,),
+            show_mtime_column(SortMode::MTimeDescending(MTimeSort::Entry), &show_columns,),
             "mtime sorting shows the mtime column even when it is not explicitly enabled",
         );
 
         show_columns.insert(Column::MTime);
         assert!(
-            show_mtime_column(&SortMode::SizeDescending, &show_columns,),
+            show_mtime_column(SortMode::SizeDescending, &show_columns,),
             "explicitly enabling the mtime column shows it for non-mtime sorts",
         );
     }

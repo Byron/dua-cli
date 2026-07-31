@@ -83,6 +83,7 @@ impl Default for Traversal {
 
 impl Traversal {
     /// Create a new empty traversal with a synthetic root node.
+    #[must_use]
     pub fn new() -> Self {
         let mut tree = Tree::new();
         let root_index = tree.add_node(EntryData::default());
@@ -95,6 +96,7 @@ impl Traversal {
     }
 
     /// Return `true` if this traversal is considered expensive to recompute.
+    #[must_use]
     pub fn is_costly(&self) -> bool {
         self.cost.is_none_or(|d| d.as_secs_f32() > 10.0)
     }
@@ -130,7 +132,6 @@ impl Default for TraversalStats {
 /// A filesystem entry waiting to be integrated into a traversal.
 pub struct TraversalEntry(crate::walk::Entry);
 
-#[allow(clippy::large_enum_variant)]
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
     /// A discovered entry and its traversal context.
@@ -157,7 +158,7 @@ pub struct BackgroundTraversal {
 
 impl BackgroundTraversal {
     /// Start a background thread to perform the actual tree walk, and dispatch the results
-    /// as events to be received on [BackgroundTraversal::event_rx].
+    /// as events to be received on [`BackgroundTraversal::event_rx`].
     pub fn start(
         root_idx: TreeIndex,
         walk_options: &WalkOptions,
@@ -172,14 +173,11 @@ impl BackgroundTraversal {
                 let walk_options = walk_options.clone();
                 let mut io_errors: u64 = 0;
                 move || {
-                    for root_path in input.into_iter() {
-                        log::info!("Walking {root_path:?}");
-                        let device_id = match crossdev::init(root_path.as_ref()) {
-                            Ok(id) => id,
-                            Err(_) => {
-                                io_errors += 1;
-                                continue;
-                            }
+                    for root_path in input {
+                        log::info!("Walking {}", root_path.display());
+                        let Ok(device_id) = crossdev::init(root_path.as_ref()) else {
+                            io_errors += 1;
+                            continue;
                         };
 
                         let root_path = Arc::new(root_path);
@@ -229,6 +227,15 @@ impl BackgroundTraversal {
     /// * `Some(true)` if the traversal is finished
     /// * `Some(false)` if the caller may update its state after throttling kicked in
     /// * `None` - the event was written into the traversal, but there is nothing else to do
+    ///
+    /// # Panics
+    ///
+    /// Panics if a child entry arrives before its parent, violating the parent-first traversal
+    /// invariant.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "event integration keeps tree updates atomic"
+    )]
     pub fn integrate_traversal_event(
         &mut self,
         traversal: &mut Traversal,
@@ -242,7 +249,7 @@ impl BackgroundTraversal {
                     Ok(TraversalEntry(entry)) => {
                         let walk_depth = entry.depth;
                         if self.skip_root {
-                            data.name = entry.file_name.clone().into()
+                            data.name = entry.file_name.clone().into();
                         } else {
                             data.name = if walk_depth < 1 && self.use_root_path {
                                 (*root_path).clone()
@@ -254,42 +261,37 @@ impl BackgroundTraversal {
                         let mut file_size = 0u128;
                         let mut mtime: SystemTime = UNIX_EPOCH;
                         data.is_dir = entry.file_type.is_dir();
-                        match &entry.metadata {
-                            Ok(m) => {
-                                if self.walk_options.count_hard_links
-                                    || self.inodes.add(m)
-                                        && (self.walk_options.cross_filesystems
-                                            || crossdev::is_same_device(device_id, m))
-                                {
-                                    if self.walk_options.apparent_size {
-                                        file_size = m.len() as u128;
-                                    } else {
-                                        file_size = size_on_disk(&entry.parent_path, &data.name, m)
+                        if let Ok(m) = &entry.metadata {
+                            if self.walk_options.count_hard_links
+                                || self.inodes.add(m)
+                                    && (self.walk_options.cross_filesystems
+                                        || crossdev::is_same_device(device_id, m))
+                            {
+                                if self.walk_options.apparent_size {
+                                    file_size = u128::from(m.len());
+                                } else {
+                                    file_size = u128::from(
+                                        size_on_disk(&entry.parent_path, &data.name, m)
                                             .unwrap_or_else(|_| {
                                                 self.stats.io_errors += 1;
                                                 data.metadata_io_error = true;
                                                 0
-                                            })
-                                            as u128;
-                                    }
-                                } else {
-                                    data.entry_count = Some(0);
+                                            }),
+                                    );
                                 }
-
-                                match m.modified() {
-                                    Ok(modified) => {
-                                        mtime = modified;
-                                    }
-                                    Err(_) => {
-                                        self.stats.io_errors += 1;
-                                        data.metadata_io_error = true;
-                                    }
-                                }
+                            } else {
+                                data.entry_count = Some(0);
                             }
-                            Err(_) => {
+
+                            if let Ok(modified) = m.modified() {
+                                mtime = modified;
+                            } else {
                                 self.stats.io_errors += 1;
                                 data.metadata_io_error = true;
                             }
+                        } else {
+                            self.stats.io_errors += 1;
+                            data.metadata_io_error = true;
                         }
 
                         data.mtime = mtime;
@@ -382,7 +384,7 @@ mod tests {
                 count_hard_links: true,
                 apparent_size: true,
                 cross_filesystems: true,
-                ignore_dirs: Default::default(),
+                ignore_dirs: std::collections::BTreeSet::default(),
             },
             vec![dir.path().to_owned()],
             false,

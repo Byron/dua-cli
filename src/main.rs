@@ -14,6 +14,13 @@ use std::{
 use crate::interactive::input::{input_channel, input_channel_from_chars};
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::terminal::TerminalApp;
+#[cfg(feature = "tui-crossplatform")]
+use crossterm::{
+    execute,
+    terminal::{EnterAlternateScreen, enable_raw_mode},
+};
+#[cfg(feature = "tui-crossplatform")]
+use tui::{Terminal, backend::CrosstermBackend};
 
 mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
@@ -53,7 +60,9 @@ impl Drop for InteractiveTerminalGuard {
 }
 
 fn main() -> Result<()> {
-    use options::Command::*;
+    #[cfg(feature = "tui-crossplatform")]
+    use options::Command::Interactive;
+    use options::Command::{Aggregate, Completions, Config};
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
 
@@ -76,7 +85,7 @@ fn main() -> Result<()> {
                     log_rec.file().unwrap_or("<unknown>"),
                     log_rec.line().unwrap_or(0),
                     log_msg
-                ))
+                ));
             })
             .chain(log_output)
             .apply()?;
@@ -98,13 +107,6 @@ fn main() -> Result<()> {
             once,
         }) => {
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
-            use anyhow::{Context, anyhow};
-            use crossterm::{
-                execute,
-                terminal::{EnterAlternateScreen, enable_raw_mode},
-            };
-            use tui::{Terminal, backend::CrosstermBackend};
-
             let config = dua::Config::load()?;
             let enable_focus_change = config.notifications.any_enabled();
             let byte_format = traversal.byte_format(&config);
@@ -159,15 +161,7 @@ fn main() -> Result<()> {
                 ),
             };
 
-            let res = res.map(|r| {
-                (
-                    r,
-                    app.window
-                        .mark_pane
-                        .take()
-                        .map(|marked| marked.into_paths()),
-                )
-            });
+            let res = res.map(|r| (r, app.window.mark.take().map(|pane| pane.into_paths())));
             // Leak app memory to avoid having to wait for the hashmap to deallocate,
             // which causes a noticeable delay shortly before the the program exits anyway.
             std::mem::forget(app);
@@ -181,7 +175,7 @@ fn main() -> Result<()> {
                 Ok((walk_result, paths)) => {
                     if let Some(paths) = paths {
                         for path in paths {
-                            println!("{}", path.display())
+                            println!("{}", path.display());
                         }
                     }
                     walk_result.to_exit_code()
@@ -273,19 +267,19 @@ fn merge_traversal_args(
     subcommand: &options::TraversalArgs,
 ) -> options::TraversalArgs {
     options::TraversalArgs {
-        threads: if global.threads != options::DEFAULT_THREADS {
-            global.threads
-        } else {
+        threads: if global.threads == options::DEFAULT_THREADS {
             subcommand.threads
+        } else {
+            global.threads
         },
         format: global.format.or(subcommand.format),
         apparent_size: global.apparent_size || subcommand.apparent_size,
         count_hard_links: global.count_hard_links || subcommand.count_hard_links,
         stay_on_filesystem: global.stay_on_filesystem || subcommand.stay_on_filesystem,
-        ignore_dirs: if !is_default_ignore_dirs(&global.ignore_dirs) {
-            global.ignore_dirs.clone()
-        } else {
+        ignore_dirs: if is_default_ignore_dirs(&global.ignore_dirs) {
             subcommand.ignore_dirs.clone()
+        } else {
+            global.ignore_dirs.clone()
         },
         input: subcommand.input.clone(),
     }
@@ -346,7 +340,7 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
                 && meta.file_type().is_symlink()
             {
                 return false;
-            };
+            }
             true
         })
         .collect();
@@ -378,7 +372,7 @@ fn edit_config() -> Result<()> {
             "$EDITOR is empty. Created default configuration at {}",
             path.display()
         )
-    };
+    }
 
     let editor_program = editor_parts.remove(0);
     let status = std::process::Command::new(&editor_program)

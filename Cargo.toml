@@ -89,5 +89,16 @@ pretty_assertions = "1.0.0"
 tempfile = "3.27.0"
 
 [lints.clippy]
-all = "warn"
+all = { level = "warn", priority = -2 }
 pedantic = { level = "warn", priority = -1 }
+enum_glob_use = "allow"
+needless_pass_by_value = "allow"
+redundant_closure_for_method_calls = "allow"
+large_enum_variant = "allow"
+missing_fields_in_debug = "allow"
+missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+too_many_lines = "allow"
+format_push_string = "allow"
+fn_params_excessive_bools = "allow"

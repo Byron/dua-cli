@@ -144,6 +144,7 @@ impl Config {
     }
 
     /// Default TOML content used when initializing a new configuration file.
+    #[must_use]
     pub fn default_file_content() -> &'static str {
         concat!(
             "# dua-cli configuration\n",
@@ -202,11 +203,11 @@ mod tests {
         assert!(defaults.notifications.delete_finished);
 
         let configured: Config = toml::from_str(
-            r#"
+            r"
             [notifications]
             scan_finished = false
             delete_finished = false
-            "#,
+            ",
         )
         .expect("valid config");
         assert!(!configured.notifications.scan_finished);
@@ -216,20 +217,20 @@ mod tests {
     #[test]
     fn notifications_are_enabled_if_any_notification_is_enabled() {
         let disabled: Config = toml::from_str(
-            r#"
+            r"
             [notifications]
             scan_finished = false
             delete_finished = false
-            "#,
+            ",
         )
         .expect("valid config");
         assert!(!disabled.notifications.any_enabled());
 
         let partly_enabled: Config = toml::from_str(
-            r#"
+            r"
             [notifications]
             scan_finished = false
-            "#,
+            ",
         )
         .expect("valid config");
         assert!(partly_enabled.notifications.any_enabled());

@@ -71,7 +71,7 @@ impl MarkPane {
         if has_focus {
             self.selected = Some(self.marked.len().saturating_sub(1));
         } else {
-            self.selected = None
+            self.selected = None;
         }
     }
     pub fn toggle_index(
@@ -101,7 +101,7 @@ impl MarkPane {
                     entry.remove();
                 }
             }
-        };
+        }
         if self.marked.is_empty() {
             None
         } else {
@@ -116,7 +116,7 @@ impl MarkPane {
         self.marked.into_values().map(|v| v.path)
     }
     pub fn process_events(mut self, key: KeyEvent) -> Option<(Self, Option<MarkMode>)> {
-        use crossterm::event::KeyCode::*;
+        use crossterm::event::KeyCode::{Char, Down, PageDown, PageUp, Up};
         let action = None;
         if key.kind == KeyEventKind::Release {
             return Some((self, action));
@@ -134,19 +134,19 @@ impl MarkPane {
             Char('G') => self.change_selection(CursorDirection::ToBottom),
             PageUp => self.change_selection(CursorDirection::PageUp),
             Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.change_selection(CursorDirection::PageUp)
+                self.change_selection(CursorDirection::PageUp);
             }
             Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.change_selection(CursorDirection::PageDown)
+                self.change_selection(CursorDirection::PageDown);
             }
             PageDown => self.change_selection(CursorDirection::PageDown),
             Char('k') | Up => self.change_selection(CursorDirection::Up),
             Char('j') | Down => self.change_selection(CursorDirection::Down),
-            Char('x') | Char('d') | Char(' ') => {
+            Char('x' | 'd' | ' ') => {
                 return self.remove_selected().map(|s| (s, action));
             }
             _ => {}
-        };
+        }
         Some((self, action))
     }
 
@@ -163,7 +163,7 @@ impl MarkPane {
                     }
                     Err((pane, num_errors)) => {
                         self = pane;
-                        self.set_error_on_marked_item(num_errors)
+                        self.set_error_on_marked_item(num_errors);
                     }
                 },
                 None => return Some(self),
@@ -176,16 +176,17 @@ impl MarkPane {
             self.tree_index_by_list_position(selected)
                 .and_then(|idx| self.marked.get(&idx).map(|d| (selected, idx, d)))
         }) {
-            Some((position, selected_index, data)) => match data.num_errors_during_deletion {
-                0 => Some(selected_index),
-                _ => {
+            Some((position, selected_index, data)) => {
+                if data.num_errors_during_deletion == 0 {
+                    Some(selected_index)
+                } else {
                     self.selected = match position + 1 {
                         p if p < self.marked.len() => Some(p),
                         _ => Some(self.marked.len().saturating_sub(1)),
                     };
                     self.tree_index_by_list_position(position + 1)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -284,7 +285,7 @@ impl MarkPane {
                         if v.num_errors_during_deletion != 0 {
                             format!("{} IO deletion errors", v.num_errors_during_deletion)
                         } else {
-                            "".to_string()
+                            String::new()
                         }
                     );
                     let num_path_graphemes = path.graphemes(true).count();
@@ -337,12 +338,11 @@ impl MarkPane {
             },
         );
 
-        let entry_in_view = match self.selected {
-            Some(s) => Some(s),
-            None => {
-                self.list.offset = 0;
-                Some(marked.len().saturating_sub(1))
-            }
+        let entry_in_view = if let Some(s) = self.selected {
+            Some(s)
+        } else {
+            self.list.offset = 0;
+            Some(marked.len().saturating_sub(1))
         };
         let block = Block::default()
             .title(title.as_str())
@@ -368,9 +368,10 @@ impl MarkPane {
                     .constraints(constraints)
                     .split(inner_area);
 
-                match help_at_bottom {
-                    true => (regions[1], regions[0]),
-                    false => (regions[0], regions[1]),
+                if help_at_bottom {
+                    (regions[1], regions[0])
+                } else {
+                    (regions[0], regions[1])
                 }
             };
 

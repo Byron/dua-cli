@@ -194,6 +194,7 @@ impl PoolShared {
 
 impl Entry {
     /// Return the full path to this entry.
+    #[must_use]
     pub fn path(&self) -> PathBuf {
         self.parent_path.join(&self.file_name)
     }
@@ -349,7 +350,9 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
 
 fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
     let has_jobs = !jobs.is_empty();
-    jobs.into_iter().for_each(|job| worker.push(job));
+    for job in jobs {
+        worker.push(job);
+    }
     if has_jobs {
         shared.wake_one_worker();
     }

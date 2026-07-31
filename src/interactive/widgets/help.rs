@@ -4,7 +4,7 @@ use crate::interactive::widgets::tui_ext::{
     draw_text_nowrap_fn,
     util::{block_width, rect},
 };
-pub use crossterm::event::KeyCode::*;
+use crossterm::event::KeyCode::{Char, Down, PageDown, PageUp, Up};
 use crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers};
 use std::{borrow::Borrow, cell::RefCell};
 use tui::{
@@ -52,30 +52,34 @@ impl HelpPane {
             Char('H') => self.scroll_help(CursorDirection::ToTop),
             Char('G') => self.scroll_help(CursorDirection::ToBottom),
             Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.scroll_help(CursorDirection::PageUp)
+                self.scroll_help(CursorDirection::PageUp);
             }
             Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.scroll_help(CursorDirection::PageDown)
+                self.scroll_help(CursorDirection::PageDown);
             }
             PageUp => self.scroll_help(CursorDirection::PageUp),
             PageDown => self.scroll_help(CursorDirection::PageDown),
             Char('k') | Up => self.scroll_help(CursorDirection::Up),
             Char('j') | Down => self.scroll_help(CursorDirection::Down),
             _ => {}
-        };
+        }
     }
     fn scroll_help(&mut self, direction: CursorDirection) {
         self.scroll = direction.move_cursor(self.scroll as usize) as u16;
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "scroll coordinates are bounded by terminal areas"
+    )]
     pub fn render(&mut self, props: impl Borrow<HelpPaneProps>, area: Rect, buf: &mut Buffer) {
         let esc_navigates_back = props.borrow().esc_navigates_back;
         let t = self.language.help_text();
-        let lines = {
+        let build_lines = || {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
                 for _ in 0..n {
-                    lines.borrow_mut().push(Line::from(Span::raw("")))
+                    lines.borrow_mut().push(Line::from(Span::raw("")));
                 }
             };
 
@@ -188,6 +192,7 @@ impl HelpPane {
             }
             lines.into_inner()
         };
+        let lines = build_lines();
 
         let HelpPaneProps {
             border_style,
@@ -233,6 +238,7 @@ impl HelpPane {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tui::buffer::Cell;
 
     fn rendered(language: Language) -> String {
         let area = Rect::new(0, 0, 120, 80);
@@ -250,7 +256,7 @@ mod tests {
             area,
             &mut buf,
         );
-        buf.content.iter().map(|cell| cell.symbol()).collect()
+        buf.content.iter().map(Cell::symbol).collect()
     }
 
     #[test]
