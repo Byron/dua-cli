@@ -1,5 +1,5 @@
 use crate::{crossdev, walk};
-use byte_unit::{ByteUnit, n_gb_bytes, n_gib_bytes, n_mb_bytes, n_mib_bytes};
+use byte_unit::{Byte, Unit, UnitType};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -75,32 +75,21 @@ struct ByteFormatDisplay {
     bytes: u128,
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "byte_unit requires floating-point conversion"
-)]
 impl fmt::Display for ByteFormatDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use ByteFormat::{Binary, Bytes, GB, GiB, MB, Metric, MiB};
-        use byte_unit::Byte;
 
-        let format = match self.format {
+        let bytes = Byte::from_u128(self.bytes).expect("supported byte count");
+        let adjusted = match self.format {
             Bytes => return write!(f, "{} b", self.bytes),
-            Binary => (true, None),
-            Metric => (false, None),
-            GB => (false, Some((n_gb_bytes!(1), ByteUnit::GB))),
-            GiB => (false, Some((n_gib_bytes!(1), ByteUnit::GiB))),
-            MB => (false, Some((n_mb_bytes!(1), ByteUnit::MB))),
-            MiB => (false, Some((n_mib_bytes!(1), ByteUnit::MiB))),
+            Binary => bytes.get_appropriate_unit(UnitType::Binary),
+            Metric => bytes.get_appropriate_unit(UnitType::Decimal),
+            GB => bytes.get_adjusted_unit(Unit::GB),
+            GiB => bytes.get_adjusted_unit(Unit::GiB),
+            MB => bytes.get_adjusted_unit(Unit::MB),
+            MiB => bytes.get_adjusted_unit(Unit::MiB),
         };
-
-        let b = match format {
-            (_, Some((divisor, unit))) => Byte::from_unit(self.bytes as f64 / divisor as f64, unit)
-                .expect("byte count > 0")
-                .get_adjusted_unit(unit),
-            (binary, None) => Byte::from_bytes(self.bytes).get_appropriate_unit(binary),
-        }
-        .format(2);
+        let b = format!("{adjusted:.2}");
         let mut splits = b.split(' ');
         match (splits.next(), splits.next()) {
             (Some(bytes), Some(unit)) => write!(

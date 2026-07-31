@@ -30,7 +30,7 @@ trash-move = ["trash"]
 [dependencies]
 clap = { version = "4.0.29", features = ["derive", "env"] }
 clap_complete = "4.5.54"
-byte-unit = "4"
+byte-unit = { version = "5.2.5", features = ["u128"] }
 petgraph = "0.8.3"
 itertools = "0.15.0"
 num_cpus = "1.10.0"
