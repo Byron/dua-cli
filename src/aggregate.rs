@@ -5,6 +5,8 @@ use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::time::Duration;
 use std::{io, path::Path};
 
+const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
+
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
@@ -27,6 +29,7 @@ pub fn aggregate(
     let mut aggregates = Vec::new();
     let mut inodes = InodeFilter::default();
     let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
+    let mut progress_visible = false;
 
     for path in paths {
         num_roots += 1;
@@ -48,6 +51,7 @@ pub fn aggregate(
             progress.throttled(|| {
                 if let Some(err) = err.as_mut() {
                     write!(err, "Enumerating {} items\r", stats.entries_traversed).ok();
+                    progress_visible = true;
                 }
             });
             match entry {
@@ -81,13 +85,15 @@ pub fn aggregate(
             }
         }
 
-        if let Some(err) = err.as_mut() {
-            write!(err, "\x1b[2K\r").ok();
-        }
-
         if sort_by_size_in_bytes {
             aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
         } else {
+            if progress_visible {
+                if let Some(err) = err.as_mut() {
+                    write!(err, "{CLEAR_CURRENT_LINE}").ok();
+                }
+                progress_visible = false;
+            }
             output_colored_path(
                 &mut out,
                 &path,
@@ -103,6 +109,10 @@ pub fn aggregate(
 
     if stats.entries_traversed == 0 {
         stats.smallest_file_in_bytes = 0;
+    }
+
+    if progress_visible && let Some(err) = err.as_mut() {
+        write!(err, "{CLEAR_CURRENT_LINE}").ok();
     }
 
     if sort_by_size_in_bytes {
@@ -183,4 +193,42 @@ pub struct Statistics {
     pub smallest_file_in_bytes: u128,
     /// The size of the largest file encountered in bytes
     pub largest_file_in_bytes: u128,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fast_roots_do_not_emit_terminal_erases() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = [dir.path().join("a"), dir.path().join("b")];
+        for path in &paths {
+            std::fs::write(path, []).unwrap();
+        }
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        aggregate(
+            &mut out,
+            Some(&mut err),
+            WalkOptions {
+                threads: 2,
+                count_hard_links: true,
+                apparent_size: false,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+            },
+            true,
+            true,
+            ByteFormat::Metric,
+            paths,
+        )
+        .unwrap();
+
+        assert!(
+            err.is_empty(),
+            "fast roots should not clear unseen progress"
+        );
+    }
 }
