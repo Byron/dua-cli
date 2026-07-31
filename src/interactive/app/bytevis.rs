@@ -1,6 +1,8 @@
 use dua::ByteFormat;
 use std::fmt;
 
+const BAR_SIZE: usize = 10;
+
 #[derive(Default, Clone, Copy)]
 pub enum ByteVisualization {
     Percentage,
@@ -17,7 +19,7 @@ pub struct DisplayByteVisualization {
 
 impl ByteVisualization {
     pub fn cycle(&mut self) {
-        use ByteVisualization::*;
+        use ByteVisualization::{Bar, LongBar, Percentage, PercentageAndBar};
         *self = match self {
             Bar => LongBar,
             LongBar => PercentageAndBar,
@@ -35,7 +37,7 @@ impl ByteVisualization {
 
 impl fmt::Display for DisplayByteVisualization {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        use ByteVisualization::*;
+        use ByteVisualization::{Bar, LongBar, Percentage, PercentageAndBar};
         let Self { format, percentage } = self;
 
         let percentage = if percentage.is_nan() {
@@ -43,7 +45,6 @@ impl fmt::Display for DisplayByteVisualization {
         } else {
             *percentage
         };
-        const BAR_SIZE: usize = 10;
         match format {
             Percentage => Self::make_percentage(f, percentage),
             PercentageAndBar => {
@@ -58,6 +59,10 @@ impl fmt::Display for DisplayByteVisualization {
 }
 
 impl DisplayByteVisualization {
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "bar percentages are non-negative before conversion to a bar length"
+    )]
     fn make_bar(
         f: &mut fmt::Formatter<'_>,
         percentage: f32,
@@ -94,6 +99,7 @@ impl DisplayByteVisualization {
         }
         Ok(())
     }
+
     fn make_percentage(f: &mut fmt::Formatter<'_>, percentage: f32) -> Result<(), fmt::Error> {
         write!(f, " {:>5.01}% ", percentage * 100.0)
     }

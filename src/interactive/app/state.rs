@@ -70,15 +70,15 @@ pub struct AppState {
 impl AppState {
     pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>) -> Self {
         AppState {
-            navigation: Default::default(),
+            navigation: Navigation::default(),
             glob_navigation: None,
             entries: vec![],
             cleanup_candidates: Some(BTreeSet::new()),
             gitignored_entries: Some(BTreeSet::new()),
-            sorting: Default::default(),
-            show_columns: Default::default(),
+            sorting: SortMode::default(),
+            show_columns: HashSet::default(),
             message: None,
-            focussed: Default::default(),
+            focussed: FocussedPane::default(),
             terminal_focus: TerminalFocus::default(),
             received_events: false,
             scan: None,

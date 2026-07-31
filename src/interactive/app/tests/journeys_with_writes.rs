@@ -5,14 +5,14 @@ use crate::interactive::app::tests::utils::{
 use crate::interactive::terminal::TerminalApp;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use dua::{ByteFormat, Config, TraversalSorting, WalkOptions};
+use dua::{ByteFormat, Config, WalkOptions};
 use pretty_assertions::assert_eq;
 use std::{collections::BTreeSet, fs};
 use tempfile::TempDir;
 
 fn marked_file_names(app: &TerminalApp, message: &str) -> BTreeSet<String> {
     app.window
-        .mark_pane
+        .mark
         .as_ref()
         .expect(message)
         .marked()
@@ -41,7 +41,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
     app.process_events(&mut terminal, into_codes("doddd"))?;
 
     assert_eq!(
-        app.window.mark_pane.as_ref().map(|p| p.marked().len()),
+        app.window.mark.as_ref().map(|p| p.marked().len()),
         Some(4),
         "expecting 4 selected items, the parent dir, and some children"
     );
@@ -57,7 +57,7 @@ fn basic_user_journey_with_deletion() -> Result<()> {
         ]),
     )?;
     assert!(
-        app.window.mark_pane.is_none(),
+        app.window.mark.is_none(),
         "the marker pane is gone as all items have been removed"
     );
     assert_eq!(
@@ -120,9 +120,8 @@ $precious.tmp
         threads: 1,
         apparent_size: true,
         count_hard_links: false,
-        sorting: TraversalSorting::AlphabeticalByFileName,
         cross_filesystems: false,
-        ignore_dirs: Default::default(),
+        ignore_dirs: BTreeSet::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(
@@ -257,9 +256,8 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         threads: 1,
         apparent_size: true,
         count_hard_links: false,
-        sorting: TraversalSorting::AlphabeticalByFileName,
         cross_filesystems: false,
-        ignore_dirs: Default::default(),
+        ignore_dirs: BTreeSet::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(

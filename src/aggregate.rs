@@ -28,20 +28,22 @@ pub fn aggregate(
     let mut inodes = InodeFilter::default();
     let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
 
-    for path in paths.into_iter() {
+    for path in paths {
         num_roots += 1;
         let mut num_bytes = 0u128;
         let mut num_errors = 0u64;
-        let device_id = match crossdev::init(path.as_ref()) {
-            Ok(id) => id,
-            Err(_) => {
-                num_errors += 1;
-                res.num_errors += 1;
-                aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
-                continue;
-            }
+        let Ok(device_id) = crossdev::init(path.as_ref()) else {
+            num_errors += 1;
+            res.num_errors += 1;
+            aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
+            continue;
         };
-        for entry in walk_options.iter_from_path(path.as_ref(), device_id, false) {
+        for entry in walk_options.iter_from_path(
+            path.as_ref(),
+            device_id,
+            false,
+            crate::walk::Order::Completion,
+        ) {
             stats.entries_traversed += 1;
             progress.throttled(|| {
                 if let Some(err) = err.as_mut() {
@@ -50,8 +52,8 @@ pub fn aggregate(
             });
             match entry {
                 Ok(entry) => {
-                    let file_size = match entry.client_state {
-                        Some(Ok(ref m))
+                    let file_size = u128::from(match &entry.metadata {
+                        Ok(m)
                             if (walk_options.count_hard_links || inodes.add(m))
                                 && (walk_options.cross_filesystems
                                     || crossdev::is_same_device(device_id, m)) =>
@@ -65,13 +67,12 @@ pub fn aggregate(
                                 })
                             }
                         }
-                        Some(Ok(_)) => 0,
-                        Some(Err(_)) => {
+                        Ok(_) => 0,
+                        Err(_) => {
                             num_errors += 1;
                             0
                         }
-                        None => 0, // ignore directory
-                    } as u128;
+                    });
                     stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                     stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
                     num_bytes += file_size;
@@ -105,17 +106,7 @@ pub fn aggregate(
     }
 
     if sort_by_size_in_bytes {
-        aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
-        for (path, num_bytes, num_errors) in aggregates.into_iter() {
-            output_colored_path(
-                &mut out,
-                &path,
-                num_bytes,
-                num_errors,
-                path_color_of(&path),
-                byte_format,
-            )?;
-        }
+        output_sorted(&mut out, aggregates, byte_format)?;
     }
 
     if num_roots > 1 && compute_total {
@@ -129,6 +120,25 @@ pub fn aggregate(
         )?;
     }
     Ok((res, stats))
+}
+
+fn output_sorted(
+    out: &mut impl io::Write,
+    mut aggregates: Vec<(std::path::PathBuf, u128, u64)>,
+    byte_format: ByteFormat,
+) -> std::result::Result<(), io::Error> {
+    aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
+    for (path, num_bytes, num_errors) in aggregates {
+        output_colored_path(
+            out,
+            &path,
+            num_bytes,
+            num_errors,
+            path_color_of(&path),
+            byte_format,
+        )?;
+    }
+    Ok(())
 }
 
 fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
@@ -154,7 +164,7 @@ fn output_colored_path(
             plural_s = if num_errors > 1 { "s" } else { "" }
         )
     } else {
-        "".into()
+        String::new()
     };
 
     if let Some(color) = path_color {

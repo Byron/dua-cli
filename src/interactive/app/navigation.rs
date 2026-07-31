@@ -56,8 +56,7 @@ impl Navigation {
             Some(ref selected) => entries
                 .iter()
                 .find_position(|b| b.index == *selected)
-                .map(|(idx, _)| direction.move_cursor(idx))
-                .unwrap_or(0),
+                .map_or(0, |(idx, _)| direction.move_cursor(idx)),
             None => 0,
         };
 

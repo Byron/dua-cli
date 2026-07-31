@@ -9,7 +9,7 @@ use tui::{
 pub struct Header;
 
 impl Header {
-    pub fn render(&self, bg_color: Color, area: Rect, buf: &mut Buffer) {
+    pub fn render(bg_color: Color, area: Rect, buf: &mut Buffer) {
         let standard = Style {
             fg: Color::Black.into(),
             bg: bg_color.into(),

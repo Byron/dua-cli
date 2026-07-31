@@ -1,28 +1,37 @@
 use crate::interactive::app::tests::utils::{
-    debug, initialized_app_and_terminal_from_fixture, sample_01_tree, sample_02_tree,
+    initialized_app_and_terminal_from_fixture, sample_01_tree, sample_02_tree,
 };
 use crate::interactive::app::{state::AppState, tree_view::TreeView};
 use crate::interactive::widgets::glob_search;
 use crate::interactive::{EntryCheck, MTimeSort, SortMode, sorted_entries};
 use anyhow::Result;
+use dua::WalkOptions;
 use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
-use dua::{TraversalSorting, WalkOptions};
 use gix::glob::pattern::Case;
+use petgraph::algo::is_isomorphic_matching;
 use pretty_assertions::assert_eq;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Instant;
 use std::time::{Duration, UNIX_EPOCH};
 
-fn debug_with_unstable_sizes_redacted(tree: Tree) -> String {
-    let mut output = debug(tree);
-    let mut end = output.len();
-    while let Some(entry_count) = output[..end].rfind("entry_count: Some(") {
-        let start = output[..entry_count].rfind("size: ").unwrap() + 6;
-        let value_end = start + output[start..].find(',').unwrap();
-        output.replace_range(start..value_end, "<unstable>");
-        end = start;
-    }
-    output
+/// Trees match when their directed topology and corresponding nodes' names, entry counts, and
+/// metadata-error states match. Sizes must also match for leaf nodes without an entry count; node
+/// indices, discovery order, modification times, directory flags, and edge weights are ignored.
+fn trees_match(left: &Tree, right: &Tree) -> bool {
+    let left = petgraph::Graph::from(left.clone());
+    let right = petgraph::Graph::from(right.clone());
+    is_isomorphic_matching(
+        &left,
+        &right,
+        |left, right| {
+            left.name == right.name
+                && left.entry_count == right.entry_count
+                && left.metadata_io_error == right.metadata_io_error
+                && (left.entry_count.is_some() || left.size == right.size)
+        },
+        |(), ()| true,
+    )
 }
 
 #[test]
@@ -30,10 +39,9 @@ fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(
     let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
     let expected_tree = sample_01_tree();
 
-    assert_eq!(
-        debug_with_unstable_sizes_redacted(app.traversal.tree),
-        debug_with_unstable_sizes_redacted(expected_tree),
-        "filesystem graph is stable and matches the directory structure"
+    assert!(
+        trees_match(&app.traversal.tree, &expected_tree),
+        "filesystem graph matches the directory structure regardless of discovery order"
     );
     Ok(())
 }
@@ -43,10 +51,9 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
     let (_, app) = initialized_app_and_terminal_from_fixture(&["sample-02"])?;
     let (expected_tree, _) = sample_02_tree(true);
 
-    assert_eq!(
-        debug_with_unstable_sizes_redacted(app.traversal.tree),
-        debug_with_unstable_sizes_redacted(expected_tree),
-        "filesystem graph is stable and matches the directory structure"
+    assert!(
+        trees_match(&app.traversal.tree, &expected_tree),
+        "filesystem graph matches the directory structure regardless of discovery order"
     );
     Ok(())
 }
@@ -178,9 +185,8 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
             threads: 1,
             apparent_size: true,
             count_hard_links: false,
-            sorting: TraversalSorting::AlphabeticalByFileName,
             cross_filesystems: false,
-            ignore_dirs: Default::default(),
+            ignore_dirs: BTreeSet::default(),
         },
         Vec::new(),
     );

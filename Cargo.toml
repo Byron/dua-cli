@@ -30,7 +30,6 @@ trash-move = ["trash"]
 [dependencies]
 clap = { version = "4.0.29", features = ["derive", "env"] }
 clap_complete = "4.5.54"
-jwalk = "0.8.1"
 byte-unit = "4"
 petgraph = "0.8.3"
 itertools = "0.14.0"
@@ -90,4 +89,16 @@ pretty_assertions = "1.0.0"
 tempfile = "3.27.0"
 
 [lints.clippy]
-all = "deny"
+all = { level = "warn", priority = -2 }
+pedantic = { level = "warn", priority = -1 }
+enum_glob_use = "allow"
+needless_pass_by_value = "allow"
+redundant_closure_for_method_calls = "allow"
+large_enum_variant = "allow"
+missing_fields_in_debug = "allow"
+missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+too_many_lines = "allow"
+format_push_string = "allow"
+fn_params_excessive_bools = "allow"

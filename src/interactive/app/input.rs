@@ -63,7 +63,7 @@ pub fn input_channel(focus: TerminalFocus) -> Receiver<Event> {
         loop {
             let event = loop {
                 match crossterm::event::read() {
-                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
                     result => break result?,
                 }
             };

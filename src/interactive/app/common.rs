@@ -20,7 +20,7 @@ pub enum MTimeSort {
 
 impl MTimeSort {
     fn cycle(self) -> Self {
-        use MTimeSort::*;
+        use MTimeSort::{Entry, RecursiveChildrenNewest, RecursiveChildrenOldest};
         match self {
             Entry => RecursiveChildrenNewest,
             RecursiveChildrenNewest => RecursiveChildrenOldest,
@@ -44,16 +44,15 @@ pub enum SortMode {
 
 impl SortMode {
     pub fn toggle_size(&mut self) {
-        use SortMode::*;
+        use SortMode::{SizeAscending, SizeDescending};
         *self = match self {
             SizeDescending => SizeAscending,
-            SizeAscending => SizeDescending,
             _ => SizeDescending,
         }
     }
 
     pub fn toggle_mtime(&mut self) {
-        use SortMode::*;
+        use SortMode::{MTimeAscending, MTimeDescending};
         *self = match self {
             MTimeAscending(sort) => MTimeDescending(*sort),
             MTimeDescending(sort) => MTimeAscending(*sort),
@@ -78,19 +77,17 @@ impl SortMode {
     }
 
     pub fn toggle_count(&mut self) {
-        use SortMode::*;
+        use SortMode::{CountAscending, CountDescending};
         *self = match self {
-            CountAscending => CountDescending,
             CountDescending => CountAscending,
             _ => CountDescending,
         }
     }
 
     pub fn toggle_name(&mut self) {
-        use SortMode::*;
+        use SortMode::{NameAscending, NameDescending};
         *self = match self {
             NameAscending => NameDescending,
-            NameDescending => NameAscending,
             _ => NameAscending,
         }
     }
@@ -142,8 +139,10 @@ pub fn sorted_entries(
     glob_root: Option<TreeIndex>,
     check: EntryCheck,
 ) -> Vec<EntryDataBundle> {
-    use SortMode::*;
-    let mtime_sort = sorting.mtime_sort().unwrap_or_default();
+    use SortMode::{
+        CountAscending, CountDescending, MTimeAscending, MTimeDescending, NameAscending,
+        NameDescending, SizeAscending, SizeDescending,
+    };
     fn cmp_count(l: &EntryDataBundle, r: &EntryDataBundle) -> Ordering {
         l.entry_count
             .cmp(&r.entry_count)
@@ -158,6 +157,7 @@ pub fn sorted_entries(
             l.name.cmp(&r.name)
         }
     }
+    let mtime_sort = sorting.mtime_sort().unwrap_or_default();
     tree.neighbors_directed(node_idx, Direction::Outgoing)
         .filter_map(|idx| {
             tree.node_weight(idx).map(|entry| {
@@ -205,7 +205,7 @@ fn mtime_for_sort(
     entry_mtime: SystemTime,
     sort: MTimeSort,
 ) -> SystemTime {
-    use MTimeSort::*;
+    use MTimeSort::{Entry, RecursiveChildrenNewest, RecursiveChildrenOldest};
     match sort {
         Entry => entry_mtime,
         RecursiveChildrenNewest => max_mtime_of_descendants(tree, node_idx).unwrap_or(entry_mtime),

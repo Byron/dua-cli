@@ -39,7 +39,7 @@ pub struct GlobPane {
 impl Default for GlobPane {
     fn default() -> Self {
         GlobPane {
-            input: "".to_string(),
+            input: String::new(),
             cursor_grapheme_idx: 0,
             case: Case::Fold,
         }
@@ -48,7 +48,7 @@ impl Default for GlobPane {
 
 impl GlobPane {
     pub fn process_events(&mut self, key: KeyEvent) {
-        use crossterm::event::KeyCode::*;
+        use crossterm::event::KeyCode::{Backspace, Char, Left, Right};
         use crossterm::event::KeyModifiers;
         if key.kind == KeyEventKind::Release {
             return;
@@ -73,7 +73,7 @@ impl GlobPane {
                 self.move_cursor_right();
             }
             _ => {}
-        };
+        }
     }
 
     fn move_cursor_left(&mut self) {
@@ -91,7 +91,7 @@ impl GlobPane {
             self.input
                 .graphemes(true)
                 .take(self.cursor_grapheme_idx)
-                .map(|g| g.len())
+                .map(str::len)
                 .sum::<usize>(),
             new_char,
         );
@@ -156,7 +156,7 @@ impl GlobPane {
                     .input
                     .graphemes(true)
                     .take(self.cursor_grapheme_idx)
-                    .map(|g| g.width())
+                    .map(UnicodeWidthStr::width)
                     .sum::<usize>() as u16
                 + 1;
             cursor.y = inner_block_area.y;
@@ -236,7 +236,7 @@ pub fn glob_search(
     let glob = gix::glob::Pattern::from_bytes_without_negation(glob.as_bytes())
         .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
     let mut results = Vec::new();
-    let mut path = Default::default();
+    let mut path = BString::default();
     glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path, case);
     Ok(results)
 }

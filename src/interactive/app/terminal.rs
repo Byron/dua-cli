@@ -53,7 +53,7 @@ impl TerminalApp {
         state.allow_entry_check = entry_check;
         let traversal = Traversal::new();
         #[cfg(test)]
-        let stats = TraversalStats::default();
+        let traversal_stats = TraversalStats::default();
 
         state.navigation_mut().view_root = traversal.root_index;
         state.entries = sorted_entries(
@@ -67,11 +67,11 @@ impl TerminalApp {
 
         let app = TerminalApp {
             config,
-            state,
-            display,
             traversal,
+            display,
+            state,
             #[cfg(test)]
-            stats,
+            stats: traversal_stats,
             window,
         };
         Ok(app)

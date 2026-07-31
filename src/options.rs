@@ -35,10 +35,9 @@ fn dft_format() -> ByteFormat {
     }
 }
 
-/// For some reason, on MacOS, too many threads are bad and 3 is the best these days on M4.
-/// On M1 it was more like 4, but close enough.
+/// Enough parallelism to keep filesystem work moving without saturating macOS with syscalls.
 #[cfg(target_os = "macos")]
-pub(crate) const DEFAULT_THREADS: usize = 3;
+pub(crate) const DEFAULT_THREADS: usize = 8;
 
 #[cfg(not(target_os = "macos"))]
 pub(crate) const DEFAULT_THREADS: usize = 0;
