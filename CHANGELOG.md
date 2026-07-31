@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.40.0 (2026-07-31)
 
 The headline feature is 40% more scanning speed in my particular scenario. More cores on Linux should now scale much better as well, so I wouldn't be surprised if it's even faster for you.
 
@@ -32,7 +32,7 @@ The headline feature is 40% more scanning speed in my particular scenario. More 
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -50,6 +50,7 @@ The headline feature is 40% more scanning speed in my particular scenario. More 
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog prior to release ([`5c9976f`](https://github.com/Byron/dua-cli/commit/5c9976f05e645eb2de5a94ddab714210b9445d73))
     - Merge pull request #355 from Byron/workstealing ([`0b21b22`](https://github.com/Byron/dua-cli/commit/0b21b22f90dc4c7ed031561c11465e7250b9e971))
     - Thanks clippy ([`9e36f03`](https://github.com/Byron/dua-cli/commit/9e36f030b882258e70fa4daf5591146d934f72eb))
     - Replace jwalk with a work-stealing directory walker for up to 40% more scan speed ([`8ada93f`](https://github.com/Byron/dua-cli/commit/8ada93f8b000108ce1ede69f76f1905b05bcc303))
