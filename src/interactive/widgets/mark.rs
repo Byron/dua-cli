@@ -380,6 +380,7 @@ impl MarkPane {
                 bg: Color::Yellow.into(),
                 add_modifier: Modifier::BOLD,
                 sub_modifier: Modifier::empty(),
+                ..Style::default()
             };
             Paragraph::new(Text::from(Line::from(vec![
                 #[cfg(feature = "trash-move")]

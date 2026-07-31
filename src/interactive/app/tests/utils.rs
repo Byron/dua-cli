@@ -208,7 +208,7 @@ pub fn untraversed_app_and_terminal_with_closure(
     Ok((terminal, app))
 }
 
-pub fn new_test_terminal() -> std::io::Result<Terminal<TestBackend>> {
+pub fn new_test_terminal() -> Result<Terminal<TestBackend>, std::convert::Infallible> {
     Terminal::new(TestBackend::new(40, 20))
 }
 

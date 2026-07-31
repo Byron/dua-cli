@@ -62,7 +62,7 @@ impl AppState {
 
         if cursor.show {
             _ = terminal.show_cursor();
-            _ = terminal.set_cursor(cursor.x, cursor.y);
+            _ = terminal.set_cursor_position((cursor.x, cursor.y));
         } else {
             _ = terminal.hide_cursor();
         }
@@ -769,19 +769,21 @@ pub fn draw_window<B>(
 where
     B: Backend,
 {
-    terminal.draw(|frame| {
-        frame.render_widget(
-            FunctionWidget::new(|area, buf| {
-                window.render(props, area, buf, cursor);
-            }),
-            frame.size(),
-        );
-        // Disabled Crossterm color commands reset attributes such as reverse
-        // video, so remove colors before they reach the backend.
-        if Colored::ansi_color_disabled_memoized() {
-            strip_colors(frame.buffer_mut());
-        }
-    })?;
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                FunctionWidget::new(|area, buf| {
+                    window.render(props, area, buf, cursor);
+                }),
+                frame.area(),
+            );
+            // Disabled Crossterm color commands reset attributes such as reverse
+            // video, so remove colors before they reach the backend.
+            if Colored::ansi_color_disabled_memoized() {
+                strip_colors(frame.buffer_mut());
+            }
+        })
+        .map_err(|err| anyhow::Error::msg(err.to_string()))?;
     Ok(())
 }
 

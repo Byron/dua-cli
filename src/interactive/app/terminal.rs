@@ -37,8 +37,12 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        terminal.hide_cursor()?;
-        terminal.clear()?;
+        terminal
+            .hide_cursor()
+            .map_err(|err| anyhow::Error::msg(err.to_string()))?;
+        terminal
+            .clear()
+            .map_err(|err| anyhow::Error::msg(err.to_string()))?;
 
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();

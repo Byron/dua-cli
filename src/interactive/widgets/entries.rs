@@ -173,7 +173,7 @@ impl Entries {
         let mut scrollbar_state =
             ScrollbarState::new(line_count).position(scroll_offset.unwrap_or(list.offset));
 
-        scrollbar.render(area.inner(&Margin::new(0, 1)), buf, &mut scrollbar_state);
+        scrollbar.render(area.inner(Margin::new(0, 1)), buf, &mut scrollbar_state);
 
         if *is_focussed {
             let bound = draw_top_right_help(area, &title, buf);

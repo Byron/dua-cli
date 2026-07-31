@@ -53,7 +53,7 @@ pub fn draw_text_nowrap_fn(
         if col >= area.width as usize {
             break;
         }
-        let cell = buf.get_mut(area.x.saturating_add(col as u16), area.y);
+        let cell = &mut buf[(area.x.saturating_add(col as u16), area.y)];
         cell.set_char(ch);
         let style = style_fn(x, 0, ch);
         cell.set_style(style);
@@ -62,7 +62,7 @@ pub fn draw_text_nowrap_fn(
             if col + continuation >= area.width as usize {
                 break;
             }
-            let cell = buf.get_mut(area.x.saturating_add((col + continuation) as u16), area.y);
+            let cell = &mut buf[(area.x.saturating_add((col + continuation) as u16), area.y)];
             cell.set_char(' ');
             cell.set_style(style);
         }
