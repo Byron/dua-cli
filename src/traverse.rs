@@ -1,4 +1,4 @@
-use crate::{Throttle, WalkOptions, crossdev, inodefilter::InodeFilter};
+use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
 use filesize::PathExt;
@@ -136,8 +136,8 @@ pub struct TraversalEntry(crate::walk::Entry);
 pub enum TraversalEvent {
     /// A discovered entry and its traversal context.
     Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64),
-    /// Traversal completed with additional I/O error count.
-    Finished(u64),
+    /// Traversal completed.
+    Finished,
 }
 
 /// An in-progress traversal which exposes newly obtained entries
@@ -171,37 +171,50 @@ impl BackgroundTraversal {
             .name("dua-fs-walk-dispatcher".to_string())
             .spawn({
                 let walk_options = walk_options.clone();
-                let mut io_errors: u64 = 0;
                 move || {
-                    for root_path in input {
+                    let (mut root_paths, mut device_ids, mut walk_roots) = (
+                        Vec::with_capacity(input.len()),
+                        Vec::with_capacity(input.len()),
+                        Vec::with_capacity(input.len()),
+                    );
+                    for (root_idx, root_path) in input.into_iter().enumerate() {
                         log::info!("Walking {}", root_path.display());
-                        let Ok(device_id) = crossdev::init(root_path.as_ref()) else {
-                            io_errors += 1;
+                        let device_id = if walk_options.cross_filesystems {
+                            0
+                        } else {
+                            crossdev::init(&root_path).unwrap_or(0)
+                        };
+                        walk_roots.push(WalkRoot {
+                            index: root_idx,
+                            path: root_path.clone(),
+                            device_id,
+                        });
+                        device_ids.push(device_id);
+                        root_paths.push(Arc::new(root_path));
+                    }
+
+                    for (root, event) in walk_options.iter_from_paths(
+                        walk_roots,
+                        skip_root,
+                        crate::walk::Order::ParentFirst,
+                    ) {
+                        let crate::walk::RootEvent::Entry(entry) = event else {
                             continue;
                         };
-
-                        let root_path = Arc::new(root_path);
-                        for entry in walk_options.iter_from_path(
-                            root_path.as_ref(),
-                            device_id,
-                            skip_root,
-                            crate::walk::Order::ParentFirst,
-                        ) {
-                            if entry_tx
-                                .send(TraversalEvent::Entry(
-                                    entry.map(TraversalEntry),
-                                    Arc::clone(&root_path),
-                                    device_id,
-                                ))
-                                .is_err()
-                            {
-                                // The channel is closed, this means the user has
-                                // requested to quit the app. Abort the walking.
-                                return;
-                            }
+                        if entry_tx
+                            .send(TraversalEvent::Entry(
+                                entry.map(TraversalEntry),
+                                Arc::clone(&root_paths[root]),
+                                device_ids[root],
+                            ))
+                            .is_err()
+                        {
+                            // The channel is closed, this means the user has
+                            // requested to quit the app. Abort the walking.
+                            return;
                         }
                     }
-                    if entry_tx.send(TraversalEvent::Finished(io_errors)).is_err() {
+                    if entry_tx.send(TraversalEvent::Finished).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
                     }
                 }
@@ -338,9 +351,7 @@ impl BackgroundTraversal {
                     return Some(false);
                 }
             }
-            TraversalEvent::Finished(io_errors) => {
-                self.stats.io_errors += io_errors;
-
+            TraversalEvent::Finished => {
                 self.throttle = None;
                 let root_size = traversal.tree[self.root_idx].size;
                 self.nodes_by_path = HashMap::new();
