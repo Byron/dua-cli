@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.40.1 (2026-08-01)
 
 Even more performance, up to 15%. That's it now, trying to hit 1 week without a release ;).
 
@@ -36,7 +36,7 @@ Even more performance, up to 15%. That's it now, trying to hit 1 week without a 
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release over the course of 1 calendar day.
+ - 7 commits contributed to the release over the course of 1 calendar day.
  - 1 day passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -48,6 +48,7 @@ Even more performance, up to 15%. That's it now, trying to hit 1 week without a 
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare next release ([`8163e0e`](https://github.com/Byron/dua-cli/commit/8163e0ee614bcb303915f22c62bb3e9b515a0a50))
     - Merge pull request #356 from Byron/performance ([`fea714d`](https://github.com/Byron/dua-cli/commit/fea714dd6c018c7ebf16209d2678b162204e6bce))
     - Parallelize filesystem traversal ([`4dba3ad`](https://github.com/Byron/dua-cli/commit/4dba3ad3ac7122bdb82efdb54a49ae811e4f37f9))
     - Avoid aggregate progress flicker ([`3b7415b`](https://github.com/Byron/dua-cli/commit/3b7415b9fa161ef20dd8dd77e7cb367a7c8a216b))
