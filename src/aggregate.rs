@@ -1,9 +1,12 @@
-use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, crossdev};
+use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev};
 use anyhow::Result;
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{io, path::Path};
+
+const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
@@ -15,98 +18,121 @@ pub fn aggregate(
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     byte_format: ByteFormat,
-    paths: impl IntoIterator<Item = impl AsRef<Path>>,
+    paths: Vec<PathBuf>,
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
     let mut stats = Statistics {
         smallest_file_in_bytes: u128::MAX,
         ..Default::default()
     };
-    let mut total = 0;
-    let mut num_roots = 0;
-    let mut aggregates = Vec::new();
+    let num_roots = paths.len();
+    let mut aggregates = paths
+        .iter()
+        .cloned()
+        .map(|path| {
+            (
+                path,  // root path
+                0u128, // accumulated byte size
+                0u64,  // I/O error count
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut device_ids = vec![0; num_roots];
+    let mut completed = vec![false; num_roots];
+    let mut roots = Vec::with_capacity(num_roots);
+    for (root_idx, path) in paths.into_iter().enumerate() {
+        let device_id = if walk_options.cross_filesystems {
+            0
+        } else {
+            crossdev::init(&path).unwrap_or(0)
+        };
+        device_ids[root_idx] = device_id;
+        roots.push(WalkRoot {
+            index: root_idx,
+            path,
+            device_id,
+        });
+    }
     let mut inodes = InodeFilter::default();
     let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
+    let mut progress_visible = false;
+    let mut next_output = 0;
 
-    for path in paths {
-        num_roots += 1;
-        let mut num_bytes = 0u128;
-        let mut num_errors = 0u64;
-        let Ok(device_id) = crossdev::init(path.as_ref()) else {
-            num_errors += 1;
-            res.num_errors += 1;
-            aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
-            continue;
-        };
-        for entry in walk_options.iter_from_path(
-            path.as_ref(),
-            device_id,
-            false,
-            crate::walk::Order::Completion,
-        ) {
-            stats.entries_traversed += 1;
-            progress.throttled(|| {
-                if let Some(err) = err.as_mut() {
-                    write!(err, "Enumerating {} items\r", stats.entries_traversed).ok();
+    for (root_idx, event) in
+        walk_options.iter_from_paths(roots, false, crate::walk::Order::Completion)
+    {
+        let entry = match event {
+            crate::walk::RootEvent::Entry(entry) => entry,
+            crate::walk::RootEvent::Finished => {
+                completed[root_idx] = true;
+                if !sort_by_size_in_bytes {
+                    output_completed(
+                        &mut out,
+                        &mut err,
+                        &aggregates,
+                        &completed,
+                        &mut next_output,
+                        &mut progress_visible,
+                        byte_format,
+                    )?;
                 }
-            });
-            match entry {
-                Ok(entry) => {
-                    let file_size = u128::from(match &entry.metadata {
-                        Ok(m)
-                            if (walk_options.count_hard_links || inodes.add(m))
-                                && (walk_options.cross_filesystems
-                                    || crossdev::is_same_device(device_id, m)) =>
-                        {
-                            if walk_options.apparent_size {
-                                m.len()
-                            } else {
-                                entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
-                                    num_errors += 1;
-                                    0
-                                })
-                            }
-                        }
-                        Ok(_) => 0,
-                        Err(_) => {
-                            num_errors += 1;
-                            0
-                        }
-                    });
-                    stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                    stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
-                    num_bytes += file_size;
-                }
-                Err(_) => num_errors += 1,
+                continue;
             }
+        };
+        let (_, num_bytes, num_errors) = &mut aggregates[root_idx];
+        stats.entries_traversed += 1;
+        progress.throttled(|| {
+            if let Some(err) = err.as_mut() {
+                write!(err, "Enumerating {} items\r", stats.entries_traversed).ok();
+                progress_visible = true;
+            }
+        });
+        match entry {
+            Ok(entry) => {
+                let file_size = u128::from(match &entry.metadata {
+                    Ok(m)
+                        if (walk_options.count_hard_links || inodes.add(m))
+                            && (walk_options.cross_filesystems
+                                || crossdev::is_same_device(device_ids[root_idx], m)) =>
+                    {
+                        if walk_options.apparent_size {
+                            m.len()
+                        } else {
+                            entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
+                                *num_errors += 1;
+                                0
+                            })
+                        }
+                    }
+                    Ok(_) => 0,
+                    Err(_) => {
+                        *num_errors += 1;
+                        0
+                    }
+                });
+                stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
+                stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
+                *num_bytes += file_size;
+            }
+            Err(_) => *num_errors += 1,
         }
-
-        if let Some(err) = err.as_mut() {
-            write!(err, "\x1b[2K\r").ok();
-        }
-
-        if sort_by_size_in_bytes {
-            aggregates.push((path.as_ref().to_owned(), num_bytes, num_errors));
-        } else {
-            output_colored_path(
-                &mut out,
-                &path,
-                num_bytes,
-                num_errors,
-                path_color_of(&path),
-                byte_format,
-            )?;
-        }
-        total += num_bytes;
-        res.num_errors += num_errors;
     }
+
+    let total = aggregates.iter().map(|(_, bytes, _)| bytes).sum();
+    res.num_errors = aggregates.iter().map(|(_, _, errors)| errors).sum();
 
     if stats.entries_traversed == 0 {
         stats.smallest_file_in_bytes = 0;
     }
 
+    if progress_visible && let Some(err) = err.as_mut() {
+        write!(err, "{CLEAR_CURRENT_LINE}").ok();
+    }
+
     if sort_by_size_in_bytes {
         output_sorted(&mut out, aggregates, byte_format)?;
+    } else {
+        debug_assert_eq!(next_output, num_roots);
     }
 
     if num_roots > 1 && compute_total {
@@ -120,6 +146,41 @@ pub fn aggregate(
         )?;
     }
     Ok((res, stats))
+}
+
+/// Write the contiguous run of completed roots starting at `next_output`, preserving input order.
+/// Clears a visible progress line before writing the first completed root.
+/// `progress_visible` tracks if progress information is currently shown, taking up the last line.
+fn output_completed<W: io::Write, E: io::Write>(
+    out: &mut W,
+    err: &mut Option<E>,
+    aggregates: &[(std::path::PathBuf, u128, u64)],
+    completed: &[bool],
+    next_output: &mut usize,
+    progress_visible: &mut bool,
+    byte_format: ByteFormat,
+) -> io::Result<()> {
+    let must_report_completed_path = completed.get(*next_output).copied() == Some(true);
+    // Remove the transient progress line before writing permanent results to the terminal.
+    if must_report_completed_path && *progress_visible {
+        if let Some(err) = err.as_mut() {
+            write!(err, "{CLEAR_CURRENT_LINE}").ok();
+        }
+        *progress_visible = false;
+    }
+    while completed.get(*next_output).copied() == Some(true) {
+        let (path, num_bytes, num_errors) = &aggregates[*next_output];
+        output_colored_path(
+            out,
+            path,
+            *num_bytes,
+            *num_errors,
+            path_color_of(path),
+            byte_format,
+        )?;
+        *next_output += 1;
+    }
+    Ok(())
 }
 
 fn output_sorted(
@@ -183,4 +244,92 @@ pub struct Statistics {
     pub smallest_file_in_bytes: u128,
     /// The size of the largest file encountered in bytes
     pub largest_file_in_bytes: u128,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completed_roots_stream_in_input_order() {
+        let aggregates = [("first".into(), 1, 0), ("second".into(), 2, 0)];
+        let mut completed = [false, true];
+        let mut next_output = 0;
+        let mut progress_visible = true;
+        let mut out = Vec::new();
+        let mut err = Some(Vec::new());
+
+        output_completed(
+            &mut out,
+            &mut err,
+            &aggregates,
+            &completed,
+            &mut next_output,
+            &mut progress_visible,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+        assert!(
+            out.is_empty(),
+            "later roots must not overtake earlier roots"
+        );
+
+        completed[0] = true;
+        output_completed(
+            &mut out,
+            &mut err,
+            &aggregates,
+            &completed,
+            &mut next_output,
+            &mut progress_visible,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+
+        let out = String::from_utf8(out).unwrap();
+        assert!(
+            out.find("first").unwrap() < out.find("second").unwrap(),
+            "the first root is also emitted first"
+        );
+        assert_eq!(next_output, 2, "output stopped at root {next_output}");
+        assert_eq!(
+            err.as_deref(),
+            Some(CLEAR_CURRENT_LINE.as_bytes()),
+            "unexpected progress cleanup: {err:?}"
+        );
+        assert!(!progress_visible, "progress remained visible after cleanup");
+    }
+
+    #[test]
+    fn fast_roots_do_not_emit_terminal_erases() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = [dir.path().join("a"), dir.path().join("b")];
+        for path in &paths {
+            std::fs::write(path, []).unwrap();
+        }
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        aggregate(
+            &mut out,
+            Some(&mut err),
+            WalkOptions {
+                threads: 2,
+                count_hard_links: true,
+                apparent_size: false,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+            },
+            true,
+            true,
+            ByteFormat::Metric,
+            paths.into(),
+        )
+        .unwrap();
+
+        assert!(
+            err.is_empty(),
+            "fast roots should not clear unseen progress"
+        );
+    }
 }

@@ -167,29 +167,62 @@ pub struct WalkOptions {
     pub ignore_dirs: BTreeSet<PathBuf>,
 }
 
+/// A root prepared for a filesystem walk.
+pub(crate) struct WalkRoot {
+    /// Index used to associate emitted events with the original input path.
+    pub index: usize,
+    /// Path at which to start walking.
+    pub path: PathBuf,
+    /// Device containing the root, used to constrain cross-filesystem walks.
+    /// It's `0` if it couldn't be obtained or if `cross_filesystem` is `true`.
+    pub device_id: u64,
+}
+
 impl WalkOptions {
-    /// Create an iterator over `root` honoring this walk configuration.
-    ///
-    /// `root_device_id` is used to filter entries when `cross_filesystems == false`.
-    /// If `skip_root` is `true`, the root directory itself is omitted from yielded entries.
-    pub(crate) fn iter_from_path(
+    pub(crate) fn iter_from_paths(
         &self,
-        root: &Path,
-        root_device_id: u64,
+        roots: Vec<WalkRoot>,
         skip_root: bool,
         order: walk::Order,
-    ) -> impl Iterator<Item = std::io::Result<walk::Entry>> {
+    ) -> impl Iterator<Item = (usize, walk::RootEvent)> + use<> {
+        let num_roots = roots
+            .iter()
+            .map(|root| root.index)
+            .max()
+            .map_or(0, |idx| idx + 1);
+        let path_count = roots.len();
+        let (device_ids, paths_with_idx) = roots.into_iter().fold(
+            (vec![0; num_roots], Vec::with_capacity(path_count)),
+            |(mut device_ids, mut paths), root| {
+                device_ids[root.index] = root.device_id;
+                paths.push((root.index, root.path));
+                (device_ids, paths)
+            },
+        );
         let ignore_dirs = self.ignore_dirs.clone();
-        let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_owned());
+        let cwd = std::env::current_dir().unwrap_or_default();
         let cross_filesystems = self.cross_filesystems;
-        walk::walk(root, self.threads, order, move |entry| {
-            (cross_filesystems
-                || entry.metadata.as_ref().map_or(true, |metadata| {
-                    crossdev::is_same_device(root_device_id, metadata)
-                }))
-                && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
+        walk::walk_roots(
+            paths_with_idx,
+            self.threads,
+            order,
+            move |root_idx, entry| {
+                (cross_filesystems
+                    || entry.metadata.as_ref().map_or(true, |metadata| {
+                        crossdev::is_same_device(device_ids[root_idx], metadata)
+                    }))
+                    && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
+            },
+        )
+        .filter(move |(_, event)| {
+            !skip_root
+                || match event {
+                    walk::RootEvent::Entry(entry) => {
+                        entry.as_ref().map_or(true, |entry| entry.depth > 0)
+                    }
+                    walk::RootEvent::Finished => true,
+                }
         })
-        .filter(move |entry| !skip_root || entry.as_ref().map_or(true, |entry| entry.depth > 0))
     }
 }
 
@@ -304,13 +337,19 @@ mod tests {
         };
 
         let paths = options
-            .iter_from_path(
-                root.path(),
-                crossdev::init(root.path()).unwrap(),
+            .iter_from_paths(
+                vec![WalkRoot {
+                    index: 0,
+                    path: root.path().to_owned(),
+                    device_id: crossdev::init(root.path()).unwrap(),
+                }],
                 false,
                 walk::Order::Completion,
             )
-            .map(|entry| entry.unwrap().path())
+            .filter_map(|(_, event)| match event {
+                walk::RootEvent::Entry(entry) => Some(entry.unwrap().path()),
+                walk::RootEvent::Finished => None,
+            })
             .collect::<Vec<_>>();
 
         assert!(paths.contains(&child));
