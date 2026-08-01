@@ -136,8 +136,8 @@ pub struct TraversalEntry(crate::walk::Entry);
 pub enum TraversalEvent {
     /// A discovered entry and its traversal context.
     Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64),
-    /// Traversal completed.
-    Finished,
+    /// Traversal completed with the number of root-initialization I/O errors.
+    Finished(u64),
 }
 
 /// An in-progress traversal which exposes newly obtained entries
@@ -147,7 +147,8 @@ pub struct BackgroundTraversal {
     pub root_idx: TreeIndex,
     /// Running traversal statistics.
     pub stats: TraversalStats,
-    nodes_by_path: HashMap<PathBuf, TreeIndex>,
+    /// Nodes keyed by root allocation identity and path so overlapping roots build separate trees.
+    nodes_by_path: HashMap<(usize, PathBuf), TreeIndex>,
     inodes: InodeFilter,
     throttle: Option<Throttle>,
     skip_root: bool,
@@ -172,20 +173,26 @@ impl BackgroundTraversal {
             .spawn({
                 let walk_options = walk_options.clone();
                 move || {
+                    let mut io_errors = 0;
                     let (mut root_paths, mut device_ids, mut walk_roots) = (
                         Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                     );
-                    for (root_idx, root_path) in input.into_iter().enumerate() {
+                    for root_path in input {
                         log::info!("Walking {}", root_path.display());
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
-                            crossdev::init(&root_path).unwrap_or(0)
+                            let Ok(device_id) = crossdev::init(&root_path) else {
+                                // Skip roots that can't be accessed entirely.
+                                io_errors += 1;
+                                continue;
+                            };
+                            device_id
                         };
                         walk_roots.push(WalkRoot {
-                            index: root_idx,
+                            index: walk_roots.len(),
                             path: root_path.clone(),
                             device_id,
                         });
@@ -214,7 +221,7 @@ impl BackgroundTraversal {
                             return;
                         }
                     }
-                    if entry_tx.send(TraversalEvent::Finished).is_err() {
+                    if entry_tx.send(TraversalEvent::Finished(io_errors)).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
                     }
                 }
@@ -256,6 +263,7 @@ impl BackgroundTraversal {
     ) -> Option<bool> {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id) => {
+                let root = Arc::as_ptr(&root_path) as usize;
                 self.stats.entries_traversed += 1;
                 let mut data = EntryData::default();
                 match entry {
@@ -319,18 +327,18 @@ impl BackgroundTraversal {
                         } else {
                             if self.skip_root {
                                 self.nodes_by_path
-                                    .entry((*root_path).clone())
+                                    .entry((root, (*root_path).clone()))
                                     .or_insert(self.root_idx);
                             }
                             *self
                                 .nodes_by_path
-                                .get(entry.parent_path.as_ref())
+                                .get(&(root, entry.parent_path.to_path_buf()))
                                 .expect("parent entries are emitted before their children")
                         };
                         let entry_index = traversal.tree.add_node(data);
                         traversal.tree.add_edge(parent_index, entry_index, ());
                         if traversal.tree[entry_index].is_dir {
-                            self.nodes_by_path.insert(entry.path(), entry_index);
+                            self.nodes_by_path.insert((root, entry.path()), entry_index);
                         }
 
                         let mut ancestor = Some(parent_index);
@@ -351,7 +359,8 @@ impl BackgroundTraversal {
                     return Some(false);
                 }
             }
-            TraversalEvent::Finished => {
+            TraversalEvent::Finished(io_errors) => {
+                self.stats.io_errors += io_errors;
                 self.throttle = None;
                 let root_size = traversal.tree[self.root_idx].size;
                 self.nodes_by_path = HashMap::new();
@@ -430,6 +439,81 @@ mod tests {
                 break;
             }
         }
+    }
+
+    #[test]
+    fn duplicate_roots_keep_their_own_children() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file"), b"content").unwrap();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start(
+            traversal.root_index,
+            &WalkOptions {
+                threads: 1,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+            },
+            vec![dir.path().to_owned(), dir.path().to_owned()],
+            false,
+            false,
+        )
+        .unwrap();
+
+        while !background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap_or(false)
+        {}
+
+        let roots = traversal
+            .tree
+            .neighbors_directed(traversal.root_index, Direction::Outgoing)
+            .collect::<Vec<_>>();
+        assert_eq!(roots.len(), 2);
+        for root in roots {
+            assert_eq!(
+                traversal
+                    .tree
+                    .neighbors_directed(root, Direction::Outgoing)
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn root_device_error_is_reported() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dangling");
+        let valid = dir.path().join("valid");
+        symlink(dir.path().join("missing"), &root).unwrap();
+        std::fs::write(&valid, b"content").unwrap();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start(
+            traversal.root_index,
+            &WalkOptions {
+                threads: 1,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: false,
+                ignore_dirs: std::collections::BTreeSet::default(),
+            },
+            vec![root, valid],
+            false,
+            false,
+        )
+        .unwrap();
+
+        while !background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap_or(false)
+        {}
+
+        assert_eq!(background.stats.io_errors, 1);
     }
 
     #[test]
