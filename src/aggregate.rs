@@ -44,7 +44,12 @@ pub fn aggregate(
         let device_id = if walk_options.cross_filesystems {
             0
         } else {
-            crossdev::init(&path).unwrap_or(0)
+            let Ok(device_id) = crossdev::init(&path) else {
+                aggregates[root_idx].2 += 1;
+                completed[root_idx] = true;
+                continue;
+            };
+            device_id
         };
         device_ids[root_idx] = device_id;
         roots.push(WalkRoot {
@@ -58,6 +63,7 @@ pub fn aggregate(
     let mut progress_visible = false;
     let mut next_output = 0;
 
+    // With multiple roots, a shared hard link is attributed to whichever root reaches it first.
     for (root_idx, event) in
         walk_options.iter_from_paths(roots, false, crate::walk::Order::Completion)
     {
@@ -132,6 +138,17 @@ pub fn aggregate(
     if sort_by_size_in_bytes {
         output_sorted(&mut out, aggregates, byte_format)?;
     } else {
+        // Be sure failed roots are also printed, as they lack a `Finished` event,
+        // the traversal never starts on them.
+        output_completed(
+            &mut out,
+            &mut err,
+            &aggregates,
+            &completed,
+            &mut next_output,
+            &mut progress_visible,
+            byte_format,
+        )?;
         debug_assert_eq!(next_output, num_roots);
     }
 
@@ -331,5 +348,34 @@ mod tests {
             err.is_empty(),
             "fast roots should not clear unseen progress"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn root_device_error_is_reported() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dangling");
+        symlink(dir.path().join("missing"), &root).unwrap();
+
+        let (result, _) = aggregate(
+            Vec::new(),
+            None::<Vec<u8>>,
+            WalkOptions {
+                threads: 1,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: false,
+                ignore_dirs: std::collections::BTreeSet::default(),
+            },
+            false,
+            true,
+            ByteFormat::Bytes,
+            vec![root],
+        )
+        .unwrap();
+
+        assert_eq!(result.num_errors, 1);
     }
 }
