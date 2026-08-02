@@ -110,8 +110,8 @@ fn main() -> Result<()> {
             let config = dua::Config::load()?;
             let enable_focus_change = config.notifications.any_enabled();
             let byte_format = traversal.byte_format(&config);
-            let walk_options = walk_options_from(&traversal);
-            let cross_filesystems = walk_options.cross_filesystems;
+            let walk_options = walk_options_from(&traversal)?;
+            let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -146,7 +146,7 @@ fn main() -> Result<()> {
                 walk_options,
                 byte_format,
                 !no_entry_check,
-                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
+                input_paths,
                 config,
             )?;
             app.traverse()?;
@@ -196,8 +196,8 @@ fn main() -> Result<()> {
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
             let config = dua::Config::load()?;
             let byte_format = traversal.byte_format(&config);
-            let walk_options = walk_options_from(&traversal);
-            let cross_filesystems = walk_options.cross_filesystems;
+            let walk_options = walk_options_from(&traversal)?;
+            let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             let (res, stats) = dua::aggregate(
@@ -207,7 +207,7 @@ fn main() -> Result<()> {
                 !no_total,
                 !no_sort,
                 byte_format,
-                extract_paths_maybe_set_cwd(traversal.input, cross_filesystems)?,
+                input_paths,
             )?;
             if statistics {
                 writeln!(io::stderr(), "{stats:?}").ok();
@@ -233,8 +233,8 @@ fn main() -> Result<()> {
         None => {
             let config = dua::Config::load()?;
             let byte_format = global_traversal.byte_format(&config);
-            let walk_options = walk_options_from(&global_traversal);
-            let cross_filesystems = walk_options.cross_filesystems;
+            let walk_options = walk_options_from(&global_traversal)?;
+            let input_paths = extract_paths_maybe_set_cwd(global_traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
             dua::aggregate(
@@ -244,7 +244,7 @@ fn main() -> Result<()> {
                 true,
                 true,
                 byte_format,
-                extract_paths_maybe_set_cwd(global_traversal.input, cross_filesystems)?,
+                input_paths,
             )?
             .0
         }
@@ -281,30 +281,37 @@ fn merge_traversal_args(
         } else {
             global.ignore_dirs.clone()
         },
+        ignore_from: if global.ignore_from.is_empty() {
+            subcommand.ignore_from.clone()
+        } else {
+            global.ignore_from.clone()
+        },
         input: subcommand.input.clone(),
     }
 }
 
-fn walk_options_from(traversal: &options::TraversalArgs) -> dua::WalkOptions {
+fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOptions> {
     let mut walk_options = dua::WalkOptions {
         threads: traversal.threads,
         apparent_size: traversal.apparent_size,
         count_hard_links: traversal.count_hard_links,
         cross_filesystems: !traversal.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
+        ignore_patterns: dua::IgnorePatterns::from_files(&traversal.ignore_from)?,
     };
 
     if walk_options.threads == 0 {
         walk_options.threads = num_cpus::get();
     }
 
-    walk_options
+    Ok(walk_options)
 }
 
 fn extract_paths_maybe_set_cwd(
     mut paths: Vec<PathBuf>,
-    cross_filesystems: bool,
+    walk_options: &dua::WalkOptions,
 ) -> Result<Vec<PathBuf>, io::Error> {
+    let cross_filesystems = walk_options.cross_filesystems;
     if paths.len() == 1 && paths[0].is_dir() {
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
@@ -313,7 +320,7 @@ fn extract_paths_maybe_set_cwd(
         .ok()
         .and_then(|cwd| crossdev::init(&cwd).ok());
 
-    if paths.is_empty() {
+    let paths = if paths.is_empty() {
         cwd_dirlist().map(|paths| match device_id {
             Some(device_id) if !cross_filesystems => paths
                 .into_iter()
@@ -323,10 +330,17 @@ fn extract_paths_maybe_set_cwd(
                 })
                 .collect(),
             _ => paths,
-        })
+        })?
     } else {
-        Ok(paths)
-    }
+        paths
+    };
+
+    // Drop excluded top-level paths here rather than during the walk, so they are left out of the
+    // report entirely instead of showing up as being empty.
+    Ok(paths
+        .into_iter()
+        .filter(|path| !walk_options.ignore_patterns.excludes_input_path(path))
+        .collect())
 }
 
 fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
@@ -468,6 +482,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -478,6 +493,7 @@ mod tests {
             count_hard_links: true,
             stay_on_filesystem: true,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![PathBuf::from("subcommand-input")],
         };
 
@@ -496,6 +512,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -506,6 +523,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -523,6 +541,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: true,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -533,6 +552,7 @@ mod tests {
             count_hard_links: true,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -553,6 +573,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-global-ignore")],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -563,6 +584,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -583,6 +605,7 @@ mod tests {
                 .iter()
                 .map(PathBuf::from)
                 .collect(),
+            ignore_from: vec![],
             input: vec![],
         };
 
@@ -593,6 +616,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
+            ignore_from: vec![],
             input: vec![],
         };
 

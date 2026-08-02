@@ -192,6 +192,7 @@ pub fn untraversed_app_and_terminal_with_closure(
         count_hard_links: false,
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
+        ignore_patterns: dua::IgnorePatterns::default(),
     };
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();

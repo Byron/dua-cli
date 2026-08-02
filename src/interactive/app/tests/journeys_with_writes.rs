@@ -122,6 +122,7 @@ $precious.tmp
         count_hard_links: false,
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
+        ignore_patterns: dua::IgnorePatterns::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(
@@ -258,6 +259,7 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         count_hard_links: false,
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
+        ignore_patterns: dua::IgnorePatterns::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(

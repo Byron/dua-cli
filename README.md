@@ -174,6 +174,32 @@ dua *
 dua aggregate --help
 ```
 
+### Excluding paths with a pattern file
+
+`--ignore-from FILE` reads gitignore-style patterns and leaves everything they match out of the
+report, in both aggregate and interactive mode. This is the `--exclude-from` of `rsync` and the
+`--exclude-file` of `restic`, so the same file can answer "how much of this would actually get
+backed up?".
+
+```bash
+cat .duaignore
+# target/
+# **/node_modules/
+# *.log
+# !important.log
+
+dua --ignore-from .duaignore
+```
+
+Patterns follow `.gitignore` syntax - `#` comments, a trailing `/` to match directories only, a
+leading `/` to anchor to the top, `**` to span directories, and `!` to re-include something an
+earlier pattern excluded. They match the paths `dua` reports, which are relative to the directory
+being looked at, and matching is case-sensitive on every platform.
+
+The option can be given more than once, in which case later files win over earlier ones, and it
+can also be set through `DUA_IGNORE_FROM`. Excluded directories are not descended into at all, so
+their contents cannot be re-included - the same restriction Git has.
+
 ### Interactive Mode
 
 Launch into interactive mode with the `i` or `interactive` subcommand. Get help on keyboard
