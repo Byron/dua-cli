@@ -195,12 +195,15 @@ pub struct Walk {
 
 trait PoolEntry: Send + Sized + 'static {}
 
+#[cfg(not(windows))]
+type StatReader<E> = fn(usize, Arc<Path>, usize, Vec<fs::DirEntry>, &Worker<Job>, &PoolShared<E>);
+
 #[derive(Clone, Copy)]
 struct Readers<E> {
     completion: fn(usize, Arc<Path>, usize, &Worker<Job>, &PoolShared<E>),
     parent_first: fn(usize, Arc<Path>, usize, &Worker<Job>, &PoolShared<E>),
     #[cfg(not(windows))]
-    stat_completion: fn(usize, Arc<Path>, usize, Vec<fs::DirEntry>, &Worker<Job>, &PoolShared<E>),
+    stat_completion: StatReader<E>,
 }
 
 /// Walk `root` without following symlinks.
