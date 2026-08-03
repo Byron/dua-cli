@@ -168,7 +168,8 @@ pub fn sorted_entries(
                         (path, true, entry.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
-                        (path, meta.is_ok(), meta.ok().is_some_and(|m| m.is_dir()))
+                        let exists = meta.is_ok();
+                        (path, exists, meta.is_ok_and(|m| m.is_dir()))
                     }
                 };
                 EntryDataBundle {

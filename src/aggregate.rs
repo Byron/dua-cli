@@ -1,10 +1,26 @@
 use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev};
 use anyhow::Result;
+#[cfg(not(windows))]
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{io, path::Path};
+
+#[cfg(not(windows))]
+fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
+    entry.path().size_on_disk_fast(metadata)
+}
+
+#[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)]
+fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
+    Ok(if entry.file_type.is_dir() {
+        0
+    } else {
+        metadata.allocated_size()
+    })
+}
 
 const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
 
@@ -106,7 +122,7 @@ pub fn aggregate(
                         if walk_options.apparent_size {
                             m.len()
                         } else {
-                            entry.path().size_on_disk_fast(m).unwrap_or_else(|_| {
+                            size_on_disk(&entry, m).unwrap_or_else(|_| {
                                 *num_errors += 1;
                                 0
                             })
@@ -462,5 +478,31 @@ mod tests {
             64,
             "the 64-byte file is still counted until a pattern matches it too"
         );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn windows_disk_size_survives_removing_the_entry_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, b"content").unwrap();
+        let entry = crate::walk::Entry::from_path(&path).unwrap();
+        let metadata = entry.metadata.as_ref().unwrap();
+        let expected = metadata.allocated_size();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(
+            size_on_disk(&entry, metadata).unwrap(),
+            expected,
+            "Windows aggregation should use the already-enumerated allocation size"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_disk_size_preserves_zero_sized_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file"), b"content").unwrap();
+        let entry = crate::walk::Entry::from_path(dir.path()).unwrap();
+        let metadata = entry.metadata.as_ref().unwrap();
+        assert_eq!(size_on_disk(&entry, metadata).unwrap(), 0);
     }
 }

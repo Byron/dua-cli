@@ -1,8 +1,7 @@
 //! Public library API for `dua` core traversal and aggregation functionality.
 //!
 //! This crate powers the `dua` binary and can also be used as a library.
-#![cfg_attr(windows, feature(windows_by_handle))]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 
 mod aggregate;
@@ -13,6 +12,8 @@ mod crossdev;
 mod inodefilter;
 mod walk;
 pub use walk::{Entry as WalkEntry, Order as WalkOrder, Walk, walk};
+#[cfg(windows)]
+pub use walk::{FileType as WalkFileType, Metadata as WalkMetadata};
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;

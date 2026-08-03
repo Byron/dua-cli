@@ -706,6 +706,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "wild",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

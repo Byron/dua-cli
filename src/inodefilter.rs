@@ -17,18 +17,10 @@ impl InodeFilter {
 
     #[cfg(windows)]
     /// Register file metadata and return `true` if this link should be counted.
-    pub(crate) fn add(&mut self, metadata: &std::fs::Metadata) -> bool {
-        use std::os::windows::fs::MetadataExt;
-
-        if let (Some(dev), Some(inode), Some(nlinks)) = (
-            metadata.volume_serial_number(),
-            metadata.file_index(),
-            metadata.number_of_links(),
-        ) {
-            self.add_dev_inode((dev as u64, inode), nlinks as u64)
-        } else {
-            true
-        }
+    pub(crate) fn add(&mut self, metadata: &crate::walk::Metadata) -> bool {
+        metadata
+            .hard_link_id()
+            .is_none_or(|id| self.inner.insert(id, 0).is_none())
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -41,6 +33,7 @@ impl InodeFilter {
     ///
     /// Returns `true` for the first observation that should contribute to size/count,
     /// and `false` for subsequent links.
+    #[cfg(any(unix, test))]
     pub(crate) fn add_dev_inode(&mut self, dev_inode: (u64, u64), nlinks: u64) -> bool {
         if nlinks <= 1 {
             return true;

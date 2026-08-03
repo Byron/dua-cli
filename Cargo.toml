@@ -34,7 +34,6 @@ byte-unit = { version = "5.2.5", features = ["u128"] }
 petgraph = "0.8.3"
 itertools = "0.15.0"
 num_cpus = "1.10.0"
-filesize = "0.2.0"
 anyhow = "1.0.31"
 trash = { version = "5.2.0", optional = true, default-features = false, features = [
     "coinit_apartmentthreaded", "chrono"
@@ -68,6 +67,16 @@ toml = "1.1.4"
 serde = { version = "1.0", features = ["derive"] }
 dirs = "6"
 shlex = "2.0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.1", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+] }
+
+[target.'cfg(not(windows))'.dependencies]
+filesize = "0.2.0"
 
 [[bin]]
 name = "dua"
