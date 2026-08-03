@@ -668,6 +668,11 @@ fn read_dir_completion(
     finish_pending(root_idx, shared);
 }
 
+/// Read a directory for completion-order traversal.
+///
+/// Unlike the non-Windows implementation, `windows::ReadDir` collects metadata while enumerating,
+/// so complete entries are published directly in chunks instead of being split into stealable
+/// metadata jobs. This streams wide directories but keeps their metadata work on one worker.
 #[cfg(windows)]
 fn read_dir_completion(
     root_idx: usize,
@@ -1147,10 +1152,22 @@ mod tests {
             true
         });
 
-        assert_eq!(entries.next().unwrap().unwrap().depth, 0);
-        assert_eq!(entries.next().unwrap().unwrap().depth, 1);
+        assert_eq!(
+            entries.next().unwrap().unwrap().depth,
+            0,
+            "the root entry should be yielded first"
+        );
+        assert_eq!(
+            entries.next().unwrap().unwrap().depth,
+            1,
+            "the first metadata batch should be yielded before enumeration resumes"
+        );
         continue_tx.send(()).unwrap();
         entries.for_each(drop);
-        assert_eq!(seen.load(AtomicOrdering::Relaxed), ENTRY_CHUNK_SIZE + 1);
+        assert_eq!(
+            seen.load(AtomicOrdering::Relaxed),
+            ENTRY_CHUNK_SIZE + 1,
+            "all directory entries should be inspected"
+        );
     }
 }
