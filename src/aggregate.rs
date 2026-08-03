@@ -40,6 +40,7 @@ pub fn aggregate(
     let mut device_ids = vec![0; num_roots];
     let mut completed = vec![false; num_roots];
     let mut roots = Vec::with_capacity(num_roots);
+    let has_ignore_patterns = walk_options.ignore_patterns.is_some();
     for (root_idx, path) in paths.into_iter().enumerate() {
         let device_id = if walk_options.cross_filesystems {
             0
@@ -54,6 +55,7 @@ pub fn aggregate(
         device_ids[root_idx] = device_id;
         roots.push(WalkRoot {
             index: root_idx,
+            pattern_root: has_ignore_patterns.then(|| path.clone()),
             path,
             device_id,
         });
@@ -267,6 +269,24 @@ pub struct Statistics {
 mod tests {
     use super::*;
 
+    fn byte_counts(out: &[u8]) -> Vec<u128> {
+        let out = std::str::from_utf8(out).unwrap();
+        out.match_indices(" b")
+            .map(|(unit, _)| {
+                out[..unit]
+                    .chars()
+                    .rev()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+                    .parse()
+                    .unwrap()
+            })
+            .collect()
+    }
+
     #[test]
     fn completed_roots_stream_in_input_order() {
         let aggregates = [("first".into(), 1, 0), ("second".into(), 2, 0)];
@@ -303,6 +323,7 @@ mod tests {
         )
         .unwrap();
 
+        assert_eq!(byte_counts(&out), [1, 2]);
         let out = String::from_utf8(out).unwrap();
         assert!(
             out.find("first").unwrap() < out.find("second").unwrap(),
@@ -336,7 +357,7 @@ mod tests {
                 apparent_size: false,
                 cross_filesystems: true,
                 ignore_dirs: std::collections::BTreeSet::default(),
-                ignore_patterns: crate::IgnorePatterns::default(),
+                ignore_patterns: None,
             },
             true,
             true,
@@ -369,7 +390,7 @@ mod tests {
                 apparent_size: true,
                 cross_filesystems: false,
                 ignore_dirs: std::collections::BTreeSet::default(),
-                ignore_patterns: crate::IgnorePatterns::default(),
+                ignore_patterns: None,
             },
             false,
             true,
@@ -414,18 +435,10 @@ mod tests {
                 vec![dir.path().to_owned()],
             )
             .unwrap();
-            // `ByteFormat::Bytes` prints `<count> b`, wrapped in color escapes that also
-            // contain digits, so read the count backwards from the unit instead.
-            let out = String::from_utf8(out).unwrap();
-            let unit = out
-                .find(" b")
-                .unwrap_or_else(|| panic!("expected a byte count in {out:?}"));
-            let count = out[..unit]
-                .chars()
-                .rev()
-                .take_while(char::is_ascii_digit)
-                .collect::<String>();
-            count.chars().rev().collect::<String>().parse().unwrap()
+            byte_counts(&out)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| panic!("expected a byte count in {out:?}"))
         };
 
         // Directory entries have a size of their own that differs per filesystem - 4096 bytes on

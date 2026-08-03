@@ -281,11 +281,12 @@ fn merge_traversal_args(
         } else {
             global.ignore_dirs.clone()
         },
-        ignore_from: if global.ignore_from.is_empty() {
-            subcommand.ignore_from.clone()
-        } else {
-            global.ignore_from.clone()
-        },
+        ignore_from: global
+            .ignore_from
+            .iter()
+            .chain(&subcommand.ignore_from)
+            .cloned()
+            .collect(),
         input: subcommand.input.clone(),
     }
 }
@@ -316,9 +317,8 @@ fn extract_paths_maybe_set_cwd(
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
     }
-    let device_id = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| crossdev::init(&cwd).ok());
+    let cwd = std::env::current_dir()?;
+    let device_id = crossdev::init(&cwd).ok();
 
     let paths = if paths.is_empty() {
         cwd_dirlist().map(|paths| match device_id {
@@ -339,7 +339,12 @@ fn extract_paths_maybe_set_cwd(
     // report entirely instead of showing up as being empty.
     Ok(paths
         .into_iter()
-        .filter(|path| !walk_options.ignore_patterns.excludes_input_path(path))
+        .filter(|path| {
+            walk_options
+                .ignore_patterns
+                .as_ref()
+                .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
+        })
         .collect())
 }
 
@@ -482,7 +487,7 @@ mod tests {
             count_hard_links: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
-            ignore_from: vec![],
+            ignore_from: vec![PathBuf::from("global-ignore")],
             input: vec![],
         };
 
@@ -493,7 +498,7 @@ mod tests {
             count_hard_links: true,
             stay_on_filesystem: true,
             ignore_dirs: vec![],
-            ignore_from: vec![],
+            ignore_from: vec![PathBuf::from("subcommand-ignore")],
             input: vec![PathBuf::from("subcommand-input")],
         };
 
@@ -501,6 +506,13 @@ mod tests {
 
         assert_eq!(merged.threads, custom_threads);
         assert_eq!(merged.input, subcommand.input);
+        assert_eq!(
+            merged.ignore_from,
+            [
+                PathBuf::from("global-ignore"),
+                PathBuf::from("subcommand-ignore")
+            ]
+        );
     }
 
     #[test]

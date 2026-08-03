@@ -141,9 +141,7 @@ pub struct TraversalArgs {
     ///
     /// Patterns follow `.gitignore` syntax - `#` starts a comment, a trailing `/` matches
     /// directories only, a leading `/` anchors to the top, `**` spans directories, and `!`
-    /// re-includes what an earlier pattern excluded. They are matched against the paths dua
-    /// reports, which are relative to the directory being looked at, case-sensitively on all
-    /// platforms.
+    /// re-includes what an earlier pattern excluded. They are case-sensitively on all platforms.
     ///
     /// Files given later take precedence over files given earlier. Excluded directories are not
     /// descended into, so their contents cannot be re-included.
