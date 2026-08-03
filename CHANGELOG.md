@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+There are two major features: 30x and more performance on Windows, and `--ignore-from <file>` support.
+This makes this release the best one yet, and I do hope that I can last a week or more until the next one.
+
+### New Features
+
+ - <csr-id-27d16f0aed7d26efdb8af50e82b30a709d8be19c/> add --ignore-from to exclude paths with gitignore-style patterns
+   Reads gitignore-syntax patterns from one or more files and leaves everything
+   they match out of the report, in both aggregate and interactive mode. This is
+   the equivalent of rsync's --exclude-from and restic's --exclude-file, so the
+   same pattern file can answer "how much of this would actually be backed up?".
+   
+   Matching is powered by gix-ignore, which is already a dependency, so negation,
+   anchoring, `**` and directory-only patterns all behave exactly like Git.
+   Excluded directories are pruned from the walk rather than only hidden, and
+   excluded top-level paths are dropped before the walk so they are absent from
+   the report instead of appearing as empty.
+
+### Bug Fixes
+
+ - <csr-id-b4d944ea98da33ac10602fbd4f36b1bb2bc4859e/> propagate background root device errors
+   <!-- agent -->
+   Background traversal replaced failed root-device lookups with device ID
+   zero. Readable root metadata could then be rejected as cross-device while the
+   traversal incorrectly retained a successful error count.
+   
+   Skip roots whose lookup fails and carry their per-root errors in the traversal
+   completion event, restoring the previous statistics and exit status. Keep
+   interleaved overlapping and duplicate roots isolated by including each root path
+   Arc allocation in private directory-map keys while preserving public traversal
+   event types.
+ - <csr-id-01d7e00a0e55499d7c8696f49f764c5145a48fd8/> propagate aggregate root device errors
+   <!-- agent -->
+   A failed root-device lookup was replaced with device ID zero after the parallel
+   traversal rewrite. For a dangling symlink, symlink metadata remained readable
+   but failed the device check, hiding the initialization error and producing a
+   successful exit status.
+   
+   Count the lookup failure on its root, mark that root complete for ordered
+   output, and omit it from traversal. Flush completed roots after traversal
+   because failed roots emit no completion event.
+   
+   Keep all roots in the shared
+   parallel traversal pool; when hard links are deduplicated, per-root attribution
+   is scheduling-dependent while the total remains correct, in the name of performance.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 13 commits contributed to the release.
+ - 2 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#302](https://github.com/Byron/dua-cli/issues/302)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#302](https://github.com/Byron/dua-cli/issues/302)**
+    - Avoid per-entry Windows metadata queries ([`9831b1e`](https://github.com/Byron/dua-cli/commit/9831b1ed6870d0cf7683f59816f212b3328f5f20))
+ * **Uncategorized**
+    - Merge pull request #359 from Byron/windows-performance ([`bdee013`](https://github.com/Byron/dua-cli/commit/bdee013b32fe7aa838044dfa3031610fe4ce39a9))
+    - Review ([`d784e02`](https://github.com/Byron/dua-cli/commit/d784e024a6cf40ee6d67fd27c6becc45dca54c13))
+    - Simplify platform-specific walker entries ([`f94fe6d`](https://github.com/Byron/dua-cli/commit/f94fe6db10e53171ce1b917ac5fb126d56c5d18d))
+    - Address CI comment about reader type complexity ([`542e36a`](https://github.com/Byron/dua-cli/commit/542e36a0a6b2f33422c4e86cc556ffa792955a4e))
+    - Use Result::is_ok_and in entry checks ([`29b9c8c`](https://github.com/Byron/dua-cli/commit/29b9c8c15272f0ca1c1b8db83a5608fc8bc533bd))
+    - Optimize Windows directory metadata scheduling ([`e36a66d`](https://github.com/Byron/dua-cli/commit/e36a66d182df56be38e9e66d813bcfce07fe3794))
+    - Merge pull request #358 from pelazas/feat/ignore-from ([`1db53ae`](https://github.com/Byron/dua-cli/commit/1db53ae58d14c4368a12063bbad00eb6420e6949))
+    - Review ([`af83aa5`](https://github.com/Byron/dua-cli/commit/af83aa50f78d038f02857b182a1e7895243a10fc))
+    - Add --ignore-from to exclude paths with gitignore-style patterns ([`27d16f0`](https://github.com/Byron/dua-cli/commit/27d16f0aed7d26efdb8af50e82b30a709d8be19c))
+    - Merge pull request #357 from Byron/crossdev-fix ([`d7b1503`](https://github.com/Byron/dua-cli/commit/d7b1503a8102f123cc3eb9ffbffdb1e906907d98))
+    - Propagate background root device errors ([`b4d944e`](https://github.com/Byron/dua-cli/commit/b4d944ea98da33ac10602fbd4f36b1bb2bc4859e))
+    - Propagate aggregate root device errors ([`01d7e00`](https://github.com/Byron/dua-cli/commit/01d7e00a0e55499d7c8696f49f764c5145a48fd8))
+</details>
+
 ## 2.40.1 (2026-08-01)
 
 Even more performance, up to 15%. That's it now, trying to hit 1 week without a release ;).
@@ -36,7 +115,7 @@ Even more performance, up to 15%. That's it now, trying to hit 1 week without a 
 
 <csr-read-only-do-not-edit/>
 
- - 7 commits contributed to the release over the course of 1 calendar day.
+ - 8 commits contributed to the release over the course of 1 calendar day.
  - 1 day passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -48,6 +127,7 @@ Even more performance, up to 15%. That's it now, trying to hit 1 week without a 
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-cli v2.40.1 ([`9bc8f74`](https://github.com/Byron/dua-cli/commit/9bc8f74def39952547683671887b99b06cc69edf))
     - Prepare next release ([`8163e0e`](https://github.com/Byron/dua-cli/commit/8163e0ee614bcb303915f22c62bb3e9b515a0a50))
     - Merge pull request #356 from Byron/performance ([`fea714d`](https://github.com/Byron/dua-cli/commit/fea714dd6c018c7ebf16209d2678b162204e6bce))
     - Parallelize filesystem traversal ([`4dba3ad`](https://github.com/Byron/dua-cli/commit/4dba3ad3ac7122bdb82efdb54a49ae811e4f37f9))
@@ -4851,4 +4931,3 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
-
