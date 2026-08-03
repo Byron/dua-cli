@@ -8,19 +8,13 @@ use std::time::Duration;
 use std::{io, path::Path};
 
 #[cfg(not(windows))]
-fn size_on_disk(
-    entry: &crate::walk::RootEntry,
-    metadata: &crate::walk::RootMetadata,
-) -> io::Result<u64> {
+fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
     entry.path().size_on_disk_fast(metadata)
 }
 
 #[cfg(windows)]
 #[allow(clippy::unnecessary_wraps)]
-fn size_on_disk(
-    entry: &crate::walk::RootEntry,
-    metadata: &crate::walk::RootMetadata,
-) -> io::Result<u64> {
+fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
     Ok(if entry.file_type.is_dir() {
         0
     } else {
@@ -491,7 +485,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file");
         std::fs::write(&path, b"content").unwrap();
-        let entry = crate::walk::RootEntry::from_path(&path).unwrap();
+        let entry = crate::walk::Entry::from_path(&path).unwrap();
         let metadata = entry.metadata.as_ref().unwrap();
         let expected = metadata.allocated_size();
         std::fs::remove_file(path).unwrap();
@@ -507,7 +501,7 @@ mod tests {
     fn windows_disk_size_preserves_zero_sized_directories() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("file"), b"content").unwrap();
-        let entry = crate::walk::RootEntry::from_path(dir.path()).unwrap();
+        let entry = crate::walk::Entry::from_path(dir.path()).unwrap();
         let metadata = entry.metadata.as_ref().unwrap();
         assert_eq!(size_on_disk(&entry, metadata).unwrap(), 0);
     }

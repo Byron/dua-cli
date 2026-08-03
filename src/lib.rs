@@ -12,6 +12,8 @@ mod crossdev;
 mod inodefilter;
 mod walk;
 pub use walk::{Entry as WalkEntry, Order as WalkOrder, Walk, walk};
+#[cfg(windows)]
+pub use walk::{FileType as WalkFileType, Metadata as WalkMetadata};
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;

@@ -17,7 +17,7 @@ impl InodeFilter {
 
     #[cfg(windows)]
     /// Register file metadata and return `true` if this link should be counted.
-    pub(crate) fn add(&mut self, metadata: &crate::walk::RootMetadata) -> bool {
+    pub(crate) fn add(&mut self, metadata: &crate::walk::Metadata) -> bool {
         metadata
             .hard_link_id()
             .is_none_or(|id| self.inner.insert(id, 0).is_none())

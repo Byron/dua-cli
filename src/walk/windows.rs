@@ -24,12 +24,18 @@ use windows_sys::Win32::{
 const DIRECTORY_BUFFER_WORDS: usize = 8 * 1024;
 const NAME_SURROGATE_BIT: u32 = 0x2000_0000;
 
-pub(crate) struct Entry {
-    pub(crate) depth: usize,
-    pub(crate) file_name: OsString,
-    pub(crate) file_type: FileType,
-    pub(crate) metadata: io::Result<Metadata>,
-    pub(crate) parent_path: Arc<Path>,
+/// A filesystem entry produced by the Windows directory walker.
+pub struct Entry {
+    /// Distance from the walk root: `0` for the root, `1` for its children, and so on.
+    pub depth: usize,
+    /// File name relative to `parent_path`.
+    pub file_name: OsString,
+    /// Filesystem entry type without following symbolic links.
+    pub file_type: FileType,
+    /// Metadata obtained with directory enumeration.
+    pub metadata: io::Result<Metadata>,
+    /// Path containing this entry.
+    pub parent_path: Arc<Path>,
 }
 
 impl Entry {
@@ -96,15 +102,17 @@ impl Entry {
         })
     }
 
-    pub(crate) fn path(&self) -> PathBuf {
+    /// Return the full path to this entry.
+    #[must_use]
+    pub fn path(&self) -> PathBuf {
         self.parent_path.join(&self.file_name)
     }
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct FileType {
+/// Windows filesystem entry type derived from directory attributes and reparse tags.
+pub struct FileType {
     is_dir: bool,
-    #[cfg_attr(not(test), allow(dead_code))]
     is_symlink: bool,
 }
 
@@ -118,18 +126,28 @@ impl FileType {
         }
     }
 
-    pub(crate) fn is_dir(self) -> bool {
+    /// Return whether this entry is a directory that may be traversed.
+    #[must_use]
+    pub fn is_dir(self) -> bool {
         self.is_dir
     }
 
-    #[cfg(test)]
-    pub(crate) fn is_symlink(self) -> bool {
+    /// Return whether this entry is a regular file.
+    #[must_use]
+    pub fn is_file(self) -> bool {
+        !self.is_dir && !self.is_symlink
+    }
+
+    /// Return whether this entry is a symbolic link or junction.
+    #[must_use]
+    pub fn is_symlink(self) -> bool {
         self.is_symlink
     }
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Metadata {
+/// Metadata supplied by Windows directory enumeration.
+pub struct Metadata {
     len: u64,
     allocated_size: u64,
     modified: SystemTime,
@@ -138,16 +156,22 @@ pub(crate) struct Metadata {
 }
 
 impl Metadata {
-    pub(crate) fn len(&self) -> u64 {
+    /// Return the logical file size.
+    #[must_use]
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u64 {
         self.len
     }
 
-    pub(crate) fn allocated_size(&self) -> u64 {
+    /// Return the number of allocated bytes.
+    #[must_use]
+    pub fn allocated_size(&self) -> u64 {
         self.allocated_size
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    pub(crate) fn modified(&self) -> io::Result<SystemTime> {
+    /// Return the last modification time.
+    pub fn modified(&self) -> io::Result<SystemTime> {
         Ok(self.modified)
     }
 
@@ -392,9 +416,11 @@ mod tests {
 
         let file = FileType::from_attributes(FILE_ATTRIBUTE_NORMAL, 0);
         assert!(!file.is_dir());
+        assert!(file.is_file());
         assert!(!file.is_symlink());
         let dir = FileType::from_attributes(FILE_ATTRIBUTE_DIRECTORY, 0);
         assert!(dir.is_dir());
+        assert!(!dir.is_file());
         assert!(!dir.is_symlink());
         for tag in [IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POINT] {
             let link = FileType::from_attributes(
@@ -402,6 +428,7 @@ mod tests {
                 tag,
             );
             assert!(!link.is_dir());
+            assert!(!link.is_file());
             assert!(link.is_symlink());
         }
         let cloud = FileType::from_attributes(

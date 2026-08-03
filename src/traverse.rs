@@ -129,7 +129,7 @@ impl Default for TraversalStats {
 }
 
 /// A filesystem entry waiting to be integrated into a traversal.
-pub struct TraversalEntry(crate::walk::RootEntry);
+pub struct TraversalEntry(crate::walk::Entry);
 
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
@@ -395,7 +395,7 @@ impl BackgroundTraversal {
 fn size_on_disk(
     _parent: &Path,
     name: &Path,
-    meta: &crate::walk::RootMetadata,
+    meta: &crate::walk::Metadata,
     _is_dir: bool,
 ) -> io::Result<u64> {
     name.size_on_disk_fast(meta)
@@ -407,7 +407,7 @@ fn size_on_disk(
 fn size_on_disk(
     _parent: &Path,
     _name: &Path,
-    meta: &crate::walk::RootMetadata,
+    meta: &crate::walk::Metadata,
     is_dir: bool,
 ) -> io::Result<u64> {
     Ok(if is_dir { 0 } else { meta.allocated_size() })

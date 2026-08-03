@@ -693,7 +693,8 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
         match entry {
             Ok(entry) => {
                 let entry_path = entry.path();
-                let bytes = u128::from(entry.metadata.as_ref().map_or(0, std::fs::Metadata::len));
+                let bytes =
+                    u128::from(entry.metadata.as_ref().map_or(0, |metadata| metadata.len()));
                 if entry.file_type.is_dir() {
                     // Real directory (symlinks to dirs report is_symlink, not
                     // is_dir, when follow_links is false): remove after children.
