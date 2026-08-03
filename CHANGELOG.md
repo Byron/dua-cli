@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.41.0 (2026-08-03)
 
 There are two major features: 30x and more performance on Windows, and `--ignore-from <file>` support.
 This makes this release the best one yet, and I do hope that I can last a week or more until the next one.
@@ -56,7 +56,7 @@ This makes this release the best one yet, and I do hope that I can last a week o
 
 <csr-read-only-do-not-edit/>
 
- - 13 commits contributed to the release.
+ - 14 commits contributed to the release.
  - 2 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#302](https://github.com/Byron/dua-cli/issues/302)
@@ -70,6 +70,7 @@ This makes this release the best one yet, and I do hope that I can last a week o
  * **[#302](https://github.com/Byron/dua-cli/issues/302)**
     - Avoid per-entry Windows metadata queries ([`9831b1e`](https://github.com/Byron/dua-cli/commit/9831b1ed6870d0cf7683f59816f212b3328f5f20))
  * **Uncategorized**
+    - Prepare changelog prior to release ([`2b78d30`](https://github.com/Byron/dua-cli/commit/2b78d30008b0d025246a725d5c54b19d8962d965))
     - Merge pull request #359 from Byron/windows-performance ([`bdee013`](https://github.com/Byron/dua-cli/commit/bdee013b32fe7aa838044dfa3031610fe4ce39a9))
     - Review ([`d784e02`](https://github.com/Byron/dua-cli/commit/d784e024a6cf40ee6d67fd27c6becc45dca54c13))
     - Simplify platform-specific walker entries ([`f94fe6d`](https://github.com/Byron/dua-cli/commit/f94fe6db10e53171ce1b917ac5fb126d56c5d18d))
@@ -4931,3 +4932,4 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
+
