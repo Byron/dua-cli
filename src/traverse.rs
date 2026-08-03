@@ -1,14 +1,13 @@
 use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
+#[cfg(not(windows))]
 use filesize::PathExt;
 use petgraph::{Directed, Direction, graph::NodeIndex, stable_graph::StableGraph};
 use std::time::Instant;
 use std::{
     collections::HashMap,
-    fmt,
-    fs::Metadata,
-    io,
+    fmt, io,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -130,7 +129,7 @@ impl Default for TraversalStats {
 }
 
 /// A filesystem entry waiting to be integrated into a traversal.
-pub struct TraversalEntry(crate::walk::Entry);
+pub struct TraversalEntry(crate::walk::RootEntry);
 
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
@@ -302,14 +301,20 @@ impl BackgroundTraversal {
                                 if self.walk_options.apparent_size {
                                     file_size = u128::from(m.len());
                                 } else {
-                                    file_size = u128::from(
-                                        size_on_disk(&entry.parent_path, &data.name, m)
+                                    file_size =
+                                        u128::from(
+                                            size_on_disk(
+                                                &entry.parent_path,
+                                                &data.name,
+                                                m,
+                                                data.is_dir,
+                                            )
                                             .unwrap_or_else(|_| {
                                                 self.stats.io_errors += 1;
                                                 data.metadata_io_error = true;
                                                 0
                                             }),
-                                    );
+                                        );
                                 }
                             } else {
                                 data.entry_count = Some(0);
@@ -387,14 +392,25 @@ impl BackgroundTraversal {
 
 #[cfg(not(windows))]
 /// Return disk usage for `name` on Unix-like platforms.
-fn size_on_disk(_parent: &Path, name: &Path, meta: &Metadata) -> io::Result<u64> {
+fn size_on_disk(
+    _parent: &Path,
+    name: &Path,
+    meta: &crate::walk::RootMetadata,
+    _is_dir: bool,
+) -> io::Result<u64> {
     name.size_on_disk_fast(meta)
 }
 
 #[cfg(windows)]
 /// Return disk usage for `name` on Windows platforms.
-fn size_on_disk(parent: &Path, name: &Path, meta: &Metadata) -> io::Result<u64> {
-    parent.join(name).size_on_disk_fast(meta)
+#[allow(clippy::unnecessary_wraps)]
+fn size_on_disk(
+    _parent: &Path,
+    _name: &Path,
+    meta: &crate::walk::RootMetadata,
+    is_dir: bool,
+) -> io::Result<u64> {
+    Ok(if is_dir { 0 } else { meta.allocated_size() })
 }
 
 #[cfg(test)]

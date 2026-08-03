@@ -38,13 +38,24 @@ use std::{
     thread,
 };
 
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod windows;
+
+#[cfg(windows)]
+pub(crate) use windows::{Entry as RootEntry, Metadata as RootMetadata};
+#[cfg(not(windows))]
+pub(crate) type RootEntry = Entry;
+#[cfg(not(windows))]
+pub(crate) type RootMetadata = Metadata;
+
 /// Decides whether to traverse an entry's children for a given root index.
 /// Returning `false` prunes descendants but still emits the entry itself.
-type Descend = dyn Fn(usize, &Entry) -> bool + Send + Sync;
+type Descend<E> = dyn Fn(usize, &E) -> bool + Send + Sync;
 /// Entries obtained from one directory read.
 /// The outer error means `fs::read_dir` could not open the directory; inner errors come from
 /// reading or converting individual directory entries.
-type Batch = io::Result<Vec<io::Result<Entry>>>;
+type Batch<E> = io::Result<Vec<io::Result<E>>>;
 /// Number of directory entries grouped into each metadata job or result batch.
 /// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
 const ENTRY_CHUNK_SIZE: usize = 4;
@@ -104,10 +115,10 @@ impl Job {
 }
 
 /// Internal worker-channel events, including batches, per-root completion, and pool completion.
-enum Event {
+enum Event<E> {
     Batch {
         root_idx: usize,
-        batch: Batch,
+        batch: Batch<E>,
     },
     /// All work for this root is complete; emitted after all of its batches.
     /// Completion events for different roots may occur in any order.
@@ -124,17 +135,18 @@ enum Event {
 /// [`RootWalk`] yields `(root_idx, event)`, separating root routing from event meaning. [`Event`]
 /// cannot do this uniformly because its `Finished` variant is pool-wide and has no root index.
 pub(crate) enum RootEvent {
-    Entry(io::Result<Entry>),
+    Entry(io::Result<RootEntry>),
     Finished,
 }
 
-struct PoolShared {
+struct PoolShared<E> {
     /// Global queue that makes the initial root job available to whichever worker starts first.
     injector: Injector<Job>,
     stealers: Vec<Stealer<Job>>,
     stop: AtomicBool,
-    descend: Arc<Descend>,
-    events: SyncSender<Event>,
+    descend: Arc<Descend<E>>,
+    events: SyncSender<Event<E>>,
+    readers: Readers<E>,
     /// Number of roots with queued or running jobs.
     active_roots: AtomicUsize,
     /// Number of queued or running jobs for each root index.
@@ -150,9 +162,9 @@ struct PoolShared {
     next_wake: AtomicUsize,
 }
 
-struct Pool {
-    shared: Arc<PoolShared>,
-    events: Receiver<Event>,
+struct Pool<E> {
+    shared: Arc<PoolShared<E>>,
+    events: Receiver<Event<E>>,
     handles: Vec<thread::JoinHandle<()>>,
 }
 
@@ -162,7 +174,7 @@ pub(crate) struct RootWalk {
     /// Entries buffered for delivery, by root index.
     next: Vec<(usize, RootEvent)>,
     /// See [`Walk::pool`].
-    pool: Option<Pool>,
+    pool: Option<Pool<RootEntry>>,
 }
 
 /// A single-root directory iterator whose directory reads happen in parallel.
@@ -178,7 +190,17 @@ pub struct Walk {
     /// Owns the worker threads for as long as traversal is active.
     ///
     /// Clearing or dropping it requests shutdown, unparks every worker, and joins their threads.
-    pool: Option<Pool>,
+    pool: Option<Pool<Entry>>,
+}
+
+trait PoolEntry: Send + Sized + 'static {}
+
+#[derive(Clone, Copy)]
+struct Readers<E> {
+    completion: fn(usize, Arc<Path>, usize, &Worker<Job>, &PoolShared<E>),
+    parent_first: fn(usize, Arc<Path>, usize, &Worker<Job>, &PoolShared<E>),
+    #[cfg(not(windows))]
+    stat_completion: fn(usize, Arc<Path>, usize, Vec<fs::DirEntry>, &Worker<Job>, &PoolShared<E>),
 }
 
 /// Walk `root` without following symlinks.
@@ -199,6 +221,7 @@ pub fn walk(
                 1,
                 order,
                 Arc::new(move |_, entry| descend(entry)),
+                standard_readers(),
             );
             start_jobs(
                 &pool,
@@ -253,7 +276,7 @@ pub(crate) fn walk_roots(
     roots: impl IntoIterator<Item = (usize, PathBuf)>,
     threads: usize,
     order: Order,
-    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+    descend: impl Fn(usize, &RootEntry) -> bool + Send + Sync + 'static,
 ) -> RootWalk {
     let roots = roots.into_iter().collect::<Vec<_>>();
     let root_count = roots
@@ -267,7 +290,7 @@ pub(crate) fn walk_roots(
     let pool = if root_jobs.is_empty() {
         None
     } else {
-        let pool = start_pool(threads.max(1), root_count, order, descend);
+        let pool = start_pool(threads.max(1), root_count, order, descend, root_readers());
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
@@ -314,7 +337,7 @@ impl Iterator for RootWalk {
     }
 }
 
-impl PoolShared {
+impl<E> PoolShared<E> {
     /// Wake one worker that has announced it is idle.
     fn wake_worker(&self) {
         let len = self.idle.len();
@@ -374,7 +397,43 @@ impl Entry {
     }
 }
 
-fn start_pool(threads: usize, root_count: usize, order: Order, descend: Arc<Descend>) -> Pool {
+impl PoolEntry for Entry {}
+
+#[cfg(windows)]
+impl PoolEntry for RootEntry {}
+
+fn standard_readers() -> Readers<Entry> {
+    Readers {
+        #[cfg(windows)]
+        completion: read_dir_completion_inline,
+        #[cfg(not(windows))]
+        completion: read_dir_completion,
+        parent_first: read_dir_parent_first,
+        #[cfg(not(windows))]
+        stat_completion: stat_entries_completion,
+    }
+}
+
+#[cfg(not(windows))]
+fn root_readers() -> Readers<RootEntry> {
+    standard_readers()
+}
+
+#[cfg(windows)]
+fn root_readers() -> Readers<RootEntry> {
+    Readers {
+        completion: read_dir_windows_completion,
+        parent_first: read_dir_windows_parent_first,
+    }
+}
+
+fn start_pool<E: PoolEntry>(
+    threads: usize,
+    root_count: usize,
+    order: Order,
+    descend: Arc<Descend<E>>,
+    readers: Readers<E>,
+) -> Pool<E> {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
     let (event_tx, event_rx) = sync_channel(threads * 2);
@@ -384,6 +443,7 @@ fn start_pool(threads: usize, root_count: usize, order: Order, descend: Arc<Desc
         stop: AtomicBool::new(false),
         descend,
         events: event_tx,
+        readers,
         active_roots: AtomicUsize::new(0),
         jobs_per_root: (0..root_count).map(|_| AtomicUsize::new(0)).collect(),
         order,
@@ -418,12 +478,12 @@ fn start_pool(threads: usize, root_count: usize, order: Order, descend: Arc<Desc
 /// Returns events in stack order for [`RootWalk::next`] to pop, plus jobs requiring a worker pool.
 fn begin_walks(
     roots: impl IntoIterator<Item = (usize, PathBuf)>,
-    descend: &Descend,
+    descend: &Descend<RootEntry>,
 ) -> (Vec<(usize, RootEvent)>, Vec<Job>) {
     let mut next = Vec::new();
     let mut jobs = Vec::new();
     for (root_idx, path) in roots {
-        let entry = Entry::from_path(&path);
+        let entry = RootEntry::from_path(&path);
         let has_job = if let Ok(entry) = &entry
             && entry.file_type.is_dir()
             && descend(root_idx, entry)
@@ -448,7 +508,7 @@ fn begin_walks(
 
 /// Seed an idle pool with one initial job per active root.
 /// Initializes per-root completion accounting, queues the jobs, and wakes workers to process them.
-fn start_jobs(pool: &Pool, root_jobs: Vec<Job>) {
+fn start_jobs<E>(pool: &Pool<E>, root_jobs: Vec<Job>) {
     let wake_all = root_jobs.len() > 1;
     debug_assert_eq!(
         pool.shared.active_roots.load(AtomicOrdering::Relaxed),
@@ -479,7 +539,12 @@ fn start_jobs(pool: &Pool, root_jobs: Vec<Job>) {
     }
 }
 
-fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<PoolShared>) {
+fn worker_loop<E: PoolEntry>(
+    idx: usize,
+    worker: Worker<Job>,
+    parker: Parker,
+    shared: Arc<PoolShared<E>>,
+) {
     while !shared.stop.load(AtomicOrdering::Relaxed) {
         let found = if let Some(found) = find_job(&worker, &shared) {
             found
@@ -503,7 +568,7 @@ fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<Pool
     }
 }
 
-impl Drop for Pool {
+impl<E> Drop for Pool<E> {
     fn drop(&mut self) {
         self.shared.stop.store(true, AtomicOrdering::Relaxed);
         self.shared.wake_workers();
@@ -523,7 +588,7 @@ impl Drop for Pool {
 ///
 /// Returns the selected job and whether it was stolen from another worker; the caller uses a
 /// successful steal to wake another idle worker. Returns `None` when a full scan finds no work.
-fn find_job(worker: &Worker<Job>, shared: &PoolShared) -> Option<(Job, bool)> {
+fn find_job<E>(worker: &Worker<Job>, shared: &PoolShared<E>) -> Option<(Job, bool)> {
     loop {
         if let Some(job) = worker.pop() {
             return Some((job, false));
@@ -549,18 +614,19 @@ fn find_job(worker: &Worker<Job>, shared: &PoolShared) -> Option<(Job, bool)> {
     }
 }
 
-fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
+fn run_job<E: PoolEntry>(job: Job, worker: &Worker<Job>, shared: &PoolShared<E>) {
     match job {
         Job::ReadDir {
             root_idx: root,
             path,
             entry_depth,
         } => {
-            if matches!(shared.order, Order::Completion) {
-                read_dir_completion(root, path, entry_depth, worker, shared);
+            let reader = if matches!(shared.order, Order::Completion) {
+                shared.readers.completion
             } else {
-                read_dir_parent_first(root, path, entry_depth, worker, shared);
-            }
+                shared.readers.parent_first
+            };
+            reader(root, path, entry_depth, worker, shared);
         }
         #[cfg(not(windows))]
         Job::StatCompletion {
@@ -568,7 +634,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
             path,
             entry_depth,
             entries,
-        } => stat_entries_completion(root, path, entry_depth, entries, worker, shared),
+        } => (shared.readers.stat_completion)(root, path, entry_depth, entries, worker, shared),
     }
 }
 
@@ -577,90 +643,80 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
 /// are emitted directly; the directory-read job completes after all chunks are queued.
 /// This adds parallelism within wide directories when metadata calls dominate. Both traversal
 /// orders already process separate directories concurrently, so typical trees may see no speedup.
+#[cfg(not(windows))]
 fn read_dir_completion(
     root_idx: usize,
     path: Arc<Path>,
     entry_depth: usize,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) {
-    #[cfg(windows)]
-    {
-        // `DirEntry::metadata()` is populated by Windows directory enumeration and needs no
-        // additional syscall. Convert entries on this worker instead of paying to queue and steal
-        // metadata jobs, but keep publishing bounded batches so wide directories stream results.
-        read_dir_completion_inline(root_idx, path, entry_depth, worker, shared);
-    }
-
-    #[cfg(not(windows))]
-    {
-        let dir_entries = match fs::read_dir(&path) {
-            Ok(entries) => entries,
-            Err(err) => {
-                if shared
-                    .events
-                    .send(Event::Batch {
-                        root_idx,
-                        batch: Err(err),
-                    })
-                    .is_err()
-                {
-                    shared.stop.store(true, AtomicOrdering::Relaxed);
-                }
-                finish_pending(root_idx, shared);
-                return;
-            }
-        };
-        let mut chunk = Vec::with_capacity(ENTRY_CHUNK_SIZE);
-        let mut errors = Vec::new();
-        let mut has_jobs = false;
-        for entry in dir_entries {
-            match entry {
-                Ok(entry) => {
-                    chunk.push(entry);
-                    if chunk.len() == ENTRY_CHUNK_SIZE {
-                        add_pending(root_idx, 1, shared);
-                        worker.push(Job::StatCompletion {
-                            root_idx,
-                            path: Arc::clone(&path),
-                            entry_depth,
-                            entries: std::mem::replace(
-                                &mut chunk,
-                                Vec::with_capacity(ENTRY_CHUNK_SIZE),
-                            ),
-                        });
-                        has_jobs = true;
-                    }
-                }
-                Err(err) => errors.push(Err(err)),
-            }
-        }
-        if !chunk.is_empty() {
-            add_pending(root_idx, 1, shared);
-            worker.push(Job::StatCompletion {
-                root_idx,
-                path,
-                entry_depth,
-                entries: chunk,
-            });
-            has_jobs = true;
-        }
-        if has_jobs {
-            shared.wake_worker();
-        }
-        if !errors.is_empty()
-            && shared
+    let dir_entries = match fs::read_dir(&path) {
+        Ok(entries) => entries,
+        Err(err) => {
+            if shared
                 .events
                 .send(Event::Batch {
                     root_idx,
-                    batch: Ok(errors),
+                    batch: Err(err),
                 })
                 .is_err()
-        {
-            shared.stop.store(true, AtomicOrdering::Relaxed);
+            {
+                shared.stop.store(true, AtomicOrdering::Relaxed);
+            }
+            finish_pending(root_idx, shared);
+            return;
         }
-        finish_pending(root_idx, shared);
+    };
+    let mut chunk = Vec::with_capacity(ENTRY_CHUNK_SIZE);
+    let mut errors = Vec::new();
+    let mut has_jobs = false;
+    for entry in dir_entries {
+        match entry {
+            Ok(entry) => {
+                chunk.push(entry);
+                if chunk.len() == ENTRY_CHUNK_SIZE {
+                    add_pending(root_idx, 1, shared);
+                    worker.push(Job::StatCompletion {
+                        root_idx,
+                        path: Arc::clone(&path),
+                        entry_depth,
+                        entries: std::mem::replace(
+                            &mut chunk,
+                            Vec::with_capacity(ENTRY_CHUNK_SIZE),
+                        ),
+                    });
+                    has_jobs = true;
+                }
+            }
+            Err(err) => errors.push(Err(err)),
+        }
     }
+    if !chunk.is_empty() {
+        add_pending(root_idx, 1, shared);
+        worker.push(Job::StatCompletion {
+            root_idx,
+            path,
+            entry_depth,
+            entries: chunk,
+        });
+        has_jobs = true;
+    }
+    if has_jobs {
+        shared.wake_worker();
+    }
+    if !errors.is_empty()
+        && shared
+            .events
+            .send(Event::Batch {
+                root_idx,
+                batch: Ok(errors),
+            })
+            .is_err()
+    {
+        shared.stop.store(true, AtomicOrdering::Relaxed);
+    }
+    finish_pending(root_idx, shared);
 }
 
 #[cfg(windows)]
@@ -669,7 +725,7 @@ fn read_dir_completion_inline(
     path: Arc<Path>,
     depth: usize,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) {
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
@@ -722,7 +778,7 @@ fn publish_completion_batch(
     entries: &mut Vec<io::Result<Entry>>,
     jobs: &mut Vec<Job>,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) -> bool {
     add_pending(root_idx, jobs.len(), shared);
     schedule_jobs(std::mem::take(jobs), worker, shared);
@@ -744,6 +800,118 @@ fn publish_completion_batch(
     }
 }
 
+#[cfg(windows)]
+fn read_dir_windows_completion(
+    root_idx: usize,
+    path: Arc<Path>,
+    depth: usize,
+    worker: &Worker<Job>,
+    shared: &PoolShared<RootEntry>,
+) {
+    let dir_entries = match windows::ReadDir::open(path, depth) {
+        Ok(entries) => entries,
+        Err(err) => {
+            if shared
+                .events
+                .send(Event::Batch {
+                    root_idx,
+                    batch: Err(err),
+                })
+                .is_err()
+            {
+                shared.stop.store(true, AtomicOrdering::Relaxed);
+            }
+            finish_pending(root_idx, shared);
+            return;
+        }
+    };
+    let mut entries = Vec::with_capacity(ENTRY_CHUNK_SIZE);
+    let mut jobs = Vec::new();
+    for entry in dir_entries {
+        if let Ok(entry) = &entry
+            && entry.file_type.is_dir()
+            && (shared.descend)(root_idx, entry)
+        {
+            jobs.push(Job::ReadDir {
+                root_idx,
+                path: Arc::from(entry.path()),
+                entry_depth: depth + 1,
+            });
+        }
+        entries.push(entry);
+        if entries.len() == ENTRY_CHUNK_SIZE
+            && !publish_windows_completion_batch(root_idx, &mut entries, &mut jobs, worker, shared)
+        {
+            finish_pending(root_idx, shared);
+            return;
+        }
+    }
+    if !entries.is_empty() {
+        publish_windows_completion_batch(root_idx, &mut entries, &mut jobs, worker, shared);
+    }
+    finish_pending(root_idx, shared);
+}
+
+#[cfg(windows)]
+fn publish_windows_completion_batch(
+    root_idx: usize,
+    entries: &mut Vec<io::Result<RootEntry>>,
+    jobs: &mut Vec<Job>,
+    worker: &Worker<Job>,
+    shared: &PoolShared<RootEntry>,
+) -> bool {
+    add_pending(root_idx, jobs.len(), shared);
+    schedule_jobs(std::mem::take(jobs), worker, shared);
+    if shared
+        .events
+        .send(Event::Batch {
+            root_idx,
+            batch: Ok(std::mem::replace(
+                entries,
+                Vec::with_capacity(ENTRY_CHUNK_SIZE),
+            )),
+        })
+        .is_err()
+    {
+        shared.stop.store(true, AtomicOrdering::Relaxed);
+        false
+    } else {
+        true
+    }
+}
+
+#[cfg(windows)]
+fn read_dir_windows_parent_first(
+    root_idx: usize,
+    path: Arc<Path>,
+    depth: usize,
+    worker: &Worker<Job>,
+    shared: &PoolShared<RootEntry>,
+) {
+    let dir_entries = match windows::ReadDir::open(path, depth) {
+        Ok(entries) => entries,
+        Err(err) => {
+            finish_directory(root_idx, Err(err), Vec::new(), worker, shared);
+            return;
+        }
+    };
+    let mut jobs = Vec::new();
+    let entries = dir_entries
+        .map(|entry| {
+            entry.inspect(|entry| {
+                if entry.file_type.is_dir() && (shared.descend)(root_idx, entry) {
+                    jobs.push(Job::ReadDir {
+                        root_idx,
+                        path: Arc::from(entry.path()),
+                        entry_depth: depth + 1,
+                    });
+                }
+            })
+        })
+        .collect();
+    finish_directory(root_idx, Ok(entries), jobs, worker, shared);
+}
+
 #[cfg(not(windows))]
 fn stat_entries_completion(
     root_idx: usize,
@@ -751,7 +919,7 @@ fn stat_entries_completion(
     depth: usize,
     entries: Vec<fs::DirEntry>,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) {
     let mut jobs = Vec::new();
     let entries = entries
@@ -795,7 +963,7 @@ fn read_dir_parent_first(
     path: Arc<Path>,
     depth: usize,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) {
     read_dir_inline(root_idx, path, depth, worker, shared);
 }
@@ -809,7 +977,7 @@ fn read_dir_inline(
     path: Arc<Path>,
     depth: usize,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<Entry>,
 ) {
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
@@ -840,12 +1008,12 @@ fn read_dir_inline(
 /// Publish a completed directory read and schedule its accepted child-directory jobs.
 /// `ParentFirst` sends the batch before exposing child jobs; `Completion` exposes child jobs first.
 /// Child jobs are counted before either action, and the current job is marked complete afterward.
-fn finish_directory(
+fn finish_directory<E>(
     root_idx: usize,
-    batch: Batch,
+    batch: Batch<E>,
     jobs: Vec<Job>,
     worker: &Worker<Job>,
-    shared: &PoolShared,
+    shared: &PoolShared<E>,
 ) {
     add_pending(root_idx, jobs.len(), shared);
 
@@ -877,13 +1045,13 @@ fn finish_directory(
     finish_pending(root_idx, shared);
 }
 
-fn add_pending(root: usize, count: usize, shared: &PoolShared) {
+fn add_pending<E>(root: usize, count: usize, shared: &PoolShared<E>) {
     shared.jobs_per_root[root].fetch_add(count, AtomicOrdering::Relaxed);
 }
 
 /// Mark one job complete for `root`.
 /// The last job emits `RootFinished`; if this was also the last active root, `Finished` follows.
-fn finish_pending(root_idx: usize, shared: &PoolShared) {
+fn finish_pending<E>(root_idx: usize, shared: &PoolShared<E>) {
     if shared.jobs_per_root[root_idx].fetch_sub(1, AtomicOrdering::Relaxed) == 1 {
         shared.events.send(Event::RootFinished { root_idx }).ok();
         if shared.active_roots.fetch_sub(1, AtomicOrdering::Relaxed) == 1 {
@@ -892,7 +1060,7 @@ fn finish_pending(root_idx: usize, shared: &PoolShared) {
     }
 }
 
-fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
+fn schedule_jobs<E>(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared<E>) {
     let has_jobs = !jobs.is_empty();
     for job in jobs {
         worker.push(job);

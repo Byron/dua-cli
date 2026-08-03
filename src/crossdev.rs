@@ -15,11 +15,12 @@ pub fn is_same_device(device_id: u64, meta: &std::fs::Metadata) -> bool {
 }
 
 #[cfg(not(unix))]
-pub fn is_same_device(_device_id: u64, _meta: &std::fs::Metadata) -> bool {
+pub fn is_same_device<T>(_device_id: u64, _meta: &T) -> bool {
     true
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 pub fn init(_path: &Path) -> io::Result<u64> {
     Ok(0)
 }
