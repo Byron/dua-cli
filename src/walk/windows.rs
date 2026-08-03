@@ -2,7 +2,7 @@ use std::{
     ffi::OsString,
     io,
     os::windows::ffi::{OsStrExt, OsStringExt},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -357,8 +357,7 @@ struct OwnedHandle(HANDLE);
 
 impl OwnedHandle {
     fn open(path: &Path, access: u32, extra_flags: u32) -> io::Result<Self> {
-        let mut path: Vec<u16> = path.as_os_str().encode_wide().collect();
-        path.push(0);
+        let path = absolute_verbatim_path(path)?;
         // SAFETY: `path` is null-terminated and all remaining pointer arguments follow the
         // `CreateFileW` contract. A successful handle is exclusively owned by the return value.
         let handle = unsafe {
@@ -378,6 +377,66 @@ impl OwnedHandle {
             Ok(Self(handle))
         }
     }
+}
+
+fn absolute_verbatim_path(path: &Path) -> io::Result<Vec<u16>> {
+    const SEP: u16 = b'\\' as u16;
+    const ALT_SEP: u16 = b'/' as u16;
+    const VERBATIM_PREFIX: &[u16] = &[SEP, SEP, b'?' as u16, SEP];
+    const NT_PREFIX: &[u16] = &[SEP, b'?' as u16, b'?' as u16, SEP];
+    const DEVICE_PREFIX: &[u16] = &[SEP, SEP, b'.' as u16, SEP];
+
+    let encoded = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    let mut verbatim = if encoded.starts_with(VERBATIM_PREFIX) || encoded.starts_with(NT_PREFIX) {
+        encoded
+    } else {
+        let absolute = absolute_without_name_normalization(path)?;
+        let mut encoded = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+        for unit in &mut encoded {
+            if *unit == ALT_SEP {
+                *unit = SEP;
+            }
+        }
+        if encoded.starts_with(DEVICE_PREFIX) {
+            r"\\?\"
+                .encode_utf16()
+                .chain(encoded.into_iter().skip(4))
+                .collect()
+        } else if encoded.starts_with(&[SEP, SEP]) {
+            r"\\?\UNC\"
+                .encode_utf16()
+                .chain(encoded.into_iter().skip(2))
+                .collect()
+        } else {
+            r"\\?\".encode_utf16().chain(encoded).collect()
+        }
+    };
+    verbatim.push(0);
+    Ok(verbatim)
+}
+
+fn absolute_without_name_normalization(path: &Path) -> io::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_owned()
+    } else {
+        let joined = std::env::current_dir()?.join(path);
+        if joined.is_absolute() {
+            joined
+        } else {
+            return std::path::absolute(path);
+        }
+    };
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    Ok(normalized)
 }
 
 impl Drop for OwnedHandle {
@@ -519,5 +578,57 @@ mod tests {
             .map(Result::unwrap)
             .count();
         assert_eq!(count, 400);
+    }
+
+    #[test]
+    fn raw_directory_opens_paths_longer_than_max_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut path = dir.path().to_owned();
+        while path.as_os_str().encode_wide().count() <= 260 {
+            path.push("x".repeat(50));
+            std::fs::create_dir(&path).unwrap();
+        }
+        std::fs::write(path.join("file"), b"content").unwrap();
+
+        let entries = ReadDir::open(Arc::from(path), 1)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name)
+            .collect::<Vec<_>>();
+        assert_eq!(entries, [OsString::from("file")]);
+    }
+
+    #[test]
+    fn raw_directory_preserves_verbatim_name_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut verbatim_root = OsString::from(r"\\?\");
+        verbatim_root.push(dir.path());
+        let verbatim_child = PathBuf::from(verbatim_root).join("child.");
+        std::fs::create_dir(&verbatim_child).unwrap();
+        std::fs::write(verbatim_child.join("file"), b"content").unwrap();
+
+        let ordinary_child = dir.path().join("child.");
+        assert!(
+            absolute_verbatim_path(&ordinary_child)
+                .unwrap()
+                .ends_with(&"child.\0".encode_utf16().collect::<Vec<_>>())
+        );
+        let entries = ReadDir::open(Arc::from(ordinary_child), 1)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name)
+            .collect::<Vec<_>>();
+        assert_eq!(entries, [OsString::from("file")]);
+    }
+
+    #[test]
+    fn raw_directory_resolves_parent_components_before_using_verbatim_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file"), b"content").unwrap();
+        let path = dir.path().join("missing").join("..");
+
+        let entries = ReadDir::open(Arc::from(path), 1)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name)
+            .collect::<Vec<_>>();
+        assert_eq!(entries, [OsString::from("file")]);
     }
 }
