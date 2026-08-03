@@ -40,6 +40,7 @@ pub fn aggregate(
     let mut device_ids = vec![0; num_roots];
     let mut completed = vec![false; num_roots];
     let mut roots = Vec::with_capacity(num_roots);
+    let has_ignore_patterns = walk_options.ignore_patterns.is_some();
     for (root_idx, path) in paths.into_iter().enumerate() {
         let device_id = if walk_options.cross_filesystems {
             0
@@ -54,6 +55,7 @@ pub fn aggregate(
         device_ids[root_idx] = device_id;
         roots.push(WalkRoot {
             index: root_idx,
+            pattern_root: has_ignore_patterns.then(|| path.clone()),
             path,
             device_id,
         });
@@ -267,6 +269,24 @@ pub struct Statistics {
 mod tests {
     use super::*;
 
+    fn byte_counts(out: &[u8]) -> Vec<u128> {
+        let out = std::str::from_utf8(out).unwrap();
+        out.match_indices(" b")
+            .map(|(unit, _)| {
+                out[..unit]
+                    .chars()
+                    .rev()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+                    .parse()
+                    .unwrap()
+            })
+            .collect()
+    }
+
     #[test]
     fn completed_roots_stream_in_input_order() {
         let aggregates = [("first".into(), 1, 0), ("second".into(), 2, 0)];
@@ -303,6 +323,7 @@ mod tests {
         )
         .unwrap();
 
+        assert_eq!(byte_counts(&out), [1, 2]);
         let out = String::from_utf8(out).unwrap();
         assert!(
             out.find("first").unwrap() < out.find("second").unwrap(),
@@ -336,6 +357,7 @@ mod tests {
                 apparent_size: false,
                 cross_filesystems: true,
                 ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
             },
             true,
             true,
@@ -368,6 +390,7 @@ mod tests {
                 apparent_size: true,
                 cross_filesystems: false,
                 ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
             },
             false,
             true,
@@ -377,5 +400,67 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.num_errors, 1);
+    }
+
+    #[test]
+    fn ignored_patterns_are_left_out_of_the_reported_size() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("cache")).unwrap();
+        std::fs::write(dir.path().join("kept"), [0; 64]).unwrap();
+        std::fs::write(dir.path().join("cache/blob"), [0; 4096]).unwrap();
+
+        // Kept outside the traversed tree so they are not counted themselves.
+        let patterns_dir = tempfile::tempdir().unwrap();
+        let ignore_cache = patterns_dir.path().join("cache-only");
+        let ignore_both = patterns_dir.path().join("cache-and-kept");
+        std::fs::write(&ignore_cache, "cache/\n").unwrap();
+        std::fs::write(&ignore_both, "cache/\nkept\n").unwrap();
+
+        let aggregate_with = |ignore_from: &[PathBuf]| -> u128 {
+            let mut out = Vec::new();
+            aggregate(
+                &mut out,
+                None::<&mut Vec<u8>>,
+                WalkOptions {
+                    threads: 2,
+                    count_hard_links: true,
+                    apparent_size: true,
+                    cross_filesystems: true,
+                    ignore_dirs: std::collections::BTreeSet::default(),
+                    ignore_patterns: crate::IgnorePatterns::from_files(ignore_from).unwrap(),
+                },
+                false,
+                true,
+                ByteFormat::Bytes,
+                vec![dir.path().to_owned()],
+            )
+            .unwrap();
+            byte_counts(&out)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| panic!("expected a byte count in {out:?}"))
+        };
+
+        // Directory entries have a size of their own that differs per filesystem - 4096 bytes on
+        // ext4, next to nothing on APFS - so only differences between runs are compared here.
+        let full = aggregate_with(&[]);
+        let without_cache = aggregate_with(&[ignore_cache]);
+        let without_either = aggregate_with(&[ignore_both]);
+
+        assert!(
+            full >= 4096 + 64,
+            "without patterns both files are counted, got {full}"
+        );
+        assert!(
+            full - without_cache >= 4096,
+            "excluding `cache/` drops at least the 4096-byte file inside it, \
+             but only {} bytes disappeared",
+            full - without_cache
+        );
+        assert_eq!(
+            without_cache - without_either,
+            64,
+            "the 64-byte file is still counted until a pattern matches it too"
+        );
     }
 }

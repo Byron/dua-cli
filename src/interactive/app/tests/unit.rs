@@ -187,6 +187,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
             count_hard_links: false,
             cross_filesystems: false,
             ignore_dirs: BTreeSet::default(),
+            ignore_patterns: None,
         },
         Vec::new(),
     );

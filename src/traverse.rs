@@ -164,10 +164,12 @@ impl BackgroundTraversal {
         root_idx: TreeIndex,
         walk_options: &WalkOptions,
         input: Vec<PathBuf>,
+        pattern_roots: Option<&[PathBuf]>,
         skip_root: bool,
         use_root_path: bool,
     ) -> anyhow::Result<BackgroundTraversal> {
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
+        let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
             .spawn({
@@ -181,6 +183,14 @@ impl BackgroundTraversal {
                     );
                     for root_path in input {
                         log::info!("Walking {}", root_path.display());
+                        let pattern_root = pattern_roots.as_deref().map(|pattern_roots| {
+                            pattern_roots
+                                .iter()
+                                .filter(|candidate| root_path.starts_with(candidate))
+                                .max_by_key(|candidate| candidate.components().count())
+                                .cloned()
+                                .unwrap_or_else(|| root_path.clone())
+                        });
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
@@ -193,6 +203,7 @@ impl BackgroundTraversal {
                         };
                         walk_roots.push(WalkRoot {
                             index: walk_roots.len(),
+                            pattern_root,
                             path: root_path.clone(),
                             device_id,
                         });
@@ -405,8 +416,10 @@ mod tests {
                 apparent_size: true,
                 cross_filesystems: true,
                 ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
             },
             vec![dir.path().to_owned()],
+            None,
             false,
             false,
         )
@@ -454,8 +467,10 @@ mod tests {
                 apparent_size: true,
                 cross_filesystems: true,
                 ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
             },
             vec![dir.path().to_owned(), dir.path().to_owned()],
+            None,
             false,
             false,
         )
@@ -501,8 +516,10 @@ mod tests {
                 apparent_size: true,
                 cross_filesystems: false,
                 ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
             },
-            vec![root, valid],
+            vec![root.clone(), valid.clone()],
+            None,
             false,
             false,
         )

@@ -75,6 +75,10 @@ impl AppState {
             traversal.root_index,
             &self.walk_options,
             self.root_paths.clone(),
+            self.walk_options
+                .ignore_patterns
+                .as_ref()
+                .map(|_| self.root_paths.as_slice()),
             false,
             true,
         )?;
@@ -580,6 +584,10 @@ impl AppState {
                 parent_index,
                 &self.walk_options,
                 paths,
+                self.walk_options
+                    .ignore_patterns
+                    .as_ref()
+                    .map(|_| self.root_paths.as_slice()),
                 skip_root,
                 use_root_path,
             )?,

@@ -137,6 +137,23 @@ pub struct TraversalArgs {
     #[cfg_attr(target_os = "linux", clap(default_values = DEFAULT_IGNORE_DIRS))]
     pub ignore_dirs: Vec<PathBuf>,
 
+    /// One or more files with gitignore-style patterns, whose matches are left out of the report.
+    ///
+    /// Patterns follow `.gitignore` syntax - `#` starts a comment, a trailing `/` matches
+    /// directories only, a leading `/` anchors to the top, `**` spans directories, and `!`
+    /// re-includes what an earlier pattern excluded. They are case-sensitively on all platforms.
+    ///
+    /// Files given later take precedence over files given earlier. Excluded directories are not
+    /// descended into, so their contents cannot be re-included.
+    #[clap(
+        long = "ignore-from",
+        value_parser,
+        env = "DUA_IGNORE_FROM",
+        value_name = "FILE",
+        help_heading = "Traversal Options"
+    )]
+    pub ignore_from: Vec<PathBuf>,
+
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[clap(value_parser)]
     pub input: Vec<PathBuf>,
@@ -208,6 +225,7 @@ pub enum ConfigCommand {
 mod tests {
     use super::Args;
     use clap::{CommandFactory, Parser};
+    use std::path::PathBuf;
 
     #[test]
     fn clap() {
@@ -241,6 +259,30 @@ mod tests {
         };
         assert!(statistics);
         assert_eq!(traversal.input, [std::path::PathBuf::from(".")]);
+    }
+
+    #[test]
+    fn ignore_from_is_repeatable_and_available_to_subcommands() {
+        let args = Args::try_parse_from([
+            "dua",
+            "--ignore-from",
+            "global",
+            "aggregate",
+            "--ignore-from",
+            "sub-one",
+            "--ignore-from",
+            "sub-two",
+        ])
+        .expect("ignore-from parses at both levels");
+
+        assert_eq!(args.traversal.ignore_from, [PathBuf::from("global")]);
+        let Some(super::Command::Aggregate { traversal, .. }) = args.command else {
+            panic!("expected aggregate subcommand");
+        };
+        assert_eq!(
+            traversal.ignore_from,
+            [PathBuf::from("sub-one"), PathBuf::from("sub-two")]
+        );
     }
 
     #[test]
