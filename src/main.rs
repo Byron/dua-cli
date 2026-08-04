@@ -138,6 +138,7 @@ fn main() -> Result<()> {
                     focus_change: enable_focus_change,
                 }
             };
+            let stderr = io::BufWriter::new(stderr);
             let mut terminal = Terminal::new(CrosstermBackend::new(stderr))
                 .with_context(|| "Could not instantiate terminal")?;
 
