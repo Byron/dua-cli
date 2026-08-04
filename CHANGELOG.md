@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A one-line change that makes all the difference: Windows TUI performance isn't sluggish anymore as the drawing is now buffered!
+
+### Bug Fixes
+
+ - <csr-id-bccddb7e78965e8bd06c83de6094bdd92ff5e81a/> buffer terminal frame output
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 4 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #361 from larsch/fix/buffer-tui-output ([`c05f608`](https://github.com/Byron/dua-cli/commit/c05f608107e9a1a4e2a36adf5552f7efa0d46440))
+    - Buffer terminal frame output ([`bccddb7`](https://github.com/Byron/dua-cli/commit/bccddb7e78965e8bd06c83de6094bdd92ff5e81a))
+    - Merge pull request #360 from Byron/windows-performance ([`f73cc51`](https://github.com/Byron/dua-cli/commit/f73cc5113b9f334287e42169d781d70b5f7c50af))
+    - Preserve Windows verbatim paths ([`381824f`](https://github.com/Byron/dua-cli/commit/381824fac7c5d457a0b360156b7831f1b73281a0))
+</details>
+
 ## 2.41.0 (2026-08-03)
 
 There are two major features: 30x and more performance on Windows, and `--ignore-from <file>` support.
@@ -56,7 +86,7 @@ This makes this release the best one yet, and I do hope that I can last a week o
 
 <csr-read-only-do-not-edit/>
 
- - 14 commits contributed to the release.
+ - 15 commits contributed to the release.
  - 2 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#302](https://github.com/Byron/dua-cli/issues/302)
@@ -70,6 +100,7 @@ This makes this release the best one yet, and I do hope that I can last a week o
  * **[#302](https://github.com/Byron/dua-cli/issues/302)**
     - Avoid per-entry Windows metadata queries ([`9831b1e`](https://github.com/Byron/dua-cli/commit/9831b1ed6870d0cf7683f59816f212b3328f5f20))
  * **Uncategorized**
+    - Release dua-cli v2.41.0 ([`2350999`](https://github.com/Byron/dua-cli/commit/23509998199a3fd3194a6ce8343d1c3d45801f37))
     - Prepare changelog prior to release ([`2b78d30`](https://github.com/Byron/dua-cli/commit/2b78d30008b0d025246a725d5c54b19d8962d965))
     - Merge pull request #359 from Byron/windows-performance ([`bdee013`](https://github.com/Byron/dua-cli/commit/bdee013b32fe7aa838044dfa3031610fe4ce39a9))
     - Review ([`d784e02`](https://github.com/Byron/dua-cli/commit/d784e024a6cf40ee6d67fd27c6becc45dca54c13))
