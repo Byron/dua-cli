@@ -10,10 +10,7 @@ mod config;
 pub use config::Config;
 mod crossdev;
 mod inodefilter;
-mod walk;
-pub use walk::{Entry as WalkEntry, Order as WalkOrder, Walk, walk};
-#[cfg(windows)]
-pub use walk::{FileType as WalkFileType, Metadata as WalkMetadata};
+pub(crate) use dua_core as walk;
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;

@@ -1,0 +1,24 @@
+[package]
+name = "dua-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+description = "Fast parallel filesystem traversal iterators"
+license.workspace = true
+
+[dependencies]
+crossbeam.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.1", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

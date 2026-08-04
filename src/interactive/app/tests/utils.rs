@@ -89,7 +89,7 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
-    for entry in dua::walk(path.as_ref(), 1, dua::WalkOrder::Completion, |_| true) {
+    for entry in dua_core::walk(path.as_ref(), 1, dua_core::Order::Completion, |_| true) {
         let entry = entry?;
         let p = entry.path();
         if entry.file_type.is_dir() {
@@ -114,7 +114,7 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
-    for entry in dua::walk(src.as_ref(), 1, dua::WalkOrder::ParentFirst, |_| true) {
+    for entry in dua_core::walk(src.as_ref(), 1, dua_core::Order::ParentFirst, |_| true) {
         let entry = entry?;
         let entry_path = entry.path();
         entry_path
