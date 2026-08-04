@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.41.1 (2026-08-04)
 
 A one-line change that makes all the difference: Windows TUI performance isn't sluggish anymore as the drawing is now buffered!
 
@@ -17,7 +17,7 @@ A one-line change that makes all the difference: Windows TUI performance isn't s
 
 <csr-read-only-do-not-edit/>
 
- - 4 commits contributed to the release.
+ - 5 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -29,6 +29,7 @@ A one-line change that makes all the difference: Windows TUI performance isn't s
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog for upcoming release ([`f18921c`](https://github.com/Byron/dua-cli/commit/f18921cc5d56224738a2a363ab0eb0d758484e8f))
     - Merge pull request #361 from larsch/fix/buffer-tui-output ([`c05f608`](https://github.com/Byron/dua-cli/commit/c05f608107e9a1a4e2a36adf5552f7efa0d46440))
     - Buffer terminal frame output ([`bccddb7`](https://github.com/Byron/dua-cli/commit/bccddb7e78965e8bd06c83de6094bdd92ff5e81a))
     - Merge pull request #360 from Byron/windows-performance ([`f73cc51`](https://github.com/Byron/dua-cli/commit/f73cc5113b9f334287e42169d781d70b5f7c50af))
