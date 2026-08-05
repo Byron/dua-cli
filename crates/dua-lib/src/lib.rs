@@ -20,12 +20,15 @@
 //! successful thief wakes another idle worker, ramping up only while work remains stealable. A
 //! worker parks when no queue has work and is unparked when new work arrives or the walk stops. The
 //! last completed job emits the finished event; dropping the iterator stops and joins all workers.
+#![deny(unsafe_code)]
+#![deny(missing_docs)]
 
 use crossbeam::{
     deque::{Injector, Steal, Stealer, Worker},
     sync::{Parker, Unparker},
 };
 use std::{
+    collections::HashMap,
     io,
     path::{Path, PathBuf},
     sync::{
@@ -40,9 +43,7 @@ use std::{
 use std::{ffi::OsString, fs};
 
 #[cfg(not(windows))]
-use std::fs::FileType;
-#[cfg(not(windows))]
-pub(crate) use std::fs::Metadata;
+pub use std::fs::{FileType, Metadata};
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
@@ -137,8 +138,10 @@ enum Event {
 /// instead of being yielded; `Finished` therefore means only that the associated root completed.
 /// [`RootWalk`] yields `(root_idx, event)`, separating root routing from event meaning. [`Event`]
 /// cannot do this uniformly because its `Finished` variant is pool-wide and has no root index.
-pub(crate) enum RootEvent {
+pub enum RootEvent {
+    /// An entry or filesystem error produced while walking the root.
     Entry(io::Result<Entry>),
+    /// All entries for the root have been emitted.
     Finished,
 }
 
@@ -153,7 +156,7 @@ struct PoolShared {
     active_roots: AtomicUsize,
     /// Number of queued or running jobs for each root index.
     /// A counter reaching zero emits that root's [`Event::RootFinished`].
-    jobs_per_root: Vec<AtomicUsize>,
+    jobs_per_root: HashMap<usize, AtomicUsize>,
     order: Order,
     /// Handles used to wake workers, indexed by worker number.
     unparkers: Vec<Unparker>,
@@ -172,7 +175,7 @@ struct Pool {
 
 /// A multi-root iterator yielding each root index with entry and per-root completion events.
 /// Unlike [`Walk`], it preserves root identity and exposes when each root finishes.
-pub(crate) struct RootWalk {
+pub struct RootWalk {
     /// Entries buffered for delivery, by root index.
     next: Vec<(usize, RootEvent)>,
     /// See [`Walk::pool`].
@@ -210,7 +213,7 @@ pub fn walk(
             let path = Arc::from(entry.path());
             let pool = start_pool(
                 threads.max(1),
-                1,
+                HashMap::from([(0, AtomicUsize::new(0))]),
                 order,
                 Arc::new(move |_, entry| descend(entry)),
             );
@@ -263,25 +266,32 @@ impl Iterator for Walk {
 
 /// Walk multiple indexed roots without following symlinks.
 /// Unlike [`walk`], this preserves each root index and yields its completion as a [`RootEvent`].
-pub(crate) fn walk_roots(
+///
+/// # Panics
+///
+/// Panics if two roots have the same index.
+pub fn walk_roots(
     roots: impl IntoIterator<Item = (usize, PathBuf)>,
     threads: usize,
     order: Order,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
 ) -> RootWalk {
     let roots = roots.into_iter().collect::<Vec<_>>();
-    let root_count = roots
+    let jobs_per_root = roots
         .iter()
-        .map(|(root_idx, _)| *root_idx)
-        .max()
-        .unwrap_or(0)
-        + 1;
+        .map(|(root_idx, _)| (*root_idx, AtomicUsize::new(0)))
+        .collect::<HashMap<_, _>>();
+    assert_eq!(
+        jobs_per_root.len(),
+        roots.len(),
+        "root indices must be unique"
+    );
     let descend = Arc::new(descend);
     let (next, root_jobs) = begin_walks(roots, descend.as_ref());
     let pool = if root_jobs.is_empty() {
         None
     } else {
-        let pool = start_pool(threads.max(1), root_count, order, descend);
+        let pool = start_pool(threads.max(1), jobs_per_root, order, descend);
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
@@ -363,7 +373,8 @@ impl Entry {
         self.parent_path.join(&self.file_name)
     }
 
-    fn from_path(path: &Path) -> io::Result<Self> {
+    /// Create an entry from a filesystem path.
+    pub fn from_path(path: &Path) -> io::Result<Self> {
         let metadata = fs::symlink_metadata(path)?;
         Ok(Self {
             depth: 0,
@@ -389,7 +400,12 @@ impl Entry {
     }
 }
 
-fn start_pool(threads: usize, root_count: usize, order: Order, descend: Arc<Descend>) -> Pool {
+fn start_pool(
+    threads: usize,
+    jobs_per_root: HashMap<usize, AtomicUsize>,
+    order: Order,
+    descend: Arc<Descend>,
+) -> Pool {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
     let (event_tx, event_rx) = sync_channel(threads * 2);
@@ -400,7 +416,7 @@ fn start_pool(threads: usize, root_count: usize, order: Order, descend: Arc<Desc
         descend,
         events: event_tx,
         active_roots: AtomicUsize::new(0),
-        jobs_per_root: (0..root_count).map(|_| AtomicUsize::new(0)).collect(),
+        jobs_per_root,
         order,
         unparkers: parkers
             .iter()
@@ -920,13 +936,13 @@ fn finish_directory(
 }
 
 fn add_pending(root: usize, count: usize, shared: &PoolShared) {
-    shared.jobs_per_root[root].fetch_add(count, AtomicOrdering::Relaxed);
+    shared.jobs_per_root[&root].fetch_add(count, AtomicOrdering::Relaxed);
 }
 
 /// Mark one job complete for `root`.
 /// The last job emits `RootFinished`; if this was also the last active root, `Finished` follows.
 fn finish_pending(root_idx: usize, shared: &PoolShared) {
-    if shared.jobs_per_root[root_idx].fetch_sub(1, AtomicOrdering::Relaxed) == 1 {
+    if shared.jobs_per_root[&root_idx].fetch_sub(1, AtomicOrdering::Relaxed) == 1 {
         shared.events.send(Event::RootFinished { root_idx }).ok();
         if shared.active_roots.fetch_sub(1, AtomicOrdering::Relaxed) == 1 {
             shared.events.send(Event::Finished).ok();
@@ -1131,7 +1147,7 @@ mod tests {
     #[test]
     fn windows_completion_streams_metadata_before_enumeration_finishes() {
         let dir = tempfile::tempdir().unwrap();
-        for idx in 0..(ENTRY_CHUNK_SIZE + 1) {
+        for idx in 0..=ENTRY_CHUNK_SIZE {
             fs::create_dir(dir.path().join(idx.to_string())).unwrap();
         }
 

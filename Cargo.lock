@@ -683,6 +683,7 @@ dependencies = [
  "crossbeam",
  "crossterm",
  "dirs",
+ "dua-core",
  "fern",
  "filesize",
  "gix",
@@ -692,7 +693,6 @@ dependencies = [
  "log",
  "log-panics",
  "num_cpus",
- "once_cell",
  "open",
  "owo-colors",
  "petgraph",
@@ -706,6 +706,14 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "wild",
+]
+
+[[package]]
+name = "dua-core"
+version = "2.41.1"
+dependencies = [
+ "crossbeam",
+ "tempfile",
  "windows-sys 0.61.2",
 ]
 

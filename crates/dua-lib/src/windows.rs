@@ -1,3 +1,5 @@
+//! Windows filesystem enumeration support.
+
 use std::{
     ffi::OsString,
     io,
@@ -39,7 +41,8 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub(crate) fn from_path(path: &Path) -> io::Result<Self> {
+    /// Create an entry from a filesystem path.
+    pub fn from_path(path: &Path) -> io::Result<Self> {
         let handle = OwnedHandle::open(
             path,
             FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -175,7 +178,9 @@ impl Metadata {
         Ok(self.modified)
     }
 
-    pub(crate) fn hard_link_id(&self) -> Option<(u64, u64)> {
+    /// Return the volume and file identifiers used to recognize hard links.
+    #[must_use]
+    pub fn hard_link_id(&self) -> Option<(u64, u64)> {
         self.file_id.map(|file_id| (self.volume_serial, file_id))
     }
 }

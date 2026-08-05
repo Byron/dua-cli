@@ -689,7 +689,7 @@ fn delete_directory_recursively(path: PathBuf, threads: usize) -> EntryDeletionS
     let mut dirs: Vec<(PathBuf, u128, usize)> = Vec::new();
     let mut files: Vec<(PathBuf, u128)> = Vec::new();
 
-    for entry in dua::walk(&path, threads, dua::WalkOrder::Completion, |_| true) {
+    for entry in dua_core::walk(&path, threads, dua_core::Order::Completion, |_| true) {
         match entry {
             Ok(entry) => {
                 let entry_path = entry.path();
