@@ -59,6 +59,17 @@ impl Drop for InteractiveTerminalGuard {
     }
 }
 
+/// Replaces control characters (which can include terminal escape
+/// sequences) with the Unicode replacement character. A marked entry's
+/// path has no character restrictions, and is printed to the real
+/// terminal after the TUI has already released terminal control,
+/// bypassing ratatui's own protective rendering entirely.
+fn sanitize_for_display(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_control() { '\u{FFFD}' } else { c })
+        .collect()
+}
+
 fn main() -> Result<()> {
     #[cfg(feature = "tui-crossplatform")]
     use options::Command::Interactive;
@@ -176,7 +187,7 @@ fn main() -> Result<()> {
                 Ok((walk_result, paths)) => {
                     if let Some(paths) = paths {
                         for path in paths {
-                            println!("{}", path.display());
+                            println!("{}", sanitize_for_display(&path.display().to_string()));
                         }
                     }
                     walk_result.to_exit_code()
