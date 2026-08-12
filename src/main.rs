@@ -59,6 +59,20 @@ impl Drop for InteractiveTerminalGuard {
     }
 }
 
+/// Replaces control characters (which can include terminal escape
+/// sequences) with the Unicode replacement character if `stdout_is_terminal`.
+fn marked_path_for_output(path: &Path, stdout_is_terminal: bool) -> std::borrow::Cow<'_, str> {
+    let path = path.to_string_lossy();
+    if stdout_is_terminal {
+        path.chars()
+            .map(|c| if c.is_control() { '\u{FFFD}' } else { c })
+            .collect::<String>()
+            .into()
+    } else {
+        path
+    }
+}
+
 fn main() -> Result<()> {
     #[cfg(feature = "tui-crossplatform")]
     use options::Command::Interactive;
@@ -175,8 +189,9 @@ fn main() -> Result<()> {
             let exit_code = match res {
                 Ok((walk_result, paths)) => {
                     if let Some(paths) = paths {
+                        let stdout_is_terminal = io::stdout().is_terminal();
                         for path in paths {
-                            println!("{}", path.display());
+                            println!("{}", marked_path_for_output(&path, stdout_is_terminal));
                         }
                     }
                     walk_result.to_exit_code()
@@ -459,9 +474,25 @@ fn write_default_config_file(path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{merge_traversal_args, write_default_config_file};
+    use super::{marked_path_for_output, merge_traversal_args, write_default_config_file};
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn marked_paths_are_only_sanitized_for_terminals() {
+        let path = std::path::Path::new("marked\t\x1b[31m");
+
+        assert_eq!(
+            marked_path_for_output(path, false),
+            "marked\t\x1b[31m",
+            "TAB and ESC control characters are preserved for redirected output"
+        );
+        assert_eq!(
+            marked_path_for_output(path, true),
+            "marked��[31m",
+            "TAB and ESC control characters are sanitized for terminal output"
+        );
+    }
 
     #[test]
     fn write_default_config_file_overwrites_existing_config() {
