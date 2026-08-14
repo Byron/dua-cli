@@ -1,4 +1,4 @@
-use crate::{InputPath, Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
+use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -167,25 +167,6 @@ impl BackgroundTraversal {
         skip_root: bool,
         use_root_path: bool,
     ) -> anyhow::Result<BackgroundTraversal> {
-        Self::start_prepared(
-            root_idx,
-            walk_options,
-            input.into_iter().map(InputPath::from_path).collect(),
-            pattern_roots,
-            skip_root,
-            use_root_path,
-        )
-    }
-
-    /// Start a background traversal without discarding metadata already collected for its roots.
-    pub fn start_prepared(
-        root_idx: TreeIndex,
-        walk_options: &WalkOptions,
-        input: Vec<InputPath>,
-        pattern_roots: Option<&[PathBuf]>,
-        skip_root: bool,
-        use_root_path: bool,
-    ) -> anyhow::Result<BackgroundTraversal> {
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
         std::thread::Builder::new()
@@ -199,19 +180,18 @@ impl BackgroundTraversal {
                         Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                     );
-                    for input in input {
-                        log::info!("Walking {}", input.path().display());
+                    for root_path in input {
+                        log::info!("Walking {}", root_path.display());
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
-                            let Ok(device_id) = input.device_id() else {
+                            let Ok(device_id) = crossdev::init(&root_path) else {
                                 // Skip roots that can't be accessed entirely.
                                 io_errors += 1;
                                 continue;
                             };
                             device_id
                         };
-                        let (root_path, entry) = input.into_parts();
                         let pattern_root = pattern_roots.as_deref().map(|pattern_roots| {
                             pattern_roots
                                 .iter()
@@ -224,7 +204,6 @@ impl BackgroundTraversal {
                             index: walk_roots.len(),
                             pattern_root,
                             path: root_path.clone(),
-                            entry,
                             device_id,
                         });
                         device_ids.push(device_id);
@@ -501,46 +480,6 @@ mod tests {
                 break;
             }
         }
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn prepared_roots_preserve_metadata_after_their_paths_disappear() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("file");
-        std::fs::write(&path, b"content").unwrap();
-        let entry = crate::walk::read_dir(dir.path())
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap();
-        std::fs::remove_file(&path).unwrap();
-
-        let mut traversal = Traversal::new();
-        let mut background = BackgroundTraversal::start_prepared(
-            traversal.root_index,
-            &WalkOptions {
-                threads: 1,
-                count_hard_links: true,
-                apparent_size: true,
-                cross_filesystems: false,
-                ignore_dirs: std::collections::BTreeSet::default(),
-                ignore_patterns: None,
-            },
-            vec![InputPath::from_entry(entry)],
-            None,
-            false,
-            false,
-        )
-        .unwrap();
-
-        while !background
-            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
-            .unwrap_or(false)
-        {}
-
-        assert_eq!(traversal.tree[traversal.root_index].size, 7);
-        assert_eq!(background.stats.io_errors, 0);
     }
 
     #[test]

@@ -54,6 +54,15 @@ impl InodeFilter {
         true
     }
 
+    /// Register a directory whose bulk link count may differ from `stat(2)` semantics.
+    ///
+    /// `ATTR_DIR_LINKCOUNT` omits the synthetic `.` and `..` links, so a bulk-enumerated directory
+    /// can report one link where `stat(2)` reports more. The first ambiguous observation is counted
+    /// and marked unresolved. Only a repeated `(device, inode)` pays for `symlink_metadata`; that
+    /// result initializes the ordinary link-count cycle without counting the first observation
+    /// twice.
+    ///
+    /// Returns `true` when the current directory observation should contribute to size/count.
     #[cfg(target_os = "macos")]
     fn add_directory(
         &mut self,

@@ -23,7 +23,7 @@ const DIRECTORY_BUFFER_BYTES: usize = 64 * 1024;
 
 /// A macOS filesystem entry produced from native directory metadata.
 pub struct Entry {
-    /// Distance from the walk root: `0` for the root, `1` for its children, and so on.
+    /// Distance from the walk root: `0` for the root, `1` and highger for its children.
     pub depth: usize,
     /// File name relative to `parent_path`.
     pub file_name: OsString,
@@ -175,6 +175,7 @@ impl Metadata {
 
 pub(crate) struct ReadDir {
     directory: OwnedFd,
+    fallback: Option<fs::ReadDir>,
     buffer: Box<AlignedBuffer<DIRECTORY_BUFFER_BYTES>>,
     offset: usize,
     remaining: usize,
@@ -193,6 +194,7 @@ impl ReadDir {
             .into();
         Ok(Self {
             directory,
+            fallback: None,
             buffer: Box::new(AlignedBuffer::new()),
             offset: 0,
             remaining: 0,
@@ -203,6 +205,11 @@ impl ReadDir {
         })
     }
 
+    /// Refill the bulk-record buffer or activate ordinary directory iteration when the filesystem
+    /// does not support bulk enumeration.
+    ///
+    /// Returns `true` when iteration can continue, either because bulk records are available or
+    /// because `self.fallback` was initialized. Returns `false` when the directory is exhausted.
     fn refill(&mut self) -> io::Result<bool> {
         loop {
             let mut attributes = requested_attributes(self.listing_error.is_some());
@@ -235,8 +242,44 @@ impl ReadDir {
                 self.listing_error = Some(libc::EACCES);
                 continue;
             }
+            if error.kind() == io::ErrorKind::Unsupported
+                || error.raw_os_error() == Some(libc::ENOTSUP)
+                || error.raw_os_error() == Some(libc::EOPNOTSUPP)
+            {
+                match fs::read_dir(&self.parent_path) {
+                    Ok(entries) => {
+                        self.fallback = Some(entries);
+                        return Ok(true);
+                    }
+                    Err(error) => {
+                        self.exhausted = true;
+                        return Err(error);
+                    }
+                }
+            }
             self.exhausted = true;
             return Err(error);
+        }
+    }
+
+    fn fallback_entry(&self, entry: fs::DirEntry) -> Entry {
+        let file_name = entry.file_name();
+        let metadata =
+            fs::symlink_metadata(entry.path()).map(|metadata| Metadata::from_std(&metadata));
+        let file_type = metadata.as_ref().map_or_else(
+            |_| {
+                entry
+                    .file_type()
+                    .map_or(FileType { kind: VNON }, FileType::from_std)
+            },
+            |metadata| metadata.file_type,
+        );
+        Entry {
+            depth: self.depth,
+            file_name,
+            file_type,
+            metadata,
+            parent_path: Arc::clone(&self.parent_path),
         }
     }
 
@@ -310,12 +353,16 @@ impl Iterator for ReadDir {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if let Some(fallback) = &mut self.fallback {
+                let entry = fallback.next()?;
+                return Some(entry.map(|entry| self.fallback_entry(entry)));
+            }
             if self.exhausted {
                 return None;
             }
             if self.remaining == 0 {
                 match self.refill() {
-                    Ok(true) => {}
+                    Ok(true) => continue,
                     Ok(false) => return None,
                     Err(error) => return Some(Err(error)),
                 }
@@ -371,166 +418,4 @@ impl ParsedRecord {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::os::unix::fs::PermissionsExt as _;
-
-    #[test]
-    fn directory_reader_rejects_regular_files_before_iteration() {
-        let directory = tempfile::tempdir().unwrap();
-        let file = directory.path().join("file");
-        fs::write(&file, b"content").unwrap();
-
-        let error = crate::read_dir(&file)
-            .err()
-            .expect("regular files must be rejected before iteration");
-        assert_eq!(error.raw_os_error(), Some(libc::ENOTDIR));
-    }
-
-    #[test]
-    fn bulk_metadata_matches_std_for_regular_files_resource_forks_and_symlinks() {
-        let directory = tempfile::tempdir().unwrap();
-        let file = directory.path().join("file");
-        fs::write(&file, b"data").unwrap();
-        let data_blocks = fs::metadata(&file).unwrap().blocks();
-        let resource = file.join("..namedfork/rsrc");
-        fs::write(resource, [7; 8192]).unwrap();
-        let resource_blocks = fs::metadata(&file).unwrap().blocks();
-        assert!(
-            resource_blocks > data_blocks,
-            "resource fork must allocate storage: data={data_blocks}, total={resource_blocks}"
-        );
-        std::os::unix::fs::symlink("file", directory.path().join("link")).unwrap();
-
-        let entries = ReadDir::open(Arc::from(directory.path()), 1)
-            .unwrap()
-            .collect::<io::Result<Vec<_>>>()
-            .unwrap();
-        assert_eq!(
-            entries.len(),
-            2,
-            "regular file and symbolic link must both be enumerated"
-        );
-        for entry in entries {
-            let direct = fs::symlink_metadata(entry.path()).unwrap();
-            let metadata = entry.metadata.unwrap();
-            assert_eq!(
-                metadata.len(),
-                direct.len(),
-                "{:?} logical size",
-                entry.file_name
-            );
-            assert_eq!(
-                metadata.allocated_size(),
-                direct.blocks() * STAT_BLOCK_BYTES,
-                "{:?} allocated size",
-                entry.file_name
-            );
-            assert_eq!(metadata.dev(), direct.dev());
-            assert_eq!(metadata.ino(), direct.ino());
-            assert_eq!(metadata.modified().unwrap(), direct.modified().unwrap());
-            assert_eq!(
-                entry.file_type.is_symlink(),
-                direct.file_type().is_symlink()
-            );
-        }
-    }
-
-    #[test]
-    fn bulk_metadata_preserves_fractional_pre_epoch_timestamps() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("file");
-        let file = fs::File::create(&path).unwrap();
-        let expected = std::time::UNIX_EPOCH - std::time::Duration::from_millis(900);
-        file.set_times(fs::FileTimes::new().set_modified(expected))
-            .unwrap();
-        let direct = file.metadata().unwrap().modified().unwrap();
-
-        let entry = ReadDir::open(Arc::from(directory.path()), 1)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(direct, expected);
-        assert_eq!(entry.metadata.unwrap().modified().unwrap(), direct);
-    }
-
-    #[test]
-    fn readable_directory_without_search_permission_preserves_entry_errors() {
-        let directory = tempfile::tempdir().unwrap();
-        let restricted = directory.path().join("restricted");
-        fs::create_dir(&restricted).unwrap();
-        fs::write(restricted.join("file"), b"content").unwrap();
-        fs::set_permissions(&restricted, fs::Permissions::from_mode(0o400)).unwrap();
-
-        let entries = ReadDir::open(Arc::from(restricted.as_path()), 1)
-            .unwrap()
-            .collect::<Vec<_>>();
-        fs::set_permissions(&restricted, fs::Permissions::from_mode(0o700)).unwrap();
-
-        assert_eq!(entries.len(), 1);
-        let entry = entries.into_iter().next().unwrap().unwrap();
-        assert_eq!(entry.file_name, "file");
-        assert_eq!(entry.file_type.kind, VREG);
-        let error = entry
-            .metadata
-            .err()
-            .expect("metadata must retain the directory search-permission error");
-        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
-    }
-
-    #[test]
-    fn bulk_metadata_identifies_hard_links() {
-        let directory = tempfile::tempdir().unwrap();
-        let original = directory.path().join("original");
-        fs::write(&original, [7; 8192]).unwrap();
-        fs::hard_link(&original, directory.path().join("hard-link")).unwrap();
-
-        let entries = ReadDir::open(Arc::from(directory.path()), 1)
-            .unwrap()
-            .map(|entry| {
-                let entry = entry.unwrap();
-                (entry.file_name, entry.metadata.unwrap())
-            })
-            .collect::<std::collections::HashMap<_, _>>();
-        let original = &entries[std::ffi::OsStr::new("original")];
-        let hard_link = &entries[std::ffi::OsStr::new("hard-link")];
-
-        assert_eq!(original.ino(), hard_link.ino());
-        assert_eq!(original.nlink(), 2);
-    }
-
-    #[test]
-    fn bulk_device_numbers_match_std_on_devfs() {
-        let directory = Path::new("/dev");
-        let entry = ReadDir::open(Arc::from(directory), 1)
-            .unwrap()
-            .find(|entry| entry.as_ref().is_ok_and(|entry| entry.file_name == "null"))
-            .expect("devfs contains /dev/null")
-            .unwrap();
-        let expected = fs::symlink_metadata(directory.join("null")).unwrap();
-
-        assert_eq!(entry.metadata.unwrap().dev(), expected.dev());
-    }
-
-    #[test]
-    fn bulk_directory_reader_refills_its_buffer() {
-        let directory = tempfile::tempdir().unwrap();
-        for index in 0..700 {
-            fs::write(
-                directory
-                    .path()
-                    .join(format!("{index:04}-{}", "x".repeat(100))),
-                [],
-            )
-            .unwrap();
-        }
-
-        let count = ReadDir::open(Arc::from(directory.path()), 1)
-            .unwrap()
-            .map(Result::unwrap)
-            .count();
-        assert_eq!(count, 700);
-    }
-}
+mod tests;

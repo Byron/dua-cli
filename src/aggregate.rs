@@ -1,6 +1,4 @@
-use crate::{
-    ByteFormat, InodeFilter, InputPath, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev,
-};
+use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev};
 use anyhow::Result;
 #[cfg(not(any(windows, target_os = "macos")))]
 use filesize::PathExt;
@@ -32,47 +30,36 @@ fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) ->
 
 const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
 
+/// Accumulated output state for one input root, retained until roots can be emitted in the
+/// requested order.
 struct Aggregate {
+    /// Path printed for this root.
     path: PathBuf,
+    /// Sum of the accepted entries' apparent or allocated sizes.
     bytes: u128,
+    /// Number of root, entry, metadata, or size-query errors encountered.
     errors: u64,
+    /// Whether the root is a file, used to distinguish file and directory output styling.
     is_file: bool,
+}
+
+impl Aggregate {
+    fn path_color(&self) -> Option<Color> {
+        (!self.is_file).then_some(Color::Cyan)
+    }
 }
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
-    out: impl io::Write,
-    err: Option<impl io::Write>,
-    walk_options: WalkOptions,
-    compute_total: bool,
-    sort_by_size_in_bytes: bool,
-    byte_format: ByteFormat,
-    paths: Vec<PathBuf>,
-) -> Result<(WalkResult, Statistics)> {
-    aggregate_prepared(
-        out,
-        err,
-        walk_options,
-        compute_total,
-        sort_by_size_in_bytes,
-        byte_format,
-        paths.into_iter().map(InputPath::from_path).collect(),
-    )
-}
-
-/// Aggregate input paths while retaining any metadata already obtained during directory enumeration.
-/// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
-/// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
-pub fn aggregate_prepared(
     mut out: impl io::Write,
     mut err: Option<impl io::Write>,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     byte_format: ByteFormat,
-    paths: Vec<InputPath>,
+    paths: Vec<PathBuf>,
 ) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
     let mut stats = Statistics {
@@ -82,8 +69,8 @@ pub fn aggregate_prepared(
     let num_roots = paths.len();
     let mut aggregates = paths
         .iter()
-        .map(|input| Aggregate {
-            path: input.path().to_owned(),
+        .map(|path| Aggregate {
+            path: path.clone(),
             bytes: 0,
             errors: 0,
             is_file: false,
@@ -93,24 +80,22 @@ pub fn aggregate_prepared(
     let mut completed = vec![false; num_roots];
     let mut roots = Vec::with_capacity(num_roots);
     let has_ignore_patterns = walk_options.ignore_patterns.is_some();
-    for (root_idx, input) in paths.into_iter().enumerate() {
+    for (root_idx, path) in paths.into_iter().enumerate() {
         let device_id = if walk_options.cross_filesystems {
             0
         } else {
-            let Ok(device_id) = input.device_id() else {
+            let Ok(device_id) = crossdev::init(&path) else {
                 aggregates[root_idx].errors += 1;
                 completed[root_idx] = true;
                 continue;
             };
             device_id
         };
-        let (path, entry) = input.into_parts();
         device_ids[root_idx] = device_id;
         roots.push(WalkRoot {
             index: root_idx,
             pattern_root: has_ignore_patterns.then(|| path.clone()),
             path,
-            entry,
             device_id,
         });
     }
@@ -252,7 +237,7 @@ fn output_completed<W: io::Write, E: io::Write>(
             &aggregate.path,
             aggregate.bytes,
             aggregate.errors,
-            (!aggregate.is_file).then_some(Color::Cyan),
+            aggregate.path_color(),
             byte_format,
         )?;
         *next_output += 1;
@@ -272,7 +257,7 @@ fn output_sorted(
             &aggregate.path,
             aggregate.bytes,
             aggregate.errors,
-            (!aggregate.is_file).then_some(Color::Cyan),
+            aggregate.path_color(),
             byte_format,
         )?;
     }
@@ -343,51 +328,6 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn prepared_file_keeps_its_cached_size_and_color_after_removal() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("prepared-file");
-
-        for sort_by_size_in_bytes in [false, true] {
-            std::fs::write(&path, b"cached metadata").unwrap();
-            let entry = dua_core::read_dir(directory.path())
-                .unwrap()
-                .next()
-                .unwrap()
-                .unwrap();
-            let input = InputPath::from_entry(entry);
-            std::fs::remove_file(&path).unwrap();
-
-            let mut out = Vec::new();
-            let result = aggregate_prepared(
-                &mut out,
-                None::<Vec<u8>>,
-                WalkOptions {
-                    threads: 1,
-                    count_hard_links: false,
-                    apparent_size: true,
-                    cross_filesystems: false,
-                    ignore_dirs: std::collections::BTreeSet::default(),
-                    ignore_patterns: None,
-                },
-                false,
-                sort_by_size_in_bytes,
-                ByteFormat::Bytes,
-                vec![input],
-            )
-            .unwrap();
-
-            assert_eq!(result.0.num_errors, 0);
-            assert_eq!(byte_counts(&out), [15]);
-            let out = String::from_utf8(out).unwrap();
-            assert!(
-                out.contains(&format!(" {}\n", path.display())),
-                "cached file roots must remain uncolored after removal: {out:?}"
-            );
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
     fn overlapping_directory_roots_preserve_stat_link_count_cycles() {
         use std::os::unix::fs::MetadataExt;
 
@@ -405,12 +345,6 @@ mod tests {
         let child_metadata = std::fs::symlink_metadata(&child).unwrap();
         let grandchild_metadata = std::fs::symlink_metadata(&grandchild).unwrap();
         let file_metadata = std::fs::symlink_metadata(&file).unwrap();
-        let native_child = dua_core::read_dir(&parent)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap();
-        assert_eq!(native_child.metadata.unwrap().nlink(), 1);
         assert!(
             child_metadata.nlink() > 1,
             "expected multiple links for {child:?}, got {}",

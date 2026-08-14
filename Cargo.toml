@@ -11,7 +11,6 @@ license = "MIT"
 
 [workspace.dependencies]
 crossbeam = "0.8"
-libc = "0.2.186"
 tempfile = "3.27.0"
 
 [workspace.lints.clippy]

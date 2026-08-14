@@ -211,16 +211,6 @@ pub struct Walk {
     pool: Option<Pool>,
 }
 
-/// Read a macOS directory and return its entries with metadata already collected.
-///
-/// Entries have depth zero so they can be passed directly to [`walk_root_entries`] without
-/// querying their paths again. Directory-open errors are returned immediately; later enumeration
-/// errors are yielded by the iterator.
-#[cfg(target_os = "macos")]
-pub fn read_dir(path: &Path) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
-    NativeReadDir::open(Arc::from(path), 0)
-}
-
 /// Walk `root` without following symlinks.
 /// Unlike `walk_roots`, this yields entries directly for a single root and hides
 /// completion events.
@@ -295,32 +285,6 @@ impl Iterator for Walk {
 /// Panics if two roots have the same index.
 pub fn walk_roots(
     roots: impl IntoIterator<Item = (usize, PathBuf)>,
-    threads: usize,
-    order: Order,
-    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
-) -> RootWalk {
-    walk_root_entries(
-        roots
-            .into_iter()
-            .map(|(root_idx, path)| (root_idx, Entry::from_path(&path))),
-        threads,
-        order,
-        descend,
-    )
-}
-
-/// Walk multiple indexed roots whose entries and metadata have already been collected.
-///
-/// Unlike [`walk_roots`], this reuses each supplied entry without querying its path again. Entry
-/// errors are yielded for their corresponding root, and each root retains its index and completion
-/// event just as it does with [`walk_roots`]. Supplied entries are re-rooted at depth zero before
-/// the predicate runs, and their descendants start at depth one.
-///
-/// # Panics
-///
-/// Panics if two roots have the same index.
-pub fn walk_root_entries(
-    roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
     threads: usize,
     order: Order,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
@@ -497,15 +461,13 @@ fn start_pool(
 /// Prepare initial root events and directory jobs.
 /// Returns events in stack order for [`RootWalk::next`] to pop, plus jobs requiring a worker pool.
 fn begin_walks(
-    roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
+    roots: impl IntoIterator<Item = (usize, PathBuf)>,
     descend: &Descend,
 ) -> (Vec<(usize, RootEvent)>, Vec<Job>) {
     let mut next = Vec::new();
     let mut jobs = Vec::new();
-    for (root_idx, mut entry) in roots {
-        if let Ok(entry) = &mut entry {
-            entry.depth = 0;
-        }
+    for (root_idx, path) in roots {
+        let entry = Entry::from_path(&path);
         let has_job = if let Ok(entry) = &entry
             && entry.file_type.is_dir()
             && descend(root_idx, entry)
@@ -1140,83 +1102,6 @@ mod tests {
                 "root {root_idx} must finish after its last entry",
             );
         }
-    }
-
-    #[test]
-    fn prepared_roots_rebase_existing_descendants() {
-        let directory = tempfile::tempdir().unwrap();
-        let descendant = directory.path().join("descendant");
-        fs::create_dir(&descendant).unwrap();
-        let child = descendant.join("child");
-        fs::write(&child, b"nested file").unwrap();
-
-        let descendant_entry = walk(directory.path(), 2, Order::ParentFirst, |_| true)
-            .find_map(|entry| {
-                let entry = entry.unwrap();
-                (entry.path() == descendant).then_some(entry)
-            })
-            .expect("the initial walk should yield the descendant directory");
-        assert_eq!(descendant_entry.depth, 1);
-
-        let mut events = walk_root_entries(
-            [(7, Ok(descendant_entry))],
-            2,
-            Order::ParentFirst,
-            |root_idx, entry| {
-                assert_eq!(root_idx, 7);
-                assert_eq!(entry.depth, 0, "the predicate should see a re-rooted entry");
-                true
-            },
-        );
-
-        let Some((7, RootEvent::Entry(Ok(root)))) = events.next() else {
-            panic!("the prepared descendant should be emitted as the new root");
-        };
-        assert_eq!(root.path(), descendant);
-        assert_eq!(root.depth, 0);
-
-        let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
-            panic!("the re-rooted directory should emit its child");
-        };
-        assert_eq!(entry.path(), child);
-        assert_eq!(entry.depth, 1);
-        assert_eq!(
-            events
-                .next()
-                .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
-            Some((7, true))
-        );
-        assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn prepared_roots_reuse_native_directory_metadata() {
-        const CONTENTS: &[u8] = b"cached metadata";
-
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("file");
-        fs::write(&path, CONTENTS).unwrap();
-        let expected_len = fs::metadata(&path).unwrap().len();
-
-        let entry = read_dir(directory.path()).unwrap().next().unwrap().unwrap();
-        assert_eq!(entry.depth, 0);
-        assert_eq!(entry.path(), path);
-        fs::remove_file(&path).unwrap();
-
-        let mut events = walk_root_entries([(7, Ok(entry))], 1, Order::Completion, |_, _| true);
-        let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
-            panic!("prepared root must be yielded without querying its removed path");
-        };
-        assert_eq!(entry.path(), path);
-        assert_eq!(entry.metadata.unwrap().len(), expected_len);
-        assert_eq!(
-            events
-                .next()
-                .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
-            Some((7, true))
-        );
-        assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
     }
 
     #[test]

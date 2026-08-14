@@ -155,7 +155,7 @@ fn main() -> Result<()> {
             let mut terminal = Terminal::new(CrosstermBackend::new(stderr))
                 .with_context(|| "Could not instantiate terminal")?;
 
-            let mut app = TerminalApp::initialize_prepared(
+            let mut app = TerminalApp::initialize(
                 &mut terminal,
                 walk_options,
                 byte_format,
@@ -215,7 +215,7 @@ fn main() -> Result<()> {
             let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            let (res, stats) = dua::aggregate_prepared(
+            let (res, stats) = dua::aggregate(
                 stdout_locked,
                 stderr_if_tty(),
                 walk_options,
@@ -252,7 +252,7 @@ fn main() -> Result<()> {
             let input_paths = extract_paths_maybe_set_cwd(global_traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            dua::aggregate_prepared(
+            dua::aggregate(
                 stdout_locked,
                 stderr_if_tty(),
                 walk_options,
@@ -326,67 +326,53 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
 fn extract_paths_maybe_set_cwd(
     mut paths: Vec<PathBuf>,
     walk_options: &dua::WalkOptions,
-) -> Result<Vec<dua::InputPath>, io::Error> {
+) -> Result<Vec<PathBuf>, io::Error> {
     let cross_filesystems = walk_options.cross_filesystems;
     if paths.len() == 1 && paths[0].is_dir() {
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
     }
     let cwd = std::env::current_dir()?;
-    let device_id = dua::InputPath::from_path(cwd.clone()).device_id().ok();
+    let cwd_device = device_id(&cwd).ok();
 
-    let expanded_cwd = paths.is_empty();
-    let paths = if expanded_cwd {
-        cwd_dirlist().map(|paths| match device_id {
-            Some(device_id) if !cross_filesystems => paths
+    let paths = if paths.is_empty() {
+        cwd_dirlist().map(|paths| match cwd_device {
+            Some(cwd_device) if !cross_filesystems => paths
                 .into_iter()
-                .filter(|input| input.device_id().map_or(true, |device| device == device_id))
+                .filter(|path| device_id(path).map_or(true, |device| device == cwd_device))
                 .collect(),
             _ => paths,
         })?
     } else {
-        paths.into_iter().map(dua::InputPath::from_path).collect()
+        paths
     };
 
     // Drop excluded top-level paths here rather than during the walk, so they are left out of the
     // report entirely instead of showing up as being empty.
     Ok(paths
         .into_iter()
-        .filter(|input| {
+        .filter(|path| {
             walk_options
                 .ignore_patterns
                 .as_ref()
-                .is_none_or(|patterns| {
-                    #[cfg(target_os = "macos")]
-                    if expanded_cwd {
-                        return !patterns.is_excluded(input.path(), input.is_directory());
-                    }
-
-                    !patterns.excludes_input_path(input.path(), &cwd)
-                })
+                .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
         })
         .collect())
 }
 
-#[cfg(target_os = "macos")]
-fn cwd_dirlist() -> Result<Vec<dua::InputPath>, io::Error> {
-    let mut entries = Vec::new();
-    let parent_path: std::sync::Arc<Path> = Path::new("").into();
-    for entry in dua_core::read_dir(Path::new("."))? {
-        let mut entry = entry?;
-        if entry.file_type.is_symlink() {
-            continue;
-        }
-        // Keep top-level output paths identical to `read_dir(".")` with its prefix removed.
-        entry.parent_path = std::sync::Arc::clone(&parent_path);
-        entries.push(dua::InputPath::from_entry(entry));
-    }
-    entries.sort_by(|left, right| left.path().cmp(right.path()));
-    Ok(entries)
+#[cfg(unix)]
+fn device_id(path: &Path) -> io::Result<u64> {
+    use std::os::unix::fs::MetadataExt;
+
+    path.metadata().map(|metadata| metadata.dev())
 }
 
-#[cfg(not(target_os = "macos"))]
-fn cwd_dirlist() -> Result<Vec<dua::InputPath>, io::Error> {
+#[cfg(not(unix))]
+fn device_id(_path: &Path) -> io::Result<u64> {
+    Ok(0)
+}
+
+fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
     let mut entries: Vec<_> = fs::read_dir(".")?
         .filter_map(|e| {
             e.ok()
@@ -400,9 +386,9 @@ fn cwd_dirlist() -> Result<Vec<dua::InputPath>, io::Error> {
             }
             true
         })
-        .map(dua::InputPath::from_path)
         .collect();
-    entries.sort_by(|left, right| left.path().cmp(right.path()));
+
+    entries.sort();
     Ok(entries)
 }
 

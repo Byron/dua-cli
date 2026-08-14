@@ -1,4 +1,3 @@
-#[cfg(test)]
 use std::path::PathBuf;
 
 use crate::interactive::EntryCheck;
@@ -8,7 +7,7 @@ use crossterm::event::Event;
 use dua::Config;
 #[cfg(test)]
 use dua::traverse::TraversalStats;
-use dua::{ByteFormat, InputPath, WalkOptions, WalkResult, traverse::Traversal};
+use dua::{ByteFormat, WalkOptions, WalkResult, traverse::Traversal};
 use tui::{Terminal, backend::Backend};
 
 use crate::interactive::widgets::MainWindow;
@@ -27,34 +26,12 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    #[cfg(test)]
     pub fn initialize<B>(
         terminal: &mut Terminal<B>,
         walk_options: WalkOptions,
         byte_format: ByteFormat,
         entry_check: bool,
         input: Vec<PathBuf>,
-        config: Config,
-    ) -> Result<TerminalApp>
-    where
-        B: Backend,
-    {
-        Self::initialize_prepared(
-            terminal,
-            walk_options,
-            byte_format,
-            entry_check,
-            input.into_iter().map(InputPath::from_path).collect(),
-            config,
-        )
-    }
-
-    pub fn initialize_prepared<B>(
-        terminal: &mut Terminal<B>,
-        walk_options: WalkOptions,
-        byte_format: ByteFormat,
-        entry_check: bool,
-        input: Vec<InputPath>,
         config: Config,
     ) -> Result<TerminalApp>
     where
@@ -70,9 +47,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let root_paths = input.iter().map(|input| input.path().to_owned()).collect();
-        let mut state = AppState::new(walk_options, root_paths);
-        state.prepared_roots = Some(input);
+        let mut state = AppState::new(walk_options, input);
         if config.gitignore == Some(false) {
             state.gitignored_entries = None;
         }

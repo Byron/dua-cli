@@ -237,62 +237,6 @@ impl IgnorePatterns {
     }
 }
 
-/// An input path and, when available, metadata collected while listing its parent directory.
-pub struct InputPath {
-    path: PathBuf,
-    entry: Option<walk::Entry>,
-}
-
-impl InputPath {
-    /// Prepare an explicitly supplied path for filesystem traversal.
-    #[must_use]
-    pub fn from_path(path: PathBuf) -> Self {
-        Self { path, entry: None }
-    }
-
-    /// Prepare a macOS directory entry without discarding its already collected metadata.
-    #[cfg(target_os = "macos")]
-    #[must_use]
-    pub fn from_entry(entry: walk::Entry) -> Self {
-        Self {
-            path: entry.path(),
-            entry: Some(entry),
-        }
-    }
-
-    /// Return the filesystem path represented by this input.
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Return the filesystem identity used for traversal, reusing prepared metadata.
-    pub fn device_id(&self) -> std::io::Result<u64> {
-        #[cfg(target_os = "macos")]
-        if let Some(entry) = &self.entry
-            && let Ok(metadata) = &entry.metadata
-        {
-            return Ok(metadata.dev());
-        }
-
-        crossdev::init(&self.path)
-    }
-
-    /// Return whether this input is a directory, reusing its prepared entry type when available.
-    #[cfg(target_os = "macos")]
-    #[must_use]
-    pub fn is_directory(&self) -> bool {
-        self.entry
-            .as_ref()
-            .map_or_else(|| self.path.is_dir(), |entry| entry.file_type.is_dir())
-    }
-
-    /// Separate the display path from any entry prepared while enumerating its parent.
-    pub(crate) fn into_parts(self) -> (PathBuf, Option<walk::Entry>) {
-        (self.path, self.entry)
-    }
-}
-
 /// Configures a filesystem walk, including output and formatting options.
 #[derive(Clone)]
 pub struct WalkOptions {
@@ -320,8 +264,6 @@ pub(crate) struct WalkRoot {
     pub index: usize,
     /// Path at which to start walking.
     pub path: PathBuf,
-    /// Metadata already collected while enumerating this root's parent directory, if available.
-    pub entry: Option<walk::Entry>,
     /// Most specific original input root containing `path`, used as the ignore-pattern base.
     /// Choosing the longest containing root preserves the right base when input roots overlap and
     /// `path` is a subtree being refreshed.
@@ -347,21 +289,17 @@ impl WalkOptions {
             .max()
             .map_or(0, |idx| idx + 1);
         let path_count = roots.len();
-        let (device_ids, root_paths, entries_with_idx) = roots.into_iter().fold(
+        let (device_ids, root_paths, paths_with_idx) = roots.into_iter().fold(
             (
                 vec![0; num_roots],
                 vec![None; num_roots],
                 Vec::with_capacity(path_count),
             ),
-            |(mut device_ids, mut root_paths, mut entries), root| {
+            |(mut device_ids, mut root_paths, mut paths), root| {
                 device_ids[root.index] = root.device_id;
                 root_paths[root.index] = root.pattern_root;
-                entries.push((
-                    root.index,
-                    root.entry
-                        .map_or_else(|| walk::Entry::from_path(&root.path), Ok),
-                ));
-                (device_ids, root_paths, entries)
+                paths.push((root.index, root.path));
+                (device_ids, root_paths, paths)
             },
         );
         let ignore_dirs = self.ignore_dirs.clone();
@@ -388,8 +326,8 @@ impl WalkOptions {
         };
         let is_excluded_while_walking = Arc::clone(&is_excluded);
 
-        walk::walk_root_entries(
-            entries_with_idx,
+        walk::walk_roots(
+            paths_with_idx,
             self.threads,
             order,
             move |root_idx, entry| {
@@ -546,7 +484,6 @@ mod tests {
                     index: 0,
                     pattern_root: None,
                     path: root.path().to_owned(),
-                    entry: None,
                     device_id: crossdev::init(root.path()).unwrap(),
                 }],
                 false,
@@ -724,7 +661,6 @@ mod tests {
                 vec![WalkRoot {
                     index: 0,
                     path: nested,
-                    entry: None,
                     pattern_root: Some(root.path().to_owned()),
                     device_id: 0,
                 }],
@@ -779,7 +715,6 @@ mod tests {
                     index: 0,
                     pattern_root: Some(root.to_owned()),
                     path: root.to_owned(),
-                    entry: None,
                     device_id: crossdev::init(root).unwrap(),
                 }],
                 false,

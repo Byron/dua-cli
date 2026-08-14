@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 
+use dua::WalkOptions;
 use dua::traverse::{BackgroundTraversal, TraversalStats};
-use dua::{InputPath, WalkOptions};
 
 use crate::interactive::widgets::Column;
 
@@ -61,8 +61,6 @@ pub struct AppState {
     pub walk_options: WalkOptions,
     /// The paths used in the initial traversal, at least 1.
     pub root_paths: Vec<PathBuf>,
-    /// Metadata retained only until the initial background traversal consumes its roots.
-    pub prepared_roots: Option<Vec<InputPath>>,
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
     /// Whether the next quit/back action should exit the app.
@@ -87,7 +85,6 @@ impl AppState {
             stats: TraversalStats::default(),
             walk_options,
             root_paths: input,
-            prepared_roots: None,
             allow_entry_check: true,
             pending_exit: false,
         }

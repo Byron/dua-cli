@@ -12,7 +12,7 @@ use crossterm::{
     style::Colored,
 };
 use dua::{
-    Config, InputPath, WalkResult,
+    Config, WalkResult,
     traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
 };
 use std::path::PathBuf;
@@ -71,17 +71,10 @@ impl AppState {
     }
 
     pub fn traverse(&mut self, traversal: &Traversal) -> Result<()> {
-        let input = self.prepared_roots.take().unwrap_or_else(|| {
-            self.root_paths
-                .iter()
-                .cloned()
-                .map(InputPath::from_path)
-                .collect()
-        });
-        let bg_traversal = BackgroundTraversal::start_prepared(
+        let bg_traversal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
-            input,
+            self.root_paths.clone(),
             self.walk_options
                 .ignore_patterns
                 .as_ref()
