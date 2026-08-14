@@ -18,6 +18,8 @@ jobs:
       run: make check
     - name: Run tests
       run: make unit-tests
+    - name: Run journey tests
+      run: make journey-tests
     - name: fmt
       run: cargo fmt --all -- --check
     - name: clippy
@@ -39,6 +41,8 @@ jobs:
         run: make check
       - name: Run tests
         run: make unit-tests
+      - name: Run journey tests
+        run: make journey-tests
       - name: clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
@@ -63,4 +67,3 @@ jobs:
         with:
           command: test
           args: --all
-

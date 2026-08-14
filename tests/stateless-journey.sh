@@ -9,13 +9,19 @@ exe="$root/../$exe"
 source "$root/utilities.sh"
 snapshot="$root/snapshots"
 fixtures="$root/fixtures"
+export DUA_FORMAT=metric
+export DUA_COUNT_HARD_LINKS=true
+normalize_sizes() {
+  sed -E 's/[[:space:]]+[0-9]+([.][0-9]+)?[[:space:]]+([KMGT]i?B|[Bb])/ <SIZE> \2/g'
+}
+SNAPSHOT_FILTER=normalize_sizes
 
 SUCCESSFULLY=0
 WITH_FAILURE=1
 
 (with "a sample directory"
   (sandbox
-    cp -R "$fixtures/sample-01/" .
+    cp -R "$fixtures/sample-01/." .
     (with "no arguments"
       (with "no given path"
         (with "no subcommand"

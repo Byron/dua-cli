@@ -121,12 +121,14 @@ function expect_run () {
   local output=
   set +e
   if [[ -n "${SNAPSHOT_FILTER-}" ]]; then
+    set -o pipefail
     output="$("$@" 2>&1 | "$SNAPSHOT_FILTER")"
+    local actual_exit_code=$?
+    set +o pipefail
   else
     output="$("$@" 2>&1)"
+    local actual_exit_code=$?
   fi
-
-  local actual_exit_code=$?
   if [[ "$actual_exit_code" == "$expected_exit_code" ]]; then
     if [[ -n "${WITH_SNAPSHOT-}" ]]; then
       local expected="$WITH_SNAPSHOT"
