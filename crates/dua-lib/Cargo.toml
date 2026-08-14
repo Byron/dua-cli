@@ -1,6 +1,6 @@
 [package]
 name = "dua-core"
-version = "2.41.1"
+version = "3.0.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -9,6 +9,9 @@ license.workspace = true
 
 [dependencies]
 crossbeam.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.1", features = [

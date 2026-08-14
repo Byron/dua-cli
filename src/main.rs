@@ -22,7 +22,6 @@ use crossterm::{
 #[cfg(feature = "tui-crossplatform")]
 use tui::{Terminal, backend::CrosstermBackend};
 
-mod crossdev;
 #[cfg(feature = "tui-crossplatform")]
 mod interactive;
 mod options;
@@ -156,7 +155,7 @@ fn main() -> Result<()> {
             let mut terminal = Terminal::new(CrosstermBackend::new(stderr))
                 .with_context(|| "Could not instantiate terminal")?;
 
-            let mut app = TerminalApp::initialize(
+            let mut app = TerminalApp::initialize_prepared(
                 &mut terminal,
                 walk_options,
                 byte_format,
@@ -216,7 +215,7 @@ fn main() -> Result<()> {
             let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            let (res, stats) = dua::aggregate(
+            let (res, stats) = dua::aggregate_prepared(
                 stdout_locked,
                 stderr_if_tty(),
                 walk_options,
@@ -253,7 +252,7 @@ fn main() -> Result<()> {
             let input_paths = extract_paths_maybe_set_cwd(global_traversal.input, &walk_options)?;
             let stdout = io::stdout();
             let stdout_locked = stdout.lock();
-            dua::aggregate(
+            dua::aggregate_prepared(
                 stdout_locked,
                 stderr_if_tty(),
                 walk_options,
@@ -327,45 +326,68 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
 fn extract_paths_maybe_set_cwd(
     mut paths: Vec<PathBuf>,
     walk_options: &dua::WalkOptions,
-) -> Result<Vec<PathBuf>, io::Error> {
+) -> Result<Vec<dua::InputPath>, io::Error> {
     let cross_filesystems = walk_options.cross_filesystems;
     if paths.len() == 1 && paths[0].is_dir() {
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
     }
     let cwd = std::env::current_dir()?;
-    let device_id = crossdev::init(&cwd).ok();
+    let device_id = dua::InputPath::from_path(cwd.clone()).device_id().ok();
 
-    let paths = if paths.is_empty() {
+    let expanded_cwd = paths.is_empty();
+    let paths = if expanded_cwd {
         cwd_dirlist().map(|paths| match device_id {
             Some(device_id) if !cross_filesystems => paths
                 .into_iter()
-                .filter(|p| match p.metadata() {
-                    Ok(meta) => crossdev::is_same_device(device_id, &meta),
-                    Err(_) => true,
-                })
+                .filter(|input| input.device_id().map_or(true, |device| device == device_id))
                 .collect(),
             _ => paths,
         })?
     } else {
-        paths
+        paths.into_iter().map(dua::InputPath::from_path).collect()
     };
 
     // Drop excluded top-level paths here rather than during the walk, so they are left out of the
     // report entirely instead of showing up as being empty.
     Ok(paths
         .into_iter()
-        .filter(|path| {
+        .filter(|input| {
             walk_options
                 .ignore_patterns
                 .as_ref()
-                .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
+                .is_none_or(|patterns| {
+                    #[cfg(target_os = "macos")]
+                    if expanded_cwd {
+                        return !patterns.is_excluded(input.path(), input.is_directory());
+                    }
+
+                    !patterns.excludes_input_path(input.path(), &cwd)
+                })
         })
         .collect())
 }
 
-fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
-    let mut v: Vec<_> = fs::read_dir(".")?
+#[cfg(target_os = "macos")]
+fn cwd_dirlist() -> Result<Vec<dua::InputPath>, io::Error> {
+    let mut entries = Vec::new();
+    let parent_path: std::sync::Arc<Path> = Path::new("").into();
+    for entry in dua_core::read_dir(Path::new("."))? {
+        let mut entry = entry?;
+        if entry.file_type.is_symlink() {
+            continue;
+        }
+        // Keep top-level output paths identical to `read_dir(".")` with its prefix removed.
+        entry.parent_path = std::sync::Arc::clone(&parent_path);
+        entries.push(dua::InputPath::from_entry(entry));
+    }
+    entries.sort_by(|left, right| left.path().cmp(right.path()));
+    Ok(entries)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cwd_dirlist() -> Result<Vec<dua::InputPath>, io::Error> {
+    let mut entries: Vec<_> = fs::read_dir(".")?
         .filter_map(|e| {
             e.ok()
                 .and_then(|e| e.path().strip_prefix(".").ok().map(ToOwned::to_owned))
@@ -378,9 +400,10 @@ fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
             }
             true
         })
+        .map(dua::InputPath::from_path)
         .collect();
-    v.sort();
-    Ok(v)
+    entries.sort_by(|left, right| left.path().cmp(right.path()));
+    Ok(entries)
 }
 
 fn edit_config() -> Result<()> {

@@ -15,6 +15,6 @@ pub(crate) use dua_core as walk;
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;
 
-pub use aggregate::aggregate;
+pub use aggregate::{aggregate, aggregate_prepared};
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;
