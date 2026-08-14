@@ -3,7 +3,7 @@ members = ["crates/dua-lib"]
 resolver = "3"
 
 [workspace.package]
-version = "2.41.1"
+version = "2.42.0"
 authors = ["Sebastian Thiel <sebastian.thiel@icloud.com"]
 edition = "2024"
 repository = "https://github.com/Byron/dua-cli"
