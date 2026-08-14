@@ -14,8 +14,8 @@
 //!
 //! The root directory starts in a shared injector queue. On platforms where directory-entry
 //! metadata may require another syscall, directory reads enqueue small metadata batches, and
-//! metadata batches enqueue accepted child directories. Windows workers instead consume the
-//! metadata returned by directory enumeration directly and enqueue child directories immediately.
+//! metadata batches enqueue accepted child directories. Windows and macOS workers instead consume
+//! native metadata returned by directory enumeration and enqueue child directories immediately.
 //! Every worker can run available jobs from its local LIFO queue or steal from a peer. Each
 //! successful thief wakes another idle worker, ramping up only while work remains stealable. A
 //! worker parks when no queue has work and is unparked when new work arrives or the walk stops. The
@@ -39,25 +39,38 @@ use std::{
     thread,
 };
 
-#[cfg(any(not(windows), test))]
+#[cfg(any(not(any(windows, target_os = "macos")), test))]
 use std::{ffi::OsString, fs};
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub use std::fs::{FileType, Metadata};
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+mod macos;
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows;
 
+#[cfg(target_os = "macos")]
+pub use macos::{Entry, FileType, Metadata};
+
+#[cfg(target_os = "macos")]
+use macos::ReadDir as NativeReadDir;
+
 #[cfg(windows)]
 pub use windows::{Entry, FileType, Metadata};
+
+#[cfg(windows)]
+use windows::ReadDir as NativeReadDir;
 
 /// Decides whether to traverse an entry's children for a given root index.
 /// Returning `false` prunes descendants but still emits the entry itself.
 type Descend = dyn Fn(usize, &Entry) -> bool + Send + Sync;
 /// Entries obtained from one directory read.
-/// The outer error means `fs::read_dir` could not open the directory; inner errors come from
-/// reading or converting individual directory entries.
+/// An outer error means the directory could not be opened; inner errors come from reading or
+/// converting individual directory entries.
 type Batch = io::Result<Vec<io::Result<Entry>>>;
 /// Number of directory entries grouped into each metadata job or result batch.
 /// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
@@ -73,7 +86,7 @@ pub enum Order {
 }
 
 /// A filesystem entry produced by [`walk`].
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub struct Entry {
     /// Distance from the walk root: `0` for the root, `1` for its children, and so on.
     pub depth: usize,
@@ -97,7 +110,7 @@ enum Job {
         entry_depth: usize,
     },
     /// Fetch metadata for a chunk of entries from a completed directory read.
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     StatCompletion {
         root_idx: usize,
         path: Arc<Path>,
@@ -112,7 +125,7 @@ impl Job {
     fn root_idx(&self) -> usize {
         match self {
             Job::ReadDir { root_idx, .. } => *root_idx,
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             Job::StatCompletion { root_idx, .. } => *root_idx,
         }
     }
@@ -365,7 +378,7 @@ impl PoolShared {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl Entry {
     /// Return the full path to this entry.
     #[must_use]
@@ -489,7 +502,7 @@ fn start_jobs(pool: &Pool, root_jobs: Vec<Job>) {
     debug_assert!(
         root_jobs.iter().all(|j| match j {
             Job::ReadDir { entry_depth, .. } => *entry_depth,
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             Job::StatCompletion { entry_depth, .. } => *entry_depth,
         } == 1),
         "the first jobs should be root jobs, so active_root counts match"
@@ -593,7 +606,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
                 read_dir_parent_first(root, path, entry_depth, worker, shared);
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         Job::StatCompletion {
             root_idx: root,
             path,
@@ -608,7 +621,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
 /// are emitted directly; the directory-read job completes after all chunks are queued.
 /// This adds parallelism within wide directories when metadata calls dominate. Both traversal
 /// orders already process separate directories concurrently, so typical trees may see no speedup.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn read_dir_completion(
     root_idx: usize,
     path: Arc<Path>,
@@ -686,10 +699,10 @@ fn read_dir_completion(
 
 /// Read a directory for completion-order traversal.
 ///
-/// Unlike the non-Windows implementation, `windows::ReadDir` collects metadata while enumerating,
+/// Unlike the generic implementation, native readers collect metadata while enumerating,
 /// so complete entries are published directly in chunks instead of being split into stealable
 /// metadata jobs. This streams wide directories but keeps their metadata work on one worker.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn read_dir_completion(
     root_idx: usize,
     path: Arc<Path>,
@@ -697,7 +710,7 @@ fn read_dir_completion(
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match windows::ReadDir::open(path, depth) {
+    let dir_entries = match NativeReadDir::open(path, depth) {
         Ok(entries) => entries,
         Err(err) => {
             if shared
@@ -741,7 +754,7 @@ fn read_dir_completion(
     finish_pending(root_idx, shared);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn publish_completion_batch(
     root_idx: usize,
     entries: &mut Vec<io::Result<Entry>>,
@@ -769,7 +782,7 @@ fn publish_completion_batch(
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn read_dir_parent_first(
     root_idx: usize,
     path: Arc<Path>,
@@ -777,7 +790,7 @@ fn read_dir_parent_first(
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match windows::ReadDir::open(path, depth) {
+    let dir_entries = match NativeReadDir::open(path, depth) {
         Ok(entries) => entries,
         Err(err) => {
             finish_directory(root_idx, Err(err), Vec::new(), worker, shared);
@@ -801,7 +814,7 @@ fn read_dir_parent_first(
     finish_directory(root_idx, Ok(entries), jobs, worker, shared);
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn stat_entries_completion(
     root_idx: usize,
     path: Arc<Path>,
@@ -847,7 +860,7 @@ fn stat_entries_completion(
 /// order. Metadata within one directory is serial, although separate directories still run in
 /// parallel; this often matches completion-order performance unless wide-directory metadata is the
 /// bottleneck.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn read_dir_parent_first(
     root_idx: usize,
     path: Arc<Path>,
@@ -861,7 +874,7 @@ fn read_dir_parent_first(
 /// Convert a directory's entries on the worker that enumerates it, then schedule its children.
 ///
 /// Parent-first traversal converts each entry inline to preserve ordering.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn read_dir_inline(
     root_idx: usize,
     path: Arc<Path>,
@@ -1117,9 +1130,9 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
-    fn windows_metadata_is_collected_by_the_directory_worker() {
+    fn native_metadata_is_collected_by_the_directory_worker() {
         let dir = tempfile::tempdir().unwrap();
         for idx in 0..32 {
             fs::create_dir(dir.path().join(idx.to_string())).unwrap();
@@ -1139,13 +1152,13 @@ mod tests {
         assert_eq!(
             worker_threads.lock().unwrap().len(),
             1,
-            "Windows directory-entry metadata should stay on the enumerating worker"
+            "native directory-entry metadata should stay on the enumerating worker"
         );
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
-    fn windows_completion_streams_metadata_before_enumeration_finishes() {
+    fn native_completion_streams_metadata_before_enumeration_finishes() {
         let dir = tempfile::tempdir().unwrap();
         for idx in 0..=ENTRY_CHUNK_SIZE {
             fs::create_dir(dir.path().join(idx.to_string())).unwrap();

@@ -30,6 +30,18 @@ jobs:
 
         cargo diet -n --package-size-limit 90KB
 
+  build-and-test-on-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - name: Test compilation
+        run: make check
+      - name: Run tests
+        run: make unit-tests
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
   build-and-test-on-windows:
     name: Windows (nightly)
     runs-on: windows-latest

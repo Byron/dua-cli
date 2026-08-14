@@ -1,7 +1,7 @@
 use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 use filesize::PathExt;
 use petgraph::{Directed, Direction, graph::NodeIndex, stable_graph::StableGraph};
 use std::time::Instant;
@@ -182,14 +182,6 @@ impl BackgroundTraversal {
                     );
                     for root_path in input {
                         log::info!("Walking {}", root_path.display());
-                        let pattern_root = pattern_roots.as_deref().map(|pattern_roots| {
-                            pattern_roots
-                                .iter()
-                                .filter(|candidate| root_path.starts_with(candidate))
-                                .max_by_key(|candidate| candidate.components().count())
-                                .cloned()
-                                .unwrap_or_else(|| root_path.clone())
-                        });
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
@@ -200,6 +192,14 @@ impl BackgroundTraversal {
                             };
                             device_id
                         };
+                        let pattern_root = pattern_roots.as_deref().map(|pattern_roots| {
+                            pattern_roots
+                                .iter()
+                                .filter(|candidate| root_path.starts_with(candidate))
+                                .max_by_key(|candidate| candidate.components().count())
+                                .cloned()
+                                .unwrap_or_else(|| root_path.clone())
+                        });
                         walk_roots.push(WalkRoot {
                             index: walk_roots.len(),
                             pattern_root,
@@ -294,7 +294,7 @@ impl BackgroundTraversal {
                         data.is_dir = entry.file_type.is_dir();
                         if let Ok(m) = &entry.metadata {
                             if self.walk_options.count_hard_links
-                                || self.inodes.add(m)
+                                || self.inodes.add(&entry, m)
                                     && (self.walk_options.cross_filesystems
                                         || crossdev::is_same_device(device_id, m))
                             {
@@ -390,7 +390,7 @@ impl BackgroundTraversal {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 /// Return disk usage for `name` on Unix-like platforms.
 fn size_on_disk(
     _parent: &Path,
@@ -399,6 +399,18 @@ fn size_on_disk(
     _is_dir: bool,
 ) -> io::Result<u64> {
     name.size_on_disk_fast(meta)
+}
+
+#[cfg(target_os = "macos")]
+/// Return disk usage from metadata already collected by the macOS filesystem walker.
+#[allow(clippy::unnecessary_wraps)]
+fn size_on_disk(
+    _parent: &Path,
+    _name: &Path,
+    meta: &crate::walk::Metadata,
+    _is_dir: bool,
+) -> io::Result<u64> {
+    Ok(meta.allocated_size())
 }
 
 #[cfg(windows)]

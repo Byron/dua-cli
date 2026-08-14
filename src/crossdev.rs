@@ -8,10 +8,11 @@ pub fn init(path: &Path) -> io::Result<u64> {
 }
 
 #[cfg(unix)]
-pub fn is_same_device(device_id: u64, meta: &std::fs::Metadata) -> bool {
+pub fn is_same_device(device_id: u64, metadata: &dua_core::Metadata) -> bool {
+    #[cfg(not(target_os = "macos"))]
     use std::os::unix::fs::MetadataExt;
 
-    meta.dev() == device_id
+    metadata.dev() == device_id
 }
 
 #[cfg(not(unix))]

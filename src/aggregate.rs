@@ -1,15 +1,21 @@
 use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev};
 use anyhow::Result;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{io, path::Path};
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
     entry.path().size_on_disk_fast(metadata)
+}
+
+#[cfg(target_os = "macos")]
+#[allow(clippy::unnecessary_wraps)]
+fn size_on_disk(_entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
+    Ok(metadata.allocated_size())
 }
 
 #[cfg(windows)]
@@ -23,6 +29,25 @@ fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) ->
 }
 
 const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
+
+/// Accumulated output state for one input root, retained until roots can be emitted in the
+/// requested order.
+struct Aggregate {
+    /// Path printed for this root.
+    path: PathBuf,
+    /// Sum of the accepted entries' apparent or allocated sizes.
+    bytes: u128,
+    /// Number of root, entry, metadata, or size-query errors encountered.
+    errors: u64,
+    /// Whether the root is a file, used to distinguish file and directory output styling.
+    is_file: bool,
+}
+
+impl Aggregate {
+    fn path_color(&self) -> Option<Color> {
+        (!self.is_file).then_some(Color::Cyan)
+    }
+}
 
 /// Aggregate the given `paths` and write information about them to `out` in a human-readable format.
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
@@ -44,13 +69,11 @@ pub fn aggregate(
     let num_roots = paths.len();
     let mut aggregates = paths
         .iter()
-        .cloned()
-        .map(|path| {
-            (
-                path,  // root path
-                0u128, // accumulated byte size
-                0u64,  // I/O error count
-            )
+        .map(|path| Aggregate {
+            path: path.clone(),
+            bytes: 0,
+            errors: 0,
+            is_file: false,
         })
         .collect::<Vec<_>>();
     let mut device_ids = vec![0; num_roots];
@@ -62,7 +85,7 @@ pub fn aggregate(
             0
         } else {
             let Ok(device_id) = crossdev::init(&path) else {
-                aggregates[root_idx].2 += 1;
+                aggregates[root_idx].errors += 1;
                 completed[root_idx] = true;
                 continue;
             };
@@ -103,7 +126,7 @@ pub fn aggregate(
                 continue;
             }
         };
-        let (_, num_bytes, num_errors) = &mut aggregates[root_idx];
+        let aggregate = &mut aggregates[root_idx];
         stats.entries_traversed += 1;
         progress.throttled(|| {
             if let Some(err) = err.as_mut() {
@@ -113,9 +136,13 @@ pub fn aggregate(
         });
         match entry {
             Ok(entry) => {
+                if entry.depth == 0 {
+                    aggregate.is_file = entry.file_type.is_file()
+                        || entry.file_type.is_symlink() && entry.path().is_file();
+                }
                 let file_size = u128::from(match &entry.metadata {
                     Ok(m)
-                        if (walk_options.count_hard_links || inodes.add(m))
+                        if (walk_options.count_hard_links || inodes.add(&entry, m))
                             && (walk_options.cross_filesystems
                                 || crossdev::is_same_device(device_ids[root_idx], m)) =>
                     {
@@ -123,27 +150,27 @@ pub fn aggregate(
                             m.len()
                         } else {
                             size_on_disk(&entry, m).unwrap_or_else(|_| {
-                                *num_errors += 1;
+                                aggregate.errors += 1;
                                 0
                             })
                         }
                     }
                     Ok(_) => 0,
                     Err(_) => {
-                        *num_errors += 1;
+                        aggregate.errors += 1;
                         0
                     }
                 });
                 stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
                 stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
-                *num_bytes += file_size;
+                aggregate.bytes += file_size;
             }
-            Err(_) => *num_errors += 1,
+            Err(_) => aggregate.errors += 1,
         }
     }
 
-    let total = aggregates.iter().map(|(_, bytes, _)| bytes).sum();
-    res.num_errors = aggregates.iter().map(|(_, _, errors)| errors).sum();
+    let total = aggregates.iter().map(|aggregate| aggregate.bytes).sum();
+    res.num_errors = aggregates.iter().map(|aggregate| aggregate.errors).sum();
 
     if stats.entries_traversed == 0 {
         stats.smallest_file_in_bytes = 0;
@@ -189,7 +216,7 @@ pub fn aggregate(
 fn output_completed<W: io::Write, E: io::Write>(
     out: &mut W,
     err: &mut Option<E>,
-    aggregates: &[(std::path::PathBuf, u128, u64)],
+    aggregates: &[Aggregate],
     completed: &[bool],
     next_output: &mut usize,
     progress_visible: &mut bool,
@@ -204,13 +231,13 @@ fn output_completed<W: io::Write, E: io::Write>(
         *progress_visible = false;
     }
     while completed.get(*next_output).copied() == Some(true) {
-        let (path, num_bytes, num_errors) = &aggregates[*next_output];
+        let aggregate = &aggregates[*next_output];
         output_colored_path(
             out,
-            path,
-            *num_bytes,
-            *num_errors,
-            path_color_of(path),
+            &aggregate.path,
+            aggregate.bytes,
+            aggregate.errors,
+            aggregate.path_color(),
             byte_format,
         )?;
         *next_output += 1;
@@ -220,25 +247,21 @@ fn output_completed<W: io::Write, E: io::Write>(
 
 fn output_sorted(
     out: &mut impl io::Write,
-    mut aggregates: Vec<(std::path::PathBuf, u128, u64)>,
+    mut aggregates: Vec<Aggregate>,
     byte_format: ByteFormat,
 ) -> std::result::Result<(), io::Error> {
-    aggregates.sort_by_key(|&(_, num_bytes, _)| num_bytes);
-    for (path, num_bytes, num_errors) in aggregates {
+    aggregates.sort_by_key(|aggregate| aggregate.bytes);
+    for aggregate in aggregates {
         output_colored_path(
             out,
-            &path,
-            num_bytes,
-            num_errors,
-            path_color_of(&path),
+            &aggregate.path,
+            aggregate.bytes,
+            aggregate.errors,
+            aggregate.path_color(),
             byte_format,
         )?;
     }
     Ok(())
-}
-
-fn path_color_of(path: impl AsRef<Path>) -> Option<Color> {
-    (!path.as_ref().is_file()).then_some(Color::Cyan)
 }
 
 fn output_colored_path(
@@ -303,9 +326,95 @@ mod tests {
             .collect()
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn overlapping_directory_roots_preserve_stat_link_count_cycles() {
+        use std::os::unix::fs::MetadataExt;
+
+        const OVERLAPPING_VISITS: u64 = 5;
+
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().join("parent");
+        let child = parent.join("child");
+        let grandchild = child.join("grandchild");
+        std::fs::create_dir_all(&grandchild).unwrap();
+        let file = grandchild.join("file");
+        std::fs::write(&file, b"repeated directory contents").unwrap();
+
+        let parent_metadata = std::fs::symlink_metadata(&parent).unwrap();
+        let child_metadata = std::fs::symlink_metadata(&child).unwrap();
+        let grandchild_metadata = std::fs::symlink_metadata(&grandchild).unwrap();
+        let file_metadata = std::fs::symlink_metadata(&file).unwrap();
+        assert!(
+            child_metadata.nlink() > 1,
+            "expected multiple links for {child:?}, got {}",
+            child_metadata.nlink()
+        );
+        assert!(
+            grandchild_metadata.nlink() > 1,
+            "expected multiple links for {grandchild:?}, got {}",
+            grandchild_metadata.nlink()
+        );
+
+        let roots = vec![parent, child.clone(), child.clone(), child.clone(), child];
+
+        for count_hard_links in [false, true] {
+            let directory_visits = |metadata: &std::fs::Metadata| {
+                if count_hard_links || metadata.nlink() <= 1 {
+                    OVERLAPPING_VISITS
+                } else {
+                    OVERLAPPING_VISITS.div_ceil(metadata.nlink())
+                }
+            };
+            let expected = u128::from(parent_metadata.len())
+                + u128::from(directory_visits(&child_metadata) * child_metadata.len())
+                + u128::from(directory_visits(&grandchild_metadata) * grandchild_metadata.len())
+                + u128::from(OVERLAPPING_VISITS * file_metadata.len());
+
+            let mut out = Vec::new();
+            let result = aggregate(
+                &mut out,
+                None::<Vec<u8>>,
+                WalkOptions {
+                    threads: 1,
+                    count_hard_links,
+                    apparent_size: true,
+                    cross_filesystems: true,
+                    ignore_dirs: std::collections::BTreeSet::default(),
+                    ignore_patterns: None,
+                },
+                true,
+                false,
+                ByteFormat::Bytes,
+                roots.clone(),
+            )
+            .unwrap();
+
+            assert_eq!(result.0.num_errors, 0);
+            assert_eq!(
+                byte_counts(&out).last().copied(),
+                Some(expected),
+                "overlapping directory totals with count_hard_links={count_hard_links}"
+            );
+        }
+    }
+
     #[test]
     fn completed_roots_stream_in_input_order() {
-        let aggregates = [("first".into(), 1, 0), ("second".into(), 2, 0)];
+        let aggregates = [
+            Aggregate {
+                path: "first".into(),
+                bytes: 1,
+                errors: 0,
+                is_file: false,
+            },
+            Aggregate {
+                path: "second".into(),
+                bytes: 2,
+                errors: 0,
+                is_file: false,
+            },
+        ];
         let mut completed = [false, true];
         let mut next_output = 0;
         let mut progress_visible = true;
