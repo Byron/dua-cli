@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 3.0.0 (2026-08-14)
 
 macOS specificy bulk-readtree implementation for 30% performance boost on supported filesystems.
 
@@ -25,7 +25,7 @@ macOS specificy bulk-readtree implementation for 30% performance boost on suppor
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Prepare changelog prior to release ([`4e889a6`](https://github.com/Byron/dua-cli/commit/4e889a64a7939cf9f79f95a4b320900337b42e6f))
+    - Prepare changelog prior to release ([`40c2816`](https://github.com/Byron/dua-cli/commit/40c28166a4beb903e87df85e23916f27e15ef26b))
     - Merge pull request #367 from tamird/macos-native-traversal ([`e68868c`](https://github.com/Byron/dua-cli/commit/e68868c1fd28d089baa91126998dc25fb5216e23))
     - Review ([`872b6be`](https://github.com/Byron/dua-cli/commit/872b6beffaf3f354dee3e1f670d4fe45615b76a8))
     - Avoid per-entry macOS metadata queries ([`7d115c0`](https://github.com/Byron/dua-cli/commit/7d115c014eff2f85ab60e82266f4f1beb4782598))
