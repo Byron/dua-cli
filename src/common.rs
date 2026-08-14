@@ -1,3 +1,7 @@
+#[cfg(target_os = "macos")]
+use crate::walk::walk_root_entries as walk_roots;
+#[cfg(not(target_os = "macos"))]
+use crate::walk::walk_roots;
 use crate::{crossdev, walk};
 use anyhow::Context;
 use byte_unit::{Byte, Unit, UnitType};
@@ -264,6 +268,9 @@ pub(crate) struct WalkRoot {
     pub index: usize,
     /// Path at which to start walking.
     pub path: PathBuf,
+    /// Entry already collected while enumerating this root, if available.
+    #[cfg(target_os = "macos")]
+    pub entry: Option<walk::Entry>,
     /// Most specific original input root containing `path`, used as the ignore-pattern base.
     /// Choosing the longest containing root preserves the right base when input roots overlap and
     /// `path` is a subtree being refreshed.
@@ -289,17 +296,24 @@ impl WalkOptions {
             .max()
             .map_or(0, |idx| idx + 1);
         let path_count = roots.len();
-        let (device_ids, root_paths, paths_with_idx) = roots.into_iter().fold(
+        let (device_ids, root_paths, indexed_roots) = roots.into_iter().fold(
             (
                 vec![0; num_roots],
                 vec![None; num_roots],
                 Vec::with_capacity(path_count),
             ),
-            |(mut device_ids, mut root_paths, mut paths), root| {
+            |(mut device_ids, mut root_paths, mut indexed_roots), root| {
                 device_ids[root.index] = root.device_id;
                 root_paths[root.index] = root.pattern_root;
-                paths.push((root.index, root.path));
-                (device_ids, root_paths, paths)
+                #[cfg(target_os = "macos")]
+                indexed_roots.push((
+                    root.index,
+                    root.entry
+                        .map_or_else(|| walk::Entry::from_path(&root.path), Ok),
+                ));
+                #[cfg(not(target_os = "macos"))]
+                indexed_roots.push((root.index, root.path));
+                (device_ids, root_paths, indexed_roots)
             },
         );
         let ignore_dirs = self.ignore_dirs.clone();
@@ -326,8 +340,8 @@ impl WalkOptions {
         };
         let is_excluded_while_walking = Arc::clone(&is_excluded);
 
-        walk::walk_roots(
-            paths_with_idx,
+        walk_roots(
+            indexed_roots,
             self.threads,
             order,
             move |root_idx, entry| {
@@ -484,6 +498,8 @@ mod tests {
                     index: 0,
                     pattern_root: None,
                     path: root.path().to_owned(),
+                    #[cfg(target_os = "macos")]
+                    entry: None,
                     device_id: crossdev::init(root.path()).unwrap(),
                 }],
                 false,
@@ -661,6 +677,8 @@ mod tests {
                 vec![WalkRoot {
                     index: 0,
                     path: nested,
+                    #[cfg(target_os = "macos")]
+                    entry: None,
                     pattern_root: Some(root.path().to_owned()),
                     device_id: 0,
                 }],
@@ -715,6 +733,8 @@ mod tests {
                     index: 0,
                     pattern_root: Some(root.to_owned()),
                     path: root.to_owned(),
+                    #[cfg(target_os = "macos")]
+                    entry: None,
                     device_id: crossdev::init(root).unwrap(),
                 }],
                 false,

@@ -204,6 +204,8 @@ impl BackgroundTraversal {
                             index: walk_roots.len(),
                             pattern_root,
                             path: root_path.clone(),
+                            #[cfg(target_os = "macos")]
+                            entry: None,
                             device_id,
                         });
                         device_ids.push(device_id);

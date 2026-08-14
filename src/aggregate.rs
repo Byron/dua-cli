@@ -53,38 +53,92 @@ impl Aggregate {
 /// If `compute_total` is set, it will write an additional line with the total size across all given `paths`.
 /// If `sort_by_size_in_bytes` is set, we will sort all sizes (ascending) before outputting them.
 pub fn aggregate(
-    mut out: impl io::Write,
-    mut err: Option<impl io::Write>,
+    out: impl io::Write,
+    err: Option<impl io::Write>,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
     byte_format: ByteFormat,
     paths: Vec<PathBuf>,
 ) -> Result<(WalkResult, Statistics)> {
+    aggregate_inner(
+        out,
+        err,
+        walk_options,
+        compute_total,
+        sort_by_size_in_bytes,
+        byte_format,
+        paths.into_iter().map(|path| (path, None)),
+    )
+}
+
+/// Aggregate macOS directory entries without querying their paths for metadata again.
+///
+/// Reuses each entry's existing metadata and filesystem identity while preserving the output and
+/// traversal behavior of [`aggregate`].
+#[cfg(target_os = "macos")]
+pub fn aggregate_entries(
+    out: impl io::Write,
+    err: Option<impl io::Write>,
+    walk_options: WalkOptions,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
+    entries: Vec<dua_core::Entry>,
+) -> Result<(WalkResult, Statistics)> {
+    aggregate_inner(
+        out,
+        err,
+        walk_options,
+        compute_total,
+        sort_by_size_in_bytes,
+        byte_format,
+        entries.into_iter().map(|entry| (entry.path(), Some(entry))),
+    )
+}
+
+fn aggregate_inner(
+    mut out: impl io::Write,
+    mut err: Option<impl io::Write>,
+    walk_options: WalkOptions,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
+    inputs: impl ExactSizeIterator<Item = (PathBuf, Option<crate::walk::Entry>)>,
+) -> Result<(WalkResult, Statistics)> {
     let mut res = WalkResult::default();
     let mut stats = Statistics {
         smallest_file_in_bytes: u128::MAX,
         ..Default::default()
     };
-    let num_roots = paths.len();
-    let mut aggregates = paths
-        .iter()
-        .map(|path| Aggregate {
-            path: path.clone(),
-            bytes: 0,
-            errors: 0,
-            is_file: false,
-        })
-        .collect::<Vec<_>>();
+    let num_roots = inputs.len();
+    let mut aggregates = Vec::with_capacity(num_roots);
     let mut device_ids = vec![0; num_roots];
     let mut completed = vec![false; num_roots];
     let mut roots = Vec::with_capacity(num_roots);
     let has_ignore_patterns = walk_options.ignore_patterns.is_some();
-    for (root_idx, path) in paths.into_iter().enumerate() {
+    for (root_idx, (path, prepared_entry)) in inputs.enumerate() {
+        #[cfg(not(target_os = "macos"))]
+        let _ = prepared_entry;
+
+        aggregates.push(Aggregate {
+            path: path.clone(),
+            bytes: 0,
+            errors: 0,
+            is_file: false,
+        });
         let device_id = if walk_options.cross_filesystems {
             0
         } else {
-            let Ok(device_id) = crossdev::init(&path) else {
+            #[cfg(target_os = "macos")]
+            let root_device_id = prepared_entry
+                .as_ref()
+                .and_then(|entry| entry.metadata.as_ref().ok())
+                .map_or_else(|| crossdev::init(&path), |metadata| Ok(metadata.dev()));
+            #[cfg(not(target_os = "macos"))]
+            let root_device_id = crossdev::init(&path);
+
+            let Ok(device_id) = root_device_id else {
                 aggregates[root_idx].errors += 1;
                 completed[root_idx] = true;
                 continue;
@@ -96,6 +150,8 @@ pub fn aggregate(
             index: root_idx,
             pattern_root: has_ignore_patterns.then(|| path.clone()),
             path,
+            #[cfg(target_os = "macos")]
+            entry: prepared_entry,
             device_id,
         });
     }
@@ -324,6 +380,52 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn prepared_file_keeps_cached_metadata_and_device_after_removal() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("prepared-file");
+
+        for sort_by_size_in_bytes in [false, true] {
+            std::fs::write(&path, b"cached metadata").unwrap();
+            let expected_size = std::fs::metadata(&path).unwrap().len();
+            let entry = dua_core::read_dir(directory.path())
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap();
+            std::fs::remove_file(&path).unwrap();
+
+            let mut out = Vec::new();
+            let (result, statistics) = aggregate_entries(
+                &mut out,
+                None::<Vec<u8>>,
+                WalkOptions {
+                    threads: 1,
+                    count_hard_links: false,
+                    apparent_size: true,
+                    cross_filesystems: false,
+                    ignore_dirs: std::collections::BTreeSet::default(),
+                    ignore_patterns: None,
+                },
+                false,
+                sort_by_size_in_bytes,
+                ByteFormat::Bytes,
+                vec![entry],
+            )
+            .unwrap();
+
+            assert_eq!(result.num_errors, 0);
+            assert_eq!(statistics.entries_traversed, 1);
+            assert_eq!(byte_counts(&out), [u128::from(expected_size)]);
+            let out = String::from_utf8(out).unwrap();
+            assert!(
+                out.contains(&format!(" {}\n", path.display())),
+                "cached file roots must remain uncolored after removal: {out:?}"
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]
