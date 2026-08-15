@@ -1,6 +1,6 @@
-#[cfg(target_os = "macos")]
+#[cfg(any(windows, target_os = "macos"))]
 use crate::walk::walk_root_entries as walk_roots;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(windows, target_os = "macos")))]
 use crate::walk::walk_roots;
 use crate::{crossdev, walk};
 use anyhow::Context;
@@ -269,7 +269,7 @@ pub(crate) struct WalkRoot {
     /// Path at which to start walking.
     pub path: PathBuf,
     /// Entry already collected while enumerating this root, if available.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     pub entry: Option<walk::Entry>,
     /// Most specific original input root containing `path`, used as the ignore-pattern base.
     /// Choosing the longest containing root preserves the right base when input roots overlap and
@@ -305,13 +305,13 @@ impl WalkOptions {
             |(mut device_ids, mut root_paths, mut indexed_roots), root| {
                 device_ids[root.index] = root.device_id;
                 root_paths[root.index] = root.pattern_root;
-                #[cfg(target_os = "macos")]
+                #[cfg(any(windows, target_os = "macos"))]
                 indexed_roots.push((
                     root.index,
                     root.entry
                         .map_or_else(|| walk::Entry::from_path(&root.path), Ok),
                 ));
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(not(any(windows, target_os = "macos")))]
                 indexed_roots.push((root.index, root.path));
                 (device_ids, root_paths, indexed_roots)
             },
@@ -498,7 +498,7 @@ mod tests {
                     index: 0,
                     pattern_root: None,
                     path: root.path().to_owned(),
-                    #[cfg(target_os = "macos")]
+                    #[cfg(any(windows, target_os = "macos"))]
                     entry: None,
                     device_id: crossdev::init(root.path()).unwrap(),
                 }],
@@ -677,7 +677,7 @@ mod tests {
                 vec![WalkRoot {
                     index: 0,
                     path: nested,
-                    #[cfg(target_os = "macos")]
+                    #[cfg(any(windows, target_os = "macos"))]
                     entry: None,
                     pattern_root: Some(root.path().to_owned()),
                     device_id: 0,
@@ -733,7 +733,7 @@ mod tests {
                     index: 0,
                     pattern_root: Some(root.to_owned()),
                     path: root.to_owned(),
-                    #[cfg(target_os = "macos")]
+                    #[cfg(any(windows, target_os = "macos"))]
                     entry: None,
                     device_id: crossdev::init(root).unwrap(),
                 }],

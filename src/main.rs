@@ -212,7 +212,7 @@ fn main() -> Result<()> {
             let config = dua::Config::load()?;
             let byte_format = traversal.byte_format(&config);
             let walk_options = walk_options_from(&traversal)?;
-            let inputs = extract_aggregate_inputs(traversal.input, &walk_options)?;
+            let inputs = extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
             run_aggregation(
                 inputs,
                 walk_options,
@@ -242,7 +242,8 @@ fn main() -> Result<()> {
             let config = dua::Config::load()?;
             let byte_format = global_traversal.byte_format(&config);
             let walk_options = walk_options_from(&global_traversal)?;
-            let inputs = extract_aggregate_inputs(global_traversal.input, &walk_options)?;
+            let inputs =
+                extract_aggregate_inputs_maybe_set_cwd(global_traversal.input, &walk_options)?;
             run_aggregation(inputs, walk_options, true, true, byte_format, false)?
         }
     };
@@ -252,7 +253,7 @@ fn main() -> Result<()> {
 
 enum AggregateInputs {
     Paths(Vec<PathBuf>),
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     Entries(Vec<dua_core::Entry>),
 }
 
@@ -276,7 +277,7 @@ fn run_aggregation(
             byte_format,
             paths,
         ),
-        #[cfg(target_os = "macos")]
+        #[cfg(any(windows, target_os = "macos"))]
         AggregateInputs::Entries(entries) => dua::aggregate_entries(
             stdout_locked,
             stderr_if_tty(),
@@ -349,17 +350,19 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
     Ok(walk_options)
 }
 
-fn extract_aggregate_inputs(
+fn extract_aggregate_inputs_maybe_set_cwd(
     paths: Vec<PathBuf>,
     walk_options: &dua::WalkOptions,
 ) -> Result<AggregateInputs, io::Error> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     if paths.is_empty() || paths.len() == 1 && paths[0].is_dir() {
         if let Some(path) = paths.first() {
             std::env::set_current_dir(path)?;
         }
 
+        #[cfg(target_os = "macos")]
         let cwd = std::env::current_dir()?;
+        #[cfg(target_os = "macos")]
         let cwd_device = (!walk_options.cross_filesystems)
             .then(|| device_id(&cwd).ok())
             .flatten();
@@ -373,6 +376,7 @@ fn extract_aggregate_inputs(
             }
             entry.parent_path = std::sync::Arc::clone(&parent_path);
 
+            #[cfg(target_os = "macos")]
             if let Some(cwd_device) = cwd_device {
                 let same_device = entry.metadata.as_ref().map_or_else(
                     |_| device_id(&entry.path()).map_or(true, |device| device == cwd_device),

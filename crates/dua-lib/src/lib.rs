@@ -211,12 +211,12 @@ pub struct Walk {
     pool: Option<Pool>,
 }
 
-/// Read a macOS directory and return its entries with metadata already collected.
+/// Read a directory using native bulk enumeration and return entries with metadata already collected.
 ///
 /// Entries have depth zero so they can be passed directly to [`walk_root_entries`] without
 /// querying their paths again. Directory-open errors are returned immediately; later enumeration
 /// errors are yielded by the iterator.
-#[cfg(target_os = "macos")]
+#[cfg(any(windows, target_os = "macos"))]
 pub fn read_dir(path: &Path) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
     NativeReadDir::open(Arc::from(path), 0)
 }
@@ -289,6 +289,9 @@ impl Iterator for Walk {
 
 /// Walk multiple indexed roots without following symlinks.
 /// Unlike [`walk`], this preserves each root index and yields its completion as a [`RootEvent`].
+///
+/// Each item in `roots` is `(root_index, path)`. `root_index` is a caller-chosen identifier passed
+/// to `descend` and returned with every [`RootEvent`] for that root, unique per root path.
 ///
 /// # Panics
 ///
@@ -1193,20 +1196,30 @@ mod tests {
             panic!("the prepared descendant should be emitted as the new root");
         };
         assert_eq!(root.path(), descendant);
-        assert_eq!(root.depth, 0);
+        assert_eq!(
+            root.depth, 0,
+            "the entry originally found at depth 1 must become the new traversal root"
+        );
 
         let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
             panic!("the re-rooted directory should emit its child");
         };
         assert_eq!(entry.path(), child);
-        assert_eq!(entry.depth, 1);
+        assert_eq!(
+            entry.depth, 1,
+            "the child depth must be relative to the prepared entry used as the new root"
+        );
         assert_eq!(
             events
                 .next()
                 .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
             Some((7, true))
         );
-        assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
+        assert_eq!(
+            events.next().map(|(root_idx, _)| root_idx),
+            None,
+            "nothing left after the Finished event"
+        );
 
         root.metadata = Err(io::Error::from(io::ErrorKind::PermissionDenied));
         let mut events = walk_root_entries([(7, Ok(root))], 2, Order::ParentFirst, |_, _| {
@@ -1229,14 +1242,12 @@ mod tests {
         assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
     fn prepared_roots_reuse_native_directory_metadata() {
-        const CONTENTS: &[u8] = b"cached metadata";
-
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("file");
-        fs::write(&path, CONTENTS).unwrap();
+        fs::write(&path, b"cached metadata").unwrap();
         let expected_len = fs::metadata(&path).unwrap().len();
 
         let entry = read_dir(directory.path()).unwrap().next().unwrap().unwrap();
@@ -1246,7 +1257,9 @@ mod tests {
 
         let mut events = walk_root_entries([(7, Ok(entry))], 1, Order::Completion, |_, _| true);
         let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
-            panic!("prepared root must be yielded without querying its removed path");
+            panic!(
+                "prepared root must be yielded without querying its removed path which would fail"
+            );
         };
         assert_eq!(entry.path(), path);
         assert_eq!(entry.metadata.unwrap().len(), expected_len);

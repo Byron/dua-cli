@@ -72,11 +72,11 @@ pub fn aggregate(
     )
 }
 
-/// Aggregate macOS directory entries without querying their paths for metadata again.
+/// Aggregate bulk-enumerated directory entries without querying their paths for metadata again.
 ///
 /// Reuses each entry's existing metadata and filesystem identity while preserving the output and
 /// traversal behavior of [`aggregate`].
-#[cfg(target_os = "macos")]
+#[cfg(any(windows, target_os = "macos"))]
 pub fn aggregate_entries(
     out: impl io::Write,
     err: Option<impl io::Write>,
@@ -118,7 +118,7 @@ fn aggregate_inner(
     let mut roots = Vec::with_capacity(num_roots);
     let has_ignore_patterns = walk_options.ignore_patterns.is_some();
     for (root_idx, (path, prepared_entry)) in inputs.enumerate() {
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         let _ = prepared_entry;
 
         aggregates.push(Aggregate {
@@ -150,7 +150,7 @@ fn aggregate_inner(
             index: root_idx,
             pattern_root: has_ignore_patterns.then(|| path.clone()),
             path,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(windows, target_os = "macos"))]
             entry: prepared_entry,
             device_id,
         });
@@ -382,9 +382,9 @@ mod tests {
             .collect()
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
-    fn prepared_file_keeps_cached_metadata_and_device_after_removal() {
+    fn file_as_root_keeps_cached_metadata_after_removal() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("prepared-file");
 
@@ -423,7 +423,9 @@ mod tests {
             let out = String::from_utf8(out).unwrap();
             assert!(
                 out.contains(&format!(" {}\n", path.display())),
-                "cached file roots must remain uncolored after removal: {out:?}"
+                "the bulk reader must preserve the cached file type after removal; querying the \
+                 path again would fail, leave `is_file` false, and incorrectly add cyan directory \
+                 coloring: {out:?}"
             );
         }
     }
