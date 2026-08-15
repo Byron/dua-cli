@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+Support providing walk roots with their metadata already set due to bulk-reading.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 1 day passed between releases.
+ - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #369 from tamird/macos-prepared-roots ([`3b1659e`](https://github.com/Byron/dua-cli/commit/3b1659e47ae28b3facd1d7d261132023b2509d1a))
+    - Review ([`ffb2a2e`](https://github.com/Byron/dua-cli/commit/ffb2a2ef0fc3b95c4d2e0ef07f228699aa750a44))
+    - Reuse bulk metadata for macOS aggregation roots ([`d45a2f8`](https://github.com/Byron/dua-cli/commit/d45a2f85451d900b19770f1e64bddd201e9d7429))
+</details>
+
 ## 3.0.0 (2026-08-14)
 
 macOS specificy bulk-readtree implementation for 30% performance boost on supported filesystems.
@@ -13,7 +38,7 @@ macOS specificy bulk-readtree implementation for 30% performance boost on suppor
 
 <csr-read-only-do-not-edit/>
 
- - 5 commits contributed to the release over the course of 9 calendar days.
+ - 6 commits contributed to the release over the course of 9 calendar days.
  - 9 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -25,6 +50,7 @@ macOS specificy bulk-readtree implementation for 30% performance boost on suppor
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v3.0.0 ([`ac9766c`](https://github.com/Byron/dua-cli/commit/ac9766cdd01b6ea7ff81e76a8fd9e9332d12cbcc))
     - Prepare changelog prior to release ([`40c2816`](https://github.com/Byron/dua-cli/commit/40c28166a4beb903e87df85e23916f27e15ef26b))
     - Merge pull request #367 from tamird/macos-native-traversal ([`e68868c`](https://github.com/Byron/dua-cli/commit/e68868c1fd28d089baa91126998dc25fb5216e23))
     - Review ([`872b6be`](https://github.com/Byron/dua-cli/commit/872b6beffaf3f354dee3e1f670d4fe45615b76a8))
