@@ -212,22 +212,15 @@ fn main() -> Result<()> {
             let config = dua::Config::load()?;
             let byte_format = traversal.byte_format(&config);
             let walk_options = walk_options_from(&traversal)?;
-            let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
-            let stdout = io::stdout();
-            let stdout_locked = stdout.lock();
-            let (res, stats) = dua::aggregate(
-                stdout_locked,
-                stderr_if_tty(),
+            let inputs = extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
+            run_aggregation(
+                inputs,
                 walk_options,
                 !no_total,
                 !no_sort,
                 byte_format,
-                input_paths,
-            )?;
-            if statistics {
-                writeln!(io::stderr(), "{stats:?}").ok();
-            }
-            res
+                statistics,
+            )?
         }
         Some(Completions { shell }) => {
             let mut cmd = options::Args::command();
@@ -249,23 +242,57 @@ fn main() -> Result<()> {
             let config = dua::Config::load()?;
             let byte_format = global_traversal.byte_format(&config);
             let walk_options = walk_options_from(&global_traversal)?;
-            let input_paths = extract_paths_maybe_set_cwd(global_traversal.input, &walk_options)?;
-            let stdout = io::stdout();
-            let stdout_locked = stdout.lock();
-            dua::aggregate(
-                stdout_locked,
-                stderr_if_tty(),
-                walk_options,
-                true,
-                true,
-                byte_format,
-                input_paths,
-            )?
-            .0
+            let inputs =
+                extract_aggregate_inputs_maybe_set_cwd(global_traversal.input, &walk_options)?;
+            run_aggregation(inputs, walk_options, true, true, byte_format, false)?
         }
     };
 
     process::exit(res.to_exit_code());
+}
+
+enum AggregateInputs {
+    Paths(Vec<PathBuf>),
+    #[cfg(any(windows, target_os = "macos"))]
+    Entries(Vec<dua_core::Entry>),
+}
+
+fn run_aggregation(
+    inputs: AggregateInputs,
+    walk_options: dua::WalkOptions,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: dua::ByteFormat,
+    show_statistics: bool,
+) -> Result<dua::WalkResult> {
+    let stdout = io::stdout();
+    let stdout_locked = stdout.lock();
+    let (result, statistics) = match inputs {
+        AggregateInputs::Paths(paths) => dua::aggregate(
+            stdout_locked,
+            stderr_if_tty(),
+            walk_options,
+            compute_total,
+            sort_by_size_in_bytes,
+            byte_format,
+            paths,
+        ),
+        #[cfg(any(windows, target_os = "macos"))]
+        AggregateInputs::Entries(entries) => dua::aggregate_entries(
+            stdout_locked,
+            stderr_if_tty(),
+            walk_options,
+            compute_total,
+            sort_by_size_in_bytes,
+            byte_format,
+            entries,
+        ),
+    }?;
+    if show_statistics {
+        writeln!(io::stderr(), "{statistics:?}").ok();
+    }
+
+    Ok(result)
 }
 
 fn is_default_ignore_dirs(list: &[PathBuf]) -> bool {
@@ -321,6 +348,62 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
     }
 
     Ok(walk_options)
+}
+
+fn extract_aggregate_inputs_maybe_set_cwd(
+    paths: Vec<PathBuf>,
+    walk_options: &dua::WalkOptions,
+) -> Result<AggregateInputs, io::Error> {
+    #[cfg(any(windows, target_os = "macos"))]
+    if paths.is_empty() || paths.len() == 1 && paths[0].is_dir() {
+        if let Some(path) = paths.first() {
+            std::env::set_current_dir(path)?;
+        }
+
+        #[cfg(target_os = "macos")]
+        let cwd = std::env::current_dir()?;
+        #[cfg(target_os = "macos")]
+        let cwd_device = (!walk_options.cross_filesystems)
+            .then(|| device_id(&cwd).ok())
+            .flatten();
+        let parent_path: std::sync::Arc<Path> = Path::new("").into();
+        let mut entries = Vec::new();
+
+        for entry in dua_core::read_dir(Path::new("."))? {
+            let mut entry = entry?;
+            if entry.file_type.is_symlink() {
+                continue;
+            }
+            entry.parent_path = std::sync::Arc::clone(&parent_path);
+
+            #[cfg(target_os = "macos")]
+            if let Some(cwd_device) = cwd_device {
+                let same_device = entry.metadata.as_ref().map_or_else(
+                    |_| device_id(&entry.path()).map_or(true, |device| device == cwd_device),
+                    |metadata| metadata.dev() == cwd_device,
+                );
+                if !same_device {
+                    continue;
+                }
+            }
+
+            if walk_options
+                .ignore_patterns
+                .as_ref()
+                .is_some_and(|patterns| {
+                    patterns.is_excluded(Path::new(&entry.file_name), entry.file_type.is_dir())
+                })
+            {
+                continue;
+            }
+
+            entries.push(entry);
+        }
+        entries.sort_by(|left, right| left.file_name.cmp(&right.file_name));
+        return Ok(AggregateInputs::Entries(entries));
+    }
+
+    extract_paths_maybe_set_cwd(paths, walk_options).map(AggregateInputs::Paths)
 }
 
 fn extract_paths_maybe_set_cwd(
