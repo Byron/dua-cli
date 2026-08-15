@@ -3,6 +3,7 @@
 use std::{
     ffi::OsString,
     io,
+    num::NonZeroU64,
     os::unix::ffi::OsStringExt,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -15,6 +16,8 @@ pub(super) const VLNK: u32 = 5;
 // These `<sys/stat.h>` filesystem flags and accounting units are absent from `libc`.
 pub(super) const SF_FIRMLINK: u32 = 0x0080_0000;
 pub(super) const STAT_BLOCK_BYTES: u64 = 512;
+// `<sys/stat.h>` defines this extended flag, but `libc` does not expose it.
+const EF_MAY_SHARE_BLOCKS: u64 = 0x0000_0001;
 // Entry-specific bulk enumeration errors are defined by `<sys/attr.h>`.
 const ATTR_CMN_ERROR: libc::attrgroup_t = 0x2000_0000;
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
@@ -40,6 +43,9 @@ const DIRECTORY_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_DIR_LINKCOUNT
     | libc::ATTR_DIR_DATALENGTH;
 const FILE_ATTRIBUTES: libc::attrgroup_t =
     libc::ATTR_FILE_LINKCOUNT | libc::ATTR_FILE_ALLOCSIZE | libc::ATTR_FILE_DATALENGTH;
+const APFS_FILE_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_FILE_DATAALLOCSIZE;
+const APFS_EXTENDED_ATTRIBUTES: libc::attrgroup_t =
+    libc::ATTR_CMNEXT_CLONEID | libc::ATTR_CMNEXT_EXT_FLAGS;
 
 /// `getattrlistbulk(2)` requires each returned record to begin on an eight-byte boundary.
 #[repr(align(8))]
@@ -66,8 +72,25 @@ pub(super) struct RecordHeader {
     returned: libc::attribute_set_t,
 }
 
-pub(super) fn requested_attributes(list_only: bool) -> libc::attrlist {
-    libc::attrlist {
+/// Capacity and alignment of the explicit-root response, without overlaying its packed bytes.
+#[repr(C)]
+pub(super) struct RootCloneResponse {
+    header: RecordHeader,
+    device: libc::dev_t,
+    inode: u64,
+    data_allocated: u64,
+    clone_id: u64,
+    extended_flags: u64,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct DataFork {
+    pub(super) allocated_size: u64,
+    pub(super) clone_id: Option<NonZeroU64>,
+}
+
+pub(super) fn requested_attributes(list_only: bool, include_apfs: bool) -> libc::attrlist {
+    let mut attributes = libc::attrlist {
         bitmapcount: libc::ATTR_BIT_MAP_COUNT,
         reserved: 0,
         commonattr: if list_only {
@@ -79,6 +102,23 @@ pub(super) fn requested_attributes(list_only: bool) -> libc::attrlist {
         dirattr: if list_only { 0 } else { DIRECTORY_ATTRIBUTES },
         fileattr: if list_only { 0 } else { FILE_ATTRIBUTES },
         forkattr: 0,
+    };
+    if include_apfs && !list_only {
+        attributes.fileattr |= APFS_FILE_ATTRIBUTES;
+        attributes.forkattr = APFS_EXTENDED_ATTRIBUTES;
+    }
+    attributes
+}
+
+pub(super) fn root_clone_attributes() -> libc::attrlist {
+    libc::attrlist {
+        bitmapcount: libc::ATTR_BIT_MAP_COUNT,
+        reserved: 0,
+        commonattr: libc::ATTR_CMN_RETURNED_ATTRS | libc::ATTR_CMN_DEVID | libc::ATTR_CMN_FILEID,
+        volattr: 0,
+        dirattr: 0,
+        fileattr: APFS_FILE_ATTRIBUTES,
+        forkattr: APFS_EXTENDED_ATTRIBUTES,
     }
 }
 
@@ -98,6 +138,24 @@ pub(super) struct ParsedRecord {
     pub(super) file_links: Option<u64>,
     pub(super) file_length: Option<u64>,
     pub(super) file_allocated: Option<u64>,
+    file_data_allocated: Option<u64>,
+    clone_id: Option<NonZeroU64>,
+    extended_flags: Option<u64>,
+}
+
+impl ParsedRecord {
+    /// Clone identity is meaningful only when independent data-fork allocation is also known.
+    pub(super) fn data_fork(&self) -> Option<DataFork> {
+        let allocated_size = self.file_data_allocated?;
+        let clone_id = self
+            .extended_flags
+            .filter(|flags| flags & EF_MAY_SHARE_BLOCKS != 0)
+            .and(self.clone_id);
+        Some(DataFork {
+            allocated_size,
+            clone_id,
+        })
+    }
 }
 
 pub(super) fn read_record_length(bytes: &[u8]) -> io::Result<usize> {
@@ -213,6 +271,16 @@ pub(super) fn parse_record(bytes: &[u8]) -> io::Result<ParsedRecord> {
     }
     if returned.fileattr & libc::ATTR_FILE_DATALENGTH != 0 {
         record.file_length = Some(cursor.take_u64()?);
+    }
+    if returned.fileattr & libc::ATTR_FILE_DATAALLOCSIZE != 0 {
+        record.file_data_allocated = Some(cursor.take_u64()?);
+    }
+
+    if returned.forkattr & libc::ATTR_CMNEXT_CLONEID != 0 {
+        record.clone_id = NonZeroU64::new(cursor.take_u64()?);
+    }
+    if returned.forkattr & libc::ATTR_CMNEXT_EXT_FLAGS != 0 {
+        record.extended_flags = Some(cursor.take_u64()?);
     }
     Ok(record)
 }

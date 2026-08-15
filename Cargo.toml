@@ -58,7 +58,7 @@ tui-crossplatform = [
 trash-move = ["trash"]
 
 [dependencies]
-dua-core = { path = "crates/dua-lib", version = "3.1.0" }
+dua-core = { path = "crates/dua-lib", version = "3.2.0" }
 clap = { version = "4.0.29", features = ["derive", "env"] }
 clap_complete = "4.5.54"
 byte-unit = { version = "5.2.5", features = ["u128"] }

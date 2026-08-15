@@ -13,9 +13,15 @@ fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) ->
 }
 
 #[cfg(target_os = "macos")]
-#[allow(clippy::unnecessary_wraps)]
-fn size_on_disk(_entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
-    Ok(metadata.allocated_size())
+fn allocated_size(metadata: &crate::walk::Metadata, inodes: &mut InodeFilter) -> u64 {
+    if inodes.add_clone(metadata) {
+        metadata.allocated_size()
+    } else {
+        // Clone identifiers cover only the data fork; resource forks remain private.
+        metadata
+            .allocated_size()
+            .saturating_sub(metadata.data_allocated_size())
+    }
 }
 
 #[cfg(windows)]
@@ -160,7 +166,7 @@ fn aggregate_inner(
     let mut progress_visible = false;
     let mut next_output = 0;
 
-    // With multiple roots, a shared hard link is attributed to whichever root reaches it first.
+    // Shared hard links and cloned data belong to whichever root reaches them first.
     for (root_idx, event) in
         walk_options.iter_from_paths(roots, false, crate::walk::Order::Completion)
     {
@@ -205,10 +211,17 @@ fn aggregate_inner(
                         if walk_options.apparent_size {
                             m.len()
                         } else {
-                            size_on_disk(&entry, m).unwrap_or_else(|_| {
-                                aggregate.errors += 1;
-                                0
-                            })
+                            #[cfg(target_os = "macos")]
+                            {
+                                allocated_size(m, &mut inodes)
+                            }
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                size_on_disk(&entry, m).unwrap_or_else(|_| {
+                                    aggregate.errors += 1;
+                                    0
+                                })
+                            }
                         }
                     }
                     Ok(_) => 0,
@@ -501,6 +514,162 @@ mod tests {
                 "overlapping directory totals with count_hard_links={count_hard_links}"
             );
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn full_apfs_clones_preserve_private_forks_hard_links_and_logical_sizes() {
+        use std::io::Write as _;
+        use std::os::unix::fs::MetadataExt;
+
+        const STAT_BLOCK_BYTES: u128 = 512;
+        const RESOURCE_FORK_BYTES: usize = 4096;
+        const DATA_FORK_BYTES: usize = RESOURCE_FORK_BYTES * 2;
+
+        let directory = tempfile::tempdir().unwrap();
+        let original = directory.path().join("original");
+        let clone = directory.path().join("clone");
+        let partial_clone = directory.path().join("partial-clone");
+        let hard_link = directory.path().join("hard-link");
+        std::fs::write(&original, vec![7; DATA_FORK_BYTES]).unwrap();
+        std::fs::copy(&original, &clone).unwrap();
+        std::fs::copy(&original, &partial_clone).unwrap();
+        std::fs::write(clone.join("..namedfork/rsrc"), vec![5; RESOURCE_FORK_BYTES]).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&partial_clone)
+            .unwrap()
+            .write_all(&[9])
+            .unwrap();
+        std::fs::hard_link(&original, &hard_link).unwrap();
+
+        let original_metadata = std::fs::metadata(&original).unwrap();
+        let clone_metadata = std::fs::metadata(&clone).unwrap();
+        let partial_metadata = std::fs::metadata(&partial_clone).unwrap();
+        let directory_metadata = std::fs::metadata(directory.path()).unwrap();
+        let allocated_size = u128::from(original_metadata.blocks()) * STAT_BLOCK_BYTES;
+        let clone_allocated_size = u128::from(clone_metadata.blocks()) * STAT_BLOCK_BYTES;
+        let partial_allocated_size = u128::from(partial_metadata.blocks()) * STAT_BLOCK_BYTES;
+        let directory_allocated_size = u128::from(directory_metadata.blocks()) * STAT_BLOCK_BYTES;
+        let clone_private_size = clone_allocated_size - allocated_size;
+        let apparent_size = u128::from(original_metadata.len());
+        let directory_apparent_size = u128::from(directory_metadata.len());
+        assert_ne!(
+            clone_private_size, 0,
+            "the cloned fixture must own separately allocated resource-fork blocks"
+        );
+
+        let directory_root = || vec![directory.path().to_owned()];
+        for (case, roots, apparent_size_requested, count_hard_links, expected_total) in [
+            (
+                "full and partial clones retain private forks",
+                directory_root(),
+                false,
+                false,
+                directory_allocated_size
+                    + allocated_size
+                    + partial_allocated_size
+                    + clone_private_size,
+            ),
+            (
+                "explicit hard links remain counted",
+                directory_root(),
+                false,
+                true,
+                directory_allocated_size
+                    + allocated_size * 2
+                    + partial_allocated_size
+                    + clone_private_size,
+            ),
+            (
+                "logical sizes remain independent",
+                directory_root(),
+                true,
+                false,
+                directory_apparent_size + apparent_size * 3,
+            ),
+            (
+                "logical sizes count requested hard links",
+                directory_root(),
+                true,
+                true,
+                directory_apparent_size + apparent_size * 4,
+            ),
+            (
+                "clone-first roots preserve explicit hard links",
+                vec![clone.clone(), original.clone(), hard_link],
+                false,
+                true,
+                allocated_size * 2 + clone_private_size,
+            ),
+            (
+                "repeated cloned roots are not distinct clone inodes",
+                vec![clone.clone(), clone, original],
+                false,
+                false,
+                clone_allocated_size * 2,
+            ),
+        ] {
+            let mut output = Vec::new();
+            let (result, _) = aggregate(
+                &mut output,
+                None::<Vec<u8>>,
+                WalkOptions {
+                    threads: 2,
+                    count_hard_links,
+                    apparent_size: apparent_size_requested,
+                    cross_filesystems: true,
+                    ignore_dirs: std::collections::BTreeSet::default(),
+                    ignore_patterns: None,
+                },
+                true,
+                true,
+                ByteFormat::Bytes,
+                roots,
+            )
+            .unwrap();
+
+            assert_eq!(result.num_errors, 0, "unexpected traversal errors: {case}");
+            assert_eq!(
+                byte_counts(&output).last().copied(),
+                Some(expected_total),
+                "incorrect aggregate for {case}"
+            );
+        }
+
+        let entries = dua_core::read_dir(directory.path())
+            .unwrap()
+            .collect::<std::io::Result<Vec<_>>>()
+            .unwrap();
+        let mut output = Vec::new();
+        let (result, _) = aggregate_entries(
+            &mut output,
+            None::<Vec<u8>>,
+            WalkOptions {
+                threads: 2,
+                count_hard_links: false,
+                apparent_size: false,
+                cross_filesystems: false,
+                ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
+            },
+            true,
+            true,
+            ByteFormat::Bytes,
+            entries,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.num_errors, 0,
+            "prepared sibling roots should retain their cached filesystem identities"
+        );
+        assert_eq!(
+            byte_counts(&output).last().copied(),
+            Some(allocated_size + partial_allocated_size + clone_private_size),
+            "prepared sibling roots should deduplicate cloned data, retain private forks, \
+             and omit their parent directory"
+        );
     }
 
     #[test]

@@ -1,11 +1,15 @@
 //! macOS directory enumeration and metadata collection using `getattrlistbulk`.
 
 use std::{
-    ffi::OsString,
+    ffi::{CString, OsString},
     fs, io,
+    num::NonZeroU64,
     os::{
         fd::{AsRawFd, OwnedFd},
-        unix::fs::{MetadataExt, OpenOptionsExt},
+        unix::{
+            ffi::OsStrExt,
+            fs::{MetadataExt, OpenOptionsExt},
+        },
     },
     path::{Path, PathBuf},
     sync::Arc,
@@ -15,8 +19,9 @@ use std::{
 mod attributes;
 
 use attributes::{
-    AlignedBuffer, ParsedRecord, RecordHeader, SF_FIRMLINK, STAT_BLOCK_BYTES, VDIR, VLNK, VNON,
-    VREG, invalid_data, parse_record, read_record_length, requested_attributes,
+    AlignedBuffer, DataFork, ParsedRecord, RecordHeader, RootCloneResponse, SF_FIRMLINK,
+    STAT_BLOCK_BYTES, VDIR, VLNK, VNON, VREG, invalid_data, parse_record, read_record_length,
+    requested_attributes, root_clone_attributes,
 };
 
 const DIRECTORY_BUFFER_BYTES: usize = 64 * 1024;
@@ -38,7 +43,13 @@ pub struct Entry {
 impl Entry {
     /// Create an entry for an explicitly requested root without following symbolic links.
     pub fn from_path(path: &Path) -> io::Result<Self> {
-        let metadata = Metadata::from_std(&fs::symlink_metadata(path)?);
+        let metadata = fs::symlink_metadata(path)?;
+        let data_fork = if metadata.is_file() && metadata.blocks() != 0 {
+            clone_attributes_at(path, &metadata)
+        } else {
+            None
+        };
+        let metadata = Metadata::from_std(&metadata, data_fork);
         Ok(Self {
             depth: 0,
             file_name: path.file_name().unwrap_or(path.as_os_str()).to_owned(),
@@ -99,6 +110,7 @@ impl FileType {
 pub struct Metadata {
     len: u64,
     allocated_size: u64,
+    data_fork: Option<DataFork>,
     modified: Option<SystemTime>,
     dev: u64,
     ino: u64,
@@ -107,16 +119,19 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    fn from_std(metadata: &fs::Metadata) -> Self {
+    fn from_std(metadata: &fs::Metadata, data_fork: Option<DataFork>) -> Self {
         let allocated_size = metadata.blocks().saturating_mul(STAT_BLOCK_BYTES);
+        let file_type = FileType::from_std(metadata.file_type());
         Self {
             len: metadata.len(),
             allocated_size,
+            data_fork: data_fork
+                .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size),
             modified: metadata.modified().ok(),
             dev: metadata.dev(),
             ino: metadata.ino(),
             nlink: metadata.nlink(),
-            file_type: FileType::from_std(metadata.file_type()),
+            file_type,
         }
     }
 
@@ -131,6 +146,13 @@ impl Metadata {
     #[must_use]
     pub fn allocated_size(&self) -> u64 {
         self.allocated_size
+    }
+
+    /// Return data-fork allocation, or total allocation when separate fork metadata is unavailable.
+    #[must_use]
+    pub fn data_allocated_size(&self) -> u64 {
+        self.data_fork
+            .map_or(self.allocated_size, |fork| fork.allocated_size)
     }
 
     /// Return the allocated size as 512-byte filesystem accounting blocks.
@@ -171,6 +193,14 @@ impl Metadata {
     pub fn is_file(&self) -> bool {
         self.file_type.is_file()
     }
+
+    /// Return the shared APFS content identifier for a file that may have full clones.
+    ///
+    /// Clone identifiers are meaningful only within the same filesystem device.
+    #[must_use]
+    pub fn clone_id(&self) -> Option<NonZeroU64> {
+        self.data_fork.and_then(|fork| fork.clone_id)
+    }
 }
 
 pub(crate) struct ReadDir {
@@ -180,6 +210,7 @@ pub(crate) struct ReadDir {
     offset: usize,
     remaining: usize,
     exhausted: bool,
+    extended_attributes: bool,
     listing_error: Option<i32>,
     parent_path: Arc<Path>,
     depth: usize,
@@ -199,6 +230,7 @@ impl ReadDir {
             offset: 0,
             remaining: 0,
             exhausted: false,
+            extended_attributes: true,
             listing_error: None,
             parent_path: path,
             depth,
@@ -212,7 +244,8 @@ impl ReadDir {
     /// because `self.fallback` was initialized. Returns `false` when the directory is exhausted.
     fn refill(&mut self) -> io::Result<bool> {
         loop {
-            let mut attributes = requested_attributes(self.listing_error.is_some());
+            let mut attributes =
+                requested_attributes(self.listing_error.is_some(), self.extended_attributes);
             // SAFETY: the directory descriptor is owned and remains open, `attributes` is a valid
             // initialized Darwin attrlist, and the aligned buffer is writable for its exact size.
             let count = unsafe {
@@ -221,7 +254,11 @@ impl ReadDir {
                     (&raw mut attributes).cast(),
                     self.buffer.as_mut_bytes().as_mut_ptr().cast(),
                     self.buffer.as_bytes().len(),
-                    0,
+                    if self.extended_attributes {
+                        u64::from(libc::FSOPT_ATTR_CMN_EXTENDED)
+                    } else {
+                        0
+                    },
                 )
             };
             if count > 0 {
@@ -240,6 +277,16 @@ impl ReadDir {
             }
             if self.listing_error.is_none() && error.raw_os_error() == Some(libc::EACCES) {
                 self.listing_error = Some(libc::EACCES);
+                self.extended_attributes = false;
+                continue;
+            }
+            if self.extended_attributes
+                && matches!(
+                    error.raw_os_error(),
+                    Some(libc::EINVAL | libc::ENOTSUP | libc::EOPNOTSUPP | libc::ENOSYS)
+                )
+            {
+                self.extended_attributes = false;
                 continue;
             }
             if error.kind() == io::ErrorKind::Unsupported
@@ -265,7 +312,7 @@ impl ReadDir {
     fn fallback_entry(&self, entry: fs::DirEntry) -> Entry {
         let file_name = entry.file_name();
         let metadata =
-            fs::symlink_metadata(entry.path()).map(|metadata| Metadata::from_std(&metadata));
+            fs::symlink_metadata(entry.path()).map(|metadata| Metadata::from_std(&metadata, None));
         let file_type = metadata.as_ref().map_or_else(
             |_| {
                 entry
@@ -324,7 +371,7 @@ impl ReadDir {
             }
             let metadata_from_path = || {
                 fs::symlink_metadata(self.parent_path.join(&file_name))
-                    .map(|metadata| Metadata::from_std(&metadata))
+                    .map(|metadata| Metadata::from_std(&metadata, None))
             };
             // XNU uses NOCROSSMOUNT for bulk lookup; stat the visible mount or firmlink.
             let special_mount = parsed.flags & SF_FIRMLINK != 0
@@ -376,6 +423,34 @@ impl Iterator for ReadDir {
     }
 }
 
+fn clone_attributes_at(path: &Path, metadata: &fs::Metadata) -> Option<DataFork> {
+    let path = CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut attributes = root_clone_attributes();
+    let mut buffer = AlignedBuffer::<{ size_of::<RootCloneResponse>() }>::new();
+    // SAFETY: `path` is a valid NUL-terminated C string, `attributes` is initialized, and the
+    // aligned output array remains uniquely writable for its full reported byte length.
+    let result = unsafe {
+        libc::getattrlist(
+            path.as_ptr(),
+            (&raw mut attributes).cast(),
+            buffer.as_mut_bytes().as_mut_ptr().cast(),
+            buffer.as_bytes().len(),
+            libc::FSOPT_ATTR_CMN_EXTENDED | libc::FSOPT_NOFOLLOW,
+        )
+    };
+    if result != 0 {
+        return None;
+    }
+    let bytes = buffer.as_bytes();
+    let length = read_record_length(bytes).ok()?;
+    let record = bytes.get(..length)?;
+    let parsed = parse_record(record).ok()?;
+    if parsed.device != Some(metadata.dev()) || parsed.inode != Some(metadata.ino()) {
+        return None;
+    }
+    parsed.data_fork()
+}
+
 impl ParsedRecord {
     fn metadata(&self, file_type: FileType) -> io::Result<Metadata> {
         let (len, allocated_size, nlink) = if file_type.is_dir() {
@@ -401,6 +476,9 @@ impl ParsedRecord {
         Ok(Metadata {
             len,
             allocated_size,
+            data_fork: self
+                .data_fork()
+                .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size),
             modified: Some(
                 self.modified
                     .ok_or_else(|| invalid_data("missing modification timestamp"))?,
