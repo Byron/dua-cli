@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.42.1 (2026-08-15)
 
 Starting directories with a large amount of files, like 50k, now see a 5x speedup on macOS and Windows as bulk-reading is also done there. Note also that this is still a small absolute difference, 100ms vs 500ms, but a good demonstration of how much large trees with a lot of such directories will benefit  by this, as these small absolute improvements accumulate.
 
