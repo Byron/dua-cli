@@ -411,6 +411,10 @@ fn extract_paths_maybe_set_cwd(
     walk_options: &dua::WalkOptions,
 ) -> Result<Vec<PathBuf>, io::Error> {
     let cross_filesystems = walk_options.cross_filesystems;
+    // Paths were explicitly passed by the user on the command-line; per `--ignore-dirs`'s
+    // documented behavior, these are never subject to `-i`/`--ignore-dirs` filtering, only
+    // paths that we ourselves expand into roots below are.
+    let paths_were_expanded = paths.is_empty() || (paths.len() == 1 && paths[0].is_dir());
     if paths.len() == 1 && paths[0].is_dir() {
         std::env::set_current_dir(&paths[0])?;
         paths.clear();
@@ -439,6 +443,15 @@ fn extract_paths_maybe_set_cwd(
                 .ignore_patterns
                 .as_ref()
                 .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
+        })
+        .filter(|path| {
+            // Only paths we expanded into roots ourselves are eligible for --ignore-dirs here,
+            // explicitly passed top-level paths are never ignored.
+            if !paths_were_expanded || walk_options.ignore_dirs.is_empty() {
+                return true;
+            }
+            !gix::path::realpath_opts(path, &cwd, 32)
+                .is_ok_and(|real| walk_options.ignore_dirs.contains(&real))
         })
         .collect())
 }
