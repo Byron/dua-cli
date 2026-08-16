@@ -111,10 +111,10 @@ impl FileType {
 pub struct Metadata {
     len: u64,
     allocated_size: u64,
-    /// Data-fork allocation and clone identity, present only when extended metadata was requested
-    /// and supported by the filesystem. Unlike `ino`, which identifies hard links to one file,
-    /// the clone identity can be shared by copy-on-write clones with distinct inodes.
-    data_fork: Option<DataFork>,
+    /// Data-fork allocation, or total allocation when extended metadata is unavailable.
+    data_allocated_size: u64,
+    /// Unlike `ino`, clone identity can be shared by copy-on-write clones with distinct inodes.
+    clone_id: Option<NonZeroU64>,
     modified: Option<SystemTime>,
     dev: u64,
     ino: u64,
@@ -126,11 +126,13 @@ impl Metadata {
     fn from_std(metadata: &fs::Metadata, data_fork: Option<DataFork>) -> Self {
         let allocated_size = metadata.blocks().saturating_mul(STAT_BLOCK_BYTES);
         let file_type = FileType::from_std(metadata.file_type());
+        let data_fork =
+            data_fork.filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size);
         Self {
             len: metadata.len(),
             allocated_size,
-            data_fork: data_fork
-                .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size),
+            data_allocated_size: data_fork.map_or(allocated_size, |fork| fork.allocated_size),
+            clone_id: data_fork.and_then(|fork| fork.clone_id),
             modified: metadata.modified().ok(),
             dev: metadata.dev(),
             ino: metadata.ino(),
@@ -155,8 +157,7 @@ impl Metadata {
     /// Return data-fork allocation, or total allocation when separate fork metadata is unavailable.
     #[must_use]
     pub fn data_allocated_size(&self) -> u64 {
-        self.data_fork
-            .map_or(self.allocated_size, |fork| fork.allocated_size)
+        self.data_allocated_size
     }
 
     /// Return the allocated size as 512-byte filesystem accounting blocks.
@@ -203,7 +204,7 @@ impl Metadata {
     /// Clone identifiers are meaningful only within the same filesystem device.
     #[must_use]
     pub fn clone_id(&self) -> Option<NonZeroU64> {
-        self.data_fork.and_then(|fork| fork.clone_id)
+        self.clone_id
     }
 }
 
@@ -477,13 +478,15 @@ impl ParsedRecord {
                     .ok_or_else(|| invalid_data("missing file hard-link count"))?,
             )
         };
+        let data_fork = self
+            .data_fork()
+            .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size);
 
         Ok(Metadata {
             len,
             allocated_size,
-            data_fork: self
-                .data_fork()
-                .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size),
+            data_allocated_size: data_fork.map_or(allocated_size, |fork| fork.allocated_size),
+            clone_id: data_fork.and_then(|fork| fork.clone_id),
             modified: Some(
                 self.modified
                     .ok_or_else(|| invalid_data("missing modification timestamp"))?,
