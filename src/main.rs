@@ -445,13 +445,12 @@ fn extract_paths_maybe_set_cwd(
                 .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
         })
         .filter(|path| {
-            // Only paths we expanded into roots ourselves are eligible for --ignore-dirs here,
-            // explicitly passed top-level paths are never ignored.
             if !paths_were_expanded || walk_options.ignore_dirs.is_empty() {
                 return true;
             }
-            !gix::path::realpath_opts(path, &cwd, 32)
-                .is_ok_and(|real| walk_options.ignore_dirs.contains(&real))
+            let is_ignored = gix::path::realpath_opts(path, &cwd, 32)
+                .is_ok_and(|real| walk_options.ignore_dirs.contains(&real));
+            !is_ignored
         })
         .collect())
 }
