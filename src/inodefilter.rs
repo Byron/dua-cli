@@ -140,9 +140,16 @@ mod apfs {
     use std::collections::HashSet;
 
     impl super::InodeFilter {
-        /// Count a cloned data stream once without suppressing repeated visits to its inode.
-        pub(crate) fn add_clone(&mut self, metadata: &crate::walk::Metadata) -> bool {
-            self.apfs.add_clone(metadata)
+        /// Return allocated bytes while counting a cloned data stream only once.
+        pub(crate) fn allocated_size(&mut self, metadata: &crate::walk::Metadata) -> u64 {
+            if self.apfs.add_clone(metadata) {
+                metadata.allocated_size()
+            } else {
+                // Clone identifiers cover only the data fork; resource forks remain private.
+                metadata
+                    .allocated_size()
+                    .saturating_sub(metadata.data_allocated_size())
+            }
         }
     }
 

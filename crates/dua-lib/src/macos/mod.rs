@@ -42,13 +42,14 @@ pub struct Entry {
 
 impl Entry {
     /// Create an entry for an explicitly requested root without following symbolic links.
-    pub fn from_path(path: &Path) -> io::Result<Self> {
+    pub fn from_path(path: &Path, options: crate::Options) -> io::Result<Self> {
         let metadata = fs::symlink_metadata(path)?;
-        let data_fork = if metadata.is_file() && metadata.blocks() != 0 {
-            clone_attributes_at(path, &metadata)
-        } else {
-            None
-        };
+        let data_fork =
+            if options.apfs_clone_metadata && metadata.is_file() && metadata.blocks() != 0 {
+                clone_attributes_at(path, &metadata)
+            } else {
+                None
+            };
         let metadata = Metadata::from_std(&metadata, data_fork);
         Ok(Self {
             depth: 0,
@@ -110,6 +111,9 @@ impl FileType {
 pub struct Metadata {
     len: u64,
     allocated_size: u64,
+    /// Data-fork allocation and clone identity, present only when extended metadata was requested
+    /// and supported by the filesystem. Unlike `ino`, which identifies hard links to one file,
+    /// the clone identity can be shared by copy-on-write clones with distinct inodes.
     data_fork: Option<DataFork>,
     modified: Option<SystemTime>,
     dev: u64,
@@ -210,6 +214,8 @@ pub(crate) struct ReadDir {
     offset: usize,
     remaining: usize,
     exhausted: bool,
+    /// Whether bulk reads request APFS extended attributes; disabled when they cannot be served.
+    /// Note that this makes the call more expensive.
     extended_attributes: bool,
     listing_error: Option<i32>,
     parent_path: Arc<Path>,
@@ -217,7 +223,7 @@ pub(crate) struct ReadDir {
 }
 
 impl ReadDir {
-    pub(crate) fn open(path: Arc<Path>, depth: usize) -> io::Result<Self> {
+    pub(crate) fn open(path: Arc<Path>, depth: usize, options: crate::Options) -> io::Result<Self> {
         let directory: OwnedFd = fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_DIRECTORY)
@@ -230,7 +236,7 @@ impl ReadDir {
             offset: 0,
             remaining: 0,
             exhausted: false,
-            extended_attributes: true,
+            extended_attributes: options.apfs_clone_metadata,
             listing_error: None,
             parent_path: path,
             depth,
@@ -281,10 +287,9 @@ impl ReadDir {
                 continue;
             }
             if self.extended_attributes
-                && matches!(
-                    error.raw_os_error(),
-                    Some(libc::EINVAL | libc::ENOTSUP | libc::EOPNOTSUPP | libc::ENOSYS)
-                )
+                && error.raw_os_error().is_some_and(|errno| {
+                    [libc::EINVAL, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOSYS].contains(&errno)
+                })
             {
                 self.extended_attributes = false;
                 continue;

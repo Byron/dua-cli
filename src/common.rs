@@ -257,6 +257,8 @@ pub struct WalkOptions {
     /// Gitignore-style patterns whose matches are left out of the traversal entirely.
     /// `None` if no pattern was configured.
     pub ignore_patterns: Option<IgnorePatterns>,
+    /// Platform-specific metadata requested during traversal.
+    pub metadata_options: crate::TraversalOptions,
 }
 
 /// Tells whether an entry found under the root with the given index is left out of the traversal.
@@ -308,8 +310,10 @@ impl WalkOptions {
                 #[cfg(any(windows, target_os = "macos"))]
                 indexed_roots.push((
                     root.index,
-                    root.entry
-                        .map_or_else(|| walk::Entry::from_path(&root.path), Ok),
+                    root.entry.map_or_else(
+                        || walk::Entry::from_path(&root.path, self.metadata_options),
+                        Ok,
+                    ),
                 ));
                 #[cfg(not(any(windows, target_os = "macos")))]
                 indexed_roots.push((root.index, root.path));
@@ -339,21 +343,24 @@ impl WalkOptions {
             })
         };
         let is_excluded_while_walking = Arc::clone(&is_excluded);
+        let descend = move |root_idx: usize, entry: &walk::Entry| {
+            (cross_filesystems
+                || entry.metadata.as_ref().map_or(true, |metadata| {
+                    crossdev::is_same_device(device_ids[root_idx], metadata)
+                }))
+                && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
+                && !is_excluded_while_walking(root_idx, entry)
+        };
 
-        walk_roots(
+        let walk = walk_roots(
             indexed_roots,
             self.threads,
             order,
-            move |root_idx, entry| {
-                (cross_filesystems
-                    || entry.metadata.as_ref().map_or(true, |metadata| {
-                        crossdev::is_same_device(device_ids[root_idx], metadata)
-                    }))
-                    && (entry.depth == 0 || !ignore_directory(&entry.path(), &ignore_dirs, &cwd))
-                    && !is_excluded_while_walking(root_idx, entry)
-            },
-        )
-        .filter(move |(root_idx, event)| match event {
+            self.metadata_options,
+            descend,
+        );
+
+        walk.filter(move |(root_idx, event)| match event {
             walk::RootEvent::Entry(Ok(entry)) => {
                 (!skip_root || entry.depth > 0) && !is_excluded(*root_idx, entry)
             }
@@ -490,6 +497,7 @@ mod tests {
             cross_filesystems: true,
             ignore_dirs: canonicalize_ignore_dirs(&[root.path().to_owned()]),
             ignore_patterns: None,
+            metadata_options: crate::TraversalOptions::default(),
         };
 
         let paths = options
@@ -670,6 +678,7 @@ mod tests {
             cross_filesystems: true,
             ignore_dirs: BTreeSet::default(),
             ignore_patterns: Some(patterns_from("nested/secret\n")),
+            metadata_options: crate::TraversalOptions::default(),
         };
 
         let paths = options
@@ -725,6 +734,7 @@ mod tests {
             cross_filesystems: true,
             ignore_dirs: BTreeSet::default(),
             ignore_patterns: Some(patterns_from(contents)),
+            metadata_options: crate::TraversalOptions::default(),
         };
 
         let mut paths = options

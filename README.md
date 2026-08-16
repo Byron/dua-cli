@@ -174,11 +174,12 @@ dua *
 dua aggregate --help
 ```
 
-On macOS, aggregate mode counts fully shared APFS file clones only once when
-calculating disk usage. Files that share only some blocks are not deduplicated,
-so their shared blocks may still be counted more than once. Interactive mode
-retains its existing per-file accounting, and `--apparent-size` still reports
-each file's logical length.
+On macOS, the `--deduplicate-apfs-clones` traversal option counts fully shared
+APFS file clones only once in aggregate and interactive runs. It is opt-in
+because collecting the additional metadata reduces traversal performance by
+about 6%.
+Files that share only some blocks are not deduplicated, and `--apparent-size`
+still reports each file's logical length.
 
 ### Excluding paths with a pattern file
 

@@ -42,7 +42,7 @@ pub struct Entry {
 
 impl Entry {
     /// Create an entry from a filesystem path.
-    pub fn from_path(path: &Path) -> io::Result<Self> {
+    pub fn from_path(path: &Path, _options: crate::Options) -> io::Result<Self> {
         let handle = OwnedHandle::open(
             path,
             FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -196,7 +196,11 @@ pub(crate) struct ReadDir {
 }
 
 impl ReadDir {
-    pub(crate) fn open(path: Arc<Path>, depth: usize) -> io::Result<Self> {
+    pub(crate) fn open(
+        path: Arc<Path>,
+        depth: usize,
+        _options: crate::Options,
+    ) -> io::Result<Self> {
         let handle = OwnedHandle::open(&path, FILE_LIST_DIRECTORY | SYNCHRONIZE, 0)?;
         let mut info = BY_HANDLE_FILE_INFORMATION::default();
         // SAFETY: `handle` is owned and valid, and `info` is writable for the call's duration.
@@ -508,10 +512,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file");
         std::fs::write(&path, b"content").unwrap();
-        let mut entries = ReadDir::open(Arc::from(dir.path()), 1).unwrap();
+        let mut entries =
+            ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default()).unwrap();
         let entry = entries.find_map(Result::ok).unwrap();
         let metadata = entry.metadata.unwrap();
-        let direct = Entry::from_path(&path).unwrap().metadata.unwrap();
+        let direct = Entry::from_path(&path, crate::Options::default())
+            .unwrap()
+            .metadata
+            .unwrap();
         assert_eq!(metadata.len(), 7);
         assert!(metadata.allocated_size() >= metadata.len());
         assert!(metadata.hard_link_id().is_some());
@@ -527,12 +535,15 @@ mod tests {
         std::fs::create_dir(&path).unwrap();
         std::fs::write(path.join("file"), b"content").unwrap();
 
-        let entry = ReadDir::open(Arc::from(dir.path()), 1)
+        let entry = ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default())
             .unwrap()
             .find_map(Result::ok)
             .unwrap();
         let metadata = entry.metadata.unwrap();
-        let direct = Entry::from_path(&path).unwrap().metadata.unwrap();
+        let direct = Entry::from_path(&path, crate::Options::default())
+            .unwrap()
+            .metadata
+            .unwrap();
         assert_eq!(metadata.len(), direct.len());
         assert_eq!(metadata.allocated_size(), direct.allocated_size());
         assert_eq!(metadata.hard_link_id(), direct.hard_link_id());
@@ -550,7 +561,7 @@ mod tests {
             Err(err) => panic!("directory symlink can be created: {err}"),
         }
 
-        let entry = Entry::from_path(&link).unwrap();
+        let entry = Entry::from_path(&link, crate::Options::default()).unwrap();
         assert!(entry.file_type.is_symlink());
         assert!(!entry.file_type.is_dir());
     }
@@ -562,7 +573,7 @@ mod tests {
         std::fs::write(&original, b"content").unwrap();
         std::fs::hard_link(&original, dir.path().join("link")).unwrap();
 
-        let ids = ReadDir::open(Arc::from(dir.path()), 1)
+        let ids = ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default())
             .unwrap()
             .map(|entry| entry.unwrap().metadata.unwrap().hard_link_id().unwrap())
             .collect::<Vec<_>>();
@@ -578,7 +589,7 @@ mod tests {
             std::fs::write(dir.path().join(name), []).unwrap();
         }
 
-        let count = ReadDir::open(Arc::from(dir.path()), 1)
+        let count = ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default())
             .unwrap()
             .map(Result::unwrap)
             .count();
@@ -595,7 +606,7 @@ mod tests {
         }
         std::fs::write(path.join("file"), b"content").unwrap();
 
-        let entries = ReadDir::open(Arc::from(path), 1)
+        let entries = ReadDir::open(Arc::from(path), 1, crate::Options::default())
             .unwrap()
             .map(|entry| entry.unwrap().file_name)
             .collect::<Vec<_>>();
@@ -617,7 +628,7 @@ mod tests {
                 .unwrap()
                 .ends_with(&"child.\0".encode_utf16().collect::<Vec<_>>())
         );
-        let entries = ReadDir::open(Arc::from(ordinary_child), 1)
+        let entries = ReadDir::open(Arc::from(ordinary_child), 1, crate::Options::default())
             .unwrap()
             .map(|entry| entry.unwrap().file_name)
             .collect::<Vec<_>>();
@@ -630,7 +641,7 @@ mod tests {
         std::fs::write(dir.path().join("file"), b"content").unwrap();
         let path = dir.path().join("missing").join("..");
 
-        let entries = ReadDir::open(Arc::from(path), 1)
+        let entries = ReadDir::open(Arc::from(path), 1, crate::Options::default())
             .unwrap()
             .map(|entry| entry.unwrap().file_name)
             .collect::<Vec<_>>();

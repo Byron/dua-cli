@@ -12,18 +12,6 @@ fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) ->
     entry.path().size_on_disk_fast(metadata)
 }
 
-#[cfg(target_os = "macos")]
-fn allocated_size(metadata: &crate::walk::Metadata, inodes: &mut InodeFilter) -> u64 {
-    if inodes.add_clone(metadata) {
-        metadata.allocated_size()
-    } else {
-        // Clone identifiers cover only the data fork; resource forks remain private.
-        metadata
-            .allocated_size()
-            .saturating_sub(metadata.data_allocated_size())
-    }
-}
-
 #[cfg(windows)]
 #[allow(clippy::unnecessary_wraps)]
 fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
@@ -112,6 +100,8 @@ fn aggregate_inner(
     byte_format: ByteFormat,
     inputs: impl ExactSizeIterator<Item = (PathBuf, Option<crate::walk::Entry>)>,
 ) -> Result<(WalkResult, Statistics)> {
+    #[cfg(target_os = "macos")]
+    let apfs_clone_accounting = walk_options.metadata_options.apfs_clone_metadata;
     let mut res = WalkResult::default();
     let mut stats = Statistics {
         smallest_file_in_bytes: u128::MAX,
@@ -166,7 +156,7 @@ fn aggregate_inner(
     let mut progress_visible = false;
     let mut next_output = 0;
 
-    // Shared hard links and cloned data belong to whichever root reaches them first.
+    // Shared hard links and, when enabled, cloned data belong to the first root that reaches them.
     for (root_idx, event) in
         walk_options.iter_from_paths(roots, false, crate::walk::Order::Completion)
     {
@@ -212,8 +202,10 @@ fn aggregate_inner(
                             m.len()
                         } else {
                             #[cfg(target_os = "macos")]
-                            {
-                                allocated_size(m, &mut inodes)
+                            if apfs_clone_accounting {
+                                inodes.allocated_size(m)
+                            } else {
+                                m.allocated_size()
                             }
                             #[cfg(not(target_os = "macos"))]
                             {
@@ -404,7 +396,7 @@ mod tests {
         for sort_by_size_in_bytes in [false, true] {
             std::fs::write(&path, b"cached metadata").unwrap();
             let expected_size = std::fs::metadata(&path).unwrap().len();
-            let entry = dua_core::read_dir(directory.path())
+            let entry = dua_core::read_dir(directory.path(), dua_core::Options::default())
                 .unwrap()
                 .next()
                 .unwrap()
@@ -422,6 +414,7 @@ mod tests {
                     cross_filesystems: false,
                     ignore_dirs: std::collections::BTreeSet::default(),
                     ignore_patterns: None,
+                    metadata_options: crate::TraversalOptions::default(),
                 },
                 false,
                 sort_by_size_in_bytes,
@@ -499,6 +492,7 @@ mod tests {
                     cross_filesystems: true,
                     ignore_dirs: std::collections::BTreeSet::default(),
                     ignore_patterns: None,
+                    metadata_options: crate::TraversalOptions::default(),
                 },
                 true,
                 false,
@@ -532,6 +526,9 @@ mod tests {
         let partial_clone = directory.path().join("partial-clone");
         let hard_link = directory.path().join("hard-link");
         std::fs::write(&original, vec![7; DATA_FORK_BYTES]).unwrap();
+        // On Apple platforms, std::fs::copy first tries fclonefileat(2), so these become
+        // copy-on-write APFS clones with distinct inodes and shared data blocks. A non-APFS
+        // fallback copies the bytes instead and intentionally fails the clone-ID assertions below.
         std::fs::copy(&original, &clone).unwrap();
         std::fs::copy(&original, &partial_clone).unwrap();
         std::fs::write(clone.join("..namedfork/rsrc"), vec![5; RESOURCE_FORK_BYTES]).unwrap();
@@ -621,6 +618,9 @@ mod tests {
                     cross_filesystems: true,
                     ignore_dirs: std::collections::BTreeSet::default(),
                     ignore_patterns: None,
+                    metadata_options: crate::TraversalOptions {
+                        apfs_clone_metadata: true,
+                    },
                 },
                 true,
                 true,
@@ -637,10 +637,15 @@ mod tests {
             );
         }
 
-        let entries = dua_core::read_dir(directory.path())
-            .unwrap()
-            .collect::<std::io::Result<Vec<_>>>()
-            .unwrap();
+        let entries = dua_core::read_dir(
+            directory.path(),
+            dua_core::Options {
+                apfs_clone_metadata: true,
+            },
+        )
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
         let mut output = Vec::new();
         let (result, _) = aggregate_entries(
             &mut output,
@@ -652,6 +657,9 @@ mod tests {
                 cross_filesystems: false,
                 ignore_dirs: std::collections::BTreeSet::default(),
                 ignore_patterns: None,
+                metadata_options: crate::TraversalOptions {
+                    apfs_clone_metadata: true,
+                },
             },
             true,
             true,
@@ -756,6 +764,7 @@ mod tests {
                 cross_filesystems: true,
                 ignore_dirs: std::collections::BTreeSet::default(),
                 ignore_patterns: None,
+                metadata_options: crate::TraversalOptions::default(),
             },
             true,
             true,
@@ -789,6 +798,7 @@ mod tests {
                 cross_filesystems: false,
                 ignore_dirs: std::collections::BTreeSet::default(),
                 ignore_patterns: None,
+                metadata_options: crate::TraversalOptions::default(),
             },
             false,
             true,
@@ -826,6 +836,7 @@ mod tests {
                     cross_filesystems: true,
                     ignore_dirs: std::collections::BTreeSet::default(),
                     ignore_patterns: crate::IgnorePatterns::from_files(ignore_from).unwrap(),
+                    metadata_options: crate::TraversalOptions::default(),
                 },
                 false,
                 true,
@@ -867,7 +878,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file");
         std::fs::write(&path, b"content").unwrap();
-        let entry = crate::walk::Entry::from_path(&path).unwrap();
+        let entry =
+            crate::walk::Entry::from_path(&path, crate::TraversalOptions::default()).unwrap();
         let metadata = entry.metadata.as_ref().unwrap();
         let expected = metadata.allocated_size();
         std::fs::remove_file(path).unwrap();
@@ -883,7 +895,8 @@ mod tests {
     fn windows_disk_size_preserves_zero_sized_directories() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("file"), b"content").unwrap();
-        let entry = crate::walk::Entry::from_path(dir.path()).unwrap();
+        let entry =
+            crate::walk::Entry::from_path(dir.path(), crate::TraversalOptions::default()).unwrap();
         let metadata = entry.metadata.as_ref().unwrap();
         assert_eq!(size_on_disk(&entry, metadata).unwrap(), 0);
     }

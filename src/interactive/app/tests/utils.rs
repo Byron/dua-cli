@@ -89,7 +89,13 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
     let mut files: Vec<_> = Vec::new();
     let mut dirs: Vec<_> = Vec::new();
 
-    for entry in dua_core::walk(path.as_ref(), 1, dua_core::Order::Completion, |_| true) {
+    for entry in dua_core::walk(
+        path.as_ref(),
+        1,
+        dua_core::Order::Completion,
+        dua_core::Options::default(),
+        |_| true,
+    ) {
         let entry = entry?;
         let p = entry.path();
         if entry.file_type.is_dir() {
@@ -114,7 +120,13 @@ fn delete_recursive(path: impl AsRef<Path>) -> Result<()> {
 }
 
 fn copy_recursive(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), Error> {
-    for entry in dua_core::walk(src.as_ref(), 1, dua_core::Order::ParentFirst, |_| true) {
+    for entry in dua_core::walk(
+        src.as_ref(),
+        1,
+        dua_core::Order::ParentFirst,
+        dua_core::Options::default(),
+        |_| true,
+    ) {
         let entry = entry?;
         let entry_path = entry.path();
         entry_path
@@ -193,6 +205,7 @@ pub fn untraversed_app_and_terminal_with_closure(
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
+        metadata_options: dua::TraversalOptions::default(),
     };
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();

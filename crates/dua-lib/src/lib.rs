@@ -85,6 +85,14 @@ pub enum Order {
     ParentFirst,
 }
 
+/// Platform-specific filesystem metadata requested during traversal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Options {
+    /// Collect APFS clone identity and data-fork allocation metadata.
+    #[cfg(target_os = "macos")]
+    pub apfs_clone_metadata: bool,
+}
+
 /// A filesystem entry produced by [`walk`].
 #[cfg(not(any(windows, target_os = "macos")))]
 pub struct Entry {
@@ -171,6 +179,8 @@ struct PoolShared {
     /// A counter reaching zero emits that root's [`Event::RootFinished`].
     jobs_per_root: HashMap<usize, AtomicUsize>,
     order: Order,
+    #[cfg(any(windows, target_os = "macos"))]
+    options: Options,
     /// Handles used to wake workers, indexed by worker number.
     unparkers: Vec<Unparker>,
     /// Whether each worker has announced that it is idle, indexed like `unparkers`.
@@ -217,8 +227,11 @@ pub struct Walk {
 /// querying their paths again. Directory-open errors are returned immediately; later enumeration
 /// errors are yielded by the iterator.
 #[cfg(any(windows, target_os = "macos"))]
-pub fn read_dir(path: &Path) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
-    NativeReadDir::open(Arc::from(path), 0)
+pub fn read_dir(
+    path: &Path,
+    options: Options,
+) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
+    NativeReadDir::open(Arc::from(path), 0, options)
 }
 
 /// Walk `root` without following symlinks.
@@ -228,9 +241,10 @@ pub fn walk(
     root: &Path,
     threads: usize,
     order: Order,
+    options: Options,
     descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
 ) -> Walk {
-    let root = Entry::from_path(root);
+    let root = Entry::from_path(root, options);
     let pool = match &root {
         Ok(entry) if entry.file_type.is_dir() && descend(entry) => {
             let path = Arc::from(entry.path());
@@ -239,6 +253,7 @@ pub fn walk(
                 HashMap::from([(0, AtomicUsize::new(0))]),
                 order,
                 Arc::new(move |_, entry| descend(entry)),
+                options,
             );
             start_jobs(
                 &pool,
@@ -300,6 +315,7 @@ pub fn walk_roots(
     roots: impl IntoIterator<Item = (usize, PathBuf)>,
     threads: usize,
     order: Order,
+    options: Options,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
 ) -> RootWalk {
     start_root_walk(
@@ -307,7 +323,8 @@ pub fn walk_roots(
         threads,
         order,
         descend,
-        |path: PathBuf| Entry::from_path(&path),
+        |path: PathBuf| Entry::from_path(&path, options),
+        options,
     )
 }
 
@@ -325,6 +342,7 @@ pub fn walk_root_entries(
     roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
     threads: usize,
     order: Order,
+    options: Options,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
 ) -> RootWalk {
     start_root_walk(
@@ -333,6 +351,7 @@ pub fn walk_root_entries(
         order,
         descend,
         std::convert::identity,
+        options,
     )
 }
 
@@ -342,6 +361,7 @@ fn start_root_walk<Root>(
     order: Order,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
     prepare: impl Fn(Root) -> io::Result<Entry>,
+    options: Options,
 ) -> RootWalk {
     let jobs_per_root = roots
         .iter()
@@ -362,7 +382,7 @@ fn start_root_walk<Root>(
     let pool = if root_jobs.is_empty() {
         None
     } else {
-        let pool = start_pool(threads.max(1), jobs_per_root, order, descend);
+        let pool = start_pool(threads.max(1), jobs_per_root, order, descend, options);
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
@@ -445,7 +465,7 @@ impl Entry {
     }
 
     /// Create an entry from a filesystem path.
-    pub fn from_path(path: &Path) -> io::Result<Self> {
+    pub fn from_path(path: &Path, _options: Options) -> io::Result<Self> {
         let metadata = fs::symlink_metadata(path)?;
         Ok(Self {
             depth: 0,
@@ -476,7 +496,10 @@ fn start_pool(
     jobs_per_root: HashMap<usize, AtomicUsize>,
     order: Order,
     descend: Arc<Descend>,
+    options: Options,
 ) -> Pool {
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let _ = options;
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
     let (event_tx, event_rx) = sync_channel(threads * 2);
@@ -489,6 +512,8 @@ fn start_pool(
         active_roots: AtomicUsize::new(0),
         jobs_per_root,
         order,
+        #[cfg(any(windows, target_os = "macos"))]
+        options,
         unparkers: parkers
             .iter()
             .map(|parker| parker.unparker().clone())
@@ -758,6 +783,16 @@ fn read_dir_completion(
     finish_pending(root_idx, shared);
 }
 
+/// Open the platform-native reader with any traversal-specific metadata enabled.
+#[cfg(any(windows, target_os = "macos"))]
+fn native_read_dir(
+    path: Arc<Path>,
+    depth: usize,
+    shared: &PoolShared,
+) -> io::Result<NativeReadDir> {
+    NativeReadDir::open(path, depth, shared.options)
+}
+
 /// Read a directory for completion-order traversal.
 ///
 /// Unlike the generic implementation, native readers collect metadata while enumerating,
@@ -771,7 +806,7 @@ fn read_dir_completion(
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match NativeReadDir::open(path, depth) {
+    let dir_entries = match native_read_dir(path, depth, shared) {
         Ok(entries) => entries,
         Err(err) => {
             if shared
@@ -851,7 +886,7 @@ fn read_dir_parent_first(
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match NativeReadDir::open(path, depth) {
+    let dir_entries = match native_read_dir(path, depth, shared) {
         Ok(entries) => entries,
         Err(err) => {
             finish_directory(root_idx, Err(err), Vec::new(), worker, shared);
@@ -1055,16 +1090,22 @@ mod tests {
         let expected = expected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
 
         for threads in [1, 4] {
-            let paths = walk(dir.path(), threads, Order::ParentFirst, |_| true)
-                .map(|entry| {
-                    entry
-                        .unwrap()
-                        .path()
-                        .strip_prefix(dir.path())
-                        .unwrap()
-                        .to_owned()
-                })
-                .collect::<Vec<_>>();
+            let paths = walk(
+                dir.path(),
+                threads,
+                Order::ParentFirst,
+                Options::default(),
+                |_| true,
+            )
+            .map(|entry| {
+                entry
+                    .unwrap()
+                    .path()
+                    .strip_prefix(dir.path())
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
             let mut sorted_paths = paths.clone();
             sorted_paths.sort();
             assert_eq!(
@@ -1089,9 +1130,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("skip/child")).unwrap();
 
-        let paths = walk(dir.path(), 2, Order::Completion, |entry| {
-            entry.file_name != "skip"
-        })
+        let paths = walk(
+            dir.path(),
+            2,
+            Order::Completion,
+            Options::default(),
+            |entry| entry.file_name != "skip",
+        )
         .map(|entry| entry.unwrap().file_name)
         .collect::<Vec<_>>();
         assert_eq!(
@@ -1104,10 +1149,16 @@ mod tests {
         );
 
         assert!(
-            walk(&dir.path().join("missing"), 2, Order::Completion, |_| true)
-                .next()
-                .unwrap()
-                .is_err(),
+            walk(
+                &dir.path().join("missing"),
+                2,
+                Order::Completion,
+                Options::default(),
+                |_| true,
+            )
+            .next()
+            .unwrap()
+            .is_err(),
             "a missing root should be yielded as an I/O error"
         );
     }
@@ -1124,6 +1175,7 @@ mod tests {
             roots.iter().cloned().enumerate(),
             2,
             Order::Completion,
+            Options::default(),
             |_, _| true,
         )
         .collect::<Vec<_>>();
@@ -1173,18 +1225,25 @@ mod tests {
         let child = descendant.join("child");
         fs::write(&child, b"nested file").unwrap();
 
-        let descendant_entry = walk(directory.path(), 2, Order::ParentFirst, |_| true)
-            .find_map(|entry| {
-                let entry = entry.unwrap();
-                (entry.path() == descendant).then_some(entry)
-            })
-            .expect("the initial walk should yield the descendant directory");
+        let descendant_entry = walk(
+            directory.path(),
+            2,
+            Order::ParentFirst,
+            Options::default(),
+            |_| true,
+        )
+        .find_map(|entry| {
+            let entry = entry.unwrap();
+            (entry.path() == descendant).then_some(entry)
+        })
+        .expect("the initial walk should yield the descendant directory");
         assert_eq!(descendant_entry.depth, 1);
 
         let mut events = walk_root_entries(
             [(7, Ok(descendant_entry))],
             2,
             Order::ParentFirst,
+            Options::default(),
             |root_idx, entry| {
                 assert_eq!(root_idx, 7);
                 assert_eq!(entry.depth, 0, "the predicate should see a re-rooted entry");
@@ -1222,9 +1281,13 @@ mod tests {
         );
 
         root.metadata = Err(io::Error::from(io::ErrorKind::PermissionDenied));
-        let mut events = walk_root_entries([(7, Ok(root))], 2, Order::ParentFirst, |_, _| {
-            panic!("a directory with inaccessible metadata must not be descended")
-        });
+        let mut events = walk_root_entries(
+            [(7, Ok(root))],
+            2,
+            Order::ParentFirst,
+            Options::default(),
+            |_, _| panic!("a directory with inaccessible metadata must not be descended"),
+        );
         let Some((7, RootEvent::Entry(Ok(root)))) = events.next() else {
             panic!("the prepared directory must retain its metadata error");
         };
@@ -1250,12 +1313,22 @@ mod tests {
         fs::write(&path, b"cached metadata").unwrap();
         let expected_len = fs::metadata(&path).unwrap().len();
 
-        let entry = read_dir(directory.path()).unwrap().next().unwrap().unwrap();
+        let entry = read_dir(directory.path(), Options::default())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
         assert_eq!(entry.depth, 0);
         assert_eq!(entry.path(), path);
         fs::remove_file(&path).unwrap();
 
-        let mut events = walk_root_entries([(7, Ok(entry))], 1, Order::Completion, |_, _| true);
+        let mut events = walk_root_entries(
+            [(7, Ok(entry))],
+            1,
+            Order::Completion,
+            Options::default(),
+            |_, _| true,
+        );
         let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
             panic!(
                 "prepared root must be yielded without querying its removed path which would fail"
@@ -1281,15 +1354,21 @@ mod tests {
 
         let worker_threads = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
         let seen_threads = Arc::clone(&worker_threads);
-        walk(dir.path(), 8, Order::Completion, move |entry| {
-            if entry.depth == 1 {
-                thread::sleep(std::time::Duration::from_millis(1));
-            } else if entry.depth == 2 {
-                seen_threads.lock().unwrap().insert(thread::current().id());
-                thread::sleep(std::time::Duration::from_millis(10));
-            }
-            true
-        })
+        walk(
+            dir.path(),
+            8,
+            Order::Completion,
+            Options::default(),
+            move |entry| {
+                if entry.depth == 1 {
+                    thread::sleep(std::time::Duration::from_millis(1));
+                } else if entry.depth == 2 {
+                    seen_threads.lock().unwrap().insert(thread::current().id());
+                    thread::sleep(std::time::Duration::from_millis(10));
+                }
+                true
+            },
+        )
         .for_each(drop);
 
         assert!(
@@ -1308,13 +1387,19 @@ mod tests {
 
         let worker_threads = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
         let seen_threads = Arc::clone(&worker_threads);
-        walk(dir.path(), 8, Order::Completion, move |entry| {
-            if entry.depth == 1 {
-                seen_threads.lock().unwrap().insert(thread::current().id());
-                thread::sleep(std::time::Duration::from_millis(2));
-            }
-            true
-        })
+        walk(
+            dir.path(),
+            8,
+            Order::Completion,
+            Options::default(),
+            move |entry| {
+                if entry.depth == 1 {
+                    seen_threads.lock().unwrap().insert(thread::current().id());
+                    thread::sleep(std::time::Duration::from_millis(2));
+                }
+                true
+            },
+        )
         .for_each(drop);
 
         assert_eq!(
@@ -1336,18 +1421,25 @@ mod tests {
         let continue_rx = Arc::new(std::sync::Mutex::new(continue_rx));
         let seen = Arc::new(AtomicUsize::new(0));
         let seen_in_worker = Arc::clone(&seen);
-        let mut entries = walk(dir.path(), 2, Order::Completion, move |entry| {
-            if entry.depth == 1
-                && seen_in_worker.fetch_add(1, AtomicOrdering::Relaxed) == ENTRY_CHUNK_SIZE
-            {
-                continue_rx
+        let mut entries =
+            walk(
+                dir.path(),
+                2,
+                Order::Completion,
+                Options::default(),
+                move |entry| {
+                    if entry.depth == 1
+                        && seen_in_worker.fetch_add(1, AtomicOrdering::Relaxed) == ENTRY_CHUNK_SIZE
+                    {
+                        continue_rx
                     .lock()
                     .unwrap()
                     .recv_timeout(std::time::Duration::from_secs(2))
                     .expect("the first metadata batch should arrive before enumeration finishes");
-            }
-            true
-        });
+                    }
+                    true
+                },
+            );
 
         assert_eq!(
             entries.next().unwrap().unwrap().depth,
