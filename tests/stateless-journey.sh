@@ -51,6 +51,18 @@ WITH_FAILURE=1
           )
         )
       )
+      (with "--ignore-dirs naming a directory below the given one"
+        (when "specifying the 'aggregate' subcommand"
+          it "leaves that directory out, even though it was reached by expanding the given path" && {
+            WITH_SNAPSHOT="$snapshot/success-ignore-dirs-below-given-path" \
+            expect_run ${SUCCESSFULLY} "$exe" aggregate -i "$PWD/dir" .
+          }
+          it "still measures a directory named by --ignore-dirs when it is given explicitly" && {
+            WITH_SNAPSHOT="$snapshot/success-ignore-dirs-given-explicitly" \
+            expect_run ${SUCCESSFULLY} "$exe" aggregate -i "$PWD/dir" ./dir ./a
+          }
+        )
+      )
       (with "multiple given paths"
         (when "specifying the 'aggregate' subcommand"
           (with "no option to adjust the total"
