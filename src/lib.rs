@@ -11,6 +11,7 @@ pub use config::Config;
 mod crossdev;
 mod inodefilter;
 pub(crate) use dua_core as walk;
+pub use dua_core::Options as TraversalOptions;
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;

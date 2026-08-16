@@ -10,22 +10,29 @@ fn walkers_are_available_to_consumers() {
         fs::create_dir_all(root.join("child")).unwrap();
     }
 
-    let paths = walk(&roots[0], 2, Order::ParentFirst, |_| true)
-        .map(|entry| {
-            entry
-                .unwrap()
-                .path()
-                .strip_prefix(&roots[0])
-                .unwrap()
-                .into()
-        })
-        .collect::<BTreeSet<PathBuf>>();
+    let paths = walk(
+        &roots[0],
+        2,
+        Order::ParentFirst,
+        dua_core::Options::default(),
+        |_| true,
+    )
+    .map(|entry| {
+        entry
+            .unwrap()
+            .path()
+            .strip_prefix(&roots[0])
+            .unwrap()
+            .into()
+    })
+    .collect::<BTreeSet<PathBuf>>();
     assert_eq!(paths, [PathBuf::new(), PathBuf::from("child")].into());
 
     let events = walk_roots(
         roots.iter().cloned().enumerate(),
         2,
         Order::Completion,
+        dua_core::Options::default(),
         |_, _| true,
     )
     .collect::<Vec<_>>();
@@ -49,6 +56,7 @@ fn sparse_root_indices_do_not_size_internal_storage() {
         [(usize::MAX, file.path().to_owned())],
         1,
         Order::Completion,
+        dua_core::Options::default(),
         |_, _| true,
     )
     .collect::<Vec<_>>();
@@ -64,6 +72,7 @@ fn duplicate_root_indices_are_rejected() {
         [(7, file.path().to_owned()), (7, file.path().to_owned())],
         1,
         Order::Completion,
+        dua_core::Options::default(),
         |_, _| true,
     );
 }

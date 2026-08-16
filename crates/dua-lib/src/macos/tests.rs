@@ -1,5 +1,12 @@
 use super::*;
+use crate::Options;
 use std::os::unix::fs::PermissionsExt as _;
+
+fn options(apfs_clone_metadata: bool) -> Options {
+    Options {
+        apfs_clone_metadata,
+    }
+}
 
 #[test]
 fn directory_reader_rejects_regular_files_before_iteration() {
@@ -7,7 +14,7 @@ fn directory_reader_rejects_regular_files_before_iteration() {
     let file = directory.path().join("file");
     fs::write(&file, b"content").unwrap();
 
-    let error = ReadDir::open(Arc::from(file), 0)
+    let error = ReadDir::open(Arc::from(file), 0, options(false))
         .err()
         .expect("regular files must be rejected before iteration");
     assert_eq!(
@@ -23,7 +30,7 @@ fn fallback_reader_enumerates_entries_with_metadata() {
     let fallback_directory = tempfile::tempdir().unwrap();
     fs::write(fallback_directory.path().join("fallback-file"), b"content").unwrap();
 
-    let mut reader = ReadDir::open(Arc::from(directory.path()), 1).unwrap();
+    let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
     reader.fallback = Some(fs::read_dir(fallback_directory.path()).unwrap());
     let entry = reader.next().unwrap().unwrap();
 
@@ -53,7 +60,7 @@ fn bulk_metadata_matches_std_for_regular_files_resource_forks_and_symlinks() {
     );
     std::os::unix::fs::symlink("file", directory.path().join("link")).unwrap();
 
-    let entries = ReadDir::open(Arc::from(directory.path()), 1)
+    let entries = ReadDir::open(Arc::from(directory.path()), 1, options(true))
         .unwrap()
         .collect::<io::Result<Vec<_>>>()
         .unwrap();
@@ -77,6 +84,13 @@ fn bulk_metadata_matches_std_for_regular_files_resource_forks_and_symlinks() {
             "{:?} allocated size",
             entry.file_name
         );
+        if entry.file_name == "file" {
+            assert_eq!(
+                metadata.data_allocated_size(),
+                data_blocks * STAT_BLOCK_BYTES,
+                "resource-fork allocation must not be mistaken for shared data"
+            );
+        }
         assert_eq!(
             metadata.dev(),
             direct.dev(),
@@ -114,7 +128,7 @@ fn bulk_metadata_preserves_fractional_pre_epoch_timestamps() {
         .unwrap();
     let direct = file.metadata().unwrap().modified().unwrap();
 
-    let entry = ReadDir::open(Arc::from(directory.path()), 1)
+    let entry = ReadDir::open(Arc::from(directory.path()), 1, options(false))
         .unwrap()
         .next()
         .unwrap()
@@ -139,7 +153,7 @@ fn readable_directory_without_search_permission_preserves_entry_errors() {
     fs::write(restricted.join("file"), b"content").unwrap();
     fs::set_permissions(&restricted, fs::Permissions::from_mode(0o400)).unwrap();
 
-    let entries = ReadDir::open(Arc::from(restricted.as_path()), 1)
+    let entries = ReadDir::open(Arc::from(restricted.as_path()), 1, options(false))
         .unwrap()
         .collect::<Vec<_>>();
     fs::set_permissions(&restricted, fs::Permissions::from_mode(0o700)).unwrap();
@@ -170,13 +184,52 @@ fn readable_directory_without_search_permission_preserves_entry_errors() {
 }
 
 #[test]
-fn bulk_metadata_identifies_hard_links() {
+fn bulk_metadata_identifies_clones_and_hard_links() {
+    use std::os::unix::fs::FileExt as _;
+
     let directory = tempfile::tempdir().unwrap();
     let original = directory.path().join("original");
+    let clone = directory.path().join("clone");
+    let partial_clone = directory.path().join("partial-clone");
     fs::write(&original, [7; 8192]).unwrap();
+
+    // On Apple platforms, std::fs::copy first tries fclonefileat(2), producing distinct
+    // copy-on-write APFS inodes that initially share their data blocks. A non-APFS fallback
+    // copies the bytes instead and intentionally fails the clone-ID assertions below.
+    fs::copy(&original, &clone).unwrap();
+    fs::copy(&original, &partial_clone).unwrap();
+    let bytes_written = fs::OpenOptions::new()
+        .write(true)
+        .open(&partial_clone)
+        .unwrap()
+        .write_at(&[9], 0)
+        .unwrap();
+    assert_eq!(
+        bytes_written, 1,
+        "modifying one byte must diverge the partially cloned data fork"
+    );
     fs::hard_link(&original, directory.path().join("hard-link")).unwrap();
 
-    let entries = ReadDir::open(Arc::from(directory.path()), 1)
+    let ordinary = ReadDir::open(Arc::from(directory.path()), 1, options(false))
+        .unwrap()
+        .find(|entry| {
+            entry
+                .as_ref()
+                .is_ok_and(|entry| entry.file_name == "original")
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(ordinary.metadata.unwrap().clone_id(), None);
+    assert_eq!(
+        Entry::from_path(&original, options(false))
+            .unwrap()
+            .metadata
+            .unwrap()
+            .clone_id(),
+        None
+    );
+
+    let entries = ReadDir::open(Arc::from(directory.path()), 1, options(true))
         .unwrap()
         .map(|entry| {
             let entry = entry.unwrap();
@@ -184,6 +237,8 @@ fn bulk_metadata_identifies_hard_links() {
         })
         .collect::<std::collections::HashMap<_, _>>();
     let original = &entries[std::ffi::OsStr::new("original")];
+    let cloned = &entries[std::ffi::OsStr::new("clone")];
+    let partially_cloned = &entries[std::ffi::OsStr::new("partial-clone")];
     let hard_link = &entries[std::ffi::OsStr::new("hard-link")];
 
     assert_eq!(
@@ -192,12 +247,39 @@ fn bulk_metadata_identifies_hard_links() {
         "hard links must report the same inode"
     );
     assert_eq!(original.nlink(), 2, "bulk metadata must report both links");
+    assert_ne!(
+        original.ino(),
+        cloned.ino(),
+        "APFS clones must have distinct inodes"
+    );
+    let clone_id = original
+        .clone_id()
+        .expect("APFS must report a shared identifier for the cloned fixture");
+    assert_eq!(
+        cloned.clone_id(),
+        Some(clone_id),
+        "fully cloned data forks must report the same content identifier"
+    );
+    assert_ne!(
+        partially_cloned.clone_id(),
+        Some(clone_id),
+        "partially shared data forks must not claim the original clone identity"
+    );
+    let root = Entry::from_path(&clone, options(true))
+        .unwrap()
+        .metadata
+        .unwrap();
+    assert_eq!(
+        root.clone_id(),
+        Some(clone_id),
+        "explicit file roots must retain the bulk-enumerated clone identity"
+    );
 }
 
 #[test]
 fn bulk_device_numbers_match_std_on_devfs() {
     let directory = Path::new("/dev");
-    let entry = ReadDir::open(Arc::from(directory), 1)
+    let entry = ReadDir::open(Arc::from(directory), 1, options(false))
         .unwrap()
         .find(|entry| entry.as_ref().is_ok_and(|entry| entry.file_name == "null"))
         .expect("devfs contains /dev/null")
@@ -224,7 +306,7 @@ fn bulk_directory_reader_refills_its_buffer() {
         .unwrap();
     }
 
-    let count = ReadDir::open(Arc::from(directory.path()), 1)
+    let count = ReadDir::open(Arc::from(directory.path()), 1, options(false))
         .unwrap()
         .map(Result::unwrap)
         .count();

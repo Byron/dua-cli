@@ -4,10 +4,12 @@ use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 const UNRESOLVED_DIRECTORY_LINKS: u64 = u64::MAX;
 
-/// Tracks seen `(device, inode)` pairs to avoid double-counting hard-linked files.
+/// Tracks hard-linked inodes and, on macOS, fully shared APFS data streams.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct InodeFilter {
     inner: HashMap<(u64, u64), u64>,
+    #[cfg(target_os = "macos")]
+    apfs: apfs::ApfsFilter,
 }
 
 impl InodeFilter {
@@ -129,6 +131,51 @@ impl InodeFilter {
                 self.inner.insert(dev_inode, nlinks - 1);
                 true
             }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod apfs {
+    use std::collections::HashSet;
+
+    impl super::InodeFilter {
+        /// Return allocated bytes while counting a cloned data stream only once.
+        pub(crate) fn allocated_size(&mut self, metadata: &crate::walk::Metadata) -> u64 {
+            if self.apfs.add_clone(metadata) {
+                metadata.allocated_size()
+            } else {
+                // Clone identifiers cover only the data fork; resource forks remain private.
+                metadata
+                    .allocated_size()
+                    .saturating_sub(metadata.data_allocated_size())
+            }
+        }
+    }
+
+    #[derive(Debug, Default, Clone)]
+    pub(super) struct ApfsFilter {
+        streams: HashSet<(u64, u64)>,
+        inodes: HashSet<(u64, u64)>,
+    }
+
+    impl ApfsFilter {
+        fn add_clone(&mut self, metadata: &crate::walk::Metadata) -> bool {
+            if metadata.allocated_size() == 0 {
+                return true;
+            }
+
+            let Some(clone_id) = metadata.clone_id() else {
+                return true;
+            };
+            let device = metadata.dev();
+
+            // Hard links and overlapping roots revisit one inode, not distinct cloned files.
+            if !self.inodes.insert((device, metadata.ino())) {
+                return true;
+            }
+
+            self.streams.insert((device, clone_id.get()))
         }
     }
 }

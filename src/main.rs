@@ -317,6 +317,9 @@ fn merge_traversal_args(
         format: global.format.or(subcommand.format),
         apparent_size: global.apparent_size || subcommand.apparent_size,
         count_hard_links: global.count_hard_links || subcommand.count_hard_links,
+        #[cfg(target_os = "macos")]
+        deduplicate_apfs_clones: global.deduplicate_apfs_clones
+            || subcommand.deduplicate_apfs_clones,
         stay_on_filesystem: global.stay_on_filesystem || subcommand.stay_on_filesystem,
         ignore_dirs: if is_default_ignore_dirs(&global.ignore_dirs) {
             subcommand.ignore_dirs.clone()
@@ -341,6 +344,10 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
         cross_filesystems: !traversal.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
         ignore_patterns: dua::IgnorePatterns::from_files(&traversal.ignore_from)?,
+        metadata_options: dua::TraversalOptions {
+            #[cfg(target_os = "macos")]
+            apfs_clone_metadata: traversal.deduplicate_apfs_clones,
+        },
     };
 
     if walk_options.threads == 0 {
@@ -366,10 +373,12 @@ fn extract_aggregate_inputs_maybe_set_cwd(
             .then(|| device_id(&cwd).ok())
             .flatten();
         let parent_path: std::sync::Arc<Path> = Path::new("").into();
-        let mut entries = Vec::new();
+        let mut selected_entries = Vec::new();
 
-        for entry in dua_core::read_dir(Path::new("."))? {
-            let mut entry = entry?;
+        let entries = dua_core::read_dir(Path::new("."), walk_options.metadata_options)?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for mut entry in entries {
             if entry.file_type.is_symlink() {
                 continue;
             }
@@ -402,10 +411,10 @@ fn extract_aggregate_inputs_maybe_set_cwd(
                 continue;
             }
 
-            entries.push(entry);
+            selected_entries.push(entry);
         }
-        entries.sort_by(|left, right| left.file_name.cmp(&right.file_name));
-        return Ok(AggregateInputs::Entries(entries));
+        selected_entries.sort_by(|left, right| left.file_name.cmp(&right.file_name));
+        return Ok(AggregateInputs::Entries(selected_entries));
     }
 
     extract_paths_maybe_set_cwd(paths, walk_options).map(AggregateInputs::Paths)
@@ -626,6 +635,8 @@ mod tests {
             format: None,
             apparent_size: true,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
             ignore_from: vec![PathBuf::from("global-ignore")],
@@ -637,6 +648,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: true,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: true,
             ignore_dirs: vec![],
             ignore_from: vec![PathBuf::from("subcommand-ignore")],
@@ -663,6 +676,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
             ignore_from: vec![],
@@ -674,6 +689,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
             ignore_from: vec![],
@@ -692,6 +709,8 @@ mod tests {
             format: Some(super::options::ByteFormat::MB),
             apparent_size: true,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: true,
             stay_on_filesystem: true,
             ignore_dirs: vec![],
             ignore_from: vec![],
@@ -703,6 +722,8 @@ mod tests {
             format: Some(super::options::ByteFormat::GB),
             apparent_size: false,
             count_hard_links: true,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![],
             ignore_from: vec![],
@@ -714,6 +735,8 @@ mod tests {
         assert_eq!(merged.format, Some(super::options::ByteFormat::MB));
         assert!(merged.apparent_size);
         assert!(merged.count_hard_links);
+        #[cfg(target_os = "macos")]
+        assert!(merged.deduplicate_apfs_clones);
         assert!(merged.stay_on_filesystem);
     }
 
@@ -724,6 +747,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-global-ignore")],
             ignore_from: vec![],
@@ -735,6 +760,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
             ignore_from: vec![],
@@ -753,6 +780,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: super::options::DEFAULT_IGNORE_DIRS
                 .iter()
@@ -767,6 +796,8 @@ mod tests {
             format: None,
             apparent_size: false,
             count_hard_links: false,
+            #[cfg(target_os = "macos")]
+            deduplicate_apfs_clones: false,
             stay_on_filesystem: false,
             ignore_dirs: vec![PathBuf::from("/custom-subcommand-ignore")],
             ignore_from: vec![],

@@ -74,6 +74,13 @@ impl TraversalArgs {
 }
 
 #[derive(Debug, Clone, clap::Args)]
+#[cfg_attr(
+    target_os = "macos",
+    expect(
+        clippy::struct_excessive_bools,
+        reason = "independent command-line switches map directly to booleans"
+    )
+)]
 pub struct TraversalArgs {
     /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
     /// Set to 1 to use only a single thread.
@@ -114,6 +121,11 @@ pub struct TraversalArgs {
         help_heading = "Traversal Options"
     )]
     pub count_hard_links: bool,
+
+    /// Count fully shared APFS file clones only once. This costs about 6% performance.
+    #[cfg(target_os = "macos")]
+    #[clap(long, help_heading = "Traversal Options")]
+    pub deduplicate_apfs_clones: bool,
 
     /// If set, we will not cross filesystems or traverse mount points
     #[clap(

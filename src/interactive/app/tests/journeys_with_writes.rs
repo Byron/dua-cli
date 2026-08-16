@@ -123,6 +123,7 @@ $precious.tmp
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
+        metadata_options: dua::TraversalOptions::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(
@@ -260,6 +261,7 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         cross_filesystems: false,
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
+        metadata_options: dua::TraversalOptions::default(),
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(
