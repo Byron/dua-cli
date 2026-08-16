@@ -346,7 +346,7 @@ fn walk_options_from(traversal: &options::TraversalArgs) -> Result<dua::WalkOpti
         ignore_patterns: dua::IgnorePatterns::from_files(&traversal.ignore_from)?,
         metadata_options: dua::TraversalOptions {
             #[cfg(target_os = "macos")]
-            apfs_clone_metadata: traversal.deduplicate_apfs_clones,
+            apfs_clone_metadata: traversal.deduplicate_apfs_clones && !traversal.apparent_size,
         },
     };
 
@@ -625,6 +625,36 @@ mod tests {
             fs::read_to_string(&path).expect("default config"),
             dua::Config::default_file_content()
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn walk_options_only_request_apfs_clones_for_allocated_size() {
+        for (apparent_size, deduplicate_apfs_clones, expected_clone_metadata) in [
+            (false, false, false),
+            (false, true, true),
+            (true, false, false),
+            (true, true, false),
+        ] {
+            let traversal = super::options::TraversalArgs {
+                threads: 1,
+                format: None,
+                apparent_size,
+                count_hard_links: false,
+                deduplicate_apfs_clones,
+                stay_on_filesystem: false,
+                ignore_dirs: vec![],
+                ignore_from: vec![],
+                input: vec![],
+            };
+            let walk_options =
+                super::walk_options_from(&traversal).expect("valid traversal options");
+
+            assert_eq!(
+                walk_options.metadata_options.apfs_clone_metadata, expected_clone_metadata,
+                "apparent_size={apparent_size}, deduplicate_apfs_clones={deduplicate_apfs_clones}"
+            );
+        }
     }
 
     #[test]
