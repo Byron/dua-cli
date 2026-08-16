@@ -51,12 +51,13 @@ impl Entry {
                 None
             };
         let metadata = Metadata::from_std(&metadata, data_fork);
+        let (parent_path, file_name) = crate::split_root_path(path);
         Ok(Self {
             depth: 0,
-            file_name: path.file_name().unwrap_or(path.as_os_str()).to_owned(),
+            file_name: file_name.to_owned(),
             file_type: metadata.file_type,
             metadata: Ok(metadata),
-            parent_path: Arc::from(path.parent().unwrap_or(Path::new(""))),
+            parent_path,
         })
     }
 

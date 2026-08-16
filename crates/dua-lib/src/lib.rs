@@ -234,6 +234,18 @@ pub fn read_dir(
     NativeReadDir::open(Arc::from(path), 0, options)
 }
 
+/// Split a root `path` into the `(parent, file name)` pair that [`Entry::path`] rejoins into it.
+///
+/// [`Path::file_name`] is `None` when the last component is `.` or `..`, and pairing that with
+/// [`Path::parent`] would rebuild a different path - `d/sub/..` would become `d/sub/d/sub/..`.
+/// Such a path has no separable name, so it is kept whole as the file name with an empty parent.
+fn split_root_path(path: &Path) -> (Arc<Path>, &std::ffi::OsStr) {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(file_name)) => (Arc::from(parent), file_name),
+        _ => (Arc::from(Path::new("")), path.as_os_str()),
+    }
+}
+
 /// Walk `root` without following symlinks.
 /// Unlike `walk_roots`, this yields entries directly for a single root and hides
 /// completion events.
@@ -467,12 +479,13 @@ impl Entry {
     /// Create an entry from a filesystem path.
     pub fn from_path(path: &Path, _options: Options) -> io::Result<Self> {
         let metadata = fs::symlink_metadata(path)?;
+        let (parent_path, file_name) = crate::split_root_path(path);
         Ok(Self {
             depth: 0,
-            file_name: path.file_name().unwrap_or(path.as_os_str()).to_owned(),
+            file_name: file_name.to_owned(),
             file_type: metadata.file_type(),
             metadata: Ok(metadata),
-            parent_path: Arc::from(path.parent().unwrap_or(Path::new(""))),
+            parent_path,
         })
     }
 
@@ -1072,6 +1085,33 @@ fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn split_root_path_round_trips_through_entry_path() {
+        for path in [
+            PathBuf::from("sub").join(".."),
+            PathBuf::from(".."),
+            PathBuf::from("."),
+            PathBuf::from("sub").join("child"),
+            PathBuf::from("child"),
+        ] {
+            let (parent_path, file_name) = split_root_path(&path);
+            assert_eq!(
+                parent_path.join(file_name),
+                path,
+                "`Entry::path` rejoins the split of {path:?} into the very same path"
+            );
+        }
+
+        let nested = PathBuf::from("sub").join("child");
+        let (parent_path, file_name) = split_root_path(&nested);
+        assert_eq!(
+            (parent_path.as_ref(), file_name),
+            (Path::new("sub"), OsStr::new("child")),
+            "a path with a file name is still split so children are named relative to it"
+        );
+    }
 
     #[test]
     fn parallel_walk_is_parent_first_and_does_not_follow_symlinks() {

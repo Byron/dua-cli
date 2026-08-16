@@ -89,6 +89,12 @@ WITH_FAILURE=1
               expect_run ${SUCCESSFULLY} "$exe" aggregate --stats . . dir ./dir/ ./dir/sub
             }
           )
+          (with "a relative root whose last component is '..'"
+            it "traverses it like any other directory" && {
+              WITH_SNAPSHOT="$snapshot/success-multiple-input-paths-with-parent-component" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --no-sort dir/.. dir
+            }
+          )
           (with "a broken link in multiple roots"
             ln -s not-present broken-link
             it "handles the broken link while listing valid paths" && {
