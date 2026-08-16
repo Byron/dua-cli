@@ -360,7 +360,6 @@ fn extract_aggregate_inputs_maybe_set_cwd(
             std::env::set_current_dir(path)?;
         }
 
-        #[cfg(target_os = "macos")]
         let cwd = std::env::current_dir()?;
         #[cfg(target_os = "macos")]
         let cwd_device = (!walk_options.cross_filesystems)
@@ -393,6 +392,12 @@ fn extract_aggregate_inputs_maybe_set_cwd(
                 .is_some_and(|patterns| {
                     patterns.is_excluded(Path::new(&entry.file_name), entry.file_type.is_dir())
                 })
+            {
+                continue;
+            }
+
+            if gix::path::realpath_opts(&entry.path(), &cwd, 32)
+                .is_ok_and(|path| walk_options.ignore_dirs.contains(&path))
             {
                 continue;
             }
