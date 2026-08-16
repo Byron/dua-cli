@@ -375,10 +375,8 @@ fn extract_aggregate_inputs_maybe_set_cwd(
         let parent_path: std::sync::Arc<Path> = Path::new("").into();
         let mut selected_entries = Vec::new();
 
-        let entries = dua_core::read_dir(Path::new("."), walk_options.metadata_options)?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        for mut entry in entries {
+        for entry in dua_core::read_dir(Path::new("."), walk_options.metadata_options)? {
+            let mut entry = entry?;
             if entry.file_type.is_symlink() {
                 continue;
             }
