@@ -286,6 +286,12 @@ pub(crate) struct WalkRoot {
 }
 
 impl WalkOptions {
+    /// Return whether `path`, resolved relative to `cwd`, names an ignored directory.
+    #[must_use]
+    pub fn ignores_directory(&self, path: &Path, cwd: &Path) -> bool {
+        ignore_directory(path, &self.ignore_dirs, cwd)
+    }
+
     pub(crate) fn iter_from_paths(
         &self,
         roots: Vec<WalkRoot>,
