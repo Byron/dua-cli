@@ -206,6 +206,16 @@ pub enum Command {
         #[clap(short = 'd', long, conflicts_with = "statistics", value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
         depth: Option<usize>,
     },
+    /// Print the entire traversal as folded stacks for flame-graph tools.
+    ///
+    /// Each line is an entry's path with `;` between its components, a space, and its size in bytes,
+    /// ready to pipe into `inferno-flamegraph` or Brendan Gregg's `flamegraph.pl` to render a disk
+    /// usage flame graph. Summing all lines reproduces the same total the other commands report.
+    #[clap(name = "stacks")]
+    Stacks {
+        #[clap(flatten)]
+        traversal: TraversalArgs,
+    },
     /// Generate shell completions
     Completions {
         /// The shell to generate a completions-script for

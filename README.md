@@ -243,6 +243,20 @@ Japanese (`ja`) is also available when the locale uses UTF-8 or omits the codese
 LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
 ```
 
+### Flame graphs
+
+The `stacks` subcommand prints the whole traversal as folded stacks - the "collapsed" format read by
+flame-graph tools like [`inferno`](https://github.com/jonhoo/inferno) and Brendan Gregg's
+`flamegraph.pl`. Each line is an entry's path with `;` between its components, a space, and its size
+in bytes, so an interactive drill-down can be turned into a single shareable SVG:
+
+```bash
+dua stacks | inferno-flamegraph > disk-usage.svg
+```
+
+It honors the same traversal options as the other commands (`--apparent-size`, `--ignore-from`, and
+so on), and the sizes of all lines sum to the same total `dua` reports.
+
 ### Configuration
 
 `dua` can read an optional configuration file from your OS-specific config directory:

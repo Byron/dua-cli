@@ -75,7 +75,7 @@ fn marked_path_for_output(path: &Path, stdout_is_terminal: bool) -> std::borrow:
 fn main() -> Result<()> {
     #[cfg(feature = "tui-crossplatform")]
     use options::Command::Interactive;
-    use options::Command::{Aggregate, Completions, Config};
+    use options::Command::{Aggregate, Completions, Config, Stacks};
 
     let opt: options::Args = options::Args::parse_from(wild::args_os());
 
@@ -238,6 +238,16 @@ fn main() -> Result<()> {
                     statistics,
                 )?
             }
+        }
+        Some(Stacks {
+            traversal: subcommand_traversal,
+        }) => {
+            let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
+            let walk_options = walk_options_from(&traversal)?;
+            let inputs = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+            let stdout = io::stdout();
+            let stdout_locked = stdout.lock();
+            dua::stacks(stdout_locked, walk_options, inputs)?
         }
         Some(Completions { shell }) => {
             let mut cmd = options::Args::command();
