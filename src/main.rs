@@ -405,7 +405,7 @@ fn extract_aggregate_inputs_maybe_set_cwd(
                 continue;
             }
 
-            if walk_options.ignores_directory(Path::new(&entry.file_name), &cwd) {
+            if walk_options.is_ignored_directory(Path::new(&entry.file_name), &cwd) {
                 continue;
             }
 
@@ -456,7 +456,7 @@ fn extract_paths_maybe_set_cwd(
                 .as_ref()
                 .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
         })
-        .filter(|path| !paths_were_expanded || !walk_options.ignores_directory(path, &cwd))
+        .filter(|path| !paths_were_expanded || !walk_options.is_ignored_directory(path, &cwd))
         .collect())
 }
 
