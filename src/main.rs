@@ -652,7 +652,9 @@ mod tests {
 
             assert_eq!(
                 walk_options.metadata_options.apfs_clone_metadata, expected_clone_metadata,
-                "apparent_size={apparent_size}, deduplicate_apfs_clones={deduplicate_apfs_clones}"
+                "APFS clone metadata is unnecessary for apparent sizes, which use logical file lengths\n\
+                 apparent_size={apparent_size}\n\
+                 deduplicate_apfs_clones={deduplicate_apfs_clones}"
             );
         }
     }
