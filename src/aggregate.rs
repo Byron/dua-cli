@@ -103,10 +103,8 @@ fn aggregate_inner(
     #[cfg(target_os = "macos")]
     let apfs_clone_accounting = walk_options.metadata_options.apfs_clone_metadata;
     let mut res = WalkResult::default();
-    let mut stats = Statistics {
-        smallest_file_in_bytes: u128::MAX,
-        ..Default::default()
-    };
+    let mut stats = Statistics::default();
+    let mut smallest_file_in_bytes = None;
     let num_roots = inputs.len();
     let mut aggregates = Vec::with_capacity(num_roots);
     let mut device_ids = vec![0; num_roots];
@@ -223,7 +221,9 @@ fn aggregate_inner(
                     }
                 });
                 stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
+                smallest_file_in_bytes = smallest_file_in_bytes
+                    .map_or(file_size, |size: u128| size.min(file_size))
+                    .into();
                 aggregate.bytes += file_size;
             }
             Err(_) => aggregate.errors += 1,
@@ -233,9 +233,7 @@ fn aggregate_inner(
     let total = aggregates.iter().map(|aggregate| aggregate.bytes).sum();
     res.num_errors = aggregates.iter().map(|aggregate| aggregate.errors).sum();
 
-    if stats.entries_traversed == 0 {
-        stats.smallest_file_in_bytes = 0;
-    }
+    stats.smallest_file_in_bytes = smallest_file_in_bytes.unwrap_or_default();
 
     if progress_visible && let Some(err) = err.as_mut() {
         write!(err, "{CLEAR_CURRENT_LINE}").ok();
