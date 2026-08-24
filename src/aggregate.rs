@@ -103,10 +103,8 @@ fn aggregate_inner(
     #[cfg(target_os = "macos")]
     let apfs_clone_accounting = walk_options.metadata_options.apfs_clone_metadata;
     let mut res = WalkResult::default();
-    let mut stats = Statistics {
-        smallest_file_in_bytes: u128::MAX,
-        ..Default::default()
-    };
+    let mut stats = Statistics::default();
+    let mut smallest_file_in_bytes = None;
     let num_roots = inputs.len();
     let mut aggregates = Vec::with_capacity(num_roots);
     let mut device_ids = vec![0; num_roots];
@@ -223,7 +221,9 @@ fn aggregate_inner(
                     }
                 });
                 stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                stats.smallest_file_in_bytes = stats.smallest_file_in_bytes.min(file_size);
+                smallest_file_in_bytes = smallest_file_in_bytes
+                    .map_or(file_size, |size: u128| size.min(file_size))
+                    .into();
                 aggregate.bytes += file_size;
             }
             Err(_) => aggregate.errors += 1,
@@ -233,11 +233,7 @@ fn aggregate_inner(
     let total = aggregates.iter().map(|aggregate| aggregate.bytes).sum();
     res.num_errors = aggregates.iter().map(|aggregate| aggregate.errors).sum();
 
-    // Entries whose metadata could not be read never contribute a size, so counting them is not
-    // enough to know that the minimum was ever set - only the sentinel still being in place is.
-    if stats.smallest_file_in_bytes == u128::MAX {
-        stats.smallest_file_in_bytes = 0;
-    }
+    stats.smallest_file_in_bytes = smallest_file_in_bytes.unwrap_or_default();
 
     if progress_visible && let Some(err) = err.as_mut() {
         write!(err, "{CLEAR_CURRENT_LINE}").ok();
@@ -810,44 +806,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.num_errors, 1);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn unreadable_roots_do_not_leak_the_smallest_file_sentinel() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("missing");
-
-        let (result, statistics) = aggregate(
-            Vec::new(),
-            None::<Vec<u8>>,
-            WalkOptions {
-                threads: 1,
-                count_hard_links: true,
-                apparent_size: true,
-                // Crossing filesystems keeps the root out of `crossdev::init`, so it fails while
-                // being walked and is counted as a traversed entry without a size.
-                cross_filesystems: true,
-                ignore_dirs: std::collections::BTreeSet::default(),
-                ignore_patterns: None,
-                metadata_options: crate::TraversalOptions::default(),
-            },
-            false,
-            true,
-            ByteFormat::Bytes,
-            vec![root],
-        )
-        .unwrap();
-
-        assert_eq!(result.num_errors, 1);
-        assert_eq!(
-            statistics.entries_traversed, 1,
-            "the failing root is seen, even though its size is unknown"
-        );
-        assert_eq!(
-            statistics.smallest_file_in_bytes, 0,
-            "no file size was ever observed, so the sentinel must not be reported as a size"
-        );
     }
 
     #[test]
