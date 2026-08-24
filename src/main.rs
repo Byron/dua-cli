@@ -403,9 +403,7 @@ fn extract_aggregate_inputs_maybe_set_cwd(
                 continue;
             }
 
-            if gix::path::realpath_opts(&entry.path(), &cwd, 32)
-                .is_ok_and(|path| walk_options.ignore_dirs.contains(&path))
-            {
+            if walk_options.is_ignored_directory(Path::new(&entry.file_name), &cwd) {
                 continue;
             }
 
@@ -456,14 +454,7 @@ fn extract_paths_maybe_set_cwd(
                 .as_ref()
                 .is_none_or(|patterns| !patterns.excludes_input_path(path, &cwd))
         })
-        .filter(|path| {
-            if !paths_were_expanded || walk_options.ignore_dirs.is_empty() {
-                return true;
-            }
-            let is_ignored = gix::path::realpath_opts(path, &cwd, 32)
-                .is_ok_and(|real| walk_options.ignore_dirs.contains(&real));
-            !is_ignored
-        })
+        .filter(|path| !paths_were_expanded || !walk_options.is_ignored_directory(path, &cwd))
         .collect())
 }
 
