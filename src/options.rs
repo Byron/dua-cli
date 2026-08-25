@@ -201,6 +201,10 @@ pub enum Command {
         /// If set, no total column will be computed for multiple inputs
         #[clap(long)]
         no_total: bool,
+        /// Print an indented tree that descends this many levels into each input, instead of the
+        /// flat listing. The inputs form the first level, so a depth of 1 lists just them.
+        #[clap(short = 'd', long, conflicts_with = "statistics", value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        depth: Option<usize>,
     },
     /// Generate shell completions
     Completions {

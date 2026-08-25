@@ -133,10 +133,18 @@ pub struct TraversalEntry(crate::walk::Entry);
 
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
-    /// A discovered entry and its traversal context.
-    Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64),
-    /// Traversal completed with the number of root-initialization I/O errors.
-    Finished(u64),
+    /// A discovered entry and its traversal context:
+    ///
+    /// 0. The discovered entry, or the I/O error encountered while reading it.
+    /// 1. The path of the input root being traversed.
+    /// 2. The input root's device ID.
+    /// 3. The input root's index in the original input list, used to place its graph node in the
+    ///    per-root side table so callers can recover input order, including failed roots.
+    Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64, usize),
+    /// A root that could not be initialized, with its input index.
+    RootError(Arc<PathBuf>, usize),
+    /// Traversal completed.
+    Finished,
 }
 
 /// An in-progress traversal which exposes newly obtained entries
@@ -146,12 +154,15 @@ pub struct BackgroundTraversal {
     pub root_idx: TreeIndex,
     /// Running traversal statistics.
     pub stats: TraversalStats,
+    /// Root nodes in input order; populated as root traversal events are integrated.
+    pub(crate) root_nodes: Vec<Option<TreeIndex>>,
     /// Nodes keyed by root allocation identity and path so overlapping roots build separate trees.
     nodes_by_path: HashMap<(usize, PathBuf), TreeIndex>,
     inodes: InodeFilter,
     throttle: Option<Throttle>,
     skip_root: bool,
     use_root_path: bool,
+    retained_depth: Option<usize>,
     /// Receiver used to obtain traversal events from the worker thread.
     pub event_rx: Receiver<TraversalEvent>,
 }
@@ -167,6 +178,7 @@ impl BackgroundTraversal {
         skip_root: bool,
         use_root_path: bool,
     ) -> anyhow::Result<BackgroundTraversal> {
+        let num_roots = input.len();
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
         let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
         std::thread::Builder::new()
@@ -174,20 +186,24 @@ impl BackgroundTraversal {
             .spawn({
                 let walk_options = walk_options.clone();
                 move || {
-                    let mut io_errors = 0;
-                    let (mut root_paths, mut device_ids, mut walk_roots) = (
+                    let (mut root_paths, mut root_indices, mut device_ids, mut walk_roots) = (
+                        Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                         Vec::with_capacity(input.len()),
                     );
-                    for root_path in input {
+                    for (root_idx, root_path) in input.into_iter().enumerate() {
                         log::info!("Walking {}", root_path.display());
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
                             let Ok(device_id) = crossdev::init(&root_path) else {
-                                // Skip roots that can't be accessed entirely.
-                                io_errors += 1;
+                                if entry_tx
+                                    .send(TraversalEvent::RootError(Arc::new(root_path), root_idx))
+                                    .is_err()
+                                {
+                                    return;
+                                }
                                 continue;
                             };
                             device_id
@@ -208,6 +224,7 @@ impl BackgroundTraversal {
                             entry: None,
                             device_id,
                         });
+                        root_indices.push(root_idx);
                         device_ids.push(device_id);
                         root_paths.push(Arc::new(root_path));
                     }
@@ -225,6 +242,7 @@ impl BackgroundTraversal {
                                 entry.map(TraversalEntry),
                                 Arc::clone(&root_paths[root]),
                                 device_ids[root],
+                                root_indices[root],
                             ))
                             .is_err()
                         {
@@ -233,7 +251,7 @@ impl BackgroundTraversal {
                             return;
                         }
                     }
-                    if entry_tx.send(TraversalEvent::Finished(io_errors)).is_err() {
+                    if entry_tx.send(TraversalEvent::Finished).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
                     }
                 }
@@ -243,13 +261,56 @@ impl BackgroundTraversal {
             walk_options: walk_options.clone(),
             root_idx,
             stats: TraversalStats::default(),
+            root_nodes: vec![None; num_roots],
             nodes_by_path: HashMap::new(),
             inodes: InodeFilter::default(),
             throttle: Some(Throttle::new(Duration::from_millis(250), None)),
             skip_root,
             use_root_path,
+            retained_depth: None,
             event_rx: entry_rx,
         })
+    }
+
+    /// Keep graph nodes through `depth`, while still aggregating all sizes.
+    /// For example, 0 retains roots only, 1 also retains their immediate children, and 2 also
+    /// retains grandchildren.
+    pub(crate) fn retain_depth(mut self, depth: usize) -> Self {
+        self.retained_depth = Some(depth);
+        self
+    }
+
+    fn record_error_on_root(
+        &mut self,
+        traversal: &mut Traversal,
+        root_idx: usize,
+        root_path: &Path,
+    ) {
+        if self.skip_root {
+            return;
+        }
+        // Entry errors carry no descendant path, so report them on the corresponding root.
+        if let Some(root) = self.root_nodes[root_idx] {
+            traversal.tree[root].metadata_io_error = true;
+            return;
+        }
+        let name = if self.use_root_path {
+            root_path.to_owned()
+        } else {
+            root_path
+                .file_name()
+                .unwrap_or(root_path.as_os_str())
+                .into()
+        };
+        let node = traversal.tree.add_node(EntryData {
+            name,
+            metadata_io_error: true,
+            is_dir: true,
+            ..EntryData::default()
+        });
+        traversal.tree.add_edge(self.root_idx, node, ());
+        *traversal.tree[self.root_idx].entry_count.get_or_insert(0) += 1;
+        self.root_nodes[root_idx] = Some(node);
     }
 
     /// Integrate `event` into traversal `t` so its information is represented by it.
@@ -274,113 +335,134 @@ impl BackgroundTraversal {
         event: TraversalEvent,
     ) -> Option<bool> {
         match event {
-            TraversalEvent::Entry(entry, root_path, device_id) => {
+            TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
                 let root = Arc::as_ptr(&root_path) as usize;
                 self.stats.entries_traversed += 1;
                 let mut data = EntryData::default();
-                match entry {
-                    Ok(TraversalEntry(entry)) => {
-                        let walk_depth = entry.depth;
-                        if self.skip_root {
-                            data.name = entry.file_name.clone().into();
+                let Ok(TraversalEntry(entry)) = entry else {
+                    self.stats.io_errors += 1;
+                    self.record_error_on_root(traversal, root_idx, &root_path);
+                    return self
+                        .throttle
+                        .as_ref()
+                        .is_some_and(|t| t.can_update())
+                        .then_some(false);
+                };
+                let walk_depth = entry.depth;
+                if self.skip_root {
+                    data.name = entry.file_name.clone().into();
+                } else {
+                    data.name = if walk_depth < 1 && self.use_root_path {
+                        (*root_path).clone()
+                    } else {
+                        entry.file_name.clone().into()
+                    }
+                }
+
+                let mut file_size = 0u128;
+                let mut mtime: SystemTime = UNIX_EPOCH;
+                data.is_dir = entry.file_type.is_dir();
+                if let Ok(m) = &entry.metadata {
+                    if self.walk_options.count_hard_links
+                        || self.inodes.add(&entry, m)
+                            && (self.walk_options.cross_filesystems
+                                || crossdev::is_same_device(device_id, m))
+                    {
+                        if self.walk_options.apparent_size {
+                            file_size = u128::from(m.len());
                         } else {
-                            data.name = if walk_depth < 1 && self.use_root_path {
-                                (*root_path).clone()
-                            } else {
-                                entry.file_name.clone().into()
-                            }
+                            file_size = u128::from(
+                                size_on_disk(
+                                    &entry.parent_path,
+                                    &data.name,
+                                    m,
+                                    data.is_dir,
+                                    &self.walk_options,
+                                    &mut self.inodes,
+                                )
+                                .unwrap_or_else(|_| {
+                                    self.stats.io_errors += 1;
+                                    data.metadata_io_error = true;
+                                    0
+                                }),
+                            );
                         }
+                    } else {
+                        data.entry_count = Some(0);
+                    }
 
-                        let mut file_size = 0u128;
-                        let mut mtime: SystemTime = UNIX_EPOCH;
-                        data.is_dir = entry.file_type.is_dir();
-                        if let Ok(m) = &entry.metadata {
-                            if self.walk_options.count_hard_links
-                                || self.inodes.add(&entry, m)
-                                    && (self.walk_options.cross_filesystems
-                                        || crossdev::is_same_device(device_id, m))
-                            {
-                                if self.walk_options.apparent_size {
-                                    file_size = u128::from(m.len());
-                                } else {
-                                    file_size =
-                                        u128::from(
-                                            size_on_disk(
-                                                &entry.parent_path,
-                                                &data.name,
-                                                m,
-                                                data.is_dir,
-                                                &self.walk_options,
-                                                &mut self.inodes,
-                                            )
-                                            .unwrap_or_else(|_| {
-                                                self.stats.io_errors += 1;
-                                                data.metadata_io_error = true;
-                                                0
-                                            }),
-                                        );
-                                }
-                            } else {
-                                data.entry_count = Some(0);
-                            }
+                    if let Ok(modified) = m.modified() {
+                        mtime = modified;
+                    } else {
+                        self.stats.io_errors += 1;
+                        data.metadata_io_error = true;
+                    }
+                } else {
+                    self.stats.io_errors += 1;
+                    data.metadata_io_error = true;
+                }
 
-                            if let Ok(modified) = m.modified() {
-                                mtime = modified;
-                            } else {
-                                self.stats.io_errors += 1;
-                                data.metadata_io_error = true;
-                            }
-                        } else {
-                            self.stats.io_errors += 1;
-                            data.metadata_io_error = true;
+                data.mtime = mtime;
+                data.size = file_size;
+                if data.is_dir {
+                    data.entry_count = Some(1);
+                }
+                let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
+                let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
+
+                let parent_index = if walk_depth == 0 {
+                    self.root_idx
+                } else {
+                    if self.skip_root {
+                        self.nodes_by_path
+                            .entry((root, (*root_path).clone()))
+                            .or_insert(self.root_idx);
+                    }
+                    let mut parent_path = entry.parent_path.to_path_buf();
+                    loop {
+                        if let Some(index) = self.nodes_by_path.get(&(root, parent_path.clone())) {
+                            break *index;
                         }
-
-                        data.mtime = mtime;
-                        data.size = file_size;
-                        if data.is_dir {
-                            data.entry_count = Some(1);
-                        }
-                        let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
-
-                        let parent_index = if walk_depth == 0 {
-                            self.root_idx
-                        } else {
-                            if self.skip_root {
-                                self.nodes_by_path
-                                    .entry((root, (*root_path).clone()))
-                                    .or_insert(self.root_idx);
-                            }
-                            *self
-                                .nodes_by_path
-                                .get(&(root, entry.parent_path.to_path_buf()))
-                                .expect("parent entries are emitted before their children")
-                        };
-                        let entry_index = traversal.tree.add_node(data);
-                        traversal.tree.add_edge(parent_index, entry_index, ());
-                        if traversal.tree[entry_index].is_dir {
-                            self.nodes_by_path.insert((root, entry.path()), entry_index);
-                        }
-
-                        let mut ancestor = Some(parent_index);
-                        while let Some(index) = ancestor {
-                            ancestor = traversal
-                                .tree
-                                .neighbors_directed(index, Direction::Incoming)
-                                .next();
-                            let entry = &mut traversal.tree[index];
-                            entry.size += file_size;
-                            *entry.entry_count.get_or_insert(0) += entry_count;
+                        if !parent_path.pop() {
+                            assert!(
+                                !retain_entry,
+                                "parent entries are emitted before their children"
+                            );
+                            break self.root_idx;
                         }
                     }
-                    Err(_) => self.stats.io_errors += 1,
+                };
+                if retain_entry {
+                    let entry_index = traversal.tree.add_node(data);
+                    traversal.tree.add_edge(parent_index, entry_index, ());
+                    if walk_depth == 0 {
+                        self.root_nodes[root_idx] = Some(entry_index);
+                    }
+                    if traversal.tree[entry_index].is_dir {
+                        self.nodes_by_path.insert((root, entry.path()), entry_index);
+                    }
+                }
+
+                let mut ancestor = Some(parent_index);
+                while let Some(index) = ancestor {
+                    ancestor = traversal
+                        .tree
+                        .neighbors_directed(index, Direction::Incoming)
+                        .next();
+                    let entry = &mut traversal.tree[index];
+                    entry.size += file_size;
+                    *entry.entry_count.get_or_insert(0) += entry_count;
                 }
 
                 if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
                     return Some(false);
                 }
             }
-            TraversalEvent::Finished(io_errors) => {
-                self.stats.io_errors += io_errors;
+            TraversalEvent::RootError(root_path, root_idx) => {
+                self.stats.io_errors += 1;
+                self.record_error_on_root(traversal, root_idx, &root_path);
+            }
+            TraversalEvent::Finished => {
                 self.throttle = None;
                 let root_size = traversal.tree[self.root_idx].size;
                 self.nodes_by_path = HashMap::new();
@@ -472,7 +554,7 @@ mod tests {
             let event = background.event_rx.recv().unwrap();
             let is_file = matches!(
                 &event,
-                TraversalEvent::Entry(Ok(TraversalEntry(entry)), _, _)
+                TraversalEvent::Entry(Ok(TraversalEntry(entry)), _, _, _)
                     if entry.file_name == "file"
             );
             background.integrate_traversal_event(&mut traversal, event);
@@ -539,6 +621,104 @@ mod tests {
                 1
             );
         }
+    }
+
+    #[test]
+    fn retained_depth_rolls_deeper_sizes_into_the_last_kept_node() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("one/two")).unwrap();
+        std::fs::write(dir.path().join("one/two/file"), b"content").unwrap();
+        for (depth, expected_nodes) in [(0, 2), (1, 3)] {
+            let mut traversal = Traversal::new();
+            let mut background = BackgroundTraversal::start(
+                traversal.root_index,
+                &WalkOptions {
+                    threads: 1,
+                    count_hard_links: true,
+                    apparent_size: true,
+                    cross_filesystems: true,
+                    ignore_dirs: std::collections::BTreeSet::default(),
+                    ignore_patterns: None,
+                    metadata_options: crate::TraversalOptions::default(),
+                },
+                vec![dir.path().to_owned()],
+                None,
+                false,
+                true,
+            )
+            .unwrap()
+            .retain_depth(depth);
+
+            while !background
+                .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                .unwrap_or(false)
+            {}
+
+            assert_eq!(traversal.tree.node_count(), expected_nodes);
+            assert!(traversal.tree[traversal.root_index].size >= 7);
+            let root = traversal
+                .tree
+                .neighbors_directed(traversal.root_index, Direction::Outgoing)
+                .next()
+                .unwrap();
+            let last_retained = if depth == 0 {
+                root
+            } else {
+                traversal
+                    .tree
+                    .neighbors_directed(root, Direction::Outgoing)
+                    .next()
+                    .unwrap()
+            };
+            assert!(traversal.tree[last_retained].size >= 7);
+        }
+    }
+
+    #[test]
+    fn descendant_entry_errors_mark_the_retained_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root_path = dir.path().to_owned();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start(
+            traversal.root_index,
+            &WalkOptions {
+                threads: 1,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
+                metadata_options: crate::TraversalOptions::default(),
+            },
+            vec![root_path.clone()],
+            None,
+            false,
+            true,
+        )
+        .unwrap()
+        .retain_depth(0);
+
+        while background.root_nodes[0].is_none() {
+            let event = background.event_rx.recv().unwrap();
+            background.integrate_traversal_event(&mut traversal, event);
+        }
+        let root = background.root_nodes[0].unwrap();
+        background.integrate_traversal_event(
+            &mut traversal,
+            TraversalEvent::Entry(
+                Err(io::Error::other("unreadable descendant")),
+                Arc::new(root_path),
+                0,
+                0,
+            ),
+        );
+
+        assert_eq!(background.stats.io_errors, 1);
+        assert!(
+            traversal.tree[root].metadata_io_error,
+            "a path-less descendant error is reported on its retained root: {:?}",
+            traversal.tree[root]
+        );
     }
 
     #[cfg(target_os = "macos")]
@@ -624,6 +804,37 @@ mod tests {
         {}
 
         assert_eq!(background.stats.io_errors, 1);
+        let roots = background
+            .root_nodes
+            .iter()
+            .copied()
+            .collect::<Option<Vec<_>>>()
+            .unwrap();
+        assert_eq!(roots.len(), 2, "one node per input root: {roots:?}");
+        assert_eq!(
+            traversal.tree[traversal.root_index].entry_count,
+            Some(2),
+            "the synthetic root counts both input roots"
+        );
+        assert!(
+            traversal.tree[roots[0]].metadata_io_error,
+            "the failed root records its I/O error: {:?}",
+            traversal.tree[roots[0]]
+        );
+        assert_eq!(
+            traversal.tree[roots[0]].name,
+            Path::new("dangling"),
+            "the failed root retains its display name"
+        );
+        assert!(
+            roots.iter().all(|root| {
+                traversal
+                    .tree
+                    .find_edge(traversal.root_index, *root)
+                    .is_some()
+            }),
+            "all input roots are children of the synthetic root: {roots:?}"
+        );
     }
 
     #[test]

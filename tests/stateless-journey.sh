@@ -14,6 +14,9 @@ export DUA_COUNT_HARD_LINKS=true
 normalize_sizes() {
   sed -E 's/[[:space:]]+[0-9]+([.][0-9]+)?[[:space:]]+([KMGT]i?B|[Bb])/ <SIZE> \2/g'
 }
+normalize_tree_sizes() {
+  sed -E 's/[[:space:]]+[0-9]+([.][0-9]+)?[[:space:]]+([KMGT]i?B|[Bb])/ <SIZE> <UNIT>/g' | LC_ALL=C sort -k3
+}
 SNAPSHOT_FILTER=normalize_sizes
 
 SUCCESSFULLY=0
@@ -35,6 +38,13 @@ WITH_FAILURE=1
             it "produces a human-readable (metric) aggregate of everything within the current directory, with total" && {
               WITH_SNAPSHOT="$snapshot/success-no-arguments" \
               expect_run ${SUCCESSFULLY} "$exe" aggregate
+            }
+          )
+          (with "tree depth"
+            it "produces an indented tree through the requested depth" && {
+              SNAPSHOT_FILTER=normalize_tree_sizes \
+              WITH_SNAPSHOT="$snapshot/success-tree-depth" \
+              expect_run ${SUCCESSFULLY} "$exe" aggregate --depth 3
             }
           )
           (with "a single file argument"
