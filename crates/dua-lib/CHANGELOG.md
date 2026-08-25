@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 3.2.0 (2026-08-25)
 
 ### New Features
 
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 11 commits contributed to the release over the course of 9 calendar days.
+ - 12 commits contributed to the release over the course of 9 calendar days.
  - 10 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog priot to release ([`c042449`](https://github.com/Byron/dua-cli/commit/c0424490a47477dd516c3f52bbb6d130b210c317))
     - Merge pull request #379 from nshcr/codex/macos-du-allocation-accounting ([`2262295`](https://github.com/Byron/dua-cli/commit/226229565fc978e22a14ff2531044c688c87e1ed))
     - Review ([`df12088`](https://github.com/Byron/dua-cli/commit/df12088f444aa934ed922ab360279fabdf7a5ea0))
     - Match macOS `du` allocation accounting ([`ddee9e4`](https://github.com/Byron/dua-cli/commit/ddee9e48fdd90575c91006ee52c4088ddf028b68))
