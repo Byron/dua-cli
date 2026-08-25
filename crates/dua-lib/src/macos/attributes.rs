@@ -357,6 +357,10 @@ pub(super) fn parse_record(
     Ok(record)
 }
 
+/// Return whether a requested attribute occupies space in the record.
+///
+/// Packed-invalid records contain default values even when the returned-attribute mask marks the
+/// attribute unavailable; ordinary records omit unavailable attributes entirely.
 fn attribute_is_packed(
     returned: libc::attrgroup_t,
     attribute: libc::attrgroup_t,

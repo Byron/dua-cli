@@ -469,7 +469,10 @@ fn clone_attributes_at(path: &Path, metadata: &fs::Metadata) -> Option<DataFork>
 
 impl ParsedRecord {
     fn metadata(&self, file_type: FileType) -> io::Result<Metadata> {
-        debug_assert!(!file_type.is_dir());
+        debug_assert!(
+            !file_type.is_dir(),
+            "directories must fail the Apple FTS stat contract and use path metadata"
+        );
         let len = self
             .file_length
             .ok_or_else(|| invalid_data("missing file length"))?;
