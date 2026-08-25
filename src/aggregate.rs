@@ -24,6 +24,46 @@ fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) ->
 
 const CLEAR_CURRENT_LINE: &str = "\x1b[2K\r";
 
+/// Throttles transient traversal entry counts to an optional writer and clears the progress line.
+pub(crate) struct TraversalProgress<W: io::Write> {
+    writer: Option<W>,
+    throttle: Throttle,
+    // Only clear the line if progress was visible before as we printed it.
+    visible: bool,
+}
+
+impl<W: io::Write> TraversalProgress<W> {
+    pub(crate) fn new(writer: Option<W>) -> Self {
+        Self {
+            writer,
+            throttle: Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into()),
+            visible: false,
+        }
+    }
+
+    pub(crate) fn update(&mut self, entries: u64) {
+        if self.throttle.can_update() {
+            self.write(entries);
+        }
+    }
+
+    fn write(&mut self, entries: u64) {
+        if let Some(writer) = self.writer.as_mut() {
+            write!(writer, "Enumerating {entries} items\r").ok();
+            self.visible = true;
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        if self.visible {
+            if let Some(writer) = self.writer.as_mut() {
+                write!(writer, "{CLEAR_CURRENT_LINE}").ok();
+            }
+            self.visible = false;
+        }
+    }
+}
+
 /// Accumulated output state for one input root, retained until roots can be emitted in the
 /// requested order.
 struct Aggregate {
@@ -101,7 +141,7 @@ pub fn aggregate_entries(
 
 fn aggregate_inner(
     out: (impl io::Write, bool),
-    mut err: Option<impl io::Write>,
+    err: Option<impl io::Write>,
     walk_options: WalkOptions,
     compute_total: bool,
     sort_by_size_in_bytes: bool,
@@ -160,8 +200,7 @@ fn aggregate_inner(
         });
     }
     let mut inodes = InodeFilter::default();
-    let progress = Throttle::new(Duration::from_millis(100), Duration::from_secs(1).into());
-    let mut progress_visible = false;
+    let mut progress = TraversalProgress::new(err);
     let mut next_output = 0;
 
     // Shared hard links and, when enabled, cloned data belong to the first root that reaches them.
@@ -175,11 +214,10 @@ fn aggregate_inner(
                 if !sort_by_size_in_bytes {
                     output_completed(
                         &mut out,
-                        &mut err,
                         &aggregates,
                         &completed,
                         &mut next_output,
-                        &mut progress_visible,
+                        &mut progress,
                         output_options,
                     )?;
                 }
@@ -188,12 +226,7 @@ fn aggregate_inner(
         };
         let aggregate = &mut aggregates[root_idx];
         stats.entries_traversed += 1;
-        progress.throttled(|| {
-            if let Some(err) = err.as_mut() {
-                write!(err, "Enumerating {} items\r", stats.entries_traversed).ok();
-                progress_visible = true;
-            }
-        });
+        progress.update(stats.entries_traversed);
         match entry {
             Ok(entry) => {
                 if entry.depth == 0 {
@@ -245,9 +278,7 @@ fn aggregate_inner(
 
     stats.smallest_file_in_bytes = smallest_file_in_bytes.unwrap_or_default();
 
-    if progress_visible && let Some(err) = err.as_mut() {
-        write!(err, "{CLEAR_CURRENT_LINE}").ok();
-    }
+    progress.clear();
 
     if sort_by_size_in_bytes {
         output_sorted(&mut out, aggregates, output_options)?;
@@ -256,11 +287,10 @@ fn aggregate_inner(
         // the traversal never starts on them.
         output_completed(
             &mut out,
-            &mut err,
             &aggregates,
             &completed,
             &mut next_output,
-            &mut progress_visible,
+            &mut progress,
             output_options,
         )?;
         debug_assert_eq!(next_output, num_roots);
@@ -282,23 +312,18 @@ fn aggregate_inner(
 
 /// Write the contiguous run of completed roots starting at `next_output`, preserving input order.
 /// Clears a visible progress line before writing the first completed root.
-/// `progress_visible` tracks if progress information is currently shown, taking up the last line.
 fn output_completed<W: io::Write, E: io::Write>(
     out: &mut W,
-    err: &mut Option<E>,
     aggregates: &[Aggregate],
     completed: &[bool],
     next_output: &mut usize,
-    progress_visible: &mut bool,
+    progress: &mut TraversalProgress<E>,
     (byte_format, out_supports_colors): (ByteFormat, bool),
 ) -> io::Result<()> {
     let must_report_completed_path = completed.get(*next_output).copied() == Some(true);
     // Remove the transient progress line before writing permanent results to the terminal.
-    if must_report_completed_path && *progress_visible {
-        if let Some(err) = err.as_mut() {
-            write!(err, "{CLEAR_CURRENT_LINE}").ok();
-        }
-        *progress_visible = false;
+    if must_report_completed_path {
+        progress.clear();
     }
     while completed.get(*next_output).copied() == Some(true) {
         let aggregate = &aggregates[*next_output];
@@ -401,6 +426,19 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[test]
+    fn traversal_progress_writes_and_clears_one_line() {
+        let mut progress = TraversalProgress::new(Some(Vec::new()));
+        progress.write(42);
+        progress.clear();
+
+        assert_eq!(
+            progress.writer.as_deref(),
+            Some(b"Enumerating 42 items\r\x1b[2K\r".as_slice())
+        );
+        assert!(!progress.visible);
     }
 
     #[cfg(any(windows, target_os = "macos"))]
@@ -714,17 +752,16 @@ mod tests {
         ];
         let mut completed = [false, true];
         let mut next_output = 0;
-        let mut progress_visible = true;
+        let mut progress = TraversalProgress::new(Some(Vec::new()));
+        progress.visible = true;
         let mut out = Vec::new();
-        let mut err = Some(Vec::new());
 
         output_completed(
             &mut out,
-            &mut err,
             &aggregates,
             &completed,
             &mut next_output,
-            &mut progress_visible,
+            &mut progress,
             (ByteFormat::Bytes, false),
         )
         .unwrap();
@@ -736,11 +773,10 @@ mod tests {
         completed[0] = true;
         output_completed(
             &mut out,
-            &mut err,
             &aggregates,
             &completed,
             &mut next_output,
-            &mut progress_visible,
+            &mut progress,
             (ByteFormat::Bytes, false),
         )
         .unwrap();
@@ -753,11 +789,11 @@ mod tests {
         );
         assert_eq!(next_output, 2, "output stopped at root {next_output}");
         assert_eq!(
-            err.as_deref(),
+            progress.writer.as_deref(),
             Some(CLEAR_CURRENT_LINE.as_bytes()),
-            "unexpected progress cleanup: {err:?}"
+            "unexpected progress cleanup"
         );
-        assert!(!progress_visible, "progress remained visible after cleanup");
+        assert!(!progress.visible, "progress remained visible after cleanup");
     }
 
     #[test]

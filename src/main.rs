@@ -217,6 +217,7 @@ fn main() -> Result<()> {
                 let stdout = io::stdout();
                 dua::stacks(
                     stdout.lock(),
+                    stderr_if_tty(),
                     walk_options,
                     inputs,
                     depth.map(|depth| depth.saturating_sub(1)),
@@ -229,6 +230,7 @@ fn main() -> Result<()> {
                 let out_supports_colors = stdout.is_terminal();
                 dua::aggregate_tree(
                     (stdout.lock(), out_supports_colors),
+                    stderr_if_tty(),
                     walk_options,
                     byte_format,
                     paths,

@@ -1,3 +1,4 @@
+use crate::aggregate::TraversalProgress;
 use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
 use crate::{WalkOptions, WalkResult};
 use anyhow::Result;
@@ -15,6 +16,7 @@ use std::path::PathBuf;
 /// the contained entries.
 pub fn stacks(
     mut out: impl io::Write,
+    err: Option<impl io::Write>,
     walk_options: WalkOptions,
     paths: Vec<PathBuf>,
     max_depth: Option<usize>,
@@ -31,13 +33,16 @@ pub fn stacks(
         true,
     )?
     .retain_depth(max_depth);
+    let mut progress = TraversalProgress::new(err);
 
-    loop {
-        let event = background.event_rx.recv()?;
-        if background.integrate_traversal_event(&mut traversal, event) == Some(true) {
+    while let Ok(event) = background.event_rx.recv() {
+        let finished = background.integrate_traversal_event(&mut traversal, event) == Some(true);
+        progress.update(background.stats.entries_traversed);
+        if finished {
             break;
         }
     }
+    progress.clear();
 
     write_stacks(&mut out, &traversal.tree, traversal.root_index)?;
 
@@ -130,7 +135,14 @@ mod tests {
 
         let root = dir.path().to_owned();
         let mut out = Vec::new();
-        let result = stacks(&mut out, walk_options(), vec![root.clone()], None).unwrap();
+        let result = stacks(
+            &mut out,
+            None::<Vec<u8>>,
+            walk_options(),
+            vec![root.clone()],
+            None,
+        )
+        .unwrap();
         assert_eq!(result.num_errors, 0);
 
         let folded = folded(&out);
@@ -157,7 +169,14 @@ mod tests {
         std::fs::write(dir.path().join("two"), b"678").unwrap();
 
         let mut out = Vec::new();
-        stacks(&mut out, walk_options(), vec![dir.path().to_owned()], None).unwrap();
+        stacks(
+            &mut out,
+            None::<Vec<u8>>,
+            walk_options(),
+            vec![dir.path().to_owned()],
+            None,
+        )
+        .unwrap();
         let folded_total: u128 = folded(&out).values().sum();
 
         // Independently traverse the same tree to obtain the total `dua` itself reports.
@@ -189,7 +208,14 @@ mod tests {
         std::fs::write(&file, b"solo!").unwrap();
 
         let mut out = Vec::new();
-        stacks(&mut out, walk_options(), vec![file.clone()], None).unwrap();
+        stacks(
+            &mut out,
+            None::<Vec<u8>>,
+            walk_options(),
+            vec![file.clone()],
+            None,
+        )
+        .unwrap();
 
         let folded = folded(&out);
         assert_eq!(folded.len(), 1);
@@ -208,6 +234,7 @@ mod tests {
         let mut out = Vec::new();
         stacks(
             &mut out,
+            None::<Vec<u8>>,
             walk_options(),
             vec![dir.path().to_owned()],
             Some(1),
