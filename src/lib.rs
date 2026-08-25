@@ -15,9 +15,11 @@ pub use dua_core::Options as TraversalOptions;
 
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;
+mod tree;
 
 pub use aggregate::aggregate;
 #[cfg(any(windows, target_os = "macos"))]
 pub use aggregate::aggregate_entries;
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;
+pub use tree::aggregate_tree;

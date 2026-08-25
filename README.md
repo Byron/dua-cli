@@ -181,6 +181,20 @@ about 6%.
 Files that share only some blocks are not deduplicated, and `--apparent-size`
 still reports each file's logical length.
 
+### Tree output
+
+By default `aggregate` prints a flat listing. Pass `--depth N` to instead print an indented tree
+that descends `N` levels into each input, which is handy for sharing a disk-usage report without
+opening interactive mode. The inputs form the first level, so `--depth 1` lists just them, the same
+set of entries the flat listing shows.
+
+```bash
+# show each top-level entry and one level below it
+dua aggregate --depth 2
+```
+
+`--no-sort` and `--no-total` work the same way they do for the flat listing.
+
 ### Excluding paths with a pattern file
 
 `--ignore-from FILE` reads gitignore-style patterns and leaves everything they match out of the

@@ -201,6 +201,10 @@ pub enum Command {
         /// If set, no total column will be computed for multiple inputs
         #[clap(long)]
         no_total: bool,
+        /// Print an indented tree that descends this many levels into each input, instead of the
+        /// flat listing. The inputs form the first level, so a depth of 1 lists just them.
+        #[clap(long, value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        depth: Option<usize>,
     },
     /// Generate shell completions
     Completions {
@@ -295,6 +299,19 @@ mod tests {
             traversal.ignore_from,
             [PathBuf::from("sub-one"), PathBuf::from("sub-two")]
         );
+    }
+
+    #[test]
+    fn aggregate_accepts_depth_and_rejects_zero() {
+        let args = Args::try_parse_from(["dua", "aggregate", "--depth", "3"])
+            .expect("aggregate accepts a depth");
+        let Some(super::Command::Aggregate { depth, .. }) = args.command else {
+            panic!("expected aggregate subcommand");
+        };
+        assert_eq!(depth, Some(3));
+
+        Args::try_parse_from(["dua", "aggregate", "--depth", "0"])
+            .expect_err("a depth of zero is out of range");
     }
 
     #[test]

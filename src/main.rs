@@ -207,20 +207,35 @@ fn main() -> Result<()> {
             no_total,
             no_sort,
             statistics,
+            depth,
         }) => {
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
             let config = dua::Config::load()?;
             let byte_format = traversal.byte_format(&config);
             let walk_options = walk_options_from(&traversal)?;
-            let inputs = extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
-            run_aggregation(
-                inputs,
-                walk_options,
-                !no_total,
-                !no_sort,
-                byte_format,
-                statistics,
-            )?
+            if let Some(depth) = depth {
+                let paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                dua::aggregate_tree(
+                    io::stdout().lock(),
+                    walk_options,
+                    byte_format,
+                    paths,
+                    depth,
+                    !no_total,
+                    !no_sort,
+                )?
+            } else {
+                let inputs =
+                    extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
+                run_aggregation(
+                    inputs,
+                    walk_options,
+                    !no_total,
+                    !no_sort,
+                    byte_format,
+                    statistics,
+                )?
+            }
         }
         Some(Completions { shell }) => {
             let mut cmd = options::Args::command();
