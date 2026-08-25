@@ -126,6 +126,13 @@ mod tests {
             .collect()
     }
 
+    fn folded_frame(path: impl Into<std::path::PathBuf>) -> String {
+        frame(&EntryData {
+            name: path.into(),
+            ..EntryData::default()
+        })
+    }
+
     #[test]
     fn every_file_appears_with_its_size_below_its_directories() {
         let dir = tempfile::tempdir().unwrap();
@@ -146,7 +153,7 @@ mod tests {
         assert_eq!(result.num_errors, 0);
 
         let folded = folded(&out);
-        let base = root.to_string_lossy().replace(';', "_");
+        let base = folded_frame(root);
         assert_eq!(
             folded.get(&format!("{base};nested;file")),
             Some(&7),
@@ -219,10 +226,7 @@ mod tests {
 
         let folded = folded(&out);
         assert_eq!(folded.len(), 1);
-        assert_eq!(
-            folded.get(&file.to_string_lossy().replace(';', "_")),
-            Some(&5)
-        );
+        assert_eq!(folded.get(&folded_frame(file)), Some(&5));
     }
 
     #[test]
@@ -242,7 +246,7 @@ mod tests {
         .unwrap();
 
         let folded = folded(&out);
-        let nested = format!("{};nested", dir.path().to_string_lossy().replace(';', "_"));
+        let nested = format!("{};nested", folded_frame(dir.path()));
         assert!(folded.contains_key(&nested));
         assert!(!folded.keys().any(|stack| stack.ends_with(";file")));
     }
