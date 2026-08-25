@@ -1,25 +1,23 @@
 use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
 use crate::{WalkOptions, WalkResult};
 use anyhow::Result;
+use bstr::ByteSlice;
 use petgraph::Direction;
 use std::io;
 use std::path::PathBuf;
 
-/// Traverse `paths` and write the entire tree to `out` as folded stacks, one entry per line, ready
-/// to pipe into flame-graph tools like [`inferno`](https://github.com/jonhoo/inferno) or Brendan
-/// Gregg's `flamegraph.pl`.
+/// Traverse `paths` and write the tree to `out` as folded stacks, one entry per line, ready
+/// to pipe into flame-graph tools like [`inferno`](https://github.com/jonhoo/inferno).
 ///
 /// Each line is an entry's path from the traversal root, with its components separated by `;`,
 /// followed by a single space and the entry's own size in bytes. A directory contributes only the
 /// size of its own directory entry, as the sizes of everything it contains appear on the lines of
-/// the contained entries. Summing all lines therefore reproduces the same total `dua` reports.
-///
-/// Whether sizes are apparent or allocated on disk follows `walk_options`, and hard-linked files
-/// are counted once unless `count_hard_links` is set, exactly like [`crate::aggregate`].
+/// the contained entries.
 pub fn stacks(
     mut out: impl io::Write,
     walk_options: WalkOptions,
     paths: Vec<PathBuf>,
+    max_depth: Option<usize>,
 ) -> Result<WalkResult> {
     let mut traversal = Traversal::new();
     // Mirror the interactive traversal so root nodes carry their input path as name.
@@ -31,7 +29,8 @@ pub fn stacks(
         pattern_roots.as_deref(),
         false,
         true,
-    )?;
+    )?
+    .retain_depth(max_depth);
 
     loop {
         let event = background.event_rx.recv()?;
@@ -72,20 +71,28 @@ fn write_stacks(mut out: impl io::Write, tree: &Tree, root: TreeIndex) -> io::Re
     Ok(())
 }
 
-/// Turn an entry name into a single flame-graph frame, neutralizing the `;` frame separator and any
-/// control characters that would otherwise corrupt the line-based format.
+/// Turn an entry name into a single flame-graph frame, encoding the `;` frame separator, control
+/// characters, and the `\` escape marker.
 fn frame(entry: &EntryData) -> String {
-    entry
-        .name
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c == ';' || c.is_control() { '_' } else { c })
-        .collect()
+    let mut encoded = String::new();
+    for chunk in entry.name.as_os_str().as_encoded_bytes().utf8_chunks() {
+        for character in chunk.valid().chars() {
+            match character {
+                '\\' => encoded.push_str(r"\\"),
+                ';' => encoded.push_str(r"\x3b"),
+                character if character.is_control() => encoded.extend(character.escape_default()),
+                character => encoded.push(character),
+            }
+        }
+        encoded.extend(chunk.invalid().escape_bytes());
+    }
+    encoded
 }
 
 #[cfg(test)]
 mod tests {
-    use super::stacks;
+    use super::{frame, stacks};
+    use crate::traverse::EntryData;
     use crate::{TraversalOptions, WalkOptions};
     use std::collections::BTreeMap;
 
@@ -123,7 +130,7 @@ mod tests {
 
         let root = dir.path().to_owned();
         let mut out = Vec::new();
-        let result = stacks(&mut out, walk_options(), vec![root.clone()]).unwrap();
+        let result = stacks(&mut out, walk_options(), vec![root.clone()], None).unwrap();
         assert_eq!(result.num_errors, 0);
 
         let folded = folded(&out);
@@ -150,7 +157,7 @@ mod tests {
         std::fs::write(dir.path().join("two"), b"678").unwrap();
 
         let mut out = Vec::new();
-        stacks(&mut out, walk_options(), vec![dir.path().to_owned()]).unwrap();
+        stacks(&mut out, walk_options(), vec![dir.path().to_owned()], None).unwrap();
         let folded_total: u128 = folded(&out).values().sum();
 
         // Independently traverse the same tree to obtain the total `dua` itself reports.
@@ -182,7 +189,7 @@ mod tests {
         std::fs::write(&file, b"solo!").unwrap();
 
         let mut out = Vec::new();
-        stacks(&mut out, walk_options(), vec![file.clone()]).unwrap();
+        stacks(&mut out, walk_options(), vec![file.clone()], None).unwrap();
 
         let folded = folded(&out);
         assert_eq!(folded.len(), 1);
@@ -193,18 +200,38 @@ mod tests {
     }
 
     #[test]
-    fn semicolons_in_names_do_not_break_frames() {
+    fn depth_rolls_hidden_descendants_into_the_last_frame() {
         let dir = tempfile::tempdir().unwrap();
-        let odd = dir.path().join("a;b");
-        std::fs::write(&odd, b"x").unwrap();
+        std::fs::create_dir(dir.path().join("nested")).unwrap();
+        std::fs::write(dir.path().join("nested/file"), b"content").unwrap();
 
         let mut out = Vec::new();
-        stacks(&mut out, walk_options(), vec![dir.path().to_owned()]).unwrap();
+        stacks(
+            &mut out,
+            walk_options(),
+            vec![dir.path().to_owned()],
+            Some(1),
+        )
+        .unwrap();
 
-        let text = String::from_utf8(out).unwrap();
-        assert!(
-            text.lines().any(|line| line.ends_with("a_b 1")),
-            "the semicolon in the file name is neutralized so it stays a single frame, got {text:?}"
-        );
+        let folded = folded(&out);
+        let nested = format!("{};nested", dir.path().to_string_lossy().replace(';', "_"));
+        assert!(folded.contains_key(&nested));
+        assert!(!folded.keys().any(|stack| stack.ends_with(";file")));
+    }
+
+    #[test]
+    fn frame_names_are_encoded_without_collisions() {
+        let encode = |name: &str| {
+            frame(&EntryData {
+                name: name.into(),
+                ..EntryData::default()
+            })
+        };
+
+        assert_eq!(encode("a;b"), r"a\x3bb");
+        assert_eq!(encode("a_b"), "a_b");
+        assert_eq!(encode(r"a\x3bb"), r"a\\x3bb");
+        assert_eq!(encode("a\nb"), r"a\nb");
     }
 }

@@ -24,5 +24,5 @@ pub use aggregate::aggregate;
 pub use aggregate::aggregate_entries;
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;
-pub use tree::aggregate_tree;
 pub use stacks::stacks;
+pub use tree::aggregate_tree;

@@ -43,7 +43,7 @@ pub fn aggregate_tree(
         false,
         true,
     )?
-    .retain_depth(max_depth);
+    .retain_depth(Some(max_depth));
 
     while let Ok(event) = background.event_rx.recv() {
         if background
