@@ -12,7 +12,11 @@ use std::{
 pub(super) const VNON: u32 = 0;
 pub(super) const VREG: u32 = 1;
 pub(super) const VDIR: u32 = 2;
+pub(super) const VBLK: u32 = 3;
+pub(super) const VCHR: u32 = 4;
 pub(super) const VLNK: u32 = 5;
+pub(super) const VSOCK: u32 = 6;
+pub(super) const VFIFO: u32 = 7;
 // These `<sys/stat.h>` filesystem flags and accounting units are absent from `libc`.
 pub(super) const SF_FIRMLINK: u32 = 0x0080_0000;
 pub(super) const STAT_BLOCK_BYTES: u64 = 512;
@@ -22,14 +26,19 @@ const EF_MAY_SHARE_BLOCKS: u64 = 0x0000_0001;
 const ATTR_CMN_ERROR: libc::attrgroup_t = 0x2000_0000;
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
-const COMMON_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
+const FTS_COMMON_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
     | libc::ATTR_CMN_NAME
     | libc::ATTR_CMN_DEVID
     | libc::ATTR_CMN_OBJTYPE
+    | libc::ATTR_CMN_CRTIME
     | libc::ATTR_CMN_MODTIME
+    | libc::ATTR_CMN_CHGTIME
+    | libc::ATTR_CMN_ACCTIME
+    | libc::ATTR_CMN_OWNERID
+    | libc::ATTR_CMN_GRPID
+    | libc::ATTR_CMN_ACCESSMASK
     | libc::ATTR_CMN_FLAGS
-    | libc::ATTR_CMN_FILEID
-    | ATTR_CMN_ERROR;
+    | libc::ATTR_CMN_FILEID;
 // XNU's `vfs_attrlist.c` `LIST_DIR_ATTRS` authorizes this subset with LIST_DIRECTORY alone.
 // Metadata attributes additionally require SEARCH, which a readable directory need not grant.
 const LIST_ONLY_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
@@ -37,12 +46,11 @@ const LIST_ONLY_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
     | libc::ATTR_CMN_OBJTYPE
     | libc::ATTR_CMN_FILEID
     | ATTR_CMN_ERROR;
-const DIRECTORY_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_DIR_LINKCOUNT
-    | libc::ATTR_DIR_MOUNTSTATUS
-    | libc::ATTR_DIR_ALLOCSIZE
-    | libc::ATTR_DIR_DATALENGTH;
-const FILE_ATTRIBUTES: libc::attrgroup_t =
-    libc::ATTR_FILE_LINKCOUNT | libc::ATTR_FILE_ALLOCSIZE | libc::ATTR_FILE_DATALENGTH;
+const FTS_FILE_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_FILE_LINKCOUNT
+    | libc::ATTR_FILE_ALLOCSIZE
+    | libc::ATTR_FILE_IOBLOCKSIZE
+    | libc::ATTR_FILE_DEVTYPE
+    | libc::ATTR_FILE_DATALENGTH;
 const APFS_FILE_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_FILE_DATAALLOCSIZE;
 const APFS_EXTENDED_ATTRIBUTES: libc::attrgroup_t =
     libc::ATTR_CMNEXT_CLONEID | libc::ATTR_CMNEXT_EXT_FLAGS;
@@ -96,11 +104,11 @@ pub(super) fn requested_attributes(list_only: bool, include_apfs: bool) -> libc:
         commonattr: if list_only {
             LIST_ONLY_ATTRIBUTES
         } else {
-            COMMON_ATTRIBUTES
+            FTS_COMMON_ATTRIBUTES
         },
         volattr: 0,
-        dirattr: if list_only { 0 } else { DIRECTORY_ATTRIBUTES },
-        fileattr: if list_only { 0 } else { FILE_ATTRIBUTES },
+        dirattr: 0,
+        fileattr: if list_only { 0 } else { FTS_FILE_ATTRIBUTES },
         forkattr: 0,
     };
     if include_apfs && !list_only {
@@ -124,6 +132,8 @@ pub(super) fn root_clone_attributes() -> libc::attrlist {
 
 #[derive(Default)]
 pub(super) struct ParsedRecord {
+    returned_common: libc::attrgroup_t,
+    returned_file: libc::attrgroup_t,
     pub(super) file_name: Option<OsString>,
     pub(super) device: Option<u64>,
     pub(super) object_type: Option<u32>,
@@ -131,10 +141,6 @@ pub(super) struct ParsedRecord {
     pub(super) flags: u32,
     pub(super) inode: Option<u64>,
     pub(super) error: u32,
-    pub(super) directory_links: Option<u64>,
-    pub(super) mount_status: u32,
-    pub(super) directory_allocated: Option<u64>,
-    pub(super) directory_length: Option<u64>,
     pub(super) file_links: Option<u64>,
     pub(super) file_length: Option<u64>,
     pub(super) file_allocated: Option<u64>,
@@ -163,7 +169,11 @@ pub(super) fn read_record_length(bytes: &[u8]) -> io::Result<usize> {
         .map_err(|_| invalid_data("macOS attribute record length exceeds the address space"))
 }
 
-pub(super) fn parse_record(bytes: &[u8]) -> io::Result<ParsedRecord> {
+pub(super) fn parse_record(
+    bytes: &[u8],
+    pack_invalid: bool,
+    include_apfs: bool,
+) -> io::Result<ParsedRecord> {
     if bytes.len() < size_of::<RecordHeader>() {
         return Err(invalid_data("macOS attribute record is truncated"));
     }
@@ -181,43 +191,59 @@ pub(super) fn parse_record(bytes: &[u8]) -> io::Result<ParsedRecord> {
         return Err(invalid_data("macOS attributes omit their returned bitmap"));
     }
 
-    let mut record = ParsedRecord::default();
+    let mut record = ParsedRecord {
+        returned_common: returned.commonattr,
+        returned_file: returned.fileattr,
+        ..Default::default()
+    };
 
     if returned.commonattr & ATTR_CMN_ERROR != 0 {
         record.error = cursor.take_u32()?;
     }
-    if returned.commonattr & libc::ATTR_CMN_NAME != 0 {
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_NAME, pack_invalid) {
         // `getattrlist(2)` defines attr_dataoffset relative to this attrreference.
         let reference_offset = bytes.len() - cursor.bytes.len();
         let reference = libc::attrreference_t {
             attr_dataoffset: cursor.take_i32()?,
             attr_length: cursor.take_u32()?,
         };
-        let offset = isize::try_from(reference.attr_dataoffset)
-            .map_err(|_| invalid_data("macOS filename has an invalid offset"))?;
-        let start = reference_offset
-            .checked_add_signed(offset)
-            .ok_or_else(|| invalid_data("macOS filename has an invalid offset"))?;
-        let length = usize::try_from(reference.attr_length)
-            .map_err(|_| invalid_data("macOS filename exceeds the address space"))?;
-        let end = start
-            .checked_add(length)
-            .filter(|end| *end <= bytes.len())
-            .ok_or_else(|| invalid_data("macOS filename exceeds its record"))?;
-        let mut name = &bytes[start..end];
-        if name.last() == Some(&0) {
-            name = &name[..name.len() - 1];
+        if returned.commonattr & libc::ATTR_CMN_NAME != 0 {
+            let offset = isize::try_from(reference.attr_dataoffset)
+                .map_err(|_| invalid_data("macOS filename has an invalid offset"))?;
+            let start = reference_offset
+                .checked_add_signed(offset)
+                .ok_or_else(|| invalid_data("macOS filename has an invalid offset"))?;
+            let length = usize::try_from(reference.attr_length)
+                .map_err(|_| invalid_data("macOS filename exceeds the address space"))?;
+            let end = start
+                .checked_add(length)
+                .filter(|end| *end <= bytes.len())
+                .ok_or_else(|| invalid_data("macOS filename exceeds its record"))?;
+            let mut name = &bytes[start..end];
+            if name.last() == Some(&0) {
+                name = &name[..name.len() - 1];
+            }
+            record.file_name = Some(OsString::from_vec(name.to_vec()));
         }
-        record.file_name = Some(OsString::from_vec(name.to_vec()));
     }
-    if returned.commonattr & libc::ATTR_CMN_DEVID != 0 {
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_DEVID, pack_invalid) {
         // Darwin's signed `dev_t` is sign-extended by `std::fs::Metadata::dev()`.
-        record.device = Some(i64::from(cursor.take_i32()?).cast_unsigned());
+        let device = i64::from(cursor.take_i32()?).cast_unsigned();
+        if returned.commonattr & libc::ATTR_CMN_DEVID != 0 {
+            record.device = Some(device);
+        }
     }
-    if returned.commonattr & libc::ATTR_CMN_OBJTYPE != 0 {
-        record.object_type = Some(cursor.take_u32()?);
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_OBJTYPE, pack_invalid) {
+        let object_type = cursor.take_u32()?;
+        if returned.commonattr & libc::ATTR_CMN_OBJTYPE != 0 {
+            record.object_type = Some(object_type);
+        }
     }
-    if returned.commonattr & libc::ATTR_CMN_MODTIME != 0 {
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_CRTIME, pack_invalid) {
+        cursor.take_i64()?;
+        cursor.take_i64()?;
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_MODTIME, pack_invalid) {
         let seconds = cursor.take_i64()?;
         let nanoseconds = cursor.take_i64()?;
         // Apple represents fractional pre-epoch timestamps with negative nanoseconds.
@@ -235,54 +261,143 @@ pub(super) fn parse_record(bytes: &[u8]) -> io::Result<ParsedRecord> {
             .ok()
             .filter(|nanos| *nanos < NANOS_PER_SECOND)
             .ok_or_else(|| invalid_data("macOS modification time has invalid nanoseconds"))?;
-        record.modified = if seconds >= 0 {
-            UNIX_EPOCH.checked_add(Duration::new(seconds.cast_unsigned(), nanos))
-        } else {
-            UNIX_EPOCH
-                .checked_sub(Duration::new(seconds.unsigned_abs(), 0))
-                .and_then(|time| time.checked_add(Duration::new(0, nanos)))
-        };
+        if returned.commonattr & libc::ATTR_CMN_MODTIME != 0 {
+            record.modified = if seconds >= 0 {
+                UNIX_EPOCH.checked_add(Duration::new(seconds.cast_unsigned(), nanos))
+            } else {
+                UNIX_EPOCH
+                    .checked_sub(Duration::new(seconds.unsigned_abs(), 0))
+                    .and_then(|time| time.checked_add(Duration::new(0, nanos)))
+            };
+        }
     }
-    if returned.commonattr & libc::ATTR_CMN_FLAGS != 0 {
-        record.flags = cursor.take_u32()?;
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_CHGTIME, pack_invalid) {
+        cursor.take_i64()?;
+        cursor.take_i64()?;
     }
-    if returned.commonattr & libc::ATTR_CMN_FILEID != 0 {
-        record.inode = Some(cursor.take_u64()?);
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_ACCTIME, pack_invalid) {
+        cursor.take_i64()?;
+        cursor.take_i64()?;
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_OWNERID, pack_invalid) {
+        cursor.take_u32()?;
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_GRPID, pack_invalid) {
+        cursor.take_u32()?;
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_ACCESSMASK, pack_invalid) {
+        cursor.take_u32()?;
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_FLAGS, pack_invalid) {
+        let flags = cursor.take_u32()?;
+        if returned.commonattr & libc::ATTR_CMN_FLAGS != 0 {
+            record.flags = flags;
+        }
+    }
+    if attribute_is_packed(returned.commonattr, libc::ATTR_CMN_FILEID, pack_invalid) {
+        let inode = cursor.take_u64()?;
+        if returned.commonattr & libc::ATTR_CMN_FILEID != 0 {
+            record.inode = Some(inode);
+        }
     }
 
-    if returned.dirattr & libc::ATTR_DIR_LINKCOUNT != 0 {
-        record.directory_links = Some(u64::from(cursor.take_u32()?));
+    let pack_file = pack_invalid && record.object_type != Some(VDIR);
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_LINKCOUNT, pack_file) {
+        let links = u64::from(cursor.take_u32()?);
+        if returned.fileattr & libc::ATTR_FILE_LINKCOUNT != 0 {
+            record.file_links = Some(links);
+        }
     }
-    if returned.dirattr & libc::ATTR_DIR_MOUNTSTATUS != 0 {
-        record.mount_status = cursor.take_u32()?;
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_ALLOCSIZE, pack_file) {
+        let allocated = cursor.take_u64()?;
+        if returned.fileattr & libc::ATTR_FILE_ALLOCSIZE != 0 {
+            record.file_allocated = Some(fts_allocated_bytes(allocated));
+        }
     }
-    if returned.dirattr & libc::ATTR_DIR_ALLOCSIZE != 0 {
-        record.directory_allocated = Some(cursor.take_u64()?);
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_IOBLOCKSIZE, pack_file) {
+        cursor.take_u32()?;
     }
-    if returned.dirattr & libc::ATTR_DIR_DATALENGTH != 0 {
-        record.directory_length = Some(cursor.take_u64()?);
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_DEVTYPE, pack_file) {
+        cursor.take_u32()?;
+    }
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_DATALENGTH, pack_file) {
+        let length = cursor.take_u64()?;
+        if returned.fileattr & libc::ATTR_FILE_DATALENGTH != 0 {
+            record.file_length = Some(length);
+        }
+    }
+    let pack_apfs = pack_file && include_apfs;
+    if attribute_is_packed(returned.fileattr, libc::ATTR_FILE_DATAALLOCSIZE, pack_apfs) {
+        let allocated = cursor.take_u64()?;
+        if returned.fileattr & libc::ATTR_FILE_DATAALLOCSIZE != 0 {
+            record.file_data_allocated = Some(fts_allocated_bytes(allocated));
+        }
     }
 
-    if returned.fileattr & libc::ATTR_FILE_LINKCOUNT != 0 {
-        record.file_links = Some(u64::from(cursor.take_u32()?));
+    if attribute_is_packed(
+        returned.forkattr,
+        libc::ATTR_CMNEXT_CLONEID,
+        pack_invalid && include_apfs,
+    ) {
+        let clone_id = cursor.take_u64()?;
+        if returned.forkattr & libc::ATTR_CMNEXT_CLONEID != 0 {
+            record.clone_id = NonZeroU64::new(clone_id);
+        }
     }
-    if returned.fileattr & libc::ATTR_FILE_ALLOCSIZE != 0 {
-        record.file_allocated = Some(cursor.take_u64()?);
-    }
-    if returned.fileattr & libc::ATTR_FILE_DATALENGTH != 0 {
-        record.file_length = Some(cursor.take_u64()?);
-    }
-    if returned.fileattr & libc::ATTR_FILE_DATAALLOCSIZE != 0 {
-        record.file_data_allocated = Some(cursor.take_u64()?);
-    }
-
-    if returned.forkattr & libc::ATTR_CMNEXT_CLONEID != 0 {
-        record.clone_id = NonZeroU64::new(cursor.take_u64()?);
-    }
-    if returned.forkattr & libc::ATTR_CMNEXT_EXT_FLAGS != 0 {
-        record.extended_flags = Some(cursor.take_u64()?);
+    if attribute_is_packed(
+        returned.forkattr,
+        libc::ATTR_CMNEXT_EXT_FLAGS,
+        pack_invalid && include_apfs,
+    ) {
+        let extended_flags = cursor.take_u64()?;
+        if returned.forkattr & libc::ATTR_CMNEXT_EXT_FLAGS != 0 {
+            record.extended_flags = Some(extended_flags);
+        }
     }
     Ok(record)
+}
+
+/// Return whether a requested attribute occupies space in the record.
+///
+/// Packed-invalid records contain default values even when the returned-attribute mask marks the
+/// attribute unavailable; ordinary records omit unavailable attributes entirely.
+fn attribute_is_packed(
+    returned: libc::attrgroup_t,
+    attribute: libc::attrgroup_t,
+    pack_invalid: bool,
+) -> bool {
+    pack_invalid || returned & attribute != 0
+}
+
+fn fts_allocated_bytes(bytes: u64) -> u64 {
+    bytes
+        .div_ceil(STAT_BLOCK_BYTES)
+        .saturating_mul(STAT_BLOCK_BYTES)
+}
+
+impl ParsedRecord {
+    /// Return whether Apple FTS would synthesize a complete `stat` from this bulk record.
+    ///
+    /// FTS always stats directories, tolerates an unavailable creation time, and only requires a
+    /// device type for block and character devices. Matching that validity gate keeps consumers of
+    /// this walker on the same allocation-size path as macOS `du`.
+    pub(super) fn satisfies_fts_stat_contract(&self) -> bool {
+        let Some(object_type) = self.object_type else {
+            return false;
+        };
+        if !matches!(object_type, VREG | VBLK | VCHR | VLNK | VSOCK | VFIFO) {
+            return false;
+        }
+
+        let required_common = FTS_COMMON_ATTRIBUTES & !libc::ATTR_CMN_CRTIME;
+        let mut required_file = FTS_FILE_ATTRIBUTES;
+        if object_type != VBLK && object_type != VCHR {
+            required_file &= !libc::ATTR_FILE_DEVTYPE;
+        }
+
+        self.returned_common & required_common == required_common
+            && self.returned_file & required_file == required_file
+    }
 }
 
 struct Cursor<'a> {
@@ -322,4 +437,94 @@ impl<'a> Cursor<'a> {
 
 pub(super) fn invalid_data(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn complete_record(object_type: u32) -> ParsedRecord {
+        ParsedRecord {
+            returned_common: FTS_COMMON_ATTRIBUTES,
+            returned_file: FTS_FILE_ATTRIBUTES,
+            object_type: Some(object_type),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn full_request_matches_fts_without_directory_attributes() {
+        let attributes = requested_attributes(false, false);
+
+        assert_eq!(attributes.commonattr, FTS_COMMON_ATTRIBUTES);
+        assert_eq!(attributes.dirattr, 0);
+        assert_eq!(attributes.fileattr, FTS_FILE_ATTRIBUTES);
+        assert_eq!(attributes.forkattr, 0);
+
+        let apfs_attributes = requested_attributes(false, true);
+        assert_eq!(apfs_attributes.commonattr, FTS_COMMON_ATTRIBUTES);
+        assert_eq!(apfs_attributes.dirattr, 0);
+        assert_eq!(
+            apfs_attributes.fileattr,
+            FTS_FILE_ATTRIBUTES | APFS_FILE_ATTRIBUTES
+        );
+        assert_eq!(apfs_attributes.forkattr, APFS_EXTENDED_ATTRIBUTES);
+    }
+
+    #[test]
+    fn fts_contract_accepts_only_known_non_directory_vnode_types() {
+        for object_type in [VREG, VBLK, VCHR, VLNK, VSOCK, VFIFO] {
+            assert!(
+                complete_record(object_type).satisfies_fts_stat_contract(),
+                "known vnode type {object_type} must use complete bulk metadata"
+            );
+        }
+        for object_type in [VNON, VDIR, 8, u32::MAX] {
+            assert!(
+                !complete_record(object_type).satisfies_fts_stat_contract(),
+                "unknown or directory vnode type {object_type} must fall back to stat"
+            );
+        }
+
+        assert!(
+            !ParsedRecord {
+                returned_common: FTS_COMMON_ATTRIBUTES,
+                returned_file: FTS_FILE_ATTRIBUTES,
+                ..Default::default()
+            }
+            .satisfies_fts_stat_contract(),
+            "a missing vnode type must fall back to stat"
+        );
+    }
+
+    #[test]
+    fn fts_contract_rejects_missing_required_attributes() {
+        let mut missing_common = complete_record(VREG);
+        missing_common.returned_common &= !libc::ATTR_CMN_DEVID;
+        assert!(!missing_common.satisfies_fts_stat_contract());
+
+        let mut missing_file = complete_record(VREG);
+        missing_file.returned_file &= !libc::ATTR_FILE_ALLOCSIZE;
+        assert!(!missing_file.satisfies_fts_stat_contract());
+
+        let mut missing_creation_time = complete_record(VREG);
+        missing_creation_time.returned_common &= !libc::ATTR_CMN_CRTIME;
+        assert!(missing_creation_time.satisfies_fts_stat_contract());
+
+        let mut regular_without_device_type = complete_record(VREG);
+        regular_without_device_type.returned_file &= !libc::ATTR_FILE_DEVTYPE;
+        assert!(regular_without_device_type.satisfies_fts_stat_contract());
+
+        let mut block_without_device_type = complete_record(VBLK);
+        block_without_device_type.returned_file &= !libc::ATTR_FILE_DEVTYPE;
+        assert!(!block_without_device_type.satisfies_fts_stat_contract());
+    }
+
+    #[test]
+    fn fts_allocation_rounds_up_to_512_byte_stat_blocks() {
+        assert_eq!(fts_allocated_bytes(0), 0);
+        assert_eq!(fts_allocated_bytes(1), 512);
+        assert_eq!(fts_allocated_bytes(512), 512);
+        assert_eq!(fts_allocated_bytes(513), 1024);
+    }
 }

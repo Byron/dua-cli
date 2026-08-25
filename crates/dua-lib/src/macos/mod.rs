@@ -188,8 +188,8 @@ impl Metadata {
 
     /// Return the number of hard links to this entry.
     ///
-    /// Bulk-enumerated directories use `ATTR_DIR_LINKCOUNT`, which `getattrlist(2)` says
-    /// excludes historical `.` and `..` links and can therefore differ from `stat(2)`.
+    /// Directories use path metadata because the Apple FTS contract does not synthesize their
+    /// `stat` fields from bulk attributes.
     #[must_use]
     pub fn nlink(&self) -> u64 {
         self.nlink
@@ -253,8 +253,19 @@ impl ReadDir {
     /// because `self.fallback` was initialized. Returns `false` when the directory is exhausted.
     fn refill(&mut self) -> io::Result<bool> {
         loop {
-            let mut attributes =
-                requested_attributes(self.listing_error.is_some(), self.extended_attributes);
+            let list_only = self.listing_error.is_some();
+            let include_apfs = self.extended_attributes && !list_only;
+            let mut attributes = requested_attributes(list_only, include_apfs);
+            let mut options = if list_only {
+                0
+            } else {
+                u64::from(libc::FSOPT_PACK_INVAL_ATTRS)
+            };
+            if include_apfs {
+                options |= u64::from(libc::FSOPT_ATTR_CMN_EXTENDED);
+            }
+            // Apple FTS, and therefore macOS `du`, uses packed invalid attributes when collecting
+            // full metadata. APFS clone metadata is an optional extension of that same layout.
             // SAFETY: the directory descriptor is owned and remains open, `attributes` is a valid
             // initialized Darwin attrlist, and the aligned buffer is writable for its exact size.
             let count = unsafe {
@@ -263,11 +274,7 @@ impl ReadDir {
                     (&raw mut attributes).cast(),
                     self.buffer.as_mut_bytes().as_mut_ptr().cast(),
                     self.buffer.as_bytes().len(),
-                    if self.extended_attributes {
-                        u64::from(libc::FSOPT_ATTR_CMN_EXTENDED)
-                    } else {
-                        0
-                    },
+                    options,
                 )
             };
             if count > 0 {
@@ -358,7 +365,11 @@ impl ReadDir {
         self.offset = end;
         self.remaining -= 1;
 
-        let mut parsed = parse_record(record)?;
+        let mut parsed = parse_record(
+            record,
+            self.listing_error.is_none(),
+            self.extended_attributes,
+        )?;
         let file_name = parsed
             .file_name
             .take()
@@ -374,17 +385,14 @@ impl ReadDir {
         let metadata = if let Some(error) = metadata_error {
             Err(io::Error::from_raw_os_error(error))
         } else {
-            if parsed.object_type.is_none() {
-                return Err(invalid_data("macOS directory record has no object type"));
-            }
             let metadata_from_path = || {
                 fs::symlink_metadata(self.parent_path.join(&file_name))
                     .map(|metadata| Metadata::from_std(&metadata, None))
             };
-            // XNU uses NOCROSSMOUNT for bulk lookup; stat the visible mount or firmlink.
-            let special_mount = parsed.flags & SF_FIRMLINK != 0
-                || parsed.mount_status & libc::DIR_MNTSTATUS_MNTPOINT != 0;
-            if special_mount {
+            // XNU uses NOCROSSMOUNT for bulk lookup. Directories fall through the FTS contract
+            // below, while firmlinks need an explicit path lookup to expose the visible target.
+            let firmlink = parsed.flags & SF_FIRMLINK != 0;
+            if firmlink || !parsed.satisfies_fts_stat_contract() {
                 metadata_from_path()
             } else {
                 parsed.metadata(file_type).or_else(|_| metadata_from_path())
@@ -452,7 +460,7 @@ fn clone_attributes_at(path: &Path, metadata: &fs::Metadata) -> Option<DataFork>
     let bytes = buffer.as_bytes();
     let length = read_record_length(bytes).ok()?;
     let record = bytes.get(..length)?;
-    let parsed = parse_record(record).ok()?;
+    let parsed = parse_record(record, false, true).ok()?;
     if parsed.device != Some(metadata.dev()) || parsed.inode != Some(metadata.ino()) {
         return None;
     }
@@ -461,25 +469,19 @@ fn clone_attributes_at(path: &Path, metadata: &fs::Metadata) -> Option<DataFork>
 
 impl ParsedRecord {
     fn metadata(&self, file_type: FileType) -> io::Result<Metadata> {
-        let (len, allocated_size, nlink) = if file_type.is_dir() {
-            (
-                self.directory_length
-                    .ok_or_else(|| invalid_data("missing directory length"))?,
-                self.directory_allocated
-                    .ok_or_else(|| invalid_data("missing directory allocation"))?,
-                self.directory_links
-                    .ok_or_else(|| invalid_data("missing directory hard-link count"))?,
-            )
-        } else {
-            (
-                self.file_length
-                    .ok_or_else(|| invalid_data("missing file length"))?,
-                self.file_allocated
-                    .ok_or_else(|| invalid_data("missing file allocation"))?,
-                self.file_links
-                    .ok_or_else(|| invalid_data("missing file hard-link count"))?,
-            )
-        };
+        debug_assert!(
+            !file_type.is_dir(),
+            "directories must fail the Apple FTS stat contract and use path metadata"
+        );
+        let len = self
+            .file_length
+            .ok_or_else(|| invalid_data("missing file length"))?;
+        let allocated_size = self
+            .file_allocated
+            .ok_or_else(|| invalid_data("missing file allocation"))?;
+        let nlink = self
+            .file_links
+            .ok_or_else(|| invalid_data("missing file hard-link count"))?;
         let data_fork = self
             .data_fork()
             .filter(|fork| file_type.is_file() && fork.allocated_size <= allocated_size);
