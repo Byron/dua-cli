@@ -109,7 +109,9 @@ impl FileType {
 /// macOS metadata obtained during native directory enumeration.
 #[derive(Clone, Copy)]
 pub struct Metadata {
+    /// Logical file or directory length.
     len: u64,
+    /// Total allocation, including resource forks and other extended metadata.
     allocated_size: u64,
     /// Data-fork allocation, or total allocation when extended metadata is unavailable.
     data_allocated_size: u64,
