@@ -9,6 +9,20 @@ fn options(apfs_clone_metadata: bool) -> Options {
 }
 
 #[test]
+fn metadata_and_entries_keep_clone_tracking_compact() {
+    assert_eq!(
+        size_of::<Metadata>(),
+        80,
+        "effective data allocation and clone identity must not require another discriminant"
+    );
+    assert_eq!(
+        size_of::<Entry>(),
+        136,
+        "native directory entries must retain compact inline metadata"
+    );
+}
+
+#[test]
 fn directory_reader_rejects_regular_files_before_iteration() {
     let directory = tempfile::tempdir().unwrap();
     let file = directory.path().join("file");
@@ -59,6 +73,19 @@ fn bulk_metadata_matches_std_for_regular_files_resource_forks_and_symlinks() {
         "resource fork must allocate storage: data={data_blocks}, total={resource_blocks}"
     );
     std::os::unix::fs::symlink("file", directory.path().join("link")).unwrap();
+
+    let ordinary_metadata = ReadDir::open(Arc::from(directory.path()), 1, options(false))
+        .unwrap()
+        .find(|entry| entry.as_ref().is_ok_and(|entry| entry.file_name == "file"))
+        .expect("the resource-fork fixture must be enumerated")
+        .unwrap()
+        .metadata
+        .unwrap();
+    assert_eq!(
+        ordinary_metadata.data_allocated_size(),
+        ordinary_metadata.allocated_size(),
+        "without extended metadata, data allocation must fall back to total allocation"
+    );
 
     let entries = ReadDir::open(Arc::from(directory.path()), 1, options(true))
         .unwrap()
