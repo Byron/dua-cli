@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+Thanks to our contributors, there are not one, but two (a joke, a human is writing this with fleshy fingers :D) headline features:
+
+1. `dua aggregate --depth N` shows an indented tree-like view, instead of a flat list
+2. `dua aggregate --stack | inferno-flamegraph > fire.svg` outputs a flame-graph compatible stack listing, for pretty visualisations of the directory. It also works with `--depth N`.
+
+On the side, on macOS, the bytes output of `dua` now matches `du` byte-perfectly, and for the first time it's possible to pipe `dua`
+output into a file without terminal escape sequences (*why did this take me so long again?*).
+
+### New Features
+
+ - <csr-id-74bf377839b840f157cb2871c7435faf4070a509/> Add `dua aggregate --depth N` for indented tree output
+
+### Bug Fixes
+
+ - <csr-id-b1e16a0cc5ea3792b477f5b38a2d98e88b4f53c3/> don't output colors when stdout isn't a terminal.
+   This facilitates piping into a file.
+ - <csr-id-dd9e0cec2cf4488977c5b2cf2283f7a116929124/> --stats printed the u128 sentinel as the smallest file size
+   The sentinel reset was guarded by entries_traversed == 0, but an entry
+   whose metadata cannot be read still counts as traversed while never
+   contributing a size. Reset when the sentinel is still in place instead.
+ - <csr-id-f9b6200c896d2737050dca725fb1659e778b1627/> Apply --ignore-dirs to prepared aggregate roots
+ - <csr-id-72faa62bd54b65864c650d0e44983b1ea74c9df2/> Apply --ignore-dirs to paths dua expanded into roots itself
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 28 commits contributed to the release over the course of 9 calendar days.
+ - 10 days passed between releases.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #378 from ChrisJr404/feature/stacks-folded-output ([`886f3ce`](https://github.com/Byron/dua-cli/commit/886f3cece7af7cdabadba104cb0e93551103f86e))
+    - Fix folded stack path assertions on Windows ([`52df4c5`](https://github.com/Byron/dua-cli/commit/52df4c5ce9282ef1ecdfd0c8ba81ee25f5cc9966))
+    - Progress support for `--stack` and `--depth N` ([`e476971`](https://github.com/Byron/dua-cli/commit/e47697186419d425dc78a3a764af81ff955533e3))
+    - Review ([`a14f2b7`](https://github.com/Byron/dua-cli/commit/a14f2b799120b0f49dd3d00dee1fa05f080492b5))
+    - Add 'stacks' subcommand emitting folded stacks for flame graphs ([`d40a44d`](https://github.com/Byron/dua-cli/commit/d40a44dcdca048db89e8ffc79f6699d48fda8957))
+    - Merge pull request #380 from ChrisJr404/feature/aggregate-tree-depth ([`7cfa98c`](https://github.com/Byron/dua-cli/commit/7cfa98ca644d0dae848af0b935d2628bbc2c6e29))
+    - Review ([`136a86a`](https://github.com/Byron/dua-cli/commit/136a86aa836762b2262ec0535f4f3765d555c765))
+    - Add `dua aggregate --depth N` for indented tree output ([`74bf377`](https://github.com/Byron/dua-cli/commit/74bf377839b840f157cb2871c7435faf4070a509))
+    - Merge pull request #373 from VXNCXNX/fix/root-path-ending-in-dotdot ([`c4cda95`](https://github.com/Byron/dua-cli/commit/c4cda95c7248ec41738d7c7ff763c343fe326350))
+    - Don't output colors when stdout isn't a terminal. ([`b1e16a0`](https://github.com/Byron/dua-cli/commit/b1e16a0cc5ea3792b477f5b38a2d98e88b4f53c3))
+    - Merge pull request #375 from tamird/perf-skip-apfs-apparent-size ([`06b4237`](https://github.com/Byron/dua-cli/commit/06b4237f9163856c2f95d2af8fa362c5a19e2aac))
+    - Review ([`511bb35`](https://github.com/Byron/dua-cli/commit/511bb35a77938bb507e4dbdeeb3b8ec65ca92f85))
+    - Merge pull request #372 from VXNCXNX/fix/smallest-file-sentinel-leak ([`95ab634`](https://github.com/Byron/dua-cli/commit/95ab63420e5a1fc950a8ae8cfb76f47171f9c81b))
+    - Merge pull request #374 from tamird/perf-skip-empty-ignore-realpath ([`83d467a`](https://github.com/Byron/dua-cli/commit/83d467ae55025b71ea8964997ec872dc37c8e0db))
+    - Review ([`5bf9204`](https://github.com/Byron/dua-cli/commit/5bf92044dbaf1fe6b617f401d2e61bab1d5e7ace))
+    - Review ([`de9f8a0`](https://github.com/Byron/dua-cli/commit/de9f8a0b6937d12b3402f88b3c2e23fdf3e14327))
+    - Merge pull request #376 from tamird/perf-stream-prepared-roots ([`bed32a4`](https://github.com/Byron/dua-cli/commit/bed32a42acec620b61f0b2fc17248a0d9b355630))
+    - Skip path resolution without ignored directories ([`6c1c511`](https://github.com/Byron/dua-cli/commit/6c1c511a2293e320ef59ac86c8dd44ed81ed066c))
+    - Avoid materiailizing vector ([`dbf33e6`](https://github.com/Byron/dua-cli/commit/dbf33e64d43f70bdff3234cccf873b2cfcf812ee))
+    - Skip clone metadata for apparent sizes ([`18f6395`](https://github.com/Byron/dua-cli/commit/18f6395bf31e0419f22d8b52b9de6501dc50393c))
+    - --stats printed the u128 sentinel as the smallest file size ([`dd9e0ce`](https://github.com/Byron/dua-cli/commit/dd9e0cec2cf4488977c5b2cf2283f7a116929124))
+    - Merge pull request #371 from tamird/macos-apfs-clone-accounting ([`7231d83`](https://github.com/Byron/dua-cli/commit/7231d838d6dad0f4a2ac649959788ba6ec844853))
+    - Review ([`0acd5fa`](https://github.com/Byron/dua-cli/commit/0acd5fa421d287a1a8ef8c6d6efc8244e0622940))
+    - Count fully shared APFS clones once ([`6b3a231`](https://github.com/Byron/dua-cli/commit/6b3a23176f69f5f18b3eb87529d585dfb2f5b9cf))
+    - Merge pull request #370 from VXNCXNX/fix/ignore-dirs-on-expanded-roots ([`cfa5ed2`](https://github.com/Byron/dua-cli/commit/cfa5ed28b255a5359fbe0145db01888a63a264c5))
+    - Apply --ignore-dirs to prepared aggregate roots ([`f9b6200`](https://github.com/Byron/dua-cli/commit/f9b6200c896d2737050dca725fb1659e778b1627))
+    - Review ([`1c41b46`](https://github.com/Byron/dua-cli/commit/1c41b463ec28f54a3ab9907c88c419adb6c03a4e))
+    - Apply --ignore-dirs to paths dua expanded into roots itself ([`72faa62`](https://github.com/Byron/dua-cli/commit/72faa62bd54b65864c650d0e44983b1ea74c9df2))
+</details>
+
 ## 2.42.1 (2026-08-15)
 
 Starting directories with a large amount of files, like 50k, now see a 5x speedup on macOS and Windows as bulk-reading is also done there. Note also that this is still a small absolute difference, 100ms vs 500ms, but a good demonstration of how much large trees with a lot of such directories will benefit  by this, as these small absolute improvements accumulate.
