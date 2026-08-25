@@ -336,7 +336,7 @@ fn output_sorted(
     Ok(())
 }
 
-fn output_colored_path(
+pub(crate) fn output_colored_path(
     out: &mut impl io::Write,
     out_supports_colors: bool,
     path: impl AsRef<Path>,

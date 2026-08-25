@@ -1,7 +1,8 @@
+use crate::aggregate::output_colored_path;
 use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
 use crate::{ByteFormat, WalkOptions, WalkResult};
-use anyhow::Result;
-use owo_colors::{AnsiColors as Color, OwoColorize};
+use anyhow::{Context, Result};
+use owo_colors::AnsiColors as Color;
 use petgraph::Direction;
 use std::io;
 use std::path::PathBuf;
@@ -9,13 +10,13 @@ use std::path::PathBuf;
 /// Traverse `paths` and write an indented tree of their disk usage to `out`, descending up to
 /// `max_depth` levels below each given root.
 ///
-/// The given roots form the first level, so `max_depth` of 1 lists only them (the same set of
-/// entries the flat aggregation prints), while higher values reveal nested directories and files.
+/// The given roots are at depth `0`, so `max_depth` of `0` lists only them (the same set of entries the
+/// flat aggregation prints), `1` also lists their children, and higher values reveal deeper entries.
 /// When `compute_total` is set and more than one root is given, a trailing `total` line is written.
 /// `sort_by_size_in_bytes` sorts the children at each level ascending by size, otherwise they are
 /// left in the order they were discovered.
 pub fn aggregate_tree(
-    mut out: impl io::Write,
+    out: (impl io::Write, bool),
     walk_options: WalkOptions,
     byte_format: ByteFormat,
     paths: Vec<PathBuf>,
@@ -23,6 +24,8 @@ pub fn aggregate_tree(
     compute_total: bool,
     sort_by_size_in_bytes: bool,
 ) -> Result<WalkResult> {
+    let (mut out, out_supports_colors) = out;
+    let output_options = (byte_format, out_supports_colors);
     let mut traversal = Traversal::new();
     if paths.is_empty() {
         return Ok(WalkResult::default());
@@ -39,7 +42,8 @@ pub fn aggregate_tree(
         pattern_roots,
         false,
         true,
-    )?;
+    )?
+    .retain_depth(max_depth);
 
     while let Ok(event) = background.event_rx.recv() {
         if background
@@ -50,7 +54,15 @@ pub fn aggregate_tree(
         }
     }
 
-    let roots = sorted_children(&traversal.tree, traversal.root_index, sort_by_size_in_bytes);
+    let num_errors = background.stats.io_errors;
+    let mut roots = background
+        .root_nodes
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .context("traversal did not produce a node for every root")?;
+    if sort_by_size_in_bytes {
+        roots.sort_by_key(|root| traversal.tree[*root].size);
+    }
     let mut total = 0u128;
     for root in &roots {
         total += traversal.tree[*root].size;
@@ -58,20 +70,26 @@ pub fn aggregate_tree(
             &mut out,
             &traversal.tree,
             *root,
-            1,
+            0,
             max_depth,
-            byte_format,
             sort_by_size_in_bytes,
+            output_options,
         )?;
     }
 
     if roots.len() > 1 && compute_total {
-        write_entry(&mut out, "total", total, false, false, 0, byte_format)?;
+        write_entry(
+            &mut out,
+            "total",
+            total,
+            false,
+            num_errors,
+            0,
+            output_options,
+        )?;
     }
 
-    Ok(WalkResult {
-        num_errors: background.stats.io_errors,
-    })
+    Ok(WalkResult { num_errors })
 }
 
 /// Write `index` and, while there is depth budget left, its descendants, indented by their level.
@@ -81,8 +99,8 @@ fn write_subtree(
     index: TreeIndex,
     depth: usize,
     max_depth: usize,
-    byte_format: ByteFormat,
     sort_by_size_in_bytes: bool,
+    output_options: (ByteFormat, bool),
 ) -> io::Result<()> {
     let entry: &EntryData = &tree[index];
     let name = entry.name.to_string_lossy();
@@ -91,9 +109,9 @@ fn write_subtree(
         &name,
         entry.size,
         entry.is_dir,
-        entry.metadata_io_error,
-        depth - 1,
-        byte_format,
+        u64::from(entry.metadata_io_error),
+        depth,
+        output_options,
     )?;
 
     if depth >= max_depth {
@@ -106,8 +124,8 @@ fn write_subtree(
             child,
             depth + 1,
             max_depth,
-            byte_format,
             sort_by_size_in_bytes,
+            output_options,
         )?;
     }
     Ok(())
@@ -133,29 +151,19 @@ fn write_entry(
     name: &str,
     num_bytes: u128,
     is_dir: bool,
-    metadata_io_error: bool,
+    num_errors: u64,
     indent_level: usize,
-    byte_format: ByteFormat,
+    (byte_format, out_supports_colors): (ByteFormat, bool),
 ) -> io::Result<()> {
-    let size = byte_format.display(num_bytes).to_string();
-    let size = size.green();
-    let size_width = byte_format.width();
-    let indent = "  ".repeat(indent_level);
-    let error = if metadata_io_error {
-        "  <IO Error>"
-    } else {
-        ""
-    };
-
-    if is_dir {
-        writeln!(
-            out,
-            "{size:>size_width$} {indent}{}{error}",
-            name.color(Color::Cyan)
-        )
-    } else {
-        writeln!(out, "{size:>size_width$} {indent}{name}{error}")
-    }
+    output_colored_path(
+        out,
+        out_supports_colors,
+        format!("{}{name}", "  ".repeat(indent_level)),
+        num_bytes,
+        num_errors,
+        is_dir.then_some(Color::Cyan),
+        byte_format,
+    )
 }
 
 #[cfg(test)]
@@ -174,29 +182,11 @@ mod tests {
         }
     }
 
-    /// Drop the color escape sequences so tests can assert on the plain text and its indentation.
-    fn strip_ansi(line: &str) -> String {
-        let mut out = String::with_capacity(line.len());
-        let mut chars = line.chars();
-        while let Some(c) = chars.next() {
-            if c == '\u{1b}' {
-                for escaped in chars.by_ref() {
-                    if escaped == 'm' {
-                        break;
-                    }
-                }
-            } else {
-                out.push(c);
-            }
-        }
-        out
-    }
-
     fn lines(out: &[u8]) -> Vec<String> {
-        String::from_utf8(out.to_vec())
+        std::str::from_utf8(out)
             .unwrap()
             .lines()
-            .map(strip_ansi)
+            .map(str::to_owned)
             .collect()
     }
 
@@ -208,11 +198,11 @@ mod tests {
 
         let mut shallow = Vec::new();
         aggregate_tree(
-            &mut shallow,
+            (&mut shallow, false),
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
-            1,
+            0,
             true,
             true,
         )
@@ -221,17 +211,17 @@ mod tests {
         assert_eq!(
             shallow.len(),
             1,
-            "a depth of one prints only the given root: {shallow:?}"
+            "a depth of zero prints only the given root: {shallow:?}"
         );
         assert!(shallow[0].contains(&dir.path().to_string_lossy().into_owned()));
 
         let mut deep = Vec::new();
         aggregate_tree(
-            &mut deep,
+            (&mut deep, false),
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
-            3,
+            2,
             true,
             true,
         )
@@ -259,11 +249,11 @@ mod tests {
 
         let mut out = Vec::new();
         aggregate_tree(
-            &mut out,
+            (&mut out, false),
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
-            2,
+            1,
             true,
             true,
         )
@@ -282,11 +272,11 @@ mod tests {
 
         let mut with_total = Vec::new();
         aggregate_tree(
-            &mut with_total,
+            (&mut with_total, false),
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().join("a"), dir.path().join("b")],
-            1,
+            0,
             true,
             false,
         )
@@ -298,11 +288,11 @@ mod tests {
 
         let mut without_total = Vec::new();
         aggregate_tree(
-            &mut without_total,
+            (&mut without_total, false),
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().join("a"), dir.path().join("b")],
-            1,
+            0,
             false,
             false,
         )
@@ -311,5 +301,32 @@ mod tests {
             !String::from_utf8(without_total).unwrap().contains("total"),
             "no total line when it is turned off"
         );
+    }
+
+    #[test]
+    fn failed_roots_are_printed_in_input_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing");
+        let valid = dir.path().join("valid");
+        std::fs::write(&valid, b"content").unwrap();
+
+        let mut out = Vec::new();
+        let result = aggregate_tree(
+            (&mut out, false),
+            walk_options(),
+            ByteFormat::Bytes,
+            vec![missing.clone(), valid.clone()],
+            0,
+            true,
+            false,
+        )
+        .unwrap();
+        let out = lines(&out);
+
+        assert_eq!(result.num_errors, 1);
+        assert!(out[0].contains(&missing.to_string_lossy().into_owned()));
+        assert!(out[0].contains("<1 IO Error>"));
+        assert!(out[1].contains(&valid.to_string_lossy().into_owned()));
+        assert!(out[2].contains("total  <1 IO Error>"));
     }
 }

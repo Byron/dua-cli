@@ -215,12 +215,14 @@ fn main() -> Result<()> {
             let walk_options = walk_options_from(&traversal)?;
             if let Some(depth) = depth {
                 let paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                let stdout = io::stdout();
+                let out_supports_colors = stdout.is_terminal();
                 dua::aggregate_tree(
-                    io::stdout().lock(),
+                    (stdout.lock(), out_supports_colors),
                     walk_options,
                     byte_format,
                     paths,
-                    depth,
+                    depth.saturating_sub(1),
                     !no_total,
                     !no_sort,
                 )?
