@@ -1,7 +1,7 @@
-[32m <SIZE> KB[39m [36m./dir/sub[39m
-[32m <SIZE> MB[39m [36mdir[39m
-[32m <SIZE> MB[39m [36m./dir/[39m
-[32m <SIZE> MB[39m [36m.[39m
-[32m <SIZE> MB[39m [36m.[39m
-[32m <SIZE> MB[39m total
+ <SIZE> KB ./dir/sub
+ <SIZE> MB dir
+ <SIZE> MB ./dir/
+ <SIZE> MB .
+ <SIZE> MB .
+ <SIZE> MB total
 Statistics { entries_traversed: 46, smallest_file_in_bytes: 0, largest_file_in_bytes: 1003520 }

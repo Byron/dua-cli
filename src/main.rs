@@ -266,10 +266,11 @@ fn run_aggregation(
     show_statistics: bool,
 ) -> Result<dua::WalkResult> {
     let stdout = io::stdout();
+    let out_supports_colors = stdout.is_terminal();
     let stdout_locked = stdout.lock();
     let (result, statistics) = match inputs {
         AggregateInputs::Paths(paths) => dua::aggregate(
-            stdout_locked,
+            (stdout_locked, out_supports_colors),
             stderr_if_tty(),
             walk_options,
             compute_total,
@@ -279,7 +280,7 @@ fn run_aggregation(
         ),
         #[cfg(any(windows, target_os = "macos"))]
         AggregateInputs::Entries(entries) => dua::aggregate_entries(
-            stdout_locked,
+            (stdout_locked, out_supports_colors),
             stderr_if_tty(),
             walk_options,
             compute_total,
