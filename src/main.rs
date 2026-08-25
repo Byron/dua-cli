@@ -207,18 +207,30 @@ fn main() -> Result<()> {
             no_total,
             no_sort,
             statistics,
+            stack,
             depth,
         }) => {
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
-            let config = dua::Config::load()?;
-            let byte_format = traversal.byte_format(&config);
             let walk_options = walk_options_from(&traversal)?;
-            if let Some(depth) = depth {
+            if stack {
+                let inputs = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                let stdout = io::stdout();
+                dua::stacks(
+                    stdout.lock(),
+                    stderr_if_tty(),
+                    walk_options,
+                    inputs,
+                    depth.map(|depth| depth.saturating_sub(1)),
+                )?
+            } else if let Some(depth) = depth {
+                let config = dua::Config::load()?;
+                let byte_format = traversal.byte_format(&config);
                 let paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
                 let stdout = io::stdout();
                 let out_supports_colors = stdout.is_terminal();
                 dua::aggregate_tree(
                     (stdout.lock(), out_supports_colors),
+                    stderr_if_tty(),
                     walk_options,
                     byte_format,
                     paths,
@@ -227,6 +239,8 @@ fn main() -> Result<()> {
                     !no_sort,
                 )?
             } else {
+                let config = dua::Config::load()?;
+                let byte_format = traversal.byte_format(&config);
                 let inputs =
                     extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
                 run_aggregation(

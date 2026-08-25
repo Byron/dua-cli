@@ -141,16 +141,6 @@ impl Throttle {
         instance
     }
 
-    /// Execute `f` only if the throttle currently allows an update.
-    pub(crate) fn throttled<F>(&self, f: F)
-    where
-        F: FnOnce(),
-    {
-        if self.can_update() {
-            f();
-        }
-    }
-
     /// Return `true` if we are not currently throttled.
     pub(crate) fn can_update(&self) -> bool {
         self.trigger.swap(false, Ordering::Relaxed)

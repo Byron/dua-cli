@@ -1,4 +1,4 @@
-use crate::aggregate::output_colored_path;
+use crate::aggregate::{TraversalProgress, output_colored_path};
 use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
 use crate::{ByteFormat, WalkOptions, WalkResult};
 use anyhow::{Context, Result};
@@ -15,8 +15,10 @@ use std::path::PathBuf;
 /// When `compute_total` is set and more than one root is given, a trailing `total` line is written.
 /// `sort_by_size_in_bytes` sorts the children at each level ascending by size, otherwise they are
 /// left in the order they were discovered.
+#[allow(clippy::too_many_arguments)]
 pub fn aggregate_tree(
     out: (impl io::Write, bool),
+    err: Option<impl io::Write>,
     walk_options: WalkOptions,
     byte_format: ByteFormat,
     paths: Vec<PathBuf>,
@@ -43,16 +45,19 @@ pub fn aggregate_tree(
         false,
         true,
     )?
-    .retain_depth(max_depth);
+    .retain_depth(Some(max_depth));
+    let mut progress = TraversalProgress::new(err);
 
     while let Ok(event) = background.event_rx.recv() {
-        if background
+        let finished = background
             .integrate_traversal_event(&mut traversal, event)
-            .unwrap_or(false)
-        {
+            .unwrap_or(false);
+        progress.update(background.stats.entries_traversed);
+        if finished {
             break;
         }
     }
+    progress.clear();
 
     let num_errors = background.stats.io_errors;
     let mut roots = background
@@ -199,6 +204,7 @@ mod tests {
         let mut shallow = Vec::new();
         aggregate_tree(
             (&mut shallow, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
@@ -218,6 +224,7 @@ mod tests {
         let mut deep = Vec::new();
         aggregate_tree(
             (&mut deep, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
@@ -250,6 +257,7 @@ mod tests {
         let mut out = Vec::new();
         aggregate_tree(
             (&mut out, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().to_owned()],
@@ -273,6 +281,7 @@ mod tests {
         let mut with_total = Vec::new();
         aggregate_tree(
             (&mut with_total, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().join("a"), dir.path().join("b")],
@@ -289,6 +298,7 @@ mod tests {
         let mut without_total = Vec::new();
         aggregate_tree(
             (&mut without_total, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![dir.path().join("a"), dir.path().join("b")],
@@ -313,6 +323,7 @@ mod tests {
         let mut out = Vec::new();
         let result = aggregate_tree(
             (&mut out, false),
+            None::<Vec<u8>>,
             walk_options(),
             ByteFormat::Bytes,
             vec![missing.clone(), valid.clone()],

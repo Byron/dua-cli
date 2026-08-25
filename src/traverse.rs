@@ -272,11 +272,11 @@ impl BackgroundTraversal {
         })
     }
 
-    /// Keep graph nodes through `depth`, while still aggregating all sizes.
-    /// For example, 0 retains roots only, 1 also retains their immediate children, and 2 also
-    /// retains grandchildren.
-    pub(crate) fn retain_depth(mut self, depth: usize) -> Self {
-        self.retained_depth = Some(depth);
+    /// Keep graph nodes through `depth`, while still aggregating all sizes, or retain all nodes when
+    /// it is `None`. For example, 0 retains roots only, 1 also retains their immediate children,
+    /// and 2 also retains grandchildren.
+    pub(crate) fn retain_depth(mut self, depth: Option<usize>) -> Self {
+        self.retained_depth = depth;
         self
     }
 
@@ -647,7 +647,7 @@ mod tests {
                 true,
             )
             .unwrap()
-            .retain_depth(depth);
+            .retain_depth(Some(depth));
 
             while !background
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
@@ -696,7 +696,7 @@ mod tests {
             true,
         )
         .unwrap()
-        .retain_depth(0);
+        .retain_depth(Some(0));
 
         while background.root_nodes[0].is_none() {
             let event = background.event_rx.recv().unwrap();

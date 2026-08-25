@@ -15,6 +15,7 @@ mod crossdev;
 mod inodefilter;
 mod tree;
 
+mod stacks;
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;
 
@@ -23,4 +24,5 @@ pub use aggregate::aggregate;
 pub use aggregate::aggregate_entries;
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;
+pub use stacks::stacks;
 pub use tree::aggregate_tree;
