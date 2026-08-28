@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.3.0 (2026-08-28)
+
+### New Features
+
+ - <csr-id-c0005aa9f8f1f225f609eb89c7d09a98ebbcb163/> reuse workers when restarting a walk
+   <!-- agent -->
+   Retain a completed single-root walk pool and add `Walk::restart()` so callers
+   that rescan a changing directory avoid rebuilding worker threads.
+   
+   Declare Rust 1.88 support for let-chain and integer-cast syntax.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 3 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #381 from Byron/reuse-walk-pool ([`28a7279`](https://github.com/Byron/dua-cli/commit/28a727921f55a5bb10449dfe2afa89a8eaffed39))
+    - Reuse workers when restarting a walk ([`c0005aa`](https://github.com/Byron/dua-cli/commit/c0005aa9f8f1f225f609eb89c7d09a98ebbcb163))
+</details>
+
 ## 3.2.0 (2026-08-25)
 
 ### New Features
@@ -24,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 12 commits contributed to the release over the course of 9 calendar days.
+ - 13 commits contributed to the release over the course of 9 calendar days.
  - 10 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -36,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v3.2.0, dua-cli v2.43.0 ([`7baa926`](https://github.com/Byron/dua-cli/commit/7baa9266a593fd6b7f7568c741798d76660eb3ab))
     - Prepare changelog priot to release ([`c042449`](https://github.com/Byron/dua-cli/commit/c0424490a47477dd516c3f52bbb6d130b210c317))
     - Merge pull request #379 from nshcr/codex/macos-du-allocation-accounting ([`2262295`](https://github.com/Byron/dua-cli/commit/226229565fc978e22a14ff2531044c688c87e1ed))
     - Review ([`df12088`](https://github.com/Byron/dua-cli/commit/df12088f444aa934ed922ab360279fabdf7a5ea0))
