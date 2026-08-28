@@ -219,6 +219,10 @@ pub struct Walk {
     ///
     /// Clearing or dropping it requests shutdown, unparks every worker, and joins their threads.
     pool: Option<Pool>,
+    root: PathBuf,
+    options: Options,
+    /// Whether the worker pool has finished the current traversal.
+    finished: bool,
 }
 
 /// Read a directory using native bulk enumeration and return entries with metadata already collected.
@@ -244,6 +248,7 @@ pub fn walk(
     options: Options,
     descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
 ) -> Walk {
+    let root_path = root.to_owned();
     let root = Entry::from_path(root, options);
     let pool = match &root {
         Ok(entry) if entry.file_type.is_dir() && descend(entry) => {
@@ -270,6 +275,41 @@ pub fn walk(
     Walk {
         next: vec![root],
         pool,
+        root: root_path,
+        options,
+        finished: false,
+    }
+}
+
+impl Walk {
+    /// Restart an exhausted directory walk while retaining its worker threads.
+    ///
+    /// Returns `false` if the walk is still active or did not start a worker pool.
+    #[must_use]
+    pub fn restart(&mut self) -> bool {
+        if !self.finished || !self.next.is_empty() {
+            return false;
+        }
+        let Some(pool) = self.pool.as_ref() else {
+            return false;
+        };
+        let root = Entry::from_path(&self.root, self.options);
+        let job = match &root {
+            Ok(entry) if entry.file_type.is_dir() && (pool.shared.descend)(0, entry) => {
+                Some(Job::ReadDir {
+                    root_idx: 0,
+                    path: Arc::from(entry.path()),
+                    entry_depth: 1,
+                })
+            }
+            _ => None,
+        };
+        self.next.push(root);
+        if let Some(job) = job {
+            self.finished = false;
+            start_jobs(pool, vec![job]);
+        }
+        true
     }
 }
 
@@ -280,6 +320,9 @@ impl Iterator for Walk {
         loop {
             if let Some(entry) = self.next.pop() {
                 return Some(entry);
+            }
+            if self.finished {
+                return None;
             }
 
             match self.pool.as_ref()?.events.recv() {
@@ -293,7 +336,7 @@ impl Iterator for Walk {
                 }) => return Some(Err(err)),
                 Ok(Event::RootFinished { .. }) => {}
                 Ok(Event::Finished) => {
-                    self.pool = None;
+                    self.finished = true;
                     return None;
                 }
                 Err(_) => return Some(Err(io::Error::other("directory worker stopped"))),
@@ -1123,6 +1166,54 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_completed_walk_can_reuse_its_workers() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("first/child")).unwrap();
+
+        let mut walk = walk(dir.path(), 2, Order::Completion, Options::default(), |_| {
+            true
+        });
+        assert!(!walk.restart(), "an active walk cannot be restarted");
+        let worker_ids = walk
+            .pool
+            .as_ref()
+            .unwrap()
+            .handles
+            .iter()
+            .map(|handle| handle.thread().id())
+            .collect::<Vec<_>>();
+        walk.by_ref().for_each(drop);
+        assert!(walk.next().is_none(), "a completed walk stays exhausted");
+
+        fs::create_dir_all(dir.path().join("second/child")).unwrap();
+        assert!(walk.restart());
+        let paths = walk
+            .by_ref()
+            .map(|entry| {
+                entry
+                    .unwrap()
+                    .path()
+                    .strip_prefix(dir.path())
+                    .unwrap()
+                    .into()
+            })
+            .collect::<Vec<PathBuf>>();
+
+        assert!(paths.contains(&PathBuf::from("second/child")));
+        assert_eq!(
+            walk.pool
+                .as_ref()
+                .unwrap()
+                .handles
+                .iter()
+                .map(|handle| handle.thread().id())
+                .collect::<Vec<_>>(),
+            worker_ids,
+            "a restarted walk keeps its original worker threads"
+        );
     }
 
     #[test]

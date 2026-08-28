@@ -1,11 +1,12 @@
 [package]
 name = "dua-core"
-version = "3.2.0"
+version = "3.3.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
 description = "Fast parallel filesystem traversal iterators"
 license.workspace = true
+rust-version = "1.88"
 
 [dependencies]
 crossbeam.workspace = true
