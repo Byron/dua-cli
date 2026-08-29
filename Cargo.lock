@@ -685,6 +685,7 @@ dependencies = [
  "ratatui",
  "serde",
  "shlex 2.0.1",
+ "signal-hook",
  "tempfile",
  "toml",
  "trash",

@@ -1,9 +1,19 @@
 use std::path::PathBuf;
 
+#[cfg(unix)]
+use std::io;
+
 use crate::interactive::EntryCheck;
 use anyhow::Result;
 use crossbeam::channel::Receiver;
 use crossterm::event::Event;
+#[cfg(unix)]
+use crossterm::{
+    cursor::Show,
+    event::{DisableFocusChange, EnableFocusChange},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
 use dua::Config;
 #[cfg(test)]
 use dua::traverse::TraversalStats;
@@ -13,6 +23,38 @@ use tui::{Terminal, backend::Backend};
 use crate::interactive::widgets::MainWindow;
 
 use super::{DisplayOptions, sorted_entries, state::AppState};
+
+/// Restores the user's terminal, suspends the process, and reinitializes the TUI after resume.
+///
+/// The previous frame is invalidated after resume so the caller's next draw repaints the complete
+/// UI. This function does not draw by itself; the event loop draws normally after handling the
+/// suspend key event.
+#[cfg(unix)]
+pub fn suspend_terminal<B>(terminal: &mut Terminal<B>, focus_change: bool) -> Result<()>
+where
+    B: Backend,
+{
+    let mut stderr = io::stderr();
+    if focus_change {
+        execute!(stderr, DisableFocusChange)?;
+    }
+    execute!(stderr, Show)?;
+    disable_raw_mode()?;
+    execute!(stderr, LeaveAlternateScreen)?;
+
+    // This suspends the program, and anything that follows undoes the lines above.
+    signal_hook::low_level::raise(signal_hook::consts::signal::SIGTSTP)?;
+
+    enable_raw_mode()?;
+    execute!(stderr, EnterAlternateScreen)?;
+    if focus_change {
+        execute!(stderr, EnableFocusChange)?;
+    }
+    // `Terminal::clear()` queries the cursor position, racing the input thread for its response.
+    // This triggers a redraw as well without that issue.
+    terminal.swap_buffers();
+    Ok(())
+}
 
 /// State and methods representing the interactive disk usage analyser for the terminal
 pub struct TerminalApp {
