@@ -7,8 +7,8 @@ use crate::interactive::{
     CursorDirection, app::tree_view::TreeView, fit_string_graphemes_with_ellipsis,
     widgets::entry_color,
 };
-use crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers};
-use dua::{ByteFormat, traverse::TreeIndex};
+use crossterm::event::{KeyEvent, KeyEventKind};
+use dua::{ByteFormat, KeysConfig, traverse::TreeIndex};
 use itertools::Itertools;
 use std::{
     borrow::Borrow,
@@ -56,10 +56,11 @@ pub struct MarkPane {
     item_count: u64,
 }
 
-pub struct MarkPaneProps {
+pub struct MarkPaneProps<'a> {
     pub border_style: Style,
     pub format: ByteFormat,
     pub root_total_size: u128,
+    pub keys: &'a KeysConfig,
 }
 
 impl MarkPane {
@@ -116,37 +117,39 @@ impl MarkPane {
     pub fn into_paths(self) -> impl Iterator<Item = PathBuf> {
         self.marked.into_values().map(|v| v.path)
     }
-    pub fn process_events(mut self, key: KeyEvent) -> Option<(Self, Option<MarkMode>)> {
-        use crossterm::event::KeyCode::{Char, Down, PageDown, PageUp, Up};
+    pub fn process_events(
+        mut self,
+        key: KeyEvent,
+        keys: &KeysConfig,
+    ) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         if key.kind == KeyEventKind::Release {
             return Some((self, action));
         }
-        match key.code {
-            Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Delete));
-            }
-            #[cfg(feature = "trash-move")]
-            Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(self.prepare_deletion(MarkMode::Trash));
-            }
-            Char('a') => return None,
-            Char('H') => self.change_selection(CursorDirection::ToTop),
-            Char('G') => self.change_selection(CursorDirection::ToBottom),
-            PageUp => self.change_selection(CursorDirection::PageUp),
-            Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.change_selection(CursorDirection::PageUp);
-            }
-            Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.change_selection(CursorDirection::PageDown);
-            }
-            PageDown => self.change_selection(CursorDirection::PageDown),
-            Char('k') | Up => self.change_selection(CursorDirection::Up),
-            Char('j') | Down => self.change_selection(CursorDirection::Down),
-            Char('x' | 'd' | ' ') => {
-                return self.remove_selected().map(|s| (s, action));
-            }
-            _ => {}
+        if keys.delete_marked.matches(key) {
+            return Some(self.prepare_deletion(MarkMode::Delete));
+        }
+        #[cfg(feature = "trash-move")]
+        if keys.trash_marked.matches(key) {
+            return Some(self.prepare_deletion(MarkMode::Trash));
+        }
+        if keys.remove_all_marks.matches(key) {
+            return None;
+        }
+        if keys.move_to_top.matches(key) {
+            self.change_selection(CursorDirection::ToTop);
+        } else if keys.move_to_bottom.matches(key) {
+            self.change_selection(CursorDirection::ToBottom);
+        } else if keys.page_up.matches(key) {
+            self.change_selection(CursorDirection::PageUp);
+        } else if keys.page_down.matches(key) {
+            self.change_selection(CursorDirection::PageDown);
+        } else if keys.move_up.matches(key) {
+            self.change_selection(CursorDirection::Up);
+        } else if keys.move_down.matches(key) {
+            self.change_selection(CursorDirection::Down);
+        } else if keys.remove_mark.matches(key) {
+            return self.remove_selected().map(|s| (s, action));
         }
         Some((self, action))
     }
@@ -250,11 +253,17 @@ impl MarkPane {
         });
     }
 
-    pub fn render(&mut self, props: impl Borrow<MarkPaneProps>, area: Rect, buf: &mut Buffer) {
+    pub fn render<'a>(
+        &mut self,
+        props: impl Borrow<MarkPaneProps<'a>>,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         let MarkPaneProps {
             border_style,
             format,
             root_total_size,
+            keys,
         } = props.borrow();
 
         let marked: &_ = &self.marked;
@@ -393,7 +402,7 @@ impl MarkPane {
             Paragraph::new(Text::from(Line::from(vec![
                 #[cfg(feature = "trash-move")]
                 Span::styled(
-                    " Ctrl + t ",
+                    format!(" {} ", keys.trash_marked),
                     Style {
                         fg: Color::White.into(),
                         bg: Color::Black.into(),
@@ -403,7 +412,7 @@ impl MarkPane {
                 #[cfg(feature = "trash-move")]
                 Span::styled(" to trash or ", default_style),
                 Span::styled(
-                    " Ctrl + r ",
+                    format!(" {} ", keys.delete_marked),
                     Style {
                         fg: Color::LightRed.into(),
                         bg: Color::Black.into(),
@@ -448,8 +457,14 @@ impl MarkPane {
         );
 
         if has_focus {
-            let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
-            let help_text_block_width = block_width(help_text);
+            let help_text = format!(
+                " ⇊ = {}|↓ = {}|⇈ = {}|↑ = {} ",
+                keys.page_down.primary(),
+                keys.move_down.primary(),
+                keys.page_up.primary(),
+                keys.move_up.primary(),
+            );
+            let help_text_block_width = block_width(&help_text);
             let bound = Rect {
                 width: area.width.saturating_sub(1),
                 ..area
@@ -458,18 +473,21 @@ impl MarkPane {
                 draw_text_nowrap_fn(
                     rect::snap_to_right(bound, help_text_block_width),
                     buf,
-                    help_text,
+                    &help_text,
                     |_, _, _| Style::default(),
                 );
             }
             let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-            let help_text = " mark-toggle = space,d | remove-all = a";
-            let help_text_block_width = block_width(help_text);
+            let help_text = format!(
+                " mark-toggle = {} | remove-all = {}",
+                keys.remove_mark, keys.remove_all_marks
+            );
+            let help_text_block_width = block_width(&help_text);
             if help_text_block_width <= bound.width {
                 draw_text_nowrap_fn(
                     rect::snap_to_right(bound, help_text_block_width),
                     buf,
-                    help_text,
+                    &help_text,
                     |_, _, _| Style::default(),
                 );
             }
@@ -504,6 +522,7 @@ pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
 #[cfg(test)]
 mod mark_pane_tests {
     use super::*;
+    use crossterm::event::{KeyCode, KeyModifiers};
     use tui::buffer::Cell;
 
     #[test]
@@ -519,6 +538,7 @@ mod mark_pane_tests {
             MarkPaneProps {
                 border_style: Style::default(),
                 format: ByteFormat::Metric,
+                keys: &KeysConfig::default(),
                 root_total_size: 1_000_000_000,
             },
             area,
@@ -530,6 +550,58 @@ mod mark_pane_tests {
             rendered.contains("Marked 20K items (312.40 MB, 31.24% of 1.00 GB)"),
             "rendered title: {rendered:?}"
         );
+    }
+
+    #[test]
+    fn unmapped_delete_key_is_named() {
+        let area = Rect::new(0, 0, 80, 4);
+        let mut buffer = Buffer::empty(area);
+        let config: dua::Config =
+            toml::from_str("[keys]\ndelete_marked = []").expect("valid config");
+
+        MarkPane {
+            has_focus: true,
+            ..Default::default()
+        }
+        .render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                keys: &config.keys,
+                root_total_size: 0,
+            },
+            area,
+            &mut buffer,
+        );
+
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        assert!(
+            rendered.contains("<unmapped>"),
+            "rendered pane: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn process_events_uses_configured_keybindings() {
+        let config: dua::Config = toml::from_str(
+            r#"
+            [keys]
+            delete_marked = ["z"]
+            "#,
+        )
+        .expect("valid config");
+
+        assert!(matches!(
+            MarkPane::default().process_events(KeyCode::Char('z').into(), &config.keys),
+            Some((_, Some(MarkMode::Delete)))
+        ));
+        assert!(matches!(
+            MarkPane::default().process_events(
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL),
+                &config.keys
+            ),
+            Some((_, None))
+        ));
     }
 
     #[test]

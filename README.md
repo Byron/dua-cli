@@ -264,14 +264,22 @@ dua aggregate --stack | inferno-flamegraph > disk-usage.svg
 
 If the file is missing, defaults are used.
 
-Currently supported options:
+Run `dua config show-default` for a commented template containing every configurable keybinding.
+Use a string for one binding or an array for aliases; an empty array disables the action.
+For example:
 
 ```toml
 [keys]
-# If true, pressing <Esc> in the main pane navigates to the parent directory.
-# If true (default), pressing <Esc> in the main pane ascends to the parent directory.
-# If false, <Esc> follows the default quit behavior.
+# If true (default), close_pane keys ascend from the main pane.
+# If false, close_pane keys follow the quit behavior.
 esc_navigates_back = true
+
+close_pane = "esc"
+sort_by_name = "ctrl+n"
+
+# Disable permanent deletion and moving entries to the trash.
+delete_marked = []
+trash_marked = []
 ```
 
 ### Development

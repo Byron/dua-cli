@@ -10,7 +10,7 @@ pub use dua_core::Options as TraversalOptions;
 mod aggregate;
 mod common;
 mod config;
-pub use config::Config;
+pub use config::{Config, KeyBindings, KeysConfig};
 mod crossdev;
 mod inodefilter;
 mod tree;
