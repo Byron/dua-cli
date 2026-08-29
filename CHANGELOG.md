@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.43.1 (2026-08-29)
+
+### Bug Fixes
+
+ - <csr-id-1f2575a9d176c03701034a88e1e2737fc2c90c1f/> stream folded stacks during traversal
+   <!-- agent -->
+   Unlimited-depth aggregate --stack retained every traversal node and emitted only
+   after walking, allowing memory to grow with entry count.
+   
+   Write each exclusive-size line as its parent-first event is integrated and
+   retain only root accounting. Keep depth-limited mode unchanged because it must
+   roll hidden descendants into visible frames.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 2 commits contributed to the release.
+ - 4 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#382](https://github.com/Byron/dua-cli/issues/382)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#382](https://github.com/Byron/dua-cli/issues/382)**
+    - Stream folded stacks during traversal ([`1f2575a`](https://github.com/Byron/dua-cli/commit/1f2575a9d176c03701034a88e1e2737fc2c90c1f))
+ * **Uncategorized**
+    - Merge pull request #384 from Byron/stacks-memory ([`5cad619`](https://github.com/Byron/dua-cli/commit/5cad6197066cef8e74a0decd86d5da61261eef76))
+</details>
+
 ## 2.43.0 (2026-08-25)
 
 Thanks to our contributors, there are not one, but two (a joke, a human is writing this with fleshy fingers :D) headline features:
