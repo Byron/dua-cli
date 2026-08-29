@@ -84,9 +84,14 @@ impl fmt::Display for ByteFormatDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use ByteFormat::{Binary, Bytes, GB, GiB, MB, Metric, MiB};
 
-        let bytes = Byte::from_u128(self.bytes).expect("supported byte count");
+        if self.format == Bytes {
+            return write!(f, "{} b", self.bytes);
+        }
+        let Some(bytes) = Byte::from_u128(self.bytes) else {
+            return write!(f, "{} b", self.bytes);
+        };
         let adjusted = match self.format {
-            Bytes => return write!(f, "{} b", self.bytes),
+            Bytes => unreachable!("handled above"),
             Binary => bytes.get_appropriate_unit(UnitType::Binary),
             Metric => bytes.get_appropriate_unit(UnitType::Decimal),
             GB => bytes.get_adjusted_unit(Unit::GB),
@@ -431,6 +436,24 @@ fn ignore_directory(path: &Path, ignore_dirs: &BTreeSet<PathBuf>, cwd: &Path) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_byte_format_handles_the_maximum_snapshot_size() {
+        for format in [
+            ByteFormat::Metric,
+            ByteFormat::Binary,
+            ByteFormat::Bytes,
+            ByteFormat::GB,
+            ByteFormat::GiB,
+            ByteFormat::MB,
+            ByteFormat::MiB,
+        ] {
+            assert_eq!(
+                format.display(u128::MAX).to_string(),
+                format!("{} b", u128::MAX)
+            );
+        }
+    }
 
     #[test]
     fn walk_options_identify_ignored_directories() {

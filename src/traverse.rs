@@ -330,6 +330,12 @@ impl BackgroundTraversal {
         })
     }
 
+    /// Return the top-level nodes in the same order as the traversal inputs once all roots exist.
+    #[must_use]
+    pub fn root_nodes(&self) -> Option<Vec<TreeIndex>> {
+        self.root_nodes.iter().copied().collect()
+    }
+
     /// Keep graph nodes through `depth`, while still aggregating all sizes, or retain all nodes when
     /// it is `None`. For example, 0 retains roots only, 1 also retains their immediate children,
     /// and 2 also retains grandchildren.

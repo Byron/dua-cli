@@ -134,6 +134,8 @@ $precious.tmp
         vec![root.to_owned()],
         None,
         Config::default(),
+        dua::traverse::Traversal::new(),
+        None,
     )?;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;
@@ -273,6 +275,8 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         vec![root.to_owned()],
         None,
         Config::default(),
+        dua::traverse::Traversal::new(),
+        None,
     )?;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;

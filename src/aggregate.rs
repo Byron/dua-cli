@@ -1,5 +1,9 @@
-use crate::{ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev};
-use anyhow::Result;
+use crate::{
+    ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev,
+    snapshot::{Replay, Snapshot},
+    tree::metadata_io_error_count,
+};
+use anyhow::{Context, Result};
 #[cfg(not(any(windows, target_os = "macos")))]
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
@@ -137,6 +141,127 @@ pub fn aggregate_entries(
             (path.clone(), path, Some(entry))
         }),
     )
+}
+
+/// Render the top-level entries of a verified traversal snapshot as an aggregate listing.
+pub fn aggregate_snapshot(
+    out: (impl io::Write, bool),
+    snapshot: &Snapshot,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
+) -> Result<WalkResult> {
+    let aggregates = snapshot
+        .roots
+        .iter()
+        .map(|&root| {
+            let entry = snapshot
+                .traversal
+                .tree
+                .node_weight(root)
+                .context("snapshot root does not exist")?;
+            Ok(Aggregate {
+                display_path: entry.name.clone(),
+                bytes: entry.size,
+                errors: metadata_io_error_count(&snapshot.traversal.tree, &[root]),
+                is_file: !entry.is_dir,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    write_snapshot_aggregates(
+        out,
+        aggregates,
+        compute_total,
+        sort_by_size_in_bytes,
+        byte_format,
+    )
+}
+
+/// Render the top-level entries of a verified snapshot replay as an aggregate listing.
+pub fn aggregate_replay<R: io::Read + io::Seek>(
+    out: (impl io::Write, bool),
+    replay: &mut Replay<R>,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
+) -> Result<WalkResult> {
+    let mut aggregates: Vec<Aggregate> = Vec::new();
+    replay.for_each_entry(|entry| {
+        let error = u64::from(entry.data.metadata_io_error);
+        if entry.depth == 0 {
+            aggregates
+                .try_reserve(1)
+                .context("could not grow snapshot root table")?;
+            aggregates.push(Aggregate {
+                bytes: entry.data.size,
+                is_file: !entry.data.is_dir,
+                display_path: entry.data.name,
+                errors: error,
+            });
+        } else if error != 0 {
+            let root = aggregates
+                .last_mut()
+                .context("snapshot entry precedes its root")?;
+            root.errors = root.errors.saturating_add(error);
+        }
+        Ok(())
+    })?;
+    write_snapshot_aggregates(
+        out,
+        aggregates,
+        compute_total,
+        sort_by_size_in_bytes,
+        byte_format,
+    )
+}
+
+fn write_snapshot_aggregates(
+    out: (impl io::Write, bool),
+    aggregates: Vec<Aggregate>,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    byte_format: ByteFormat,
+) -> Result<WalkResult> {
+    let (mut out, out_supports_colors) = out;
+    let output_options = (byte_format, out_supports_colors);
+    let total = aggregates.iter().try_fold(0u128, |total, aggregate| {
+        total
+            .checked_add(aggregate.bytes)
+            .context("snapshot total size overflow")
+    })?;
+    let num_errors = aggregates.iter().fold(0u64, |total, aggregate| {
+        total.saturating_add(aggregate.errors)
+    });
+    let num_roots = aggregates.len();
+
+    if sort_by_size_in_bytes {
+        output_sorted(&mut out, aggregates, output_options)?;
+    } else {
+        for aggregate in &aggregates {
+            output_colored_path(
+                &mut out,
+                out_supports_colors,
+                &aggregate.display_path,
+                aggregate.bytes,
+                aggregate.errors,
+                aggregate.path_color(),
+                byte_format,
+            )?;
+        }
+    }
+
+    if num_roots > 1 && compute_total {
+        output_colored_path(
+            &mut out,
+            out_supports_colors,
+            Path::new("total"),
+            total,
+            num_errors,
+            None,
+            byte_format,
+        )?;
+    }
+    Ok(WalkResult { num_errors })
 }
 
 fn aggregate_inner(
@@ -372,7 +497,7 @@ pub(crate) fn output_colored_path(
 ) -> std::result::Result<(), io::Error> {
     let size = byte_format.display(num_bytes).to_string();
     let size_width = byte_format.width();
-    let path = path.as_ref().display();
+    let path = path.as_ref();
 
     let errors = if num_errors != 0 {
         format!(
@@ -384,9 +509,20 @@ pub(crate) fn output_colored_path(
     };
 
     if !out_supports_colors {
-        return writeln!(out, "{size:>size_width$} {path}{errors}");
+        return writeln!(out, "{size:>size_width$} {}{errors}", path.display());
     }
 
+    let path = path
+        .to_string_lossy()
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                '\u{FFFD}'
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
     let size = size.green();
     if let Some(color) = path_color {
         writeln!(out, "{size:>size_width$} {}{errors}", path.color(color))
@@ -409,6 +545,8 @@ pub struct Statistics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traverse::{EntryData, Traversal};
+    use bstr::ByteSlice;
 
     fn byte_counts(out: &[u8]) -> Vec<u128> {
         let out = std::str::from_utf8(out).unwrap();
@@ -439,6 +577,104 @@ mod tests {
             Some(b"Enumerating 42 items\r\x1b[2K\r".as_slice())
         );
         assert!(!progress.visible);
+    }
+
+    #[test]
+    fn snapshot_aggregate_uses_stored_roots_and_errors() {
+        let mut traversal = Traversal::new();
+        let large = traversal.tree.add_node(EntryData {
+            name: "not-on-disk-large".into(),
+            size: 9,
+            is_dir: true,
+            ..EntryData::default()
+        });
+        let failed_child = traversal.tree.add_node(EntryData {
+            name: "missing".into(),
+            metadata_io_error: true,
+            ..EntryData::default()
+        });
+        let small = traversal.tree.add_node(EntryData {
+            name: "not-on-disk-small".into(),
+            size: 2,
+            ..EntryData::default()
+        });
+        traversal.tree.add_edge(traversal.root_index, large, ());
+        traversal.tree.add_edge(large, failed_child, ());
+        traversal.tree.add_edge(traversal.root_index, small, ());
+        let snapshot = Snapshot {
+            traversal,
+            roots: vec![large, small],
+        };
+
+        let mut out = Vec::new();
+        let result =
+            aggregate_snapshot((&mut out, false), &snapshot, true, false, ByteFormat::Bytes)
+                .unwrap();
+        insta::assert_snapshot!(out.as_bstr(), "stored root order, total and IO errors", @r"
+                 9 b not-on-disk-large  <1 IO Error>
+                 2 b not-on-disk-small
+                11 b total  <1 IO Error>
+        ");
+        assert_eq!(result.num_errors, 1);
+
+        let mut bytes = Vec::new();
+        crate::snapshot::write(&mut bytes, &snapshot.traversal, &snapshot.roots, None).unwrap();
+        let mut replay = Replay::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut replayed = Vec::new();
+        let replayed_result = aggregate_replay(
+            (&mut replayed, false),
+            &mut replay,
+            true,
+            false,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+        assert_eq!(replayed, out);
+        assert_eq!(replayed_result.num_errors, result.num_errors);
+
+        let mut sorted = Vec::new();
+        aggregate_snapshot(
+            (&mut sorted, false),
+            &snapshot,
+            false,
+            true,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+        insta::assert_snapshot!(sorted.as_bstr(), "stored roots sorted by size without total", @r"
+                 2 b not-on-disk-small
+                 9 b not-on-disk-large  <1 IO Error>
+        ");
+    }
+
+    #[test]
+    fn terminal_output_sanitizes_control_characters() {
+        let mut redirected = Vec::new();
+        output_colored_path(
+            &mut redirected,
+            false,
+            "name\t\x1b[31m",
+            1,
+            0,
+            None,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+        assert!(redirected.ends_with(b"name\t\x1b[31m\n"));
+
+        let mut terminal = Vec::new();
+        output_colored_path(
+            &mut terminal,
+            true,
+            "name\t\x1b[31m",
+            1,
+            0,
+            None,
+            ByteFormat::Bytes,
+        )
+        .unwrap();
+        let terminal = String::from_utf8(terminal).unwrap();
+        assert!(terminal.contains("name\u{FFFD}\u{FFFD}[31m"));
     }
 
     #[cfg(any(windows, target_os = "macos"))]
@@ -781,12 +1017,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(byte_counts(&out), [1, 2]);
-        let out = String::from_utf8(out).unwrap();
-        assert!(
-            out.find("first").unwrap() < out.find("second").unwrap(),
-            "the first root is also emitted first"
-        );
+        insta::assert_snapshot!(out.as_bstr(), "completed roots released in input order", @r"
+                 1 b first
+                 2 b second
+        ");
         assert_eq!(next_output, 2, "output stopped at root {next_output}");
         assert_eq!(
             progress.writer.as_deref(),

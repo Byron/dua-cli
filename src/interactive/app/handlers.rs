@@ -83,6 +83,10 @@ impl AppState {
     pub fn open_that(&mut self, tree_view: &TreeView<'_>) {
         if let Some(idx) = self.navigation().selected {
             let path = tree_view.path_of(idx);
+            if self.read_only && !path.exists() {
+                self.message = Some(format!("Snapshot path is unavailable: {}", path.display()));
+                return;
+            }
             if let Err(err) = open::that(&path) {
                 self.message = Some(format!("Failed to open {}: {err}", path.display()));
             }
@@ -241,6 +245,10 @@ impl AppState {
     }
 
     pub fn toggle_gitignored_entries(&mut self, tree_view: &TreeView<'_>) {
+        if self.read_only {
+            self.message = Some("Gitignored entry detection is unavailable for snapshots".into());
+            return;
+        }
         self.gitignored_entries = self.gitignored_entries.is_none().then(BTreeSet::new);
         self.update_entry_annotations(tree_view);
         self.reset_message();
@@ -323,6 +331,10 @@ impl AppState {
             .take()
             .and_then(|p| p.process_events(key, &config.keys));
         window.mark = match res {
+            Some((pane, Some(_))) if self.read_only => {
+                self.message = Some("Snapshots are read-only".into());
+                Some(pane)
+            }
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
                     self.message = Some("Deleting items...".to_string());

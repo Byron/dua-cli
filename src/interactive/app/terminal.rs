@@ -1,10 +1,14 @@
-use std::path::PathBuf;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 #[cfg(unix)]
 use std::io;
 
 use crate::interactive::EntryCheck;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossbeam::channel::Receiver;
 use crossterm::event::Event;
 #[cfg(unix)]
@@ -15,9 +19,11 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use dua::Config;
-#[cfg(test)]
 use dua::traverse::TraversalStats;
-use dua::{ByteFormat, WalkOptions, WalkResult, traverse::Traversal};
+use dua::{
+    ByteFormat, WalkOptions, WalkResult,
+    traverse::{Traversal, TreeIndex},
+};
 use tui::{Terminal, backend::Backend};
 
 use crate::interactive::widgets::MainWindow;
@@ -68,6 +74,10 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "initial traversal and its load duration are explicit initialization state"
+    )]
     pub fn initialize<B>(
         terminal: &mut Terminal<B>,
         walk_options: WalkOptions,
@@ -76,6 +86,8 @@ impl TerminalApp {
         input: Vec<PathBuf>,
         root_path: Option<PathBuf>,
         config: Config,
+        traversal: Traversal,
+        snapshot_load_duration: Option<Duration>,
     ) -> Result<TerminalApp>
     where
         B: Backend,
@@ -90,17 +102,32 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::new(walk_options, input, root_path);
+        let read_only = snapshot_load_duration.is_some();
+        let mut state = AppState::new(walk_options, input, root_path, read_only);
         if config.gitignore == Some(false) {
             state.gitignored_entries = None;
         }
         if config.cleanup_heuristics == Some(false) {
             state.cleanup_candidates = None;
         }
-        state.allow_entry_check = entry_check;
-        let traversal = Traversal::new();
-        #[cfg(test)]
-        let traversal_stats = TraversalStats::default();
+        state.allow_entry_check = entry_check && !read_only;
+        if read_only {
+            state.gitignored_entries = None;
+            state.stats = TraversalStats {
+                entries_traversed: u64::try_from(traversal.tree.node_count().saturating_sub(1))
+                    .unwrap_or(u64::MAX),
+                elapsed: snapshot_load_duration,
+                io_errors: traversal
+                    .tree
+                    .node_weights()
+                    .filter(|entry| entry.metadata_io_error)
+                    .count()
+                    .try_into()
+                    .unwrap_or(u64::MAX),
+                total_bytes: Some(traversal.tree[traversal.root_index].size),
+                ..TraversalStats::default()
+            };
+        }
 
         state.navigation_mut().view_root = traversal.root_index;
         state.entries = sorted_entries(
@@ -112,20 +139,35 @@ impl TerminalApp {
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 
+        if let Some(candidates) = state.cleanup_candidates.as_mut() {
+            *candidates = super::cleanup::cleanup_candidates(&state.entries);
+        }
+        state.reset_message();
+
         let app = TerminalApp {
             config,
             traversal,
             display,
             state,
             #[cfg(test)]
-            stats: traversal_stats,
+            stats: TraversalStats::default(),
             window,
         };
         Ok(app)
     }
 
     pub fn traverse(&mut self) -> Result<()> {
-        self.state.traverse(&self.traversal)?;
+        self.state.traverse(&self.traversal, None)?;
+        Ok(())
+    }
+
+    pub fn traverse_and_export(
+        &mut self,
+        path: PathBuf,
+        compression_level: Option<i32>,
+    ) -> Result<()> {
+        self.state
+            .traverse(&self.traversal, Some((path, compression_level)))?;
         Ok(())
     }
 
@@ -164,6 +206,34 @@ impl TerminalApp {
             &self.config,
         )
     }
+}
+
+pub(super) fn write_snapshot_atomically(
+    path: &Path,
+    traversal: &Traversal,
+    roots: &[TreeIndex],
+    compression_level: Option<i32>,
+) -> Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut temporary = tempfile::NamedTempFile::new_in(parent).with_context(|| {
+        format!(
+            "Could not create a temporary snapshot beside {}",
+            path.display()
+        )
+    })?;
+    dua::snapshot::write(temporary.as_file_mut(), traversal, roots, compression_level)
+        .with_context(|| format!("Could not write snapshot to {}", path.display()))?;
+    temporary.as_file_mut().flush()?;
+    temporary.as_file().sync_all()?;
+    temporary
+        .into_temp_path()
+        .persist(path)
+        .map_err(|err| err.error)
+        .with_context(|| format!("Could not install snapshot at {}", path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]

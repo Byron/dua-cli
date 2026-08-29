@@ -61,6 +61,7 @@ pub struct MarkPaneProps<'a> {
     pub format: ByteFormat,
     pub root_total_size: u128,
     pub keys: &'a KeysConfig,
+    pub safety_notice: Option<&'static str>,
 }
 
 impl MarkPane {
@@ -264,6 +265,7 @@ impl MarkPane {
             format,
             root_total_size,
             keys,
+            safety_notice,
         } = props.borrow();
 
         let marked: &_ = &self.marked;
@@ -399,31 +401,35 @@ impl MarkPane {
                 sub_modifier: Modifier::empty(),
                 ..Style::default()
             };
-            Paragraph::new(Text::from(Line::from(vec![
-                #[cfg(feature = "trash-move")]
-                Span::styled(
-                    format!(" {} ", keys.trash_marked),
-                    Style {
-                        fg: Color::White.into(),
-                        bg: Color::Black.into(),
-                        ..default_style
-                    },
-                ),
-                #[cfg(feature = "trash-move")]
-                Span::styled(" to trash or ", default_style),
-                Span::styled(
-                    format!(" {} ", keys.delete_marked),
-                    Style {
-                        fg: Color::LightRed.into(),
-                        bg: Color::Black.into(),
-                        add_modifier: default_style.add_modifier | Modifier::RAPID_BLINK,
-                        ..default_style
-                    },
-                ),
-                Span::styled(" to delete without prompt", default_style),
-            ])))
-            .style(default_style)
-            .render(help_line_area, buf);
+            if let Some(notice) = safety_notice {
+                Paragraph::new(*notice).render(help_line_area, buf);
+            } else {
+                Paragraph::new(Text::from(Line::from(vec![
+                    #[cfg(feature = "trash-move")]
+                    Span::styled(
+                        format!(" {} ", keys.trash_marked),
+                        Style {
+                            fg: Color::White.into(),
+                            bg: Color::Black.into(),
+                            ..default_style
+                        },
+                    ),
+                    #[cfg(feature = "trash-move")]
+                    Span::styled(" to trash or ", default_style),
+                    Span::styled(
+                        format!(" {} ", keys.delete_marked),
+                        Style {
+                            fg: Color::LightRed.into(),
+                            bg: Color::Black.into(),
+                            add_modifier: default_style.add_modifier | Modifier::RAPID_BLINK,
+                            ..default_style
+                        },
+                    ),
+                    Span::styled(" to delete without prompt", default_style),
+                ])))
+                .style(default_style)
+                .render(help_line_area, buf);
+            }
             list_area
         } else {
             inner_area
@@ -523,7 +529,6 @@ pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
 mod mark_pane_tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyModifiers};
-    use tui::buffer::Cell;
 
     #[test]
     fn title_shows_percentage_of_root_size() {
@@ -540,15 +545,29 @@ mod mark_pane_tests {
                 format: ByteFormat::Metric,
                 keys: &KeysConfig::default(),
                 root_total_size: 1_000_000_000,
+                safety_notice: None,
             },
             area,
             &mut buffer,
         );
 
-        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
-        assert!(
-            rendered.contains("Marked 20K items (312.40 MB, 31.24% of 1.00 GB)"),
-            "rendered title: {rendered:?}"
+        insta::assert_debug_snapshot!(
+            buffer,
+            "marked item count, size and percentage of root size",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 80, height: 4 },
+            content: [
+                "┌Marked 20K items (312.40 MB, 31.24% of 1.00 GB) ──────────────────────────────┐",
+                "│                                                                              │",
+                "│                                                                              │",
+                "└──────────────────────────────────────────────────────────────────────────────┘",
+            ],
+            styles: [
+                x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+            ]
+        }
+        "#
         );
     }
 
@@ -569,15 +588,98 @@ mod mark_pane_tests {
                 format: ByteFormat::Metric,
                 keys: &config.keys,
                 root_total_size: 0,
+                safety_notice: None,
             },
             area,
             &mut buffer,
         );
 
-        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
-        assert!(
-            rendered.contains("<unmapped>"),
-            "rendered pane: {rendered:?}"
+        #[cfg(feature = "trash-move")]
+        insta::assert_debug_snapshot!(
+            buffer,
+            "unmapped permanent-delete key alongside trash support",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 80, height: 4 },
+            content: [
+                "┌Marked 0 items (0  B, 0.00% of 0  B) ── ⇊ = Ctrl + d|↓ = j|⇈ = Ctrl + u|↑ = k ┐",
+                "│                                                                              │",
+                "│ Ctrl + t  to trash or  <unmapped>  to delete without prompt                  │",
+                "└─────────────────────────────────── mark-toggle = x/d/<Space> | remove-all = a┘",
+            ],
+            styles: [
+                x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+                x: 1, y: 2, fg: White, bg: Black, underline: Reset, modifier: BOLD,
+                x: 11, y: 2, fg: Black, bg: Yellow, underline: Reset, modifier: BOLD,
+                x: 24, y: 2, fg: LightRed, bg: Black, underline: Reset, modifier: BOLD | RAPID_BLINK,
+                x: 36, y: 2, fg: Black, bg: Yellow, underline: Reset, modifier: BOLD,
+                x: 79, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+            ]
+        }
+        "#
+        );
+        #[cfg(not(feature = "trash-move"))]
+        insta::assert_debug_snapshot!(
+            buffer,
+            "unmapped permanent-delete key without trash support",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 80, height: 4 },
+            content: [
+                "┌Marked 0 items (0  B, 0.00% of 0  B) ── ⇊ = Ctrl + d|↓ = j|⇈ = Ctrl + u|↑ = k ┐",
+                "│                                                                              │",
+                "│ <unmapped>  to delete without prompt                                         │",
+                "└─────────────────────────────────── mark-toggle = x/d/<Space> | remove-all = a┘",
+            ],
+            styles: [
+                x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+                x: 1, y: 2, fg: LightRed, bg: Black, underline: Reset, modifier: BOLD | RAPID_BLINK,
+                x: 13, y: 2, fg: Black, bg: Yellow, underline: Reset, modifier: BOLD,
+                x: 79, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+            ]
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn safety_notice_replaces_the_danger_prompt() {
+        let area = Rect::new(0, 0, 80, 4);
+        let mut buffer = Buffer::empty(area);
+
+        MarkPane {
+            has_focus: true,
+            ..Default::default()
+        }
+        .render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                keys: &KeysConfig::default(),
+                root_total_size: 0,
+                safety_notice: Some(" Snapshot is read-only; marked entries cannot be deleted "),
+            },
+            area,
+            &mut buffer,
+        );
+
+        insta::assert_debug_snapshot!(
+            buffer,
+            "read-only notice replaces destructive prompt and styling",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 80, height: 4 },
+            content: [
+                "┌Marked 0 items (0  B, 0.00% of 0  B) ── ⇊ = Ctrl + d|↓ = j|⇈ = Ctrl + u|↑ = k ┐",
+                "│                                                                              │",
+                "│ Snapshot is read-only; marked entries cannot be deleted                      │",
+                "└─────────────────────────────────── mark-toggle = x/d/<Space> | remove-all = a┘",
+            ],
+            styles: [
+                x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+            ]
+        }
+        "#
         );
     }
 

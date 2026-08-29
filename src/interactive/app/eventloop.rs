@@ -5,7 +5,7 @@ use crate::interactive::{
     state::FocussedPane,
     widgets::{MainWindow, MainWindowProps, glob_search},
 };
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use crossbeam::channel::Receiver;
 use crossterm::{
     event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -25,6 +25,7 @@ use super::notification;
 use super::state::{AppState, Cursor};
 #[cfg(unix)]
 use super::terminal::suspend_terminal;
+use super::terminal::write_snapshot_atomically;
 use super::tree_view::TreeView;
 
 /// Information needed to extend the traversal one directory upward:
@@ -58,7 +59,7 @@ impl AppState {
         B: Backend,
     {
         let props = MainWindowProps {
-            current_path: tree_view.current_path(self.navigation().view_root),
+            current_path: self.display_path(tree_view),
             entries_traversed: self.stats.entries_traversed,
             total_bytes: tree_view.total_size(),
             start: self.stats.start,
@@ -81,7 +82,14 @@ impl AppState {
         result
     }
 
-    pub fn traverse(&mut self, traversal: &Traversal) -> Result<()> {
+    pub fn traverse(
+        &mut self,
+        traversal: &Traversal,
+        snapshot_export: Option<(PathBuf, Option<i32>)>,
+    ) -> Result<()> {
+        if self.read_only {
+            bail!("Snapshots are read-only");
+        }
         let bg_traversal = BackgroundTraversal::start(
             traversal.root_index,
             &self.walk_options,
@@ -97,6 +105,7 @@ impl AppState {
         self.scan = Some(FilesystemScan {
             active_traversal: bg_traversal,
             previous_selection: None,
+            snapshot_export,
         });
         Ok(())
     }
@@ -105,8 +114,23 @@ impl AppState {
         self.parent_scan_target(tree).is_some()
     }
 
+    /// Return the path displayed for the current view without resolving snapshot paths on disk.
+    fn display_path(&self, tree_view: &TreeView<'_>) -> PathBuf {
+        if self.read_only {
+            let path = tree_view.path_of(self.navigation().view_root);
+            if path.as_os_str().is_empty() {
+                PathBuf::from("<snapshot>")
+            } else {
+                path
+            }
+        } else {
+            tree_view.current_path(self.navigation().view_root)
+        }
+    }
+
     fn parent_scan_target(&self, tree: &TreeView<'_>) -> Option<ParentScan> {
-        if self.scan.is_some()
+        if self.read_only
+            || self.scan.is_some()
             || self.glob_navigation.is_some()
             || self.navigation.view_root != tree.traversal.root_index
         {
@@ -152,6 +176,10 @@ impl AppState {
     }
 
     fn scan_parent(&mut self, tree: &mut TreeView<'_>) -> Result<()> {
+        if self.read_only {
+            self.message = Some("Snapshots are read-only".into());
+            return Ok(());
+        }
         if self.scan.is_some() {
             self.message = Some("Traversal already running".into());
             return Ok(());
@@ -264,6 +292,7 @@ impl AppState {
         self.scan = Some(FilesystemScan {
             active_traversal,
             previous_selection,
+            snapshot_export: None,
         });
         self.reset_message();
         Ok(())
@@ -390,6 +419,7 @@ impl AppState {
         if let Some(FilesystemScan {
             active_traversal,
             previous_selection,
+            snapshot_export,
         }) = self.scan.as_mut()
         {
             crossbeam::select! {
@@ -419,7 +449,26 @@ impl AppState {
                         let previous_selection = previous_selection.clone();
                         if is_finished {
                             let root_index = active_traversal.root_idx;
+                            let export = snapshot_export
+                                .take()
+                                .map(|(path, compression_level)| {
+                                    active_traversal
+                                        .root_nodes()
+                                        .map(|roots| (path, roots, compression_level))
+                                        .context(
+                                            "traversal did not produce a node for every root",
+                                        )
+                                })
+                                .transpose()?;
                             self.recompute_sizes_recursively(traversal, root_index);
+                            if let Some((path, roots, compression_level)) = export {
+                                write_snapshot_atomically(
+                                    &path,
+                                    traversal,
+                                    &roots,
+                                    compression_level,
+                                )?;
+                            }
                             self.scan = None;
                             traversal.cost = Some(traversal.start_time.elapsed());
                         }
@@ -491,7 +540,10 @@ impl AppState {
     }
 
     pub(crate) fn entry_check(&self) -> EntryCheck {
-        EntryCheck::new(self.scan.is_some(), self.allow_entry_check)
+        EntryCheck::new(
+            self.scan.is_some(),
+            self.allow_entry_check && !self.read_only,
+        )
     }
 
     fn process_terminal_event<B>(
@@ -680,6 +732,10 @@ impl AppState {
         window: &mut MainWindow,
         what: Refresh,
     ) -> anyhow::Result<()> {
+        if self.read_only {
+            self.message = Some("Snapshots are read-only".into());
+            return Ok(());
+        }
         // If another traversal is already running do not do anything.
         if self.scan.is_some() {
             self.message = Some("Traversal already running".into());
@@ -787,6 +843,7 @@ impl AppState {
                 use_root_path,
             )?,
             previous_selection,
+            snapshot_export: None,
         });
 
         self.received_events = false;

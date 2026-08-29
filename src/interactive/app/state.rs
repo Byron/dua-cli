@@ -28,8 +28,14 @@ pub struct FilesystemScan {
     pub active_traversal: BackgroundTraversal,
     /// The selected item prior to starting the traversal, if available, based on its name or index into [`AppState::entries`].
     pub previous_selection: Option<(PathBuf, usize)>,
+    /// Snapshot destination for the initial scan, if requested.
+    pub snapshot_export: Option<(PathBuf, Option<i32>)>,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent UI state flags are clearer than an artificial state machine"
+)]
 pub struct AppState {
     /// Navigation state for the main traversal view.
     pub navigation: Navigation,
@@ -70,12 +76,19 @@ pub struct AppState {
     pub root_path: Option<PathBuf>,
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
+    /// Whether this traversal was loaded from a snapshot and must not touch the filesystem.
+    pub read_only: bool,
     /// Whether the next quit/back action should exit the app.
     pub pending_exit: bool,
 }
 
 impl AppState {
-    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>, root_path: Option<PathBuf>) -> Self {
+    pub fn new(
+        walk_options: WalkOptions,
+        input: Vec<PathBuf>,
+        root_path: Option<PathBuf>,
+        read_only: bool,
+    ) -> Self {
         AppState {
             navigation: Navigation::default(),
             glob_navigation: None,
@@ -93,7 +106,8 @@ impl AppState {
             walk_options,
             root_paths: input,
             root_path,
-            allow_entry_check: true,
+            allow_entry_check: !read_only,
+            read_only,
             pending_exit: false,
         }
     }

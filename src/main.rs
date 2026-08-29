@@ -1,6 +1,6 @@
 #![forbid(rust_2018_idioms, unsafe_code)]
 use anyhow::{Context, Result, anyhow, bail};
-use clap::{CommandFactory as _, Parser};
+use clap::{CommandFactory as _, FromArgMatches as _};
 use dua::canonicalize_ignore_dirs;
 use log::info;
 use std::{
@@ -33,6 +33,25 @@ fn stderr_if_tty() -> Option<io::Stderr> {
     } else {
         None
     }
+}
+
+fn open_snapshot_file(path: &Path) -> Result<fs::File> {
+    let file = fs::File::open(path)
+        .with_context(|| format!("Could not open snapshot {}", path.display()))?;
+    if !file.metadata()?.is_file() {
+        bail!("Snapshot {} is not a regular file", path.display());
+    }
+    Ok(file)
+}
+
+fn read_snapshot_file(path: &Path) -> Result<dua::snapshot::Snapshot> {
+    dua::snapshot::read(open_snapshot_file(path)?)
+        .with_context(|| format!("Could not read snapshot {}", path.display()))
+}
+
+fn replay_snapshot_file(path: &Path) -> Result<dua::snapshot::Replay<fs::File>> {
+    dua::snapshot::Replay::new(open_snapshot_file(path)?)
+        .with_context(|| format!("Could not read snapshot {}", path.display()))
 }
 
 #[cfg(feature = "tui-crossplatform")]
@@ -77,7 +96,9 @@ fn main() -> Result<()> {
     use options::Command::Interactive;
     use options::Command::{Aggregate, Completions, Config};
 
-    let opt: options::Args = options::Args::parse_from(wild::args_os());
+    let matches = options::Args::command().get_matches_from(wild::args_os());
+    let global_traversal_options_used = traversal_options_on_command_line(&matches);
+    let opt = options::Args::from_arg_matches(&matches)?;
 
     if let Some(log_file) = &opt.log_file {
         log_panics::init();
@@ -116,18 +137,50 @@ fn main() -> Result<()> {
         #[cfg(feature = "tui-crossplatform")]
         Some(Interactive {
             traversal: subcommand_traversal,
+            export,
+            compression,
+            import,
             no_entry_check,
             once,
         }) => {
+            if import.is_some() && global_traversal_options_used {
+                bail!("--import cannot be used with traversal options or input paths");
+            }
+            let export = export.map(std::path::absolute).transpose()?;
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
             let config = dua::Config::load()?;
             let enable_focus_change = config.notifications.any_enabled();
             let byte_format = traversal.byte_format(&config);
-            let walk_options = walk_options_from(&traversal)?;
-            let has_complete_root = traversal.input.is_empty()
-                || traversal.input.len() == 1 && traversal.input[0].is_dir();
-            let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
-            let root_path = has_complete_root.then(std::env::current_dir).transpose()?;
+            let snapshot_load_start = import.as_ref().map(|_| std::time::Instant::now());
+            let snapshot = import.as_deref().map(read_snapshot_file).transpose()?;
+            let snapshot_load_duration = snapshot_load_start.map(|start| start.elapsed());
+            let read_only = snapshot.is_some();
+            let (input_paths, initial_traversal, walk_options, root_path) =
+                if let Some(snapshot) = snapshot {
+                    let input_paths = snapshot
+                        .roots
+                        .iter()
+                        .map(|root| snapshot.traversal.tree[*root].name.clone())
+                        .collect();
+                    (
+                        input_paths,
+                        snapshot.traversal,
+                        snapshot_walk_options(),
+                        None,
+                    )
+                } else {
+                    let walk_options = walk_options_from(&traversal)?;
+                    let has_complete_root = traversal.input.is_empty()
+                        || traversal.input.len() == 1 && traversal.input[0].is_dir();
+                    let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                    let root_path = has_complete_root.then(std::env::current_dir).transpose()?;
+                    (
+                        input_paths,
+                        dua::traverse::Traversal::new(),
+                        walk_options,
+                        root_path,
+                    )
+                };
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -166,8 +219,14 @@ fn main() -> Result<()> {
                 input_paths,
                 root_path,
                 config,
+                initial_traversal,
+                snapshot_load_duration,
             )?;
-            app.traverse()?;
+            if let Some(path) = export {
+                app.traverse_and_export(path, (compression != 0).then_some(compression))?;
+            } else if !read_only {
+                app.traverse()?;
+            }
 
             let res = match once {
                 Some(input) => {
@@ -208,53 +267,96 @@ fn main() -> Result<()> {
         }
         Some(Aggregate {
             traversal: subcommand_traversal,
+            import,
             no_total,
             no_sort,
             statistics,
             stack,
             depth,
         }) => {
+            if import.is_some() && global_traversal_options_used {
+                bail!("--import cannot be used with traversal options or input paths");
+            }
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
-            let walk_options = walk_options_from(&traversal)?;
-            if stack {
-                let inputs = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+            if let Some(path) = import {
+                let mut replay = replay_snapshot_file(&path)?;
+                writeln!(
+                    io::stderr(),
+                    "Results are from a traversal snapshot; no filesystem traversal was performed"
+                )
+                .ok();
                 let stdout = io::stdout();
-                dua::stacks(
-                    stdout.lock(),
-                    stderr_if_tty(),
-                    walk_options,
-                    inputs,
-                    depth.map(|depth| depth.saturating_sub(1)),
-                )?
-            } else if let Some(depth) = depth {
-                let config = dua::Config::load()?;
-                let byte_format = traversal.byte_format(&config);
-                let paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
-                let stdout = io::stdout();
-                let out_supports_colors = stdout.is_terminal();
-                dua::aggregate_tree(
-                    (stdout.lock(), out_supports_colors),
-                    stderr_if_tty(),
-                    walk_options,
-                    byte_format,
-                    paths,
-                    depth.saturating_sub(1),
-                    !no_total,
-                    !no_sort,
-                )?
+                if stack {
+                    dua::stacks_from_replay(
+                        stdout.lock(),
+                        &mut replay,
+                        depth.map(|depth| depth.saturating_sub(1)),
+                    )?
+                } else {
+                    let config = dua::Config::load()?;
+                    let byte_format = traversal.byte_format(&config);
+                    let out_supports_colors = stdout.is_terminal();
+                    if let Some(depth) = depth {
+                        dua::aggregate_tree_from_replay(
+                            (stdout.lock(), out_supports_colors),
+                            &mut replay,
+                            byte_format,
+                            depth.saturating_sub(1),
+                            !no_total,
+                            !no_sort,
+                        )?
+                    } else {
+                        dua::aggregate_replay(
+                            (stdout.lock(), out_supports_colors),
+                            &mut replay,
+                            !no_total,
+                            !no_sort,
+                            byte_format,
+                        )?
+                    }
+                }
             } else {
-                let config = dua::Config::load()?;
-                let byte_format = traversal.byte_format(&config);
-                let inputs =
-                    extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
-                run_aggregation(
-                    inputs,
-                    walk_options,
-                    !no_total,
-                    !no_sort,
-                    byte_format,
-                    statistics,
-                )?
+                let walk_options = walk_options_from(&traversal)?;
+                if stack {
+                    let inputs = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                    let stdout = io::stdout();
+                    dua::stacks(
+                        stdout.lock(),
+                        stderr_if_tty(),
+                        walk_options,
+                        inputs,
+                        depth.map(|depth| depth.saturating_sub(1)),
+                    )?
+                } else if let Some(depth) = depth {
+                    let config = dua::Config::load()?;
+                    let byte_format = traversal.byte_format(&config);
+                    let paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+                    let stdout = io::stdout();
+                    let out_supports_colors = stdout.is_terminal();
+                    dua::aggregate_tree(
+                        (stdout.lock(), out_supports_colors),
+                        stderr_if_tty(),
+                        walk_options,
+                        byte_format,
+                        paths,
+                        depth.saturating_sub(1),
+                        !no_total,
+                        !no_sort,
+                    )?
+                } else {
+                    let config = dua::Config::load()?;
+                    let byte_format = traversal.byte_format(&config);
+                    let inputs =
+                        extract_aggregate_inputs_maybe_set_cwd(traversal.input, &walk_options)?;
+                    run_aggregation(
+                        inputs,
+                        walk_options,
+                        !no_total,
+                        !no_sort,
+                        byte_format,
+                        statistics,
+                    )?
+                }
             }
         }
         Some(Completions { shell }) => {
@@ -338,6 +440,38 @@ fn is_default_ignore_dirs(list: &[PathBuf]) -> bool {
             .iter()
             .zip(defaults)
             .all(|(input, default)| input == Path::new(default))
+}
+
+fn traversal_options_on_command_line(matches: &clap::ArgMatches) -> bool {
+    let used = [
+        "threads",
+        "apparent_size",
+        "count_hard_links",
+        "stay_on_filesystem",
+        "ignore_dirs",
+        "ignore_from",
+        "input",
+    ]
+    .into_iter()
+    .any(|id| matches.value_source(id) == Some(clap::parser::ValueSource::CommandLine));
+    #[cfg(target_os = "macos")]
+    let used = used
+        || matches.value_source("deduplicate_apfs_clones")
+            == Some(clap::parser::ValueSource::CommandLine);
+    used
+}
+
+#[cfg(feature = "tui-crossplatform")]
+fn snapshot_walk_options() -> dua::WalkOptions {
+    dua::WalkOptions {
+        threads: 1,
+        apparent_size: false,
+        count_hard_links: false,
+        cross_filesystems: true,
+        ignore_dirs: std::collections::BTreeSet::new(),
+        ignore_patterns: None,
+        metadata_options: dua::TraversalOptions::default(),
+    }
 }
 
 fn merge_traversal_args(
@@ -617,7 +751,9 @@ fn write_default_config_file(path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::traversal_options_on_command_line;
     use super::{marked_path_for_output, merge_traversal_args, write_default_config_file};
+    use clap::CommandFactory as _;
     use std::fs;
     use std::path::PathBuf;
 
@@ -635,6 +771,41 @@ mod tests {
             "marked��[31m",
             "TAB and ESC control characters are sanitized for terminal output"
         );
+    }
+
+    #[cfg(feature = "tui-crossplatform")]
+    #[test]
+    fn interactive_import_rejects_global_traversal_options() {
+        let threads = super::options::DEFAULT_THREADS.to_string();
+        let matches = super::options::Args::command()
+            .try_get_matches_from([
+                "dua",
+                "--threads",
+                &threads,
+                "interactive",
+                "--import",
+                "scan.dua",
+            ])
+            .expect("parent traversal options parse before the subcommand");
+
+        assert!(traversal_options_on_command_line(&matches));
+    }
+
+    #[test]
+    fn aggregate_import_rejects_global_traversal_options() {
+        let threads = super::options::DEFAULT_THREADS.to_string();
+        let matches = super::options::Args::command()
+            .try_get_matches_from([
+                "dua",
+                "--threads",
+                &threads,
+                "aggregate",
+                "--import",
+                "scan.dua",
+            ])
+            .expect("parent traversal options parse before the subcommand");
+
+        assert!(traversal_options_on_command_line(&matches));
     }
 
     #[test]

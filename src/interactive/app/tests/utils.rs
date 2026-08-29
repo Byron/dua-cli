@@ -218,6 +218,8 @@ pub fn untraversed_app_and_terminal_with_closure(
         input_paths,
         None,
         Config::default(),
+        dua::traverse::Traversal::new(),
+        None,
     )?;
 
     Ok((terminal, app))

@@ -13,16 +13,18 @@ mod config;
 pub use config::{Config, KeyBindings, KeysConfig};
 mod crossdev;
 mod inodefilter;
+/// Reading and writing dua traversal snapshots.
+pub mod snapshot;
 mod tree;
 
 mod stacks;
 /// Filesystem traversal, in-memory tree representation, and traversal events.
 pub mod traverse;
 
-pub use aggregate::aggregate;
 #[cfg(any(windows, target_os = "macos"))]
 pub use aggregate::aggregate_entries;
+pub use aggregate::{aggregate, aggregate_replay, aggregate_snapshot};
 pub use common::*;
 pub(crate) use inodefilter::InodeFilter;
-pub use stacks::stacks;
-pub use tree::aggregate_tree;
+pub use stacks::{stacks, stacks_from_replay, stacks_from_traversal};
+pub use tree::{aggregate_tree, aggregate_tree_from_replay, aggregate_tree_from_traversal};

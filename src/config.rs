@@ -113,6 +113,12 @@ impl KeyBindings {
             .first()
             .map_or_else(|| UNMAPPED_KEY.into(), ToString::to_string)
     }
+
+    /// Return whether this action has no configured keys.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl fmt::Display for KeyBindings {

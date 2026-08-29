@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
-use std::{ffi::OsString, fs};
+use std::{ffi::OsString, fs, time::Duration};
 
 use crate::interactive::app::tests::utils::{into_codes, into_events};
 use crate::interactive::widgets::Column;
@@ -11,8 +11,9 @@ use crate::interactive::{
         FIXTURE_PATH,
         utils::{
             fixture, fixture_str, index_by_name, initialized_app_and_terminal_from_fixture,
-            initialized_app_and_terminal_from_paths, into_keys, node_by_index, node_by_name,
-            untraversed_app_and_terminal_from_fixture,
+            initialized_app_and_terminal_from_paths, into_keys, new_test_terminal, node_by_index,
+            node_by_name, untraversed_app_and_terminal_from_fixture,
+            untraversed_app_and_terminal_with_closure,
         },
     },
 };
@@ -661,6 +662,163 @@ fn once_waits_for_replayed_refresh_to_finish() -> Result<()> {
     assert!(
         app.state.scan.is_none(),
         "once mode should wait for refreshes started by replayed events"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn snapshot_roundtrip_is_read_only() -> Result<()> {
+    use crate::interactive::terminal::TerminalApp;
+    use dua::{ByteFormat, Config};
+
+    let fixture = tempfile::tempdir()?;
+    let root = fixture.path().join("root");
+    fs::create_dir(&root)?;
+    fs::write(root.join("a"), b"a")?;
+    fs::write(root.join("b"), b"bb")?;
+    fs::create_dir(root.join("dir"))?;
+    fs::write(root.join("dir/file"), b"content")?;
+    let snapshot_dir = tempfile::tempdir()?;
+    let snapshot_path = snapshot_dir.path().join("scan.dua");
+    fs::write(&snapshot_path, b"old snapshot")?;
+    let (mut terminal, mut scanned) = untraversed_app_and_terminal_with_closure(
+        std::slice::from_ref(&root),
+        std::path::Path::to_path_buf,
+    )?;
+    scanned.traverse_and_export(snapshot_path.clone(), Some(2))?;
+    assert_eq!(
+        fs::read(&snapshot_path)?,
+        b"old snapshot",
+        "export waits for the traversal to finish"
+    );
+    scanned.run_until_traversed(&mut terminal, into_events([]))?;
+
+    let snapshot = dua::snapshot::read(fs::File::open(&snapshot_path)?)?;
+    let root_paths = snapshot
+        .roots
+        .iter()
+        .map(|root| snapshot.traversal.tree[*root].name.clone())
+        .collect();
+    let snapshot_load_duration = Duration::from_millis(123);
+    let mut terminal = new_test_terminal()?;
+    let mut app = TerminalApp::initialize(
+        &mut terminal,
+        scanned.state.walk_options.clone(),
+        ByteFormat::Metric,
+        true,
+        root_paths,
+        None,
+        Config::default(),
+        snapshot.traversal,
+        Some(snapshot_load_duration),
+    )?;
+
+    assert!(app.state.read_only);
+    assert_eq!(app.state.stats.elapsed, Some(snapshot_load_duration));
+    assert!(app.state.scan.is_none(), "import starts no traversal");
+    assert!(app.state.gitignored_entries.is_none());
+
+    fs::remove_file(root.join("a"))?;
+    app.process_events(&mut terminal, into_codes("o"))?;
+    let missing = app
+        .state
+        .entries
+        .iter()
+        .find(|entry| entry.name == std::path::Path::new("a"))
+        .expect("snapshot contains a");
+    assert!(
+        missing.exists,
+        "snapshot entries are not checked against the local filesystem"
+    );
+    let missing_index = missing.index;
+
+    app.process_events(&mut terminal, into_codes("R"))?;
+    assert!(app.state.scan.is_none(), "refresh remains disabled");
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Snapshots are read-only")
+    );
+
+    app.process_events(&mut terminal, into_codes("U"))?;
+    assert!(app.state.scan.is_none(), "parent scan remains disabled");
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Snapshots are read-only")
+    );
+
+    app.state.navigation_mut().select(Some(missing_index));
+    app.process_events(&mut terminal, into_codes("O"))?;
+    let missing_message = format!("Snapshot path is unavailable: {}", root.join("a").display());
+    assert_eq!(app.state.message.as_deref(), Some(missing_message.as_str()));
+
+    app.process_events(&mut terminal, into_codes("i"))?;
+    assert!(app.state.gitignored_entries.is_none());
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Gitignored entry detection is unavailable for snapshots")
+    );
+
+    let victim = root.join("b");
+    let victim_index = app
+        .state
+        .entries
+        .iter()
+        .find(|entry| entry.name == std::path::Path::new("b"))
+        .expect("snapshot contains b")
+        .index;
+    app.state.navigation_mut().select(Some(victim_index));
+    app.process_events(
+        &mut terminal,
+        into_events([
+            Event::Key(KeyCode::Char(' ').into()),
+            Event::Key(KeyCode::Tab.into()),
+            Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+        ]),
+    )?;
+    assert!(victim.exists(), "delete is disabled for snapshots");
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Snapshots are read-only")
+    );
+
+    #[cfg(feature = "trash-move")]
+    {
+        app.process_events(
+            &mut terminal,
+            into_events([Event::Key(KeyEvent::new(
+                KeyCode::Char('t'),
+                KeyModifiers::CONTROL,
+            ))]),
+        )?;
+        assert!(victim.exists(), "move to trash is disabled for snapshots");
+    }
+
+    app.process_events(&mut terminal, into_keys([KeyCode::Tab]))?;
+    let marked_paths = app
+        .window
+        .mark
+        .take()
+        .expect("marking remains available")
+        .into_paths()
+        .collect::<Vec<_>>();
+    assert_eq!(marked_paths, [victim]);
+
+    app.process_events(&mut terminal, into_codes("n"))?;
+    assert_eq!(app.state.sorting, SortMode::NameAscending);
+    app.process_events(
+        &mut terminal,
+        into_events([
+            Event::Key(KeyCode::Char('/').into()),
+            Event::Key(KeyCode::Char('d').into()),
+            Event::Key(KeyCode::Char('i').into()),
+            Event::Key(KeyCode::Char('r').into()),
+            Event::Key(KeyCode::Enter.into()),
+        ]),
+    )?;
+    assert!(
+        app.state.glob_navigation.is_some(),
+        "globbing remains available"
     );
 
     Ok(())

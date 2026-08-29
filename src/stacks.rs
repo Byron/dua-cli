@@ -1,9 +1,11 @@
 use crate::aggregate::TraversalProgress;
+use crate::snapshot::Replay;
 use crate::traverse::{
     BackgroundTraversal, EntryData, Traversal, TraversalEntry, TraversalEvent, Tree, TreeIndex,
 };
+use crate::tree::metadata_io_error_count;
 use crate::{WalkOptions, WalkResult};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bstr::ByteSlice;
 use petgraph::Direction;
 use std::ffi::OsStr;
@@ -49,7 +51,10 @@ pub fn stacks(
         let stack = stream.then(|| stack_path(&event)).flatten();
         let size_before = traversal.tree[traversal.root_index].size;
         let finished = background.integrate_traversal_event(&mut traversal, event) == Some(true);
-        let own_size = traversal.tree[traversal.root_index].size - size_before;
+        let own_size = traversal.tree[traversal.root_index]
+            .size
+            .checked_sub(size_before)
+            .context("traversal size decreased")?;
         if let Some(stack) = stack
             && own_size > 0
         {
@@ -64,12 +69,96 @@ pub fn stacks(
     progress.clear();
 
     if !stream {
-        write_stacks(&mut out, &traversal.tree, traversal.root_index)?;
+        let roots = background
+            .root_nodes()
+            .context("traversal did not produce a node for every root")?;
+        write_stacks(&mut out, &traversal.tree, &roots, max_depth)?;
     }
 
     Ok(WalkResult {
         num_errors: background.stats.io_errors,
     })
+}
+
+/// Write an already completed traversal as folded stacks.
+///
+/// `roots` must contain the traversal's top-level nodes in their original input order. At
+/// `max_depth`, an entry's line contains its full aggregate size, including hidden descendants.
+/// The returned error count is derived from the stored metadata-error flags.
+pub fn stacks_from_traversal(
+    mut out: impl io::Write,
+    traversal: &Traversal,
+    roots: &[TreeIndex],
+    max_depth: Option<usize>,
+) -> Result<WalkResult> {
+    write_stacks(&mut out, &traversal.tree, roots, max_depth)?;
+    Ok(WalkResult {
+        num_errors: metadata_io_error_count(&traversal.tree, roots),
+    })
+}
+
+struct ReplayStackEntry {
+    size: u128,
+    children_size: u128,
+    prefix_len: usize,
+}
+
+/// Replay a verified snapshot as folded stacks while retaining only the current path.
+pub fn stacks_from_replay<R: io::Read + io::Seek>(
+    mut out: impl io::Write,
+    replay: &mut Replay<R>,
+    max_depth: Option<usize>,
+) -> Result<WalkResult> {
+    let num_errors = replay.num_errors();
+    let mut open = Vec::new();
+    let mut prefix = String::new();
+    replay.for_each_entry(|entry| {
+        while open.len() > entry.depth {
+            write_replay_stack(&mut out, &mut open, &mut prefix)?;
+        }
+        if max_depth.is_some_and(|max_depth| entry.depth > max_depth) {
+            return Ok(());
+        }
+
+        if let Some(parent) = open.last_mut() {
+            parent.children_size = parent
+                .children_size
+                .checked_add(entry.data.size)
+                .context("stack child sizes overflowed")?;
+        }
+        if !open.is_empty() {
+            prefix.push(';');
+        }
+        prefix.push_str(&frame(&entry.data));
+        open.push(ReplayStackEntry {
+            size: entry.data.size,
+            children_size: 0,
+            prefix_len: prefix.len(),
+        });
+        Ok(())
+    })?;
+    while !open.is_empty() {
+        write_replay_stack(&mut out, &mut open, &mut prefix)?;
+    }
+    Ok(WalkResult { num_errors })
+}
+
+fn write_replay_stack(
+    out: &mut impl io::Write,
+    open: &mut Vec<ReplayStackEntry>,
+    prefix: &mut String,
+) -> Result<()> {
+    let entry = open.pop().expect("called with an open stack entry");
+    let own_size = entry
+        .size
+        .checked_sub(entry.children_size)
+        .context("stack children exceed their parent's size")?;
+    debug_assert_eq!(prefix.len(), entry.prefix_len);
+    if own_size > 0 {
+        writeln!(out, "{prefix} {own_size}")?;
+    }
+    prefix.truncate(open.last().map_or(0, |entry| entry.prefix_len));
+    Ok(())
 }
 
 fn stack_path(event: &TraversalEvent) -> Option<String> {
@@ -91,24 +180,41 @@ fn stack_path(event: &TraversalEvent) -> Option<String> {
     Some(stack)
 }
 
-/// Write every entry below `root` as a folded stack line with its own (exclusive) size.
-fn write_stacks(mut out: impl io::Write, tree: &Tree, root: TreeIndex) -> io::Result<()> {
+/// Write every entry below `roots` as a folded stack line with its own (exclusive) size.
+fn write_stacks(
+    mut out: impl io::Write,
+    tree: &Tree,
+    roots: &[TreeIndex],
+    max_depth: Option<usize>,
+) -> Result<()> {
     // Depth-first, carrying the folded prefix that was built from the ancestors' names.
-    let mut stack: Vec<(TreeIndex, String)> = tree
-        .neighbors_directed(root, Direction::Outgoing)
-        .map(|child| (child, frame(&tree[child])))
+    let mut stack: Vec<(TreeIndex, usize, String)> = roots
+        .iter()
+        .rev()
+        .map(|&root| (root, 0, frame(&tree[root])))
         .collect();
 
-    while let Some((index, prefix)) = stack.pop() {
+    while let Some((index, depth, prefix)) = stack.pop() {
         let mut children_size = 0u128;
-        for child in tree.neighbors_directed(index, Direction::Outgoing) {
-            children_size += tree[child].size;
-            stack.push((child, format!("{prefix};{}", frame(&tree[child]))));
+        if max_depth.is_none_or(|max_depth| depth < max_depth) {
+            for child in tree.neighbors_directed(index, Direction::Outgoing) {
+                children_size = children_size
+                    .checked_add(tree[child].size)
+                    .context("stack child sizes overflowed")?;
+                stack.push((
+                    child,
+                    depth + 1,
+                    format!("{prefix};{}", frame(&tree[child])),
+                ));
+            }
         }
         // A directory's own size is what remains after accounting for its contents; a file has no
         // children and so contributes its entire size. Zero-sized entries are left out as they add
         // nothing to a flame graph.
-        let own_size = tree[index].size.saturating_sub(children_size);
+        let own_size = tree[index]
+            .size
+            .checked_sub(children_size)
+            .context("stack children exceed their parent's size")?;
         if own_size > 0 {
             writeln!(out, "{prefix} {own_size}")?;
         }
@@ -140,9 +246,10 @@ fn frame_name(name: &OsStr) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{frame, stacks};
-    use crate::traverse::EntryData;
+    use super::{Replay, frame, stacks, stacks_from_replay, stacks_from_traversal};
+    use crate::traverse::{EntryData, Traversal};
     use crate::{TraversalOptions, WalkOptions};
+    use bstr::ByteSlice;
     use std::collections::BTreeMap;
 
     fn walk_options() -> WalkOptions {
@@ -343,6 +450,87 @@ mod tests {
         let nested = format!("{};nested", folded_frame(dir.path()));
         assert!(folded.contains_key(&nested));
         assert!(!folded.keys().any(|stack| stack.ends_with(";file")));
+    }
+
+    #[test]
+    fn completed_traversal_rolls_hidden_entries_into_the_cutoff() {
+        let mut traversal = Traversal::new();
+        let root = traversal.tree.add_node(EntryData {
+            name: "first".into(),
+            size: 9,
+            is_dir: true,
+            ..EntryData::default()
+        });
+        let cutoff = traversal.tree.add_node(EntryData {
+            name: "cutoff".into(),
+            size: 9,
+            is_dir: true,
+            ..EntryData::default()
+        });
+        let hidden_error = traversal.tree.add_node(EntryData {
+            name: "hidden".into(),
+            size: 7,
+            metadata_io_error: true,
+            ..EntryData::default()
+        });
+        let second = traversal.tree.add_node(EntryData {
+            name: "second".into(),
+            size: 2,
+            ..EntryData::default()
+        });
+        traversal.tree.add_edge(traversal.root_index, root, ());
+        traversal.tree.add_edge(root, cutoff, ());
+        traversal.tree.add_edge(cutoff, hidden_error, ());
+        traversal.tree.add_edge(traversal.root_index, second, ());
+
+        let mut out = Vec::new();
+        let result = stacks_from_traversal(&mut out, &traversal, &[root, second], Some(1)).unwrap();
+        let mut snapshot = Vec::new();
+        crate::snapshot::write(&mut snapshot, &traversal, &[root, second], None).unwrap();
+        let mut replay = Replay::new(std::io::Cursor::new(snapshot)).unwrap();
+        let mut replayed = Vec::new();
+        let replayed_result = stacks_from_replay(&mut replayed, &mut replay, Some(1)).unwrap();
+        assert_eq!(folded(&replayed), folded(&out));
+        assert_eq!(replayed_result.num_errors, result.num_errors);
+        insta::assert_snapshot!(out.as_bstr(), "depth cutoff rolls hidden descendants into parent", @r"
+        first;cutoff 9
+        second 2
+        ");
+        assert_eq!(result.num_errors, 1);
+    }
+
+    #[test]
+    fn completed_traversal_rejects_invalid_aggregate_sizes() {
+        for (parent_size, child_sizes, expected) in [
+            (1, vec![2], "stack children exceed their parent's size"),
+            (
+                u128::MAX,
+                vec![u128::MAX, 1],
+                "stack child sizes overflowed",
+            ),
+        ] {
+            let mut traversal = Traversal::new();
+            let root = traversal.tree.add_node(EntryData {
+                name: "root".into(),
+                size: parent_size,
+                is_dir: true,
+                ..EntryData::default()
+            });
+            traversal.tree.add_edge(traversal.root_index, root, ());
+            for size in child_sizes {
+                let child = traversal.tree.add_node(EntryData {
+                    name: "child".into(),
+                    size,
+                    ..EntryData::default()
+                });
+                traversal.tree.add_edge(root, child, ());
+            }
+
+            let Err(error) = stacks_from_traversal(Vec::new(), &traversal, &[root], None) else {
+                panic!("invalid aggregate sizes must fail");
+            };
+            assert_eq!(error.to_string(), expected);
+        }
     }
 
     #[test]

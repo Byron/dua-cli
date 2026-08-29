@@ -245,7 +245,6 @@ pub fn glob_search(
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEventKind, KeyEventState, KeyModifiers};
-    use tui::buffer::Cell;
 
     #[test]
     fn default_toggle_case_key_does_not_type_into_input() {
@@ -328,7 +327,22 @@ mod tests {
             &mut Cursor::default(),
         );
 
-        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
-        assert!(rendered.contains("search = <F2> | case = Alt + c | cancel = q"));
+        insta::assert_debug_snapshot!(
+            buffer,
+            "glob pane help with configured bindings",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 100, height: 3 },
+            content: [
+                "┌Git-Glob (case-insensitive)────────────────────────── search = <F2> | case = Alt + c | cancel = q ┐",
+                "│                                                                                                  │",
+                "└──────────────────────────────────────────────────────────────────────────────────────────────────┘",
+            ],
+            styles: [
+                x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+            ]
+        }
+        "#
+        );
     }
 }
