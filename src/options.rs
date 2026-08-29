@@ -35,6 +35,8 @@ fn dft_format() -> ByteFormat {
     }
 }
 
+const DEFAULT_DIFF_SUMMARY_LIMIT: usize = 5;
+
 #[cfg(feature = "tui-crossplatform")]
 fn parse_snapshot_compression_level(value: &str) -> Result<i32, String> {
     let level = value
@@ -229,6 +231,30 @@ pub enum Command {
         #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "")]
         once: Option<String>,
     },
+    /// Compare two traversal snapshots
+    Diff {
+        /// Earlier traversal snapshot.
+        #[clap(value_name = "OLD")]
+        old: PathBuf,
+        /// Later traversal snapshot.
+        #[clap(value_name = "NEW")]
+        new: PathBuf,
+        /// The format with which to print byte counts.
+        #[clap(short = 'f', long, value_enum, ignore_case = true)]
+        format: Option<ByteFormat>,
+        /// Report aggregate directory changes instead of file changes.
+        #[clap(long)]
+        directories_only: bool,
+        /// Show only this stored path and its descendants.
+        #[clap(long, value_name = "PATH")]
+        prefix: Option<PathBuf>,
+        /// Limit the tree to this many levels. The root or selected prefix is the first level.
+        #[clap(short = 'd', long, value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        depth: Option<usize>,
+        /// Include at most this many largest additions and removals in the summary. Use 0 to hide them.
+        #[clap(long, value_name = "COUNT", default_value_t = DEFAULT_DIFF_SUMMARY_LIMIT)]
+        summary_limit: usize,
+    },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
     Aggregate {
@@ -370,6 +396,91 @@ mod tests {
         let err = Args::try_parse_from(["dua", "config", "edit", "--format", "metric"])
             .expect_err("config edit should not accept traversal options");
 
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn diff_accepts_format_before_or_after_the_subcommand() {
+        let before =
+            Args::try_parse_from(["dua", "--format", "bytes", "diff", "old.dua", "new.dua"])
+                .expect("global format parses");
+        assert_eq!(before.traversal.format, Some(super::ByteFormat::Bytes));
+
+        let after =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--format", "bytes"])
+                .expect("diff format parses");
+        let Some(super::Command::Diff {
+            old,
+            new,
+            format,
+            summary_limit,
+            ..
+        }) = after.command
+        else {
+            panic!("expected diff subcommand");
+        };
+        assert_eq!(old, PathBuf::from("old.dua"));
+        assert_eq!(new, PathBuf::from("new.dua"));
+        assert_eq!(format, Some(super::ByteFormat::Bytes));
+        assert_eq!(summary_limit, super::DEFAULT_DIFF_SUMMARY_LIMIT);
+
+        let directories =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--directories-only"])
+                .expect("directory-only diff parses");
+        assert!(matches!(
+            directories.command,
+            Some(super::Command::Diff {
+                directories_only: true,
+                ..
+            })
+        ));
+
+        let prefixed = Args::try_parse_from([
+            "dua",
+            "diff",
+            "old.dua",
+            "new.dua",
+            "--prefix",
+            "root/subtree",
+        ])
+        .expect("prefixed diff parses");
+        assert!(matches!(
+            prefixed.command,
+            Some(super::Command::Diff {
+                prefix: Some(path),
+                ..
+            }) if path == std::path::Path::new("root/subtree")
+        ));
+
+        let depth = Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--depth", "2"])
+            .expect("diff depth parses");
+        assert!(matches!(
+            depth.command,
+            Some(super::Command::Diff { depth: Some(2), .. })
+        ));
+        assert_eq!(
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--depth", "0"])
+                .expect_err("zero diff depth is invalid")
+                .kind(),
+            clap::error::ErrorKind::ValueValidation
+        );
+
+        let summary_limit =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--summary-limit", "27"])
+                .expect("diff summary limit parses");
+        assert!(matches!(
+            summary_limit.command,
+            Some(super::Command::Diff {
+                summary_limit: 27,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn diff_rejects_traversal_options_after_the_subcommand() {
+        let err = Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--threads", "1"])
+            .expect_err("diff should not accept traversal options");
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 

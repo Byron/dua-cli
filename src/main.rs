@@ -94,7 +94,7 @@ fn marked_path_for_output(path: &Path, stdout_is_terminal: bool) -> std::borrow:
 fn main() -> Result<()> {
     #[cfg(feature = "tui-crossplatform")]
     use options::Command::Interactive;
-    use options::Command::{Aggregate, Completions, Config};
+    use options::Command::{Aggregate, Completions, Config, Diff};
 
     let matches = options::Args::command().get_matches_from(wild::args_os());
     let global_traversal_options_used = traversal_options_on_command_line(&matches);
@@ -264,6 +264,42 @@ fn main() -> Result<()> {
                 }
             };
             std::process::exit(exit_code);
+        }
+        Some(Diff {
+            old,
+            new,
+            format,
+            directories_only,
+            prefix,
+            depth,
+            summary_limit,
+        }) => {
+            if global_traversal_options_used {
+                bail!("diff cannot be used with traversal options or input paths");
+            }
+            let (old_replay, new_replay) = std::thread::scope(|scope| {
+                let old_replay = scope.spawn(|| replay_snapshot_file(&old));
+                let new_replay = scope.spawn(|| replay_snapshot_file(&new));
+                (old_replay.join(), new_replay.join())
+            });
+            let mut old = old_replay.map_err(|_| anyhow!("old snapshot reader panicked"))??;
+            let mut new = new_replay.map_err(|_| anyhow!("new snapshot reader panicked"))??;
+            let mut display = global_traversal.clone();
+            display.format = format.or(display.format);
+            let byte_format = display.byte_format(&dua::Config::load()?);
+            let stdout = io::stdout();
+            let out_is_terminal = stdout.is_terminal();
+            dua::diff_snapshots(
+                (stdout.lock(), out_is_terminal),
+                &mut old,
+                &mut new,
+                byte_format,
+                directories_only,
+                prefix.as_deref(),
+                depth.map(|depth| depth.saturating_sub(1)),
+                summary_limit,
+            )?;
+            dua::WalkResult::default()
         }
         Some(Aggregate {
             traversal: subcommand_traversal,
@@ -806,6 +842,20 @@ mod tests {
             .expect("parent traversal options parse before the subcommand");
 
         assert!(traversal_options_on_command_line(&matches));
+    }
+
+    #[test]
+    fn diff_rejects_global_traversal_options_but_accepts_format() {
+        let threads = super::options::DEFAULT_THREADS.to_string();
+        let matches = super::options::Args::command()
+            .try_get_matches_from(["dua", "--threads", &threads, "diff", "old.dua", "new.dua"])
+            .expect("parent traversal options parse before the subcommand");
+        assert!(traversal_options_on_command_line(&matches));
+
+        let matches = super::options::Args::command()
+            .try_get_matches_from(["dua", "--format", "bytes", "diff", "old.dua", "new.dua"])
+            .expect("format parses before the subcommand");
+        assert!(!traversal_options_on_command_line(&matches));
     }
 
     #[test]

@@ -43,18 +43,21 @@ pub(crate) struct DecodedEntry {
     /// Zero-based depth in the serialized forest; top-level roots have depth zero.
     pub(crate) depth: usize,
     pub(crate) data: EntryData,
+    /// Lossless platform-native bytes of `data.name`, used for canonical ordering and diff keys.
+    pub(crate) native_name: Vec<u8>,
+    pub(crate) sibling_ordinal: u64,
 }
 
 struct DecodeSummary {
     total_size: u128,
     total_entries: u64,
-    num_errors: u64,
     digest: [u8; DIGEST_LEN],
 }
 
 struct OpenNode {
     id: u64,
     is_dir: bool,
+    last_child: Option<(Vec<u8>, u64)>,
 }
 
 enum SnapshotReader<R> {
@@ -66,6 +69,16 @@ enum SnapshotReader<R> {
         /// verifies that no trailing compressed input remains.
         finished: bool,
     },
+}
+
+struct Decoder<R> {
+    reader: HashingReader<BufReader<SnapshotReader<R>>>,
+    open_nodes: Vec<OpenNode>,
+    record: Vec<u8>,
+    node_count: u64,
+    total_size: u128,
+    total_entries: u64,
+    summary: Option<DecodeSummary>,
 }
 
 impl<R: Read> SnapshotReader<R> {
@@ -173,25 +186,77 @@ fn is_zlib_header(bytes: &[u8]) -> bool {
         && flags & 0x20 == 0
 }
 
-/// A verified, seekable snapshot that can replay entries without materializing the full tree.
+fn verify_checksum(reader: impl Read) -> Result<[u8; DIGEST_LEN]> {
+    let mut reader = SnapshotReader::new(reader)?;
+    let mut hash = gix::hash::hasher(gix::hash::Kind::Sha256);
+    let mut buffer = vec![0; 64 * 1024];
+    let mut tail = Vec::with_capacity(DIGEST_LEN + buffer.len());
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        tail.extend_from_slice(&buffer[..read]);
+        if tail.len() > DIGEST_LEN {
+            let hashed = tail.len() - DIGEST_LEN;
+            hash.update(&tail[..hashed]);
+            tail.copy_within(hashed.., 0);
+            tail.truncate(DIGEST_LEN);
+        }
+    }
+    if tail.len() != DIGEST_LEN {
+        bail!("snapshot checksum is truncated");
+    }
+    let actual = hash.try_finalize()?;
+    if actual.as_slice() != tail {
+        bail!("snapshot checksum mismatch");
+    }
+    let mut digest = [0; DIGEST_LEN];
+    digest.copy_from_slice(actual.as_slice());
+    Ok(digest)
+}
+
+/// A checksum-verified, seekable snapshot that can replay entries without materializing the tree.
 ///
-/// The backing data must remain unchanged while the replay is in use. Changes to its decoded
-/// snapshot data are detected after each replay, but entry callbacks may already have observed
-/// changed data at that point.
+/// Construction verifies the decompressed stream's checksum without decoding its records.
+/// Records are structurally validated during each replay. The backing data must remain unchanged;
+/// structural errors and changes may be reported after callbacks have observed earlier entries.
 pub struct Replay<R> {
     reader: R,
     start: u64,
     digest: [u8; DIGEST_LEN],
-    num_errors: u64,
+}
+
+pub(crate) struct ReplayEntries<'a, R> {
+    decoder: Decoder<&'a mut R>,
+    expected_digest: [u8; DIGEST_LEN],
+}
+
+impl<R: Read> ReplayEntries<'_, R> {
+    pub(crate) fn next_entry(&mut self) -> Result<Option<DecodedEntry>> {
+        let entry = self.decoder.next_entry()?;
+        if entry.is_none()
+            && self
+                .decoder
+                .summary
+                .as_ref()
+                .expect("end of snapshot stores its summary")
+                .digest
+                != self.expected_digest
+        {
+            bail!("snapshot changed since it was verified");
+        }
+        Ok(entry)
+    }
 }
 
 impl<R: Read + Seek> Replay<R> {
-    /// Fully verify `reader` and prepare it for bounded-memory replay.
+    /// Verify `reader`'s checksum and prepare it for bounded-memory replay.
     pub fn new(mut reader: R) -> Result<Self> {
         let start = reader
             .stream_position()
             .context("could not determine snapshot stream position")?;
-        let summary = decode(SnapshotReader::new(&mut reader)?, |_| Ok(()))?;
+        let digest = verify_checksum(&mut reader)?;
         // Let's keep this for safety, even though it's redundant.
         reader
             .seek(SeekFrom::Start(start))
@@ -199,27 +264,29 @@ impl<R: Read + Seek> Replay<R> {
         Ok(Self {
             reader,
             start,
-            digest: summary.digest,
-            num_errors: summary.num_errors,
+            digest,
         })
-    }
-
-    pub(crate) fn num_errors(&self) -> u64 {
-        self.num_errors
     }
 
     pub(crate) fn for_each_entry(
         &mut self,
-        on_entry: impl FnMut(DecodedEntry) -> Result<()>,
+        mut on_entry: impl FnMut(DecodedEntry) -> Result<()>,
     ) -> Result<()> {
+        let mut entries = self.entries()?;
+        while let Some(entry) = entries.next_entry()? {
+            on_entry(entry)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn entries(&mut self) -> Result<ReplayEntries<'_, R>> {
         self.reader
             .seek(SeekFrom::Start(self.start))
             .context("could not rewind snapshot")?;
-        let summary = decode(SnapshotReader::new(&mut self.reader)?, on_entry)?;
-        if summary.digest != self.digest {
-            bail!("snapshot changed since it was verified");
-        }
-        Ok(())
+        Ok(ReplayEntries {
+            decoder: Decoder::new(&mut self.reader)?,
+            expected_digest: self.digest,
+        })
     }
 }
 
@@ -359,7 +426,7 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
     traversal.cost = Some(Duration::ZERO);
     let mut parents = Vec::new();
     let mut roots = Vec::new();
-    let summary = decode(SnapshotReader::new(reader)?, |entry| {
+    let summary = decode(reader, |entry| {
         parents.truncate(entry.depth);
         let parent = parents.last().copied().unwrap_or(traversal.root_index);
         let node = traversal
@@ -394,39 +461,57 @@ fn decode(
     reader: impl Read,
     mut on_entry: impl FnMut(DecodedEntry) -> Result<()>,
 ) -> Result<DecodeSummary> {
-    let mut reader = HashingReader::new(BufReader::new(reader));
-    let mut header = [0; HEADER_LEN];
-    read_exact(&mut reader, &mut header)?;
-    if &header[..MAGIC.len()] != MAGIC {
-        bail!("invalid snapshot at byte 0: bad magic");
+    let mut decoder = Decoder::new(reader)?;
+    while let Some(entry) = decoder.next_entry()? {
+        on_entry(entry)?;
     }
-    let version = u16::from_le_bytes([header[8], header[9]]);
-    if version != VERSION {
-        bail!("invalid snapshot at byte 8: unsupported version {version}");
-    }
-    if header[10] != PATH_ENCODING {
-        bail!(
-            "invalid snapshot at byte 10: path encoding {} is incompatible with this host",
-            header[10]
-        );
-    }
-    if header[11] != 0 {
-        bail!("invalid snapshot at byte 11: unknown header flags");
+    Ok(decoder.summary.expect("end of snapshot stores its summary"))
+}
+
+impl<R: Read> Decoder<R> {
+    fn new(reader: R) -> Result<Self> {
+        let mut reader = HashingReader::new(BufReader::new(SnapshotReader::new(reader)?));
+        let mut header = [0; HEADER_LEN];
+        read_exact(&mut reader, &mut header)?;
+        if &header[..MAGIC.len()] != MAGIC {
+            bail!("invalid snapshot at byte 0: bad magic");
+        }
+        let version = u16::from_le_bytes([header[8], header[9]]);
+        if version != VERSION {
+            bail!("invalid snapshot at byte 8: unsupported version {version}");
+        }
+        if header[10] != PATH_ENCODING {
+            bail!(
+                "invalid snapshot at byte 10: path encoding {} is incompatible with this host",
+                header[10]
+            );
+        }
+        if header[11] != 0 {
+            bail!("invalid snapshot at byte 11: unknown header flags");
+        }
+
+        Ok(Self {
+            reader,
+            open_nodes: Vec::new(),
+            record: Vec::new(),
+            node_count: 0,
+            total_size: 0,
+            total_entries: 0,
+            summary: None,
+        })
     }
 
-    let mut open_nodes: Vec<OpenNode> = Vec::new();
-    let mut record = Vec::new();
-    let mut node_count = 0u64;
-    let mut total_size = 0u128;
-    let mut total_entries = 0u64;
-    let mut num_errors = 0u64;
+    fn next_entry(&mut self) -> Result<Option<DecodedEntry>> {
+        if self.summary.is_some() {
+            return Ok(None);
+        }
 
-    loop {
-        let length_offset = reader.offset;
-        let record_len = read_u64(&mut reader)
+        let length_offset = self.reader.offset;
+        let record_len = read_u64(&mut self.reader)
             .map_err(|err| anyhow!("invalid snapshot integer at byte {length_offset}: {err}"))?;
         if record_len == 0 {
-            break;
+            self.finish()?;
+            return Ok(None);
         }
         let record_len = usize::try_from(record_len)
             .context("snapshot record length exceeds this address space")?;
@@ -436,32 +521,39 @@ fn decode(
             );
         }
 
-        record.clear();
-        if record.capacity() < record_len {
-            record
+        self.record.clear();
+        if self.record.capacity() < record_len {
+            self.record
                 .try_reserve(record_len)
                 .context("could not allocate snapshot record")?;
         }
-        record.resize(record_len, 0);
-        let record_offset = reader.offset;
-        read_exact(&mut reader, &mut record)?;
+        self.record.resize(record_len, 0);
+        let record_offset = self.reader.offset;
+        read_exact(&mut self.reader, &mut self.record)?;
 
-        let node_id = node_count
+        let node_id = self
+            .node_count
             .checked_add(1)
             .context("snapshot contains too many nodes")?;
-        let (parent_id, data) = parse_record(&record, node_id)
+        let (parent_id, data) = parse_record(&self.record, node_id)
             .map_err(|err| anyhow!("invalid snapshot record at byte {record_offset}: {err}"))?;
         if usize::try_from(node_id).map_or(true, |id| id >= TreeIndex::end().index()) {
             bail!("snapshot exceeds petgraph's node-index limit");
         }
 
-        if parent_id == 0 {
-            open_nodes.clear();
+        let native_name = native_name_bytes(&data.name);
+        let sibling_ordinal = if parent_id == 0 {
+            self.open_nodes.clear();
+            0
         } else {
-            while open_nodes.last().is_some_and(|node| node.id != parent_id) {
-                open_nodes.pop();
+            while self
+                .open_nodes
+                .last()
+                .is_some_and(|node| node.id != parent_id)
+            {
+                self.open_nodes.pop();
             }
-            let parent = open_nodes.last().with_context(|| {
+            let parent = self.open_nodes.last_mut().with_context(|| {
                 format!(
                     "invalid snapshot record at byte {record_offset}: parent is outside the current depth-first subtree"
                 )
@@ -469,64 +561,84 @@ fn decode(
             if !parent.is_dir {
                 bail!("invalid snapshot record at byte {record_offset}: parent is not a directory");
             }
-        }
+            let ordinal = match parent.last_child.as_ref() {
+                Some((previous, _)) if previous > &native_name => {
+                    bail!(
+                        "invalid snapshot record at byte {record_offset}: sibling names are not in canonical order"
+                    );
+                }
+                Some((previous, ordinal)) if previous == &native_name => ordinal
+                    .checked_add(1)
+                    .context("snapshot contains too many duplicate sibling names")?,
+                _ => 0,
+            };
+            parent.last_child = Some((native_name.clone(), ordinal));
+            ordinal
+        };
 
-        let depth = open_nodes.len();
+        let depth = self.open_nodes.len();
         if depth == 0 {
-            total_size = total_size
+            self.total_size = self
+                .total_size
                 .checked_add(data.size)
                 .context("snapshot root size total overflows u128")?;
-            total_entries = total_entries
+            self.total_entries = self
+                .total_entries
                 .checked_add(data.entry_count.unwrap_or(1))
                 .context("snapshot root entry count total overflows u64")?;
         }
 
-        let open_node = OpenNode {
-            id: node_id,
-            is_dir: data.is_dir,
-        };
-        num_errors = num_errors.saturating_add(u64::from(data.metadata_io_error));
-        on_entry(DecodedEntry { depth, data })?;
-        open_nodes
+        self.open_nodes
             .try_reserve(1)
             .context("could not grow snapshot ancestor stack")?;
-        open_nodes.push(open_node);
-        node_count = node_id;
+        self.open_nodes.push(OpenNode {
+            id: node_id,
+            is_dir: data.is_dir,
+            last_child: None,
+        });
+        self.node_count = node_id;
+        Ok(Some(DecodedEntry {
+            depth,
+            data,
+            native_name,
+            sibling_ordinal,
+        }))
     }
 
-    let count_offset = reader.offset;
-    let footer_count = read_u64(&mut reader)
-        .map_err(|err| anyhow!("invalid snapshot node count at byte {count_offset}: {err}"))?;
-    if footer_count != node_count {
-        bail!(
-            "invalid snapshot at byte {count_offset}: footer names {footer_count} nodes but read {node_count}"
-        );
-    }
+    fn finish(&mut self) -> Result<()> {
+        let count_offset = self.reader.offset;
+        let footer_count = read_u64(&mut self.reader)
+            .map_err(|err| anyhow!("invalid snapshot node count at byte {count_offset}: {err}"))?;
+        if footer_count != self.node_count {
+            bail!(
+                "invalid snapshot at byte {count_offset}: footer names {footer_count} nodes but read {}",
+                self.node_count
+            );
+        }
 
-    let HashingReader {
-        mut inner, hash, ..
-    } = reader;
-    let actual = hash.try_finalize()?;
-    let mut expected = [0; DIGEST_LEN];
-    inner
-        .read_exact(&mut expected)
-        .context("snapshot checksum is truncated")?;
-    if actual.as_slice() != expected {
-        bail!("snapshot checksum mismatch");
-    }
-    let mut trailing = [0];
-    if inner.read(&mut trailing)? != 0 {
-        bail!("snapshot has trailing data");
-    }
+        let actual = self.reader.hash.clone().try_finalize()?;
+        let mut expected = [0; DIGEST_LEN];
+        self.reader
+            .inner
+            .read_exact(&mut expected)
+            .context("snapshot checksum is truncated")?;
+        if actual.as_slice() != expected {
+            bail!("snapshot checksum mismatch");
+        }
+        let mut trailing = [0];
+        if self.reader.inner.read(&mut trailing)? != 0 {
+            bail!("snapshot has trailing data");
+        }
 
-    let mut digest = [0; DIGEST_LEN];
-    digest.copy_from_slice(actual.as_slice());
-    Ok(DecodeSummary {
-        total_size,
-        total_entries,
-        num_errors,
-        digest,
-    })
+        let mut digest = [0; DIGEST_LEN];
+        digest.copy_from_slice(actual.as_slice());
+        self.summary = Some(DecodeSummary {
+            total_size: self.total_size,
+            total_entries: self.total_entries,
+            digest,
+        });
+        Ok(())
+    }
 }
 
 fn parse_record(record: &[u8], node_id: u64) -> Result<(u64, EntryData)> {

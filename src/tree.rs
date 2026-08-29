@@ -120,11 +120,12 @@ pub fn aggregate_tree_from_replay<R: io::Read + io::Seek>(
     compute_total: bool,
     sort_by_size_in_bytes: bool,
 ) -> Result<WalkResult> {
-    let num_errors = replay.num_errors();
+    let mut num_errors = 0u64;
     let mut traversal = Traversal::new();
     let mut parents = Vec::new();
     let mut roots = Vec::new();
     replay.for_each_entry(|entry| {
+        num_errors = num_errors.saturating_add(u64::from(entry.data.metadata_io_error));
         if entry.depth > max_depth {
             return Ok(());
         }

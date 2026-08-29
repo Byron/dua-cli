@@ -23,6 +23,20 @@ fn replay_rejects_source_changes_after_validation() {
 }
 
 #[test]
+fn replay_defers_record_validation_until_replay() {
+    let bytes = stream(&[record(0, 0, b"a", 0, 0, 0, None)], 1);
+    let mut replay = Replay::new(Cursor::new(bytes)).unwrap();
+
+    assert!(
+        replay
+            .for_each_entry(|_| Ok(()))
+            .unwrap_err()
+            .to_string()
+            .contains("parent distance")
+    );
+}
+
+#[test]
 fn compressed_snapshot_round_trips_and_replays() {
     let mut traversal = Traversal::new();
     let root_index = traversal.root_index;
@@ -84,6 +98,20 @@ fn rejects_invalid_compressed_envelopes() {
 }
 
 #[test]
+fn rejects_noncanonical_sibling_order() {
+    let root = native_record(1, FLAG_DIRECTORY, "root");
+    let later = native_record(1, 0, "z");
+    let earlier = native_record(2, 0, "a");
+
+    assert!(
+        read(Cursor::new(stream(&[root, later, earlier], 3)))
+            .unwrap_err()
+            .to_string()
+            .contains("canonical order")
+    );
+}
+
+#[test]
 fn rejects_header_record_parent_and_name_errors() {
     let mut bad_magic = vec![0; HEADER_LEN];
     assert!(
@@ -120,7 +148,7 @@ fn rejects_header_record_parent_and_name_errors() {
         .contains("flags")
     );
 
-    let file = record(1, 0, b"file", 0, 0, 0, None);
+    let file = native_record(1, 0, "file");
     let child = record(
         1,
         0,
@@ -137,7 +165,7 @@ fn rejects_header_record_parent_and_name_errors() {
             .contains("not a directory")
     );
 
-    let directory = record(1, FLAG_DIRECTORY, b"root", 0, 0, 0, None);
+    let directory = native_record(1, FLAG_DIRECTORY, "root");
     let child = record(
         1,
         0,
@@ -154,9 +182,9 @@ fn rejects_header_record_parent_and_name_errors() {
             .contains("component")
     );
 
-    let first_root = record(1, FLAG_DIRECTORY, b"first", 0, 0, 0, None);
-    let second_root = record(2, FLAG_DIRECTORY, b"second", 0, 0, 0, None);
-    let late_child = record(2, 0, b"late", 0, 0, 0, None);
+    let first_root = native_record(1, FLAG_DIRECTORY, "first");
+    let second_root = native_record(2, FLAG_DIRECTORY, "second");
+    let late_child = native_record(2, 0, "late");
     assert!(
         read(Cursor::new(stream(
             &[first_root, second_root, late_child],
@@ -375,6 +403,18 @@ fn record(
         push_uleb128(&mut record, u128::from(count));
     }
     record
+}
+
+fn native_record(parent_distance: u64, flags: u8, name: &str) -> Vec<u8> {
+    record(
+        parent_distance,
+        flags,
+        &native_name_bytes(Path::new(name)),
+        0,
+        0,
+        0,
+        None,
+    )
 }
 
 fn stream(records: &[Vec<u8>], footer_count: u64) -> Vec<u8> {

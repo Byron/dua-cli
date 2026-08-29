@@ -12,6 +12,8 @@ mod common;
 mod config;
 pub use config::{Config, KeyBindings, KeysConfig};
 mod crossdev;
+mod diff;
+pub use diff::diff_snapshots;
 mod inodefilter;
 /// Reading and writing dua traversal snapshots.
 pub mod snapshot;

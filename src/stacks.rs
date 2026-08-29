@@ -109,10 +109,11 @@ pub fn stacks_from_replay<R: io::Read + io::Seek>(
     replay: &mut Replay<R>,
     max_depth: Option<usize>,
 ) -> Result<WalkResult> {
-    let num_errors = replay.num_errors();
+    let mut num_errors = 0u64;
     let mut open = Vec::new();
     let mut prefix = String::new();
     replay.for_each_entry(|entry| {
+        num_errors = num_errors.saturating_add(u64::from(entry.data.metadata_io_error));
         while open.len() > entry.depth {
             write_replay_stack(&mut out, &mut open, &mut prefix)?;
         }
