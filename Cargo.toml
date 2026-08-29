@@ -82,7 +82,7 @@ open = { version = "5.0", optional = true }
 wild = "2.0.4"
 owo-colors = "4.0.0"
 human_format = "1.0.3"
-gix = { version = "0.86.0", default-features = false, features = [
+gix = { version = "0.87.1", default-features = false, features = [
     "excludes",
     "sha1",
     "sha256",
