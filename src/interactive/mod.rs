@@ -8,7 +8,6 @@ mod utils {
     use std::path::PathBuf;
 
     pub fn path_of(tree: &Tree, mut node_idx: TreeIndex, glob_root: Option<TreeIndex>) -> PathBuf {
-        const THE_ROOT: usize = 1;
         let mut entries = Vec::new();
 
         let mut iter = tree.neighbors_directed(node_idx, petgraph::Incoming);
@@ -32,7 +31,7 @@ mod utils {
         entries
             .iter()
             .rev()
-            .skip(THE_ROOT)
+            .filter(|entry| !entry.name.as_os_str().is_empty())
             .fold(PathBuf::new(), |mut acc, entry| {
                 acc.push(&entry.name);
                 acc

@@ -74,6 +74,7 @@ impl TerminalApp {
         byte_format: ByteFormat,
         entry_check: bool,
         input: Vec<PathBuf>,
+        root_path: Option<PathBuf>,
         config: Config,
     ) -> Result<TerminalApp>
     where
@@ -89,7 +90,7 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
-        let mut state = AppState::new(walk_options, input);
+        let mut state = AppState::new(walk_options, input, root_path);
         if config.gitignore == Some(false) {
             state.gitignored_entries = None;
         }

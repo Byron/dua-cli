@@ -191,6 +191,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
             metadata_options: dua::TraversalOptions::default(),
         },
         Vec::new(),
+        None,
     );
     state.navigation.view_root = root;
     state.sorting = SortMode::MTimeDescending(MTimeSort::Entry);
