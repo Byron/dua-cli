@@ -507,9 +507,6 @@ impl AppState {
         B: Backend,
     {
         use FocussedPane::{Glob, Help, Main, Mark};
-        use crossterm::event::KeyCode::{
-            Backspace, Char, Down, End, Enter, Esc, Home, Left, PageDown, PageUp, Right, Tab, Up,
-        };
 
         let key = match event {
             Event::FocusGained => {
@@ -534,46 +531,42 @@ impl AppState {
 
         let glob_focussed = self.focussed == Glob;
         let mut tree_view = self.tree_view(traversal);
+        let keys = &config.keys;
 
-        let esc_navigates_back_in_main =
-            config.keys.esc_navigates_back && key.code == Esc && self.focussed == Main;
-
-        if esc_navigates_back_in_main {
+        let close_pane = keys.close_pane.matches(key);
+        let quit = !glob_focussed && keys.quit.matches(key);
+        let mut handled = true;
+        if keys.esc_navigates_back && close_pane && self.focussed == Main {
             self.pending_exit = false;
-            self.exit_node_with_traversal(&tree_view);
+            self.exit_node_with_traversal(&tree_view, &keys.scan_parent.primary());
+        } else if close_pane || quit {
+            if let Some(result) = self.handle_quit(&mut tree_view, window) {
+                return Ok(Some(result?));
+            }
         } else {
-            match (key.code, glob_focussed) {
-                (Esc, _) | (Char('q'), false) => {
-                    if let Some(result) = self.handle_quit(&mut tree_view, window) {
-                        return Ok(Some(result?));
-                    }
+            self.pending_exit = false;
+            match key {
+                #[cfg(unix)]
+                _ if keys.suspend.matches(key) => {
+                    suspend_terminal(terminal, config.notifications.any_enabled())?;
+                }
+                _ if keys.cycle_panes.matches(key) => {
+                    self.cycle_focus(window);
+                }
+                _ if !glob_focussed && keys.open_search.matches(key) => {
+                    self.toggle_glob_search(window);
+                }
+                _ if !glob_focussed && keys.toggle_help.matches(key) => {
+                    self.toggle_help_pane(window);
+                }
+                _ if !glob_focussed && keys.quit_immediately.matches(key) => {
+                    return Ok(Some(WalkResult {
+                        num_errors: self.stats.io_errors,
+                    }));
                 }
                 _ => {
-                    self.pending_exit = false;
+                    handled = false;
                 }
-            }
-        }
-
-        let mut handled = true;
-        match key.code {
-            #[cfg(unix)]
-            _ if is_suspend_key(key) => {
-                suspend_terminal(terminal, config.notifications.any_enabled())?;
-            }
-            Tab => {
-                self.cycle_focus(window);
-            }
-            Char('/') if !glob_focussed => {
-                self.toggle_glob_search(window);
-            }
-            Char('?') if !glob_focussed => self.toggle_help_pane(window),
-            Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) && !glob_focussed => {
-                return Ok(Some(WalkResult {
-                    num_errors: self.stats.io_errors,
-                }));
-            }
-            _ => {
-                handled = false;
             }
         }
 
@@ -588,74 +581,92 @@ impl AppState {
                     config,
                 ),
                 Help => {
-                    window.help.as_mut().expect("help pane").process_events(key);
+                    window
+                        .help
+                        .as_mut()
+                        .expect("help pane")
+                        .process_events(key, keys);
                 }
                 Glob => {
                     let glob_pane = window.glob.as_mut().expect("glob pane");
-                    match key.code {
-                        Enter => self.search_glob_pattern(
-                            &mut tree_view,
-                            &glob_pane.input,
-                            glob_pane.case,
-                        ),
-                        _ => glob_pane.process_events(key),
+                    if keys.search_confirm.matches(key) {
+                        self.search_glob_pattern(&mut tree_view, &glob_pane.input, glob_pane.case);
+                    } else {
+                        glob_pane.process_events(key, keys);
                     }
                 }
-                Main => match key.code {
-                    Char('O') => self.open_that(&tree_view),
-                    Char(' ') => self.mark_entry(
-                        CursorMode::KeepPosition,
-                        MarkEntryMode::Toggle,
-                        window,
-                        &tree_view,
-                    ),
-                    Char('x') => self.mark_entry(
-                        CursorMode::Advance,
-                        MarkEntryMode::MarkForDeletion,
-                        window,
-                        &tree_view,
-                    ),
-                    Char('a') => self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view),
-                    Char('t') => self.toggle_cleanup_candidates(&tree_view),
-                    Char('X') => self.mark_cleanup_candidates(window, &tree_view),
-                    Char('i') => self.toggle_gitignored_entries(&tree_view),
-                    Char('I') => self.mark_gitignored_entries(window, &tree_view),
-                    Char('o' | 'l') | Enter | Right => {
+                Main => {
+                    if keys.open_entry.matches(key) {
+                        self.open_that(&tree_view);
+                    } else if keys.toggle_mark.matches(key) {
+                        self.mark_entry(
+                            CursorMode::KeepPosition,
+                            MarkEntryMode::Toggle,
+                            window,
+                            &tree_view,
+                        );
+                    } else if keys.mark_for_deletion.matches(key) {
+                        self.mark_entry(
+                            CursorMode::Advance,
+                            MarkEntryMode::MarkForDeletion,
+                            window,
+                            &tree_view,
+                        );
+                    } else if keys.toggle_all.matches(key) {
+                        self.mark_all_entries(MarkEntryMode::Toggle, window, &tree_view);
+                    } else if keys.toggle_cleanup.matches(key) {
+                        self.toggle_cleanup_candidates(&tree_view);
+                    } else if keys.mark_cleanup.matches(key) {
+                        self.mark_cleanup_candidates(window, &tree_view);
+                    } else if keys.toggle_gitignore.matches(key) {
+                        self.toggle_gitignored_entries(&tree_view);
+                    } else if keys.mark_gitignore.matches(key) {
+                        self.mark_gitignored_entries(window, &tree_view);
+                    } else if keys.descend.matches(key) {
                         self.enter_node_with_traversal(&tree_view);
-                    }
-                    Char('r') => self.refresh(&mut tree_view, window, Refresh::Selected)?,
-                    Char('R') => self.refresh(&mut tree_view, window, Refresh::AllInView)?,
-                    Char('H') | Home => self.change_entry_selection(CursorDirection::ToTop),
-                    Char('G') | End => self.change_entry_selection(CursorDirection::ToBottom),
-                    PageUp => self.change_entry_selection(CursorDirection::PageUp),
-                    Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    } else if keys.refresh_selected.matches(key) {
+                        self.refresh(&mut tree_view, window, Refresh::Selected)?;
+                    } else if keys.refresh_all.matches(key) {
+                        self.refresh(&mut tree_view, window, Refresh::AllInView)?;
+                    } else if keys.move_to_top.matches(key) {
+                        self.change_entry_selection(CursorDirection::ToTop);
+                    } else if keys.move_to_bottom.matches(key) {
+                        self.change_entry_selection(CursorDirection::ToBottom);
+                    } else if keys.page_up.matches(key) {
                         self.change_entry_selection(CursorDirection::PageUp);
-                    }
-                    Char('k') | Up => self.change_entry_selection(CursorDirection::Up),
-                    Char('j') | Down => self.change_entry_selection(CursorDirection::Down),
-                    PageDown => self.change_entry_selection(CursorDirection::PageDown),
-                    Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    } else if keys.move_up.matches(key) {
+                        self.change_entry_selection(CursorDirection::Up);
+                    } else if keys.move_down.matches(key) {
+                        self.change_entry_selection(CursorDirection::Down);
+                    } else if keys.page_down.matches(key) {
                         self.change_entry_selection(CursorDirection::PageDown);
+                    } else if keys.sort_by_size.matches(key) {
+                        self.cycle_sorting(&tree_view);
+                    } else if keys.sort_by_mtime.matches(key) {
+                        self.cycle_mtime_sorting(&tree_view);
+                    } else if keys.cycle_mtime_mode.matches(key) {
+                        self.cycle_mtime_sort_mode(&tree_view);
+                    } else if keys.sort_by_count.matches(key) {
+                        self.cycle_count_sorting(&tree_view);
+                    } else if keys.toggle_count_column.matches(key) {
+                        self.toggle_count_column();
+                    } else if keys.sort_by_name.matches(key) {
+                        self.cycle_name_sorting(&tree_view);
+                    } else if keys.cycle_visualization.matches(key) {
+                        display.byte_vis.cycle();
+                    } else if keys.toggle_mark_and_move_down.matches(key) {
+                        self.mark_entry(
+                            CursorMode::Advance,
+                            MarkEntryMode::Toggle,
+                            window,
+                            &tree_view,
+                        );
+                    } else if keys.scan_parent.matches(key) {
+                        self.scan_parent(&mut tree_view)?;
+                    } else if keys.ascend.matches(key) {
+                        self.exit_node_with_traversal(&tree_view, &keys.scan_parent.primary());
                     }
-                    Char('s') => self.cycle_sorting(&tree_view),
-                    Char('m') => self.cycle_mtime_sorting(&tree_view),
-                    Char('M') => self.cycle_mtime_sort_mode(&tree_view),
-                    Char('c') => self.cycle_count_sorting(&tree_view),
-                    Char('C') => self.toggle_count_column(),
-                    Char('n') => self.cycle_name_sorting(&tree_view),
-                    Char('g' | 'S') => display.byte_vis.cycle(),
-                    Char('d') => self.mark_entry(
-                        CursorMode::Advance,
-                        MarkEntryMode::Toggle,
-                        window,
-                        &tree_view,
-                    ),
-                    Char('U') => self.scan_parent(&mut tree_view)?,
-                    Char('u' | 'h') | Backspace | Left => {
-                        self.exit_node_with_traversal(&tree_view);
-                    }
-                    _ => {}
-                },
+                }
             }
         }
         self.draw(window, &tree_view, *display, terminal, config)?;
@@ -987,9 +998,4 @@ fn strip_colors(buffer: &mut Buffer) {
 
 pub fn refresh_key() -> KeyEvent {
     KeyEvent::new(KeyCode::Char('\r'), KeyModifiers::ALT)
-}
-
-#[cfg(unix)]
-fn is_suspend_key(key: KeyEvent) -> bool {
-    key.code == KeyCode::Char('z') && key.modifiers.contains(KeyModifiers::CONTROL)
 }

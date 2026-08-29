@@ -174,8 +174,8 @@ $precious.tmp
     );
     assert_eq!(
         app.state.message.as_deref(),
-        Some("1 cleanup, 5 gitignored (X|I)"),
-        "footer message advertises both cleanup and gitignore shortcuts"
+        Some("1 cleanup, 5 gitignored"),
+        "footer message describes both annotation types"
     );
     app.process_events(&mut terminal, into_codes("i"))?;
     assert!(
@@ -184,13 +184,13 @@ $precious.tmp
     );
     assert_eq!(
         app.state.message.as_deref(),
-        Some("1 cleanup candidate (X)"),
-        "footer message drops the gitignore shortcut when disabled"
+        Some("1 cleanup candidate"),
+        "footer message drops gitignore details when disabled"
     );
     app.process_events(&mut terminal, into_codes("i"))?;
     assert_eq!(
         app.state.message.as_deref(),
-        Some("1 cleanup, 5 gitignored (X|I)"),
+        Some("1 cleanup, 5 gitignored"),
         "gitignored entry detection can be enabled again"
     );
 

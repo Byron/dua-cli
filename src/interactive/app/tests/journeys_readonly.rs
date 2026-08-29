@@ -448,8 +448,14 @@ fn simple_user_journey_read_only() -> Result<()> {
 }
 
 #[test]
-fn shift_u_scans_the_parent_without_retraversing_the_current_root() -> Result<()> {
+fn configured_key_scans_the_parent_without_retraversing_the_current_root() -> Result<()> {
     let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&["sample-02/dir"])?;
+    app.config = toml::from_str(
+        r#"
+        [keys]
+        scan_parent = "P"
+        "#,
+    )?;
     let dir = index_by_name(&app, fixture_str("sample-02/dir"));
     let sub = index_by_name(&app, "sub");
     let dir_size = node_by_index(&app, dir).size;
@@ -458,11 +464,20 @@ fn shift_u_scans_the_parent_without_retraversing_the_current_root() -> Result<()
     app.process_events(&mut terminal, into_codes("u"))?;
     assert_eq!(
         app.state.message.as_deref(),
-        Some("Top level reached. Press Shift+U to scan the parent directory")
+        Some("Top level reached. Press P to scan the parent directory")
     );
 
     app.process_events(&mut terminal, into_codes("U"))?;
-    assert!(app.state.scan.is_some(), "Shift+U starts the parent scan");
+    assert!(
+        app.state.scan.is_none(),
+        "the replaced default no longer starts the parent scan"
+    );
+
+    app.process_events(&mut terminal, into_codes("P"))?;
+    assert!(
+        app.state.scan.is_some(),
+        "configured key starts the parent scan"
+    );
     app.run_until_traversed(&mut terminal, into_events([]))?;
 
     assert_eq!(
@@ -539,6 +554,43 @@ fn shift_u_wraps_a_complete_root_at_its_natural_position() -> Result<()> {
     assert_eq!(app.traversal.tree.node_count(), nodes_before + 3);
     assert_eq!(app.state.stats.entries_traversed, 3);
 
+    Ok(())
+}
+
+#[test]
+fn configured_keybinding_replaces_only_its_default() -> Result<()> {
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_fixture(&["sample-01", "sample-02"])?;
+    app.config = toml::from_str(
+        r#"
+        [keys]
+        sort_by_name = "ctrl+b"
+        "#,
+    )?;
+
+    let initial_selection = app.state.navigation().selected;
+    app.process_events(&mut terminal, into_codes("j"))?;
+    assert_ne!(
+        app.state.navigation().selected,
+        initial_selection,
+        "an unspecified binding keeps its default"
+    );
+
+    app.process_events(&mut terminal, into_codes("n"))?;
+    assert_eq!(
+        app.state.sorting,
+        SortMode::SizeDescending,
+        "the overridden default no longer invokes the action"
+    );
+
+    app.process_events(
+        &mut terminal,
+        into_events([Event::Key(KeyEvent::new(
+            KeyCode::Char('b'),
+            KeyModifiers::CONTROL,
+        ))]),
+    )?;
+    assert_eq!(app.state.sorting, SortMode::NameAscending);
     Ok(())
 }
 

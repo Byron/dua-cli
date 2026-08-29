@@ -13,7 +13,7 @@ use crate::interactive::{MTimeSort, SortMode};
 
 pub struct Footer;
 
-pub struct FooterProps {
+pub struct FooterProps<'a> {
     pub total_bytes: u128,
     pub entries_traversed: u64,
     pub traversal_start: std::time::Instant,
@@ -22,11 +22,11 @@ pub struct FooterProps {
     pub message: Option<String>,
     pub sort_mode: SortMode,
     pub pending_exit: bool,
-    pub esc_navigates_back: bool,
+    pub keys: &'a dua::KeysConfig,
 }
 
 impl Footer {
-    pub fn render(props: impl Borrow<FooterProps>, area: Rect, buf: &mut Buffer) {
+    pub fn render<'a>(props: impl Borrow<FooterProps<'a>>, area: Rect, buf: &mut Buffer) {
         let FooterProps {
             total_bytes,
             entries_traversed,
@@ -36,14 +36,17 @@ impl Footer {
             message,
             sort_mode,
             pending_exit,
-            esc_navigates_back,
+            keys,
         } = props.borrow();
 
         if *pending_exit {
-            let exit_msg = if *esc_navigates_back {
-                "Press q again to exit..."
+            let exit_msg = if keys.esc_navigates_back {
+                format!("Press {} again to exit...", keys.quit)
             } else {
-                "Press esc or q again to exit..."
+                format!(
+                    "Press {} or {} again to exit...",
+                    keys.close_pane, keys.quit
+                )
             };
             Paragraph::new(Text::from(exit_msg))
                 .style(

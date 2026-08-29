@@ -89,9 +89,9 @@ impl AppState {
         }
     }
 
-    pub fn exit_node_with_traversal(&mut self, tree_view: &TreeView<'_>) {
+    pub fn exit_node_with_traversal(&mut self, tree_view: &TreeView<'_>, scan_parent_key: &str) {
         let entries = self.entries_for_exit_node(tree_view);
-        self.exit_node(entries, tree_view);
+        self.exit_node(entries, tree_view, scan_parent_key);
     }
 
     fn entries_for_exit_node(
@@ -112,6 +112,7 @@ impl AppState {
         &mut self,
         entries: Option<(TreeIndex, Vec<EntryDataBundle>)>,
         tree_view: &TreeView<'_>,
+        scan_parent_key: &str,
     ) {
         match entries {
             Some((parent_idx, entries)) => {
@@ -121,14 +122,13 @@ impl AppState {
                 self.reset_message();
             }
             None => {
-                self.message = Some(
-                    if self.can_scan_parent(tree_view) {
-                        "Top level reached. Press Shift+U to scan the parent directory"
-                    } else {
-                        "Top level reached"
-                    }
-                    .into(),
-                );
+                self.message = Some(if self.can_scan_parent(tree_view) {
+                    format!(
+                        "Top level reached. Press {scan_parent_key} to scan the parent directory"
+                    )
+                } else {
+                    "Top level reached".into()
+                });
             }
         }
     }
@@ -318,7 +318,10 @@ impl AppState {
     ) where
         B: Backend,
     {
-        let res = window.mark.take().and_then(|p| p.process_events(key));
+        let res = window
+            .mark
+            .take()
+            .and_then(|p| p.process_events(key, &config.keys));
         window.mark = match res {
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
@@ -669,7 +672,7 @@ fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<S
             } else {
                 "cleanup candidates"
             };
-            Some(format!("{cleanup} {label} (X)"))
+            Some(format!("{cleanup} {label}"))
         }
         (0, gitignored) => {
             let label = if gitignored == 1 {
@@ -677,9 +680,9 @@ fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<S
             } else {
                 "gitignored entries"
             };
-            Some(format!("{gitignored} {label} (I)"))
+            Some(format!("{gitignored} {label}"))
         }
-        (cleanup, gitignored) => Some(format!("{cleanup} cleanup, {gitignored} gitignored (X|I)")),
+        (cleanup, gitignored) => Some(format!("{cleanup} cleanup, {gitignored} gitignored")),
     }
 }
 

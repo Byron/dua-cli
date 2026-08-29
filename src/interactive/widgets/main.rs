@@ -90,6 +90,7 @@ impl MainWindow {
                 border_style: mark_style,
                 format: display.byte_format,
                 root_total_size: *total_bytes,
+                keys: &config.keys,
             };
             pane.render(props, mark_area, buffer);
         }
@@ -98,7 +99,7 @@ impl MainWindow {
             let props = HelpPaneProps {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
-                esc_navigates_back: config.keys.esc_navigates_back,
+                keys: &config.keys,
             };
             pane.render(props, help_area, buffer);
         }
@@ -116,6 +117,7 @@ impl MainWindow {
             is_focussed: matches!(state.focussed, Main),
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
+            keys: &config.keys,
         };
         self.entries.render(props, entries_area, buffer);
 
@@ -123,6 +125,7 @@ impl MainWindow {
             let props = GlobPaneProps {
                 border_style: glob_style,
                 has_focus: matches!(state.focussed, Glob),
+                keys: &config.keys,
             };
             pane.render(props, glob_area, buffer, cursor);
         }
@@ -137,7 +140,7 @@ impl MainWindow {
                 elapsed: *elapsed,
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
-                esc_navigates_back: config.keys.esc_navigates_back,
+                keys: &config.keys,
             },
             footer_area,
             buffer,

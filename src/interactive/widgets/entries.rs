@@ -49,6 +49,8 @@ pub struct EntriesProps<'a> {
     pub sort_mode: SortMode,
     /// Columns explicitly enabled in addition to columns implied by sorting.
     pub show_columns: &'a HashSet<Column>,
+    /// Configured keyboard shortcuts shown in the pane hints.
+    pub keys: &'a dua::KeysConfig,
 }
 
 #[derive(Default)]
@@ -75,6 +77,7 @@ impl Entries {
             is_focussed,
             sort_mode,
             show_columns,
+            keys,
         } = props.borrow();
         let list = &mut self.list;
 
@@ -176,8 +179,8 @@ impl Entries {
         scrollbar.render(area.inner(Margin::new(0, 1)), buf, &mut scrollbar_state);
 
         if *is_focussed {
-            let bound = draw_top_right_help(area, &title, buf);
-            draw_bottom_right_help(bound, buf);
+            let bound = draw_top_right_help(area, &title, buf, keys);
+            draw_bottom_right_help(bound, buf, keys);
         }
     }
 }
@@ -436,11 +439,16 @@ impl<'a> DisplayPath<'a> {
     }
 }
 
-fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
+fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer, keys: &dua::KeysConfig) {
     let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
-    let mut help_text = " mark-move = d | mark-toggle = space | cleanup = X".to_string();
-    help_text.push_str(" | gitignore = I");
-    help_text.push_str(" | all = a ");
+    let help_text = format!(
+        " mark-move = {} | mark-toggle = {} | cleanup = {} | gitignore = {} | all = {} ",
+        keys.toggle_mark_and_move_down,
+        keys.toggle_mark,
+        keys.mark_cleanup,
+        keys.mark_gitignore,
+        keys.toggle_all,
+    );
 
     let help_text_block_width = block_width(&help_text);
     if help_text_block_width <= bound.width {
@@ -453,9 +461,17 @@ fn draw_bottom_right_help(bound: Rect, buf: &mut Buffer) {
     }
 }
 
-fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
-    let help_text = " . = o|.. = u ── ⇊ = Ctrl+d|↓ = j|⇈ = Ctrl+u|↑ = k ";
-    let help_text_block_width = block_width(help_text);
+fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer, keys: &dua::KeysConfig) -> Rect {
+    let help_text = format!(
+        " . = {}|.. = {} ── ⇊ = {}|↓ = {}|⇈ = {}|↑ = {} ",
+        keys.descend.primary(),
+        keys.ascend.primary(),
+        keys.page_down.primary(),
+        keys.move_down.primary(),
+        keys.page_up.primary(),
+        keys.move_up.primary(),
+    );
+    let help_text_block_width = block_width(&help_text);
     let bound = Rect {
         width: area.width.saturating_sub(1),
         ..area
@@ -464,7 +480,7 @@ fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer) -> Rect {
         draw_text_nowrap_fn(
             rect::snap_to_right(bound, help_text_block_width),
             buf,
-            help_text,
+            &help_text,
             |_, _, _| Style::default(),
         );
     }
