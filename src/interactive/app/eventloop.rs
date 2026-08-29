@@ -22,6 +22,8 @@ use tui::{
 
 use super::notification;
 use super::state::{AppState, Cursor};
+#[cfg(unix)]
+use super::terminal::suspend_terminal;
 use super::tree_view::TreeView;
 
 impl AppState {
@@ -377,6 +379,10 @@ impl AppState {
 
         let mut handled = true;
         match key.code {
+            #[cfg(unix)]
+            _ if is_suspend_key(key) => {
+                suspend_terminal(terminal, config.notifications.any_enabled())?;
+            }
             Tab => {
                 self.cycle_focus(window);
             }
@@ -803,4 +809,9 @@ fn strip_colors(buffer: &mut Buffer) {
 
 pub fn refresh_key() -> KeyEvent {
     KeyEvent::new(KeyCode::Char('\r'), KeyModifiers::ALT)
+}
+
+#[cfg(unix)]
+fn is_suspend_key(key: KeyEvent) -> bool {
+    key.code == KeyCode::Char('z') && key.modifiers.contains(KeyModifiers::CONTROL)
 }
