@@ -129,7 +129,7 @@ impl Default for TraversalStats {
 }
 
 /// A filesystem entry waiting to be integrated into a traversal.
-pub struct TraversalEntry(crate::walk::Entry);
+pub struct TraversalEntry(pub(crate) crate::walk::Entry);
 
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
@@ -412,6 +412,13 @@ impl BackgroundTraversal {
 
                 let parent_index = if walk_depth == 0 {
                     self.root_idx
+                } else if self.retained_depth == Some(0) {
+                    if self.skip_root {
+                        self.root_idx
+                    } else {
+                        self.root_nodes[root_idx]
+                            .expect("root entries are emitted before their children")
+                    }
                 } else {
                     if self.skip_root {
                         self.nodes_by_path

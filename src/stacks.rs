@@ -1,9 +1,12 @@
 use crate::aggregate::TraversalProgress;
-use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
+use crate::traverse::{
+    BackgroundTraversal, EntryData, Traversal, TraversalEntry, TraversalEvent, Tree, TreeIndex,
+};
 use crate::{WalkOptions, WalkResult};
 use anyhow::Result;
 use bstr::ByteSlice;
 use petgraph::Direction;
+use std::ffi::OsStr;
 use std::io;
 use std::path::PathBuf;
 
@@ -14,6 +17,12 @@ use std::path::PathBuf;
 /// followed by a single space and the entry's own size in bytes. A directory contributes only the
 /// size of its own directory entry, as the sizes of everything it contains appear on the lines of
 /// the contained entries.
+///
+/// Without `max_depth`, each entry's own size is known when it is traversed, so its line can be
+/// written immediately without retaining the complete tree. With `max_depth`, sizes below the
+/// limit must be folded into their nearest visible ancestor. Because an ancestor is visited before
+/// its descendants, its final size is unknown until traversal finishes; the requested levels are
+/// therefore retained and written afterward instead of streamed.
 pub fn stacks(
     mut out: impl io::Write,
     err: Option<impl io::Write>,
@@ -22,6 +31,7 @@ pub fn stacks(
     max_depth: Option<usize>,
 ) -> Result<WalkResult> {
     let mut traversal = Traversal::new();
+    let stream = max_depth.is_none();
     // Mirror the interactive traversal so root nodes carry their input path as name.
     let pattern_roots = walk_options.ignore_patterns.as_ref().map(|_| paths.clone());
     let mut background = BackgroundTraversal::start(
@@ -32,11 +42,20 @@ pub fn stacks(
         false,
         true,
     )?
-    .retain_depth(max_depth);
+    .retain_depth(max_depth.or(Some(0)));
     let mut progress = TraversalProgress::new(err);
 
     while let Ok(event) = background.event_rx.recv() {
+        let stack = stream.then(|| stack_path(&event)).flatten();
+        let size_before = traversal.tree[traversal.root_index].size;
         let finished = background.integrate_traversal_event(&mut traversal, event) == Some(true);
+        let own_size = traversal.tree[traversal.root_index].size - size_before;
+        if let Some(stack) = stack
+            && own_size > 0
+        {
+            progress.clear();
+            writeln!(out, "{stack} {own_size}")?;
+        }
         progress.update(background.stats.entries_traversed);
         if finished {
             break;
@@ -44,11 +63,32 @@ pub fn stacks(
     }
     progress.clear();
 
-    write_stacks(&mut out, &traversal.tree, traversal.root_index)?;
+    if !stream {
+        write_stacks(&mut out, &traversal.tree, traversal.root_index)?;
+    }
 
     Ok(WalkResult {
         num_errors: background.stats.io_errors,
     })
+}
+
+fn stack_path(event: &TraversalEvent) -> Option<String> {
+    let TraversalEvent::Entry(Ok(TraversalEntry(entry)), root, _, _) = event else {
+        return None;
+    };
+    let mut stack = frame_name(root.as_os_str());
+    if entry.depth > 0 {
+        for component in entry
+            .path()
+            .strip_prefix(root.as_path())
+            .expect("walk entries remain below their root")
+            .components()
+        {
+            stack.push(';');
+            stack.push_str(&frame_name(component.as_os_str()));
+        }
+    }
+    Some(stack)
 }
 
 /// Write every entry below `root` as a folded stack line with its own (exclusive) size.
@@ -79,8 +119,12 @@ fn write_stacks(mut out: impl io::Write, tree: &Tree, root: TreeIndex) -> io::Re
 /// Turn an entry name into a single flame-graph frame, encoding the `;` frame separator, control
 /// characters, and the `\` escape marker.
 fn frame(entry: &EntryData) -> String {
+    frame_name(entry.name.as_os_str())
+}
+
+fn frame_name(name: &OsStr) -> String {
     let mut encoded = String::new();
-    for chunk in entry.name.as_os_str().as_encoded_bytes().utf8_chunks() {
+    for chunk in name.as_encoded_bytes().utf8_chunks() {
         for character in chunk.valid().chars() {
             match character {
                 '\\' => encoded.push_str(r"\\"),
@@ -227,6 +271,56 @@ mod tests {
         let folded = folded(&out);
         assert_eq!(folded.len(), 1);
         assert_eq!(folded.get(&folded_frame(file)), Some(&5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_is_written_while_the_walk_is_still_running() {
+        struct CreateFileOnFirstWrite {
+            out: Vec<u8>,
+            path: std::path::PathBuf,
+        }
+
+        impl std::io::Write for CreateFileOnFirstWrite {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                if self.out.is_empty() {
+                    std::fs::write(&self.path, b"x")?;
+                }
+                self.out.extend_from_slice(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut deepest = dir.path().to_owned();
+        for _ in 0..200 {
+            deepest.push("d");
+        }
+        std::fs::create_dir_all(&deepest).unwrap();
+        std::fs::write(dir.path().join("trigger"), b"x").unwrap();
+        let mut out = CreateFileOnFirstWrite {
+            out: Vec::new(),
+            path: deepest.join("late"),
+        };
+
+        stacks(
+            &mut out,
+            None::<Vec<u8>>,
+            walk_options(),
+            vec![dir.path().to_owned()],
+            None,
+        )
+        .unwrap();
+
+        let text = String::from_utf8(out.out).unwrap();
+        assert!(
+            text.lines().any(|line| line.ends_with(";late 1")),
+            "the first stack line should be written before the deepest directory is read: {text:?}"
+        );
     }
 
     #[test]
