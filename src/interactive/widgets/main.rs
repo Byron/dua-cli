@@ -89,6 +89,7 @@ impl MainWindow {
             let props = MarkPaneProps {
                 border_style: mark_style,
                 format: display.byte_format,
+                root_total_size: *total_bytes,
             };
             pane.render(props, mark_area, buffer);
         }

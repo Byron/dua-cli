@@ -59,6 +59,7 @@ pub struct MarkPane {
 pub struct MarkPaneProps {
     pub border_style: Style,
     pub format: ByteFormat,
+    pub root_total_size: u128,
 }
 
 impl MarkPane {
@@ -253,13 +254,20 @@ impl MarkPane {
         let MarkPaneProps {
             border_style,
             format,
+            root_total_size,
         } = props.borrow();
 
         let marked: &_ = &self.marked;
+        let percentage = if *root_total_size == 0 {
+            0.0
+        } else {
+            self.total_size as f64 / *root_total_size as f64 * 100.0
+        };
         let title = format!(
-            "Marked {} items ({}) ",
+            "Marked {} items ({}, {percentage:.2}% of {}) ",
             COUNT.format(self.item_count as f64),
-            format.display(self.total_size)
+            format.display(self.total_size),
+            format.display(*root_total_size)
         );
         let selected = self.selected;
         let has_focus = self.has_focus;
@@ -496,6 +504,33 @@ pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
 #[cfg(test)]
 mod mark_pane_tests {
     use super::*;
+    use tui::buffer::Cell;
+
+    #[test]
+    fn title_shows_percentage_of_root_size() {
+        let area = Rect::new(0, 0, 80, 4);
+        let mut buffer = Buffer::empty(area);
+        MarkPane {
+            total_size: 312_400_000,
+            item_count: 20_000,
+            ..Default::default()
+        }
+        .render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                root_total_size: 1_000_000_000,
+            },
+            area,
+            &mut buffer,
+        );
+
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        assert!(
+            rendered.contains("Marked 20K items (312.40 MB, 31.24% of 1.00 GB)"),
+            "rendered title: {rendered:?}"
+        );
+    }
 
     #[test]
     fn test_calculate_size() {
