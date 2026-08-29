@@ -61,6 +61,13 @@ pub struct AppState {
     pub walk_options: WalkOptions,
     /// The paths used in the initial traversal, at least 1.
     pub root_paths: Vec<PathBuf>,
+    /// Filesystem directory completely represented by the traversal root, if one exists.
+    ///
+    /// `Some(path)` means the root contains the complete, walk-option-filtered contents of
+    /// `path`; this lets an upward scan reuse the existing tree as that directory's subtree.
+    /// `None` means the root groups explicitly selected paths and may omit their siblings, so it
+    /// cannot itself be treated as a complete directory.
+    pub root_path: Option<PathBuf>,
     /// If true, listed entries will be validated for presence when switching directories.
     pub allow_entry_check: bool,
     /// Whether the next quit/back action should exit the app.
@@ -68,7 +75,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>) -> Self {
+    pub fn new(walk_options: WalkOptions, input: Vec<PathBuf>, root_path: Option<PathBuf>) -> Self {
         AppState {
             navigation: Navigation::default(),
             glob_navigation: None,
@@ -85,6 +92,7 @@ impl AppState {
             stats: TraversalStats::default(),
             walk_options,
             root_paths: input,
+            root_path,
             allow_entry_check: true,
             pending_exit: false,
         }

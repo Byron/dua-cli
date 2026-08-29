@@ -120,7 +120,16 @@ impl AppState {
                 self.update_entry_annotations(tree_view);
                 self.reset_message();
             }
-            None => self.message = Some("Top level reached".into()),
+            None => {
+                self.message = Some(
+                    if self.can_scan_parent(tree_view) {
+                        "Top level reached. Press Shift+U to scan the parent directory"
+                    } else {
+                        "Top level reached"
+                    }
+                    .into(),
+                );
+            }
         }
     }
 

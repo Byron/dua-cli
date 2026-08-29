@@ -124,7 +124,10 @@ fn main() -> Result<()> {
             let enable_focus_change = config.notifications.any_enabled();
             let byte_format = traversal.byte_format(&config);
             let walk_options = walk_options_from(&traversal)?;
+            let has_complete_root = traversal.input.is_empty()
+                || traversal.input.len() == 1 && traversal.input[0].is_dir();
             let input_paths = extract_paths_maybe_set_cwd(traversal.input, &walk_options)?;
+            let root_path = has_complete_root.then(std::env::current_dir).transpose()?;
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -161,6 +164,7 @@ fn main() -> Result<()> {
                 byte_format,
                 !no_entry_check,
                 input_paths,
+                root_path,
                 config,
             )?;
             app.traverse()?;

@@ -216,6 +216,7 @@ pub fn untraversed_app_and_terminal_with_closure(
         ByteFormat::Metric,
         false, /* entry-check */
         input_paths,
+        None,
         Config::default(),
     )?;
 

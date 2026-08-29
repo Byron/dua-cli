@@ -15,6 +15,7 @@ use dua::{
     Config, WalkResult,
     traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
 };
+use petgraph::Direction;
 use std::path::PathBuf;
 use tui::{
     Terminal, backend::Backend, buffer::Buffer, layout::Rect, style::Color, widgets::Widget,
@@ -23,6 +24,14 @@ use tui::{
 use super::notification;
 use super::state::{AppState, Cursor};
 use super::tree_view::TreeView;
+
+/// Information needed to extend the traversal one directory upward:
+///
+/// 0. The parent directory to scan.
+/// 1. Existing subtree roots to preserve as `(filesystem path, tree node)` pairs.
+/// 2. Whether the current root represents a complete directory and must become a child of a new
+///    root. If false, it is a synthetic container that can be repurposed as the parent.
+type ParentScan = (PathBuf, Vec<(PathBuf, TreeIndex)>, bool);
 
 impl AppState {
     pub fn navigation_mut(&mut self) -> &mut Navigation {
@@ -87,6 +96,174 @@ impl AppState {
             active_traversal: bg_traversal,
             previous_selection: None,
         });
+        Ok(())
+    }
+
+    pub(super) fn can_scan_parent(&self, tree: &TreeView<'_>) -> bool {
+        self.parent_scan_target(tree).is_some()
+    }
+
+    fn parent_scan_target(&self, tree: &TreeView<'_>) -> Option<ParentScan> {
+        if self.scan.is_some()
+            || self.glob_navigation.is_some()
+            || self.navigation.view_root != tree.traversal.root_index
+        {
+            return None;
+        }
+
+        if let Some(current_root) = &self.root_path {
+            let parent = current_root.parent()?;
+            return (parent != current_root.as_path()).then(|| {
+                (
+                    parent.to_owned(),
+                    vec![(current_root.clone(), tree.traversal.root_index)],
+                    true,
+                )
+            });
+        }
+
+        let cwd = std::env::current_dir().ok()?;
+        let mut common_parent = None;
+        let mut roots = Vec::new();
+        for index in tree
+            .tree()
+            .neighbors_directed(tree.traversal.root_index, Direction::Outgoing)
+        {
+            let path = tree.path_of(index);
+            let path = if path.is_absolute() {
+                path
+            } else {
+                cwd.join(path)
+            };
+            let name = path.file_name()?.to_owned();
+            let parent = path.parent()?.canonicalize().ok()?;
+            if common_parent
+                .as_ref()
+                .is_some_and(|common| common != &parent)
+            {
+                return None;
+            }
+            roots.push((parent.join(name), index));
+            common_parent = Some(parent);
+        }
+        common_parent.map(|parent| (parent, roots, false))
+    }
+
+    fn scan_parent(&mut self, tree: &mut TreeView<'_>) -> Result<()> {
+        if self.scan.is_some() {
+            self.message = Some("Traversal already running".into());
+            return Ok(());
+        }
+        let Some((parent, preexisting, wrap_root)) = self.parent_scan_target(tree) else {
+            self.message = Some("Top level reached".into());
+            return Ok(());
+        };
+
+        let old_root = tree.traversal.root_index;
+        let new_root = if wrap_root {
+            tree.tree_mut().add_node(EntryData {
+                name: parent.clone(),
+                is_dir: true,
+                ..EntryData::default()
+            })
+        } else {
+            old_root
+        };
+        let pattern_roots = self
+            .walk_options
+            .ignore_patterns
+            .as_ref()
+            .map(|_| std::slice::from_ref(&parent));
+        let active_traversal = match BackgroundTraversal::start_incremental(
+            new_root,
+            &self.walk_options,
+            vec![parent.clone()],
+            pattern_roots,
+            true,
+            false,
+            preexisting
+                .iter()
+                .map(|(path, index)| (path.clone(), *index, wrap_root))
+                .collect(),
+        ) {
+            Ok(traversal) => traversal,
+            Err(err) => {
+                if wrap_root {
+                    tree.tree_mut().remove_node(new_root);
+                }
+                return Err(err);
+            }
+        };
+
+        let previous_selection = self.navigation.selected;
+        if wrap_root {
+            let current_root = self.root_path.as_ref().expect("complete root is set");
+            let entry = tree
+                .tree_mut()
+                .node_weight_mut(old_root)
+                .expect("root exists");
+            entry.name = current_root
+                .file_name()
+                .expect("filesystem roots have no parent")
+                .into();
+            entry.is_dir = true;
+            let children = tree
+                .tree()
+                .neighbors_directed(old_root, Direction::Outgoing)
+                .collect::<Vec<_>>();
+            for child in children {
+                let name = tree.tree()[child]
+                    .name
+                    .file_name()
+                    .expect("children have a file name")
+                    .to_owned();
+                tree.tree_mut()[child].name = name.into();
+            }
+            tree.tree_mut().add_edge(new_root, old_root, ());
+        } else {
+            let root = tree
+                .tree_mut()
+                .node_weight_mut(old_root)
+                .expect("root exists");
+            root.name.clone_from(&parent);
+            root.is_dir = true;
+            for (path, index) in &preexisting {
+                tree.tree_mut()[*index].name = path
+                    .file_name()
+                    .expect("paths with a parent have a file name")
+                    .into();
+            }
+        }
+
+        tree.recompute_sizes_recursively(new_root);
+        tree.traversal.root_index = new_root;
+        self.navigation.tree_root = new_root;
+        self.navigation.view_root = new_root;
+        self.entries = tree.sorted_entries(new_root, self.sorting, self.entry_check());
+        let selected = if wrap_root {
+            Some(old_root)
+        } else {
+            previous_selection
+                .filter(|selected| preexisting.iter().any(|(_, index)| index == selected))
+                .or_else(|| self.entries.first().map(|entry| entry.index))
+        };
+        self.navigation.select(selected);
+        self.update_entry_annotations(tree);
+
+        let previous_selection = selected.and_then(|selected| {
+            self.entries
+                .iter()
+                .position(|entry| entry.index == selected)
+                .map(|position| (tree.tree()[selected].name.clone(), position))
+        });
+        self.root_path = Some(parent.clone());
+        self.root_paths = vec![parent];
+        self.received_events = false;
+        self.scan = Some(FilesystemScan {
+            active_traversal,
+            previous_selection,
+        });
+        self.reset_message();
         Ok(())
     }
 
@@ -467,6 +644,7 @@ impl AppState {
                         window,
                         &tree_view,
                     ),
+                    Char('U') => self.scan_parent(&mut tree_view)?,
                     Char('u' | 'h') | Backspace | Left => {
                         self.exit_node_with_traversal(&tree_view);
                     }

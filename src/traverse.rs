@@ -163,6 +163,7 @@ pub struct BackgroundTraversal {
     skip_root: bool,
     use_root_path: bool,
     retained_depth: Option<usize>,
+    preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
     /// Receiver used to obtain traversal events from the worker thread.
     pub event_rx: Receiver<TraversalEvent>,
 }
@@ -177,6 +178,62 @@ impl BackgroundTraversal {
         pattern_roots: Option<&[PathBuf]>,
         skip_root: bool,
         use_root_path: bool,
+    ) -> anyhow::Result<BackgroundTraversal> {
+        Self::start_inner(
+            root_idx,
+            walk_options,
+            input,
+            pattern_roots,
+            skip_root,
+            use_root_path,
+            HashMap::new(),
+        )
+    }
+
+    /// Start an incremental traversal that preserves subtrees listed in `preexisting_nodes`.
+    ///
+    /// This is used when extending a traversal to a parent directory: rescanning an existing
+    /// subtree would waste work and duplicate its nodes and totals. Each tuple is
+    /// `(path, node, needs_metadata)`. `needs_metadata` is true when the node was a synthetic
+    /// traversal root that represented the directory's contents but not the directory entry
+    /// itself; once that root becomes a child, its own metadata must be integrated.
+    pub fn start_incremental(
+        root_idx: TreeIndex,
+        walk_options: &WalkOptions,
+        input: Vec<PathBuf>,
+        pattern_roots: Option<&[PathBuf]>,
+        skip_root: bool,
+        use_root_path: bool,
+        preexisting_nodes: Vec<(PathBuf, TreeIndex, bool)>,
+    ) -> anyhow::Result<BackgroundTraversal> {
+        let mut walk_options = walk_options.clone();
+        walk_options.ignore_dirs.extend(
+            preexisting_nodes
+                .iter()
+                .filter_map(|(path, _, _)| gix::path::realpath(path).ok()),
+        );
+        Self::start_inner(
+            root_idx,
+            &walk_options,
+            input,
+            pattern_roots,
+            skip_root,
+            use_root_path,
+            preexisting_nodes
+                .into_iter()
+                .map(|(path, index, needs_metadata)| (path, (index, needs_metadata)))
+                .collect(),
+        )
+    }
+
+    fn start_inner(
+        root_idx: TreeIndex,
+        walk_options: &WalkOptions,
+        input: Vec<PathBuf>,
+        pattern_roots: Option<&[PathBuf]>,
+        skip_root: bool,
+        use_root_path: bool,
+        preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
     ) -> anyhow::Result<BackgroundTraversal> {
         let num_roots = input.len();
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
@@ -268,6 +325,7 @@ impl BackgroundTraversal {
             skip_root,
             use_root_path,
             retained_depth: None,
+            preexisting_nodes,
             event_rx: entry_rx,
         })
     }
@@ -361,6 +419,7 @@ impl BackgroundTraversal {
 
                 let mut file_size = 0u128;
                 let mut mtime: SystemTime = UNIX_EPOCH;
+                let mut has_mtime = false;
                 data.is_dir = entry.file_type.is_dir();
                 if let Ok(m) = &entry.metadata {
                     if self.walk_options.count_hard_links
@@ -393,6 +452,7 @@ impl BackgroundTraversal {
 
                     if let Ok(modified) = m.modified() {
                         mtime = modified;
+                        has_mtime = true;
                     } else {
                         self.stats.io_errors += 1;
                         data.metadata_io_error = true;
@@ -408,6 +468,38 @@ impl BackgroundTraversal {
                     data.entry_count = Some(1);
                 }
                 let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
+                if let Some((index, needs_metadata)) = self.preexisting_nodes.remove(&entry.path())
+                {
+                    if needs_metadata {
+                        let existing = &mut traversal.tree[index];
+                        existing.size += file_size;
+                        *existing.entry_count.get_or_insert(0) += entry_count;
+                        if has_mtime {
+                            existing.mtime = data.mtime;
+                        }
+                        existing.metadata_io_error |= data.metadata_io_error;
+                        existing.is_dir = data.is_dir;
+
+                        let mut ancestor = traversal
+                            .tree
+                            .neighbors_directed(index, Direction::Incoming)
+                            .next();
+                        while let Some(ancestor_index) = ancestor {
+                            ancestor = traversal
+                                .tree
+                                .neighbors_directed(ancestor_index, Direction::Incoming)
+                                .next();
+                            let entry = &mut traversal.tree[ancestor_index];
+                            entry.size += file_size;
+                            *entry.entry_count.get_or_insert(0) += entry_count;
+                        }
+                    }
+                    return self
+                        .throttle
+                        .as_ref()
+                        .is_some_and(|t| t.can_update())
+                        .then_some(false);
+                }
                 let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
 
                 let parent_index = if walk_depth == 0 {

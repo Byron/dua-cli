@@ -132,6 +132,7 @@ $precious.tmp
         ByteFormat::Metric,
         true,
         vec![root.to_owned()],
+        None,
         Config::default(),
     )?;
     app.traverse()?;
@@ -270,6 +271,7 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         ByteFormat::Metric,
         true,
         vec![root.to_owned()],
+        None,
         Config::default(),
     )?;
     app.traverse()?;

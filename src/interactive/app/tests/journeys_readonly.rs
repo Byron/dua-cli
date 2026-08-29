@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
-use std::ffi::OsString;
+use std::{ffi::OsString, fs};
 
 use crate::interactive::app::tests::utils::{into_codes, into_events};
 use crate::interactive::widgets::Column;
@@ -10,8 +10,9 @@ use crate::interactive::{
     app::tests::{
         FIXTURE_PATH,
         utils::{
-            fixture_str, index_by_name, initialized_app_and_terminal_from_fixture, into_keys,
-            node_by_index, node_by_name, untraversed_app_and_terminal_from_fixture,
+            fixture, fixture_str, index_by_name, initialized_app_and_terminal_from_fixture,
+            initialized_app_and_terminal_from_paths, into_keys, node_by_index, node_by_name,
+            untraversed_app_and_terminal_from_fixture,
         },
     },
 };
@@ -442,6 +443,101 @@ fn simple_user_journey_read_only() -> Result<()> {
         // tend to just work when they compile, and while experimenting, tests can be in the way.
         // However, if Dua should be more widely used, we need CI and these tests written.
     }
+
+    Ok(())
+}
+
+#[test]
+fn shift_u_scans_the_parent_without_retraversing_the_current_root() -> Result<()> {
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&["sample-02/dir"])?;
+    let dir = index_by_name(&app, fixture_str("sample-02/dir"));
+    let sub = index_by_name(&app, "sub");
+    let dir_size = node_by_index(&app, dir).size;
+    let nodes_before = app.traversal.tree.node_count();
+
+    app.process_events(&mut terminal, into_codes("u"))?;
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Top level reached. Press Shift+U to scan the parent directory")
+    );
+
+    app.process_events(&mut terminal, into_codes("U"))?;
+    assert!(app.state.scan.is_some(), "Shift+U starts the parent scan");
+    app.run_until_traversed(&mut terminal, into_events([]))?;
+
+    assert_eq!(
+        crate::interactive::path_of(&app.traversal.tree, app.traversal.root_index, None),
+        fixture("sample-02").canonicalize()?,
+        "the shared parent becomes the new root"
+    );
+    assert_eq!(
+        index_by_name(&app, "dir"),
+        dir,
+        "the existing root is reattached instead of replaced"
+    );
+    assert_eq!(
+        index_by_name(&app, "sub"),
+        sub,
+        "the existing subtree keeps its node identities"
+    );
+    assert_eq!(
+        node_by_index(&app, dir).size,
+        dir_size,
+        "an explicit root's own metadata is not counted twice"
+    );
+    assert_eq!(
+        app.traversal.tree.node_count(),
+        nodes_before + 2,
+        "only the two previously unseen siblings are added"
+    );
+    assert_eq!(
+        app.state.stats.entries_traversed, 3,
+        "the existing directory is observed but its descendants are not traversed"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn shift_u_wraps_a_complete_root_at_its_natural_position() -> Result<()> {
+    let current_root = fixture("sample-02/dir").canonicalize()?;
+    let root_paths = fs::read_dir(&current_root)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&root_paths)?;
+    app.state.root_path = Some(current_root.clone());
+
+    let old_root = app.traversal.root_index;
+    let sub = index_by_name(&app, current_root.join("sub"));
+    let size_before = node_by_index(&app, old_root).size;
+    let count_before = node_by_index(&app, old_root)
+        .entry_count
+        .unwrap_or_default();
+    let nodes_before = app.traversal.tree.node_count();
+
+    app.process_events(&mut terminal, into_codes("U"))?;
+    app.run_until_traversed(&mut terminal, into_events([]))?;
+
+    assert_eq!(
+        crate::interactive::path_of(&app.traversal.tree, app.traversal.root_index, None),
+        current_root.parent().unwrap(),
+        "the complete root's parent becomes the new root"
+    );
+    assert_eq!(
+        index_by_name(&app, "dir"),
+        old_root,
+        "the previous root becomes its naturally named child"
+    );
+    assert_eq!(index_by_name(&app, "sub"), sub);
+    let promoted_root = node_by_index(&app, old_root);
+    assert_eq!(
+        promoted_root.size,
+        size_before + u128::from(current_root.metadata()?.len()),
+        "the promoted node gains the directory entry's own size"
+    );
+    assert_eq!(promoted_root.entry_count, Some(count_before + 1));
+    assert_eq!(app.traversal.tree.node_count(), nodes_before + 3);
+    assert_eq!(app.state.stats.entries_traversed, 3);
 
     Ok(())
 }
