@@ -10,7 +10,7 @@ fn replay_rejects_source_changes_after_validation() {
     let mut replay = Replay::new(Cursor::new(bytes.clone())).unwrap();
 
     let mut changed = bytes[..bytes.len() - DIGEST_LEN].to_vec();
-    changed[16] = b'b';
+    changed[18] = b'b';
     *replay.reader.get_mut() = rehash(changed);
 
     assert!(
@@ -249,6 +249,25 @@ fn rejects_header_record_parent_and_name_errors() {
         .to_string()
         .contains("outside the current depth-first subtree")
     );
+}
+
+#[test]
+fn rejects_incorrect_v2_storage_requirements() {
+    let mut traversal = Traversal::new();
+    let root_index = traversal.root_index;
+    let root = add(&mut traversal, root_index, "a", EntryData::default());
+    let bytes = encoded(&traversal, &[root]);
+
+    for offset in [HEADER_LEN, HEADER_LEN + 1] {
+        let mut changed = bytes[..bytes.len() - DIGEST_LEN].to_vec();
+        changed[offset] += 1;
+        let err = read(Cursor::new(rehash(changed))).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not match its declared storage requirements"),
+            "{err:#}"
+        );
+    }
 }
 
 #[test]
