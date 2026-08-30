@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.44.0 (2026-08-30)
 
 This is a massive release that cost my weekend and was motivated by the chance to 
 reduce the amount of open issues to 0.
@@ -69,130 +69,130 @@ and cleanly resumes the TUI on Unix.
    Keyboard shortcuts are configurable, but `--once` could only synthesize plain
    character events. That made named and modified bindings impossible to reproduce
    in one-shot debugging runs.
-
+   
    - Reuse the configuration keybinding parser for `--once`.
    - Convert parsed bindings into terminal events.
    - Preserve compact character sequences such as `--once=jko`.
  - <csr-id-931472011b13234db9f22381f9fb8fa473f0bd3a/> add streaming snapshot diff command
    <!-- agent -->
    ## Command-line interface
-
+   
    - Add `dua diff OLD NEW` to compare an earlier traversal snapshot with a later
-     one.
+   one.
    - Support byte-format selection either globally or after the subcommand, with
-     the configured format as the fallback.
+   the configured format as the fallback.
    - Add `--directories-only` for aggregate directory changes, `--prefix PATH`
-     for a component-aware subtree filter, `--depth DEPTH` for limiting the
-     displayed tree, and `--summary-limit COUNT` for sizing or hiding the largest
-     additions and removals lists.
+   for a component-aware subtree filter, `--depth DEPTH` for limiting the
+   displayed tree, and `--summary-limit COUNT` for sizing or hiding the largest
+   additions and removals lists.
    - Treat the selected root or prefix as the first displayed depth level while
-     leaving summary calculations unbounded.
+   leaving summary calculations unbounded.
    - Reject traversal-only options and input paths because diffing never walks
-     the live filesystem.
+   the live filesystem.
    - Hash both decompressed snapshots in parallel before comparison, then validate
-     their records as they stream and verify each digest again at the end.
-
+   their records as they stream and verify each digest again at the end.
+   
    ## Streaming comparison
-
+   
    - Refactor snapshot decoding into a resumable decoder and entry iterator that
-     can replay a verified, seekable snapshot without materializing its tree.
+   can replay a verified, seekable snapshot without materializing its tree.
    - Rewind each snapshot for every pass and verify its digest again at the end
-     of replay, detecting files changed after initial validation.
+   of replay, detecting files changed after initial validation.
    - Expose native encoded names and duplicate-sibling ordinals from decoded
-     entries to build deterministic comparison keys on Unix and Windows.
+   entries to build deterministic comparison keys on Unix and Windows.
    - Enforce canonical sibling ordering during decoding and distinguish repeated
-     sibling names without changing the snapshot format.
+   sibling names without changing the snapshot format.
    - Merge the two canonical depth-first streams in lock-step on the main thread
-     while a background collector retains only bounded summary entries.
+   while a background collector retains only bounded summary entries.
    - Pair roots in stored order and deliberately avoid cross-root matching or
-     rename detection.
+   rename detection.
    - Collapse an entirely added or removed directory to one change and skip its
-     descendants, keeping large subtree changes concise.
-
+   descendants, keeping large subtree changes concise.
+   
    ## Diff output
-
+   
    - Report additions, removals, and signed size deltas with `+`, `-`, and `~`
-     markers in a compact tree with shared directory context.
+   markers in a compact tree with shared directory context.
    - Stream the tree first, then report a configurable number of the largest
-     additions and removals (five by default) and the total number of changes.
+   additions and removals (five by default) and the total number of changes.
    - Compare file sizes in the default mode and aggregate directory sizes in
-     directory-only mode, including file-to-directory type changes.
+   directory-only mode, including file-to-directory type changes.
    - Preserve full `u128` size deltas and use the selected human-readable byte
-     format.
+   format.
    - Mark depth-collapsed branches with an ellipsis without hiding their entries
-     from the largest-change summary.
+   from the largest-change summary.
    - Render terminal additions in green, removals in red, modifications in
-     yellow, and directory context in cyan while keeping redirected output free
-     of escape sequences.
+   yellow, and directory context in cyan while keeping redirected output free
+   of escape sequences.
    - Use native path separators, sanitize control characters that could split
-     output lines, and emit no output for identical snapshots or unmatched
-     prefixes.
+   output lines, and emit no output for identical snapshots or unmatched
+   prefixes.
  - <csr-id-3a30cc5319b9f472fe2d343a7b1d990e3e8d9f09/> add traversal snapshot codec
    <!-- agent -->
    ## Snapshot format
-
+   
    - Add a deterministic version-1 `DUASNAP\0` codec for depth-first traversal
-     forests while preserving input-root order and native Unix and Windows path
-     representations.
+   forests while preserving input-root order and native Unix and Windows path
+   representations.
    - Encode parent distances, node flags, names, `u128` sizes, nanosecond
-     modification times, and optional entry counts using canonical ULEB128 fields.
+   modification times, and optional entry counts using canonical ULEB128 fields.
    - Validate path components, tree structure, record limits, integer encodings,
-     timestamps, node counts, checksums, truncation, and trailing data.
+   timestamps, node counts, checksums, truncation, and trailing data.
    - Protect decoded snapshot data with SHA-256 and preserve deterministic child
-     ordering.
+   ordering.
    - Support raw snapshots and streaming zlib compression through the existing
-     `gix::zlib` dependency. Export at level 2 by default, accept levels 1–9, and
-     use level 0 for raw output.
+   `gix::zlib` dependency. Export at level 2 by default, accept levels 1–9, and
+   use level 0 for raw output.
    - Verify seekable snapshots once and rewind them for bounded-memory replay
-     without materializing the full tree.
-
+   without materializing the full tree.
+   
    ## CLI integration
-
+   
    - Add `dua interactive --export` to atomically persist a completed traversal
-     through a neighboring temporary file before replacing the destination.
+   through a neighboring temporary file before replacing the destination.
    - Add `dua interactive --import` to load a snapshot into the terminal UI
-     without traversing the filesystem.
+   without traversing the filesystem.
    - Add `dua aggregate --import` with flat, tree, depth-limited, sorted, total,
-     and folded-stack output modes.
+   and folded-stack output modes.
    - Reject traversal-only paths and options when importing and print snapshot
-     provenance to standard error.
+   provenance to standard error.
    - Preserve stored root ordering, sizes, entry counts, modification times, and
-     metadata IO errors.
-
+   metadata IO errors.
+   
    ## Replay rendering
-
+   
    - Add completed-traversal and replay renderers for aggregate, tree, and
-     folded-stack output.
+   folded-stack output.
    - Keep only roots, displayed levels, or the current stack path in memory as
-     required by each output mode.
+   required by each output mode.
    - Use checked arithmetic for aggregate and exclusive-size calculations and
-     report malformed snapshot totals instead of silently saturating.
+   report malformed snapshot totals instead of silently saturating.
    - Handle the full `u128` snapshot size range and sanitize control characters
-     when writing terminal output.
-
+   when writing terminal output.
+   
    ## Interactive safety
-
+   
    - Treat imported snapshots as read-only while retaining navigation, sorting,
-     searching, marking, and display controls.
+   searching, marking, and display controls.
    - Disable entry existence checks, filesystem refreshes, upward scans,
-     gitignore discovery, permanent deletion, and trash operations.
+   gitignore discovery, permanent deletion, and trash operations.
    - Show the actual snapshot load time until the first user event and replace
-     destructive mark prompts and styling with an explicit read-only safety notice.
+   destructive mark prompts and styling with an explicit read-only safety notice.
    - Allow opening a stored path when it still exists, without weakening the final
-     read-only guards around trash and permanent deletion.
+   read-only guards around trash and permanent deletion.
    - Expose completed traversal roots in original input order for deterministic
-     export.
+   export.
  - <csr-id-707b3166b2b9f6429c0d7ce222e1ee66f3a1940d/> make interactive keybindings configurable
    <!-- agent -->
    Interactive shortcuts were hard-coded, preventing users from avoiding terminal
    conflicts or adapting the controls to their habits.
-
+   
    Add per-action [keys] arrays whose defaults preserve the existing controls,
    route every interactive pane and visible shortcut hint through those settings,
    and expose all bindings as commented config show-default templates. Parse common
    named keys and modifiers while handling shifted character events consistently
    across terminal backends.
-
+   
    Regression coverage verifies that overrides replace only their own defaults,
    the documented template round-trips to the built-in defaults, modified shortcuts
    remain distinct, and shifted punctuation works on Windows.
@@ -200,7 +200,7 @@ and cleanly resumes the TUI on Unix.
    <!-- agent -->
    Interactive mode stopped at its initial root and required a restart to inspect
    its parent.
-
+   
    Handle Shift+U by scanning the parent while pruning already represented paths,
    then reattach the existing subtree at its natural position so node identities
    and prior work are preserved. The top-level message now advertises the shortcut
@@ -209,18 +209,38 @@ and cleanly resumes the TUI on Unix.
    <!-- agent -->
    Show the marked byte total as a percentage of the top-level root total in the
    mark pane title.
+ - <csr-id-49f78a8d7d53f0c553fa04a63d858d533ea844ee/> show gross changes for collapsed diff branches
+   Not reviewed at all, only functional tests.
+   
+   <!-- agent -->
+   Depth-limited snapshot diffs now reveal the churn hidden beneath each collapsed directory.
+   
+   - Accumulate gross additions and removals while preserving bounded streaming memory.
+   - Keep directory-only output and largest-change summaries unchanged.
+   - Cover mixed changes, overflow, root boundaries, context ordering, and terminal colors.
 
 ### Performance
 
- - <csr-id-8e590bbe5150aa347fc84385b008db6ec75f395b/> compact traversal storage and snapshot replay
-   Replace `petgraph` with compact arena-backed nodes and stable indices, store
-   native filenames in one byte arena, and link walker events through dense
-   directory IDs. Snapshot replay now lends names from reusable record buffers,
-   reuses sibling-order storage by depth, and copies names only for retained
-   entries while preserving the version-1 snapshot format.
-
-   In a local `~/dev` scan, maximum RSS fell from 524,812,288 bytes with 2.43.1 to
-   268,206,080 bytes with the current build, as measured by `/usr/bin/time -lp`.
+ - <csr-id-95136995ea39b35e6575f9ae1c5df9618ff5c0a9/> compact traversal storage and snapshot replay
+   Admittedly, this one I waved through, but looked at the new storage for
+   a more tightly packed tree closely.
+   The parts with DirectoryId I just skipped over, as they are the most invasive
+   overall and touch a log of places.
+   Fine with me, everything seems to work, and this is beyond the time I can spend
+   on reviewing, while the value proposition is too high to skip it.
+   
+   <!-- agent -->
+   ## Traversal storage
+   
+   - Replace `petgraph` with a 64-byte arena-backed tree and compact stable indices.
+   - Store native filenames in one append-only arena and reuse deleted node slots.
+   - Route parents through dense directory IDs and keep glob matches outside the filesystem topology.
+   
+   ## Snapshot replay
+   
+   - Lend names from reusable record buffers and reuse sibling-order buffers by depth.
+   - Copy names only for retained entries and sort snapshots directly from arena bytes.
+   - Preserve the V1 encoding, validation, and platform-native path handling.
 
 ### Bug Fixes
 
@@ -228,12 +248,12 @@ and cleanly resumes the TUI on Unix.
    <!-- agent -->
    Interactive mode consumes Ctrl+Z in raw mode, so the shell never receives the
    usual job-control signal and the TUI cannot be resumed cleanly.
-
+   
    Recognize the key globally on Unix, release crossterm's focus, cursor, raw-mode,
    and alternate-screen state, raise SIGTSTP, then reclaim and clear the Ratatui
    terminal after fg resumes the process. A focused regression test covers the
    Ctrl+Z mapping.
-
+   
    Validated with the repository check, unit, journey, format, and clippy targets;
    an Expect-driven PTY run also verified stop, fg redraw, and clean shell
    restoration.
@@ -242,9 +262,9 @@ and cleanly resumes the TUI on Unix.
 
 <csr-read-only-do-not-edit/>
 
- - 11 commits contributed to the release over the course of 1 calendar day.
+ - 13 commits contributed to the release over the course of 1 calendar day.
  - 1 day passed between releases.
- - 7 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 9 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 4 unique issues were worked on: [#113](https://github.com/Byron/dua-cli/issues/113), [#171](https://github.com/Byron/dua-cli/issues/171), [#65](https://github.com/Byron/dua-cli/issues/65), [#82](https://github.com/Byron/dua-cli/issues/82)
 
 ### Commit Details
@@ -262,6 +282,8 @@ and cleanly resumes the TUI on Unix.
  * **[#82](https://github.com/Byron/dua-cli/issues/82)**
     - Traverse beyond the interactive root ([`2fef192`](https://github.com/Byron/dua-cli/commit/2fef192f1420a5fdd1acf565703a408ef9ce8a6a))
  * **Uncategorized**
+    - Show gross changes for collapsed diff branches ([`49f78a8`](https://github.com/Byron/dua-cli/commit/49f78a8d7d53f0c553fa04a63d858d533ea844ee))
+    - Compact traversal storage and snapshot replay ([`9513699`](https://github.com/Byron/dua-cli/commit/95136995ea39b35e6575f9ae1c5df9618ff5c0a9))
     - Accept configured keys in --once ([`2a9deb5`](https://github.com/Byron/dua-cli/commit/2a9deb5b01e26977dcd788a0e42f77d1eaf035da))
     - Add streaming snapshot diff command ([`9314720`](https://github.com/Byron/dua-cli/commit/931472011b13234db9f22381f9fb8fa473f0bd3a))
     - Add traversal snapshot codec ([`3a30cc5`](https://github.com/Byron/dua-cli/commit/3a30cc5319b9f472fe2d343a7b1d990e3e8d9f09))
@@ -4438,3 +4460,4 @@ Fix `dua -h` usage string.
 The first usable, read-only interactive terminal user interface.
 That's that. We also use `tui-react`, something that makes it much more pleasant to handle the
 application and GUI state.
+

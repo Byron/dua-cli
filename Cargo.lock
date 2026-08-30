@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "dua-cli"
-version = "2.43.1"
+version = "2.44.0"
 dependencies = [
  "anyhow",
  "bstr",
@@ -707,7 +707,7 @@ dependencies = [
 
 [[package]]
 name = "dua-core"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "crossbeam",
  "libc",
