@@ -58,7 +58,10 @@ impl MainWindow {
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
-        let header_bg_color = header_background_color(self.is_anything_marked(), state.focussed);
+        let safety_notice = mark_safety_notice(state.read_only, &config.keys);
+
+        let header_bg_color =
+            header_background_color(self.has_marks() && safety_notice.is_none(), state.focussed);
         Header::render(header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
@@ -91,6 +94,7 @@ impl MainWindow {
                 format: display.byte_format,
                 root_total_size: *total_bytes,
                 keys: &config.keys,
+                safety_notice,
             };
             pane.render(props, mark_area, buffer);
         }
@@ -134,10 +138,12 @@ impl MainWindow {
             FooterProps {
                 total_bytes: *total_bytes,
                 format: display.byte_format,
-                entries_traversed: *entries_traversed,
                 message: state.message.clone(),
-                traversal_start: *start,
-                elapsed: *elapsed,
+                traversal_stats: (state.scan.is_some() || !state.received_events).then_some((
+                    *entries_traversed,
+                    *start,
+                    *elapsed,
+                )),
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
                 keys: &config.keys,
@@ -147,11 +153,11 @@ impl MainWindow {
         );
     }
 
-    fn is_anything_marked(&self) -> bool {
+    fn has_marks(&self) -> bool {
         self.mark
             .as_ref()
             .map(|pane| pane.marked())
-            .is_none_or(|marked| marked.is_empty())
+            .is_some_and(|marked| !marked.is_empty())
     }
 }
 
@@ -171,11 +177,23 @@ fn content_layout(content_area: Rect) -> (Rect, Rect) {
     (regions[0], regions[1])
 }
 
-fn header_background_color(is_marked: bool, focused_pane: FocussedPane) -> Color {
-    match (is_marked, focused_pane) {
-        (false, Mark) => Color::LightRed,
-        (false, _) => COLOR_MARKED,
-        (_, _) => Color::White,
+fn mark_safety_notice(read_only: bool, keys: &dua::KeysConfig) -> Option<&'static str> {
+    if read_only {
+        Some(" Snapshot is read-only; marked entries cannot be deleted ")
+    } else if keys.delete_marked.is_empty()
+        && (!cfg!(feature = "trash-move") || keys.trash_marked.is_empty())
+    {
+        Some(" No destructive keys are mapped; marked entries are safe ")
+    } else {
+        None
+    }
+}
+
+fn header_background_color(has_dangerous_marks: bool, focused_pane: FocussedPane) -> Color {
+    match (has_dangerous_marks, focused_pane) {
+        (true, Mark) => Color::LightRed,
+        (true, _) => COLOR_MARKED,
+        (false, _) => Color::White,
     }
 }
 
@@ -200,5 +218,24 @@ fn pane_border_style(focused_pane: FocussedPane) -> (Style, Style, Style, Style)
         Help => (grey, bold, grey, grey),
         Mark => (grey, grey, bold, grey),
         Glob => (grey, grey, grey, bold),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn marks_are_only_dangerous_when_a_destructive_action_is_available() {
+        let config = dua::Config::default();
+        assert!(mark_safety_notice(false, &config.keys).is_none());
+        assert_eq!(header_background_color(true, Mark), Color::LightRed);
+
+        assert!(mark_safety_notice(true, &config.keys).is_some());
+        assert_eq!(header_background_color(false, Mark), Color::White);
+
+        let config: dua::Config =
+            toml::from_str("[keys]\ndelete_marked = []\ntrash_marked = []").expect("valid config");
+        assert!(mark_safety_notice(false, &config.keys).is_some());
     }
 }

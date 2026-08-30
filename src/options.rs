@@ -35,6 +35,21 @@ fn dft_format() -> ByteFormat {
     }
 }
 
+const DEFAULT_DIFF_SUMMARY_LIMIT: usize = 5;
+
+#[cfg(feature = "tui-crossplatform")]
+fn parse_snapshot_compression_level(value: &str) -> Result<i32, String> {
+    let level = value
+        .parse::<i32>()
+        .map_err(|_| format!("invalid compression level: {value}"))?;
+    let maximum = gix::zlib::Compression::BEST.level();
+    if gix::zlib::Compression::new(level).is_some() {
+        Ok(level)
+    } else {
+        Err(format!("compression level must be between 0 and {maximum}"))
+    }
+}
+
 /// Enough parallelism to keep filesystem work moving without saturating macOS with syscalls.
 #[cfg(target_os = "macos")]
 pub(crate) const DEFAULT_THREADS: usize = 8;
@@ -179,18 +194,90 @@ pub enum Command {
     Interactive {
         #[clap(flatten)]
         traversal: TraversalArgs,
+        /// Write the completed traversal to this snapshot file.
+        #[clap(long, value_name = "FILE", conflicts_with = "import")]
+        export: Option<PathBuf>,
+        /// Snapshot compression level when exporting. Use 0 to disable compression.
+        #[clap(
+            long,
+            env = "DUA_SNAPSHOT_COMPRESSION_LEVEL",
+            value_name = "LEVEL",
+            default_value_t = 2,
+            allow_hyphen_values = true,
+            value_parser = parse_snapshot_compression_level
+        )]
+        compression: i32,
+        /// Load a snapshot instead of traversing the filesystem.
+        #[clap(
+            long,
+            value_name = "FILE",
+            conflicts_with_all = [
+                "input",
+                "threads",
+                "apparent_size",
+                "count_hard_links",
+                "stay_on_filesystem",
+                "ignore_dirs",
+                "ignore_from",
+                "no_entry_check"
+            ]
+        )]
+        #[cfg_attr(target_os = "macos", clap(conflicts_with = "deduplicate_apfs_clones"))]
+        import: Option<PathBuf>,
         /// Do not check entries for presence when listing a directory to avoid slugging performance on slow filesystems.
-        #[clap(long, short = 'e')]
+        #[clap(long, short = 'e', conflicts_with = "import")]
         no_entry_check: bool,
-        /// Exit automatically after traversal, optionally replaying the given single-character keys first.
+        /// Exit automatically after traversal, optionally replaying a configured keybinding or compact character sequence first.
         #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "")]
         once: Option<String>,
+    },
+    /// Compare two traversal snapshots
+    Diff {
+        /// Earlier traversal snapshot.
+        #[clap(value_name = "OLD")]
+        old: PathBuf,
+        /// Later traversal snapshot.
+        #[clap(value_name = "NEW")]
+        new: PathBuf,
+        /// The format with which to print byte counts.
+        #[clap(short = 'f', long, value_enum, ignore_case = true)]
+        format: Option<ByteFormat>,
+        /// Report aggregate directory changes instead of file changes.
+        #[clap(long)]
+        directories_only: bool,
+        /// Show only this stored path and its descendants.
+        #[clap(long, value_name = "PATH")]
+        prefix: Option<PathBuf>,
+        /// Limit the tree to this many levels, summarizing hidden additions and removals. The root
+        /// or selected prefix is the first level.
+        #[clap(short = 'd', long, value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+        depth: Option<usize>,
+        /// Include at most this many largest additions and removals in the summary. Use 0 to hide them.
+        #[clap(long, value_name = "COUNT", default_value_t = DEFAULT_DIFF_SUMMARY_LIMIT)]
+        summary_limit: usize,
     },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
     Aggregate {
         #[clap(flatten)]
         traversal: TraversalArgs,
+        /// Load a traversal snapshot instead of scanning the filesystem.
+        #[clap(
+            long,
+            value_name = "FILE",
+            conflicts_with_all = [
+                "input",
+                "threads",
+                "apparent_size",
+                "count_hard_links",
+                "stay_on_filesystem",
+                "ignore_dirs",
+                "ignore_from",
+                "statistics"
+            ]
+        )]
+        #[cfg_attr(target_os = "macos", clap(conflicts_with = "deduplicate_apfs_clones"))]
+        import: Option<PathBuf>,
         /// If set, print additional statistics about the file traversal to stderr
         #[clap(long = "stats")]
         statistics: bool,
@@ -314,6 +401,91 @@ mod tests {
     }
 
     #[test]
+    fn diff_accepts_format_before_or_after_the_subcommand() {
+        let before =
+            Args::try_parse_from(["dua", "--format", "bytes", "diff", "old.dua", "new.dua"])
+                .expect("global format parses");
+        assert_eq!(before.traversal.format, Some(super::ByteFormat::Bytes));
+
+        let after =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--format", "bytes"])
+                .expect("diff format parses");
+        let Some(super::Command::Diff {
+            old,
+            new,
+            format,
+            summary_limit,
+            ..
+        }) = after.command
+        else {
+            panic!("expected diff subcommand");
+        };
+        assert_eq!(old, PathBuf::from("old.dua"));
+        assert_eq!(new, PathBuf::from("new.dua"));
+        assert_eq!(format, Some(super::ByteFormat::Bytes));
+        assert_eq!(summary_limit, super::DEFAULT_DIFF_SUMMARY_LIMIT);
+
+        let directories =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--directories-only"])
+                .expect("directory-only diff parses");
+        assert!(matches!(
+            directories.command,
+            Some(super::Command::Diff {
+                directories_only: true,
+                ..
+            })
+        ));
+
+        let prefixed = Args::try_parse_from([
+            "dua",
+            "diff",
+            "old.dua",
+            "new.dua",
+            "--prefix",
+            "root/subtree",
+        ])
+        .expect("prefixed diff parses");
+        assert!(matches!(
+            prefixed.command,
+            Some(super::Command::Diff {
+                prefix: Some(path),
+                ..
+            }) if path == std::path::Path::new("root/subtree")
+        ));
+
+        let depth = Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--depth", "2"])
+            .expect("diff depth parses");
+        assert!(matches!(
+            depth.command,
+            Some(super::Command::Diff { depth: Some(2), .. })
+        ));
+        assert_eq!(
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--depth", "0"])
+                .expect_err("zero diff depth is invalid")
+                .kind(),
+            clap::error::ErrorKind::ValueValidation
+        );
+
+        let summary_limit =
+            Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--summary-limit", "27"])
+                .expect("diff summary limit parses");
+        assert!(matches!(
+            summary_limit.command,
+            Some(super::Command::Diff {
+                summary_limit: 27,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn diff_rejects_traversal_options_after_the_subcommand() {
+        let err = Args::try_parse_from(["dua", "diff", "old.dua", "new.dua", "--threads", "1"])
+            .expect_err("diff should not accept traversal options");
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
     fn log_file_is_accepted_by_config_edit() {
         Args::try_parse_from(["dua", "config", "edit", "--log-file", "dua.log"])
             .expect("log-file is globally available");
@@ -364,5 +536,198 @@ mod tests {
         };
 
         assert_eq!(args.traversal.byte_format(&config), dua::ByteFormat::Metric);
+    }
+
+    #[test]
+    fn aggregate_snapshot_import_accepts_display_options() {
+        let args = Args::try_parse_from([
+            "dua",
+            "aggregate",
+            "--import",
+            "scan.dua",
+            "--format",
+            "bytes",
+            "--no-sort",
+            "--no-total",
+            "--depth",
+            "2",
+        ])
+        .expect("snapshot import accepts aggregate display options");
+        let Some(super::Command::Aggregate {
+            import,
+            traversal,
+            depth,
+            ..
+        }) = args.command
+        else {
+            panic!("expected aggregate subcommand");
+        };
+        assert_eq!(import, Some(PathBuf::from("scan.dua")));
+        assert_eq!(traversal.format, Some(super::ByteFormat::Bytes));
+        assert_eq!(depth, Some(2));
+
+        Args::try_parse_from([
+            "dua",
+            "aggregate",
+            "--import",
+            "scan.dua",
+            "--stack",
+            "--depth",
+            "2",
+        ])
+        .expect("snapshot import supports folded stacks");
+    }
+
+    #[test]
+    fn aggregate_import_rejects_traversal_inputs_and_statistics() {
+        for args in [
+            vec!["dua", "a", "--import", "scan.dua", "input"],
+            vec!["dua", "a", "--import", "scan.dua", "--threads", "1"],
+            vec!["dua", "a", "--import", "scan.dua", "--apparent-size"],
+            vec!["dua", "a", "--import", "scan.dua", "--count-hard-links"],
+            vec!["dua", "a", "--import", "scan.dua", "--stay-on-filesystem"],
+            vec!["dua", "a", "--import", "scan.dua", "--ignore-dirs", "dir"],
+            vec![
+                "dua",
+                "a",
+                "--import",
+                "scan.dua",
+                "--ignore-from",
+                "ignore",
+            ],
+            vec!["dua", "a", "--import", "scan.dua", "--stats"],
+        ] {
+            let err = Args::try_parse_from(args).expect_err("import option conflict");
+            assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+    }
+
+    #[cfg(feature = "tui-crossplatform")]
+    #[test]
+    fn interactive_snapshot_options_parse() {
+        let args = Args::try_parse_from([
+            "dua",
+            "interactive",
+            "--import",
+            "scan.dua",
+            "--format",
+            "bytes",
+            "--once=",
+        ])
+        .expect("snapshot import accepts display options");
+        let Some(super::Command::Interactive {
+            import,
+            export,
+            compression,
+            traversal,
+            ..
+        }) = args.command
+        else {
+            panic!("expected interactive subcommand");
+        };
+        assert_eq!(import, Some(PathBuf::from("scan.dua")));
+        assert_eq!(export, None);
+        assert_eq!(compression, 2);
+        assert_eq!(traversal.format, Some(super::ByteFormat::Bytes));
+
+        let args =
+            Args::try_parse_from(["dua", "interactive", "--export", "scan.dua", "somewhere"])
+                .expect("snapshot export accepts traversal inputs");
+        let Some(super::Command::Interactive {
+            import,
+            export,
+            compression,
+            traversal,
+            ..
+        }) = args.command
+        else {
+            panic!("expected interactive subcommand");
+        };
+        assert_eq!(import, None);
+        assert_eq!(export, Some(PathBuf::from("scan.dua")));
+        assert_eq!(compression, 2);
+        assert_eq!(traversal.input, [PathBuf::from("somewhere")]);
+
+        assert!(matches!(
+            Args::try_parse_from([
+                "dua",
+                "interactive",
+                "--export",
+                "scan.dua",
+                "--compression",
+                "0"
+            ])
+            .unwrap()
+            .command,
+            Some(super::Command::Interactive { compression: 0, .. })
+        ));
+        assert!(matches!(
+            Args::try_parse_from([
+                "dua",
+                "interactive",
+                "--export",
+                "scan.dua",
+                "--compression",
+                "7"
+            ])
+            .unwrap()
+            .command,
+            Some(super::Command::Interactive { compression: 7, .. })
+        ));
+        for invalid in ["-1", "10"] {
+            assert_eq!(
+                Args::try_parse_from([
+                    "dua",
+                    "interactive",
+                    "--export",
+                    "scan.dua",
+                    "--compression",
+                    invalid,
+                ])
+                .unwrap_err()
+                .kind(),
+                clap::error::ErrorKind::ValueValidation
+            );
+        }
+    }
+
+    #[cfg(feature = "tui-crossplatform")]
+    #[test]
+    fn interactive_import_rejects_traversal_inputs_and_export() {
+        for args in [
+            vec!["dua", "i", "--import", "scan.dua", "input"],
+            vec!["dua", "i", "--import", "scan.dua", "--export", "other.dua"],
+            vec!["dua", "i", "--import", "scan.dua", "--threads", "1"],
+            vec!["dua", "i", "--import", "scan.dua", "--apparent-size"],
+            vec!["dua", "i", "--import", "scan.dua", "--count-hard-links"],
+            vec!["dua", "i", "--import", "scan.dua", "--stay-on-filesystem"],
+            vec!["dua", "i", "--import", "scan.dua", "--ignore-dirs", "dir"],
+            vec![
+                "dua",
+                "i",
+                "--import",
+                "scan.dua",
+                "--ignore-from",
+                "ignore",
+            ],
+            vec!["dua", "i", "--import", "scan.dua", "--no-entry-check"],
+        ] {
+            let err = Args::try_parse_from(args).expect_err("import option conflict");
+            assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+    }
+
+    #[cfg(all(feature = "tui-crossplatform", target_os = "macos"))]
+    #[test]
+    fn interactive_import_rejects_apfs_deduplication() {
+        let err = Args::try_parse_from([
+            "dua",
+            "i",
+            "--import",
+            "scan.dua",
+            "--deduplicate-apfs-clones",
+        ])
+        .expect_err("import option conflict");
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 }

@@ -3,10 +3,9 @@ use crossbeam::channel::Receiver;
 use crossterm::event::{Event, KeyCode};
 use dua::{
     ByteFormat, Config, WalkOptions,
-    traverse::{EntryData, Tree, TreeIndex},
+    traverse::{Entry, EntryData, Tree, TreeIndex},
 };
 use itertools::Itertools;
-use petgraph::prelude::NodeIndex;
 use std::{
     collections::BTreeSet,
     env::temp_dir,
@@ -37,11 +36,11 @@ pub fn into_codes(input: &str) -> Receiver<Event> {
     into_keys(input.chars().map(KeyCode::Char))
 }
 
-pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> &EntryData {
-    app.traversal.tree.node_weight(id).unwrap()
+pub fn node_by_index(app: &TerminalApp, id: TreeIndex) -> Entry<'_> {
+    app.traversal.tree.entry(id).unwrap()
 }
 
-pub fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> &EntryData {
+pub fn node_by_name(app: &TerminalApp, name: impl AsRef<OsStr>) -> Entry<'_> {
     node_by_index(app, index_by_name(app, name))
 }
 
@@ -54,7 +53,7 @@ pub fn index_by_name_and_size(
     let t: Vec<_> = app
         .traversal
         .tree
-        .node_indices()
+        .indices()
         .map(|idx| (idx, node_by_index(app, idx)))
         .filter_map(|(idx, e)| {
             if e.name == name && size.is_none_or(|s| s == e.size) {
@@ -218,6 +217,8 @@ pub fn untraversed_app_and_terminal_with_closure(
         input_paths,
         None,
         Config::default(),
+        dua::traverse::Traversal::new(),
+        None,
     )?;
 
     Ok((terminal, app))
@@ -356,17 +357,17 @@ pub fn sample_02_tree(use_native_separator: bool) -> (Tree, TreeIndex) {
 
 pub fn make_add_node(
     t: &mut Tree,
-) -> impl FnMut(&str, u128, u64, Option<NodeIndex>) -> NodeIndex + '_ {
+) -> impl FnMut(&str, u128, u64, Option<TreeIndex>) -> TreeIndex + '_ {
     move |name, size, entry_count, maybe_from_idx| {
-        let n = t.add_node(EntryData {
-            name: PathBuf::from(name),
+        let data = EntryData {
             size,
             entry_count: (entry_count > 0).then_some(entry_count),
             ..Default::default()
-        });
-        if let Some(from) = maybe_from_idx {
-            t.add_edge(from, n, ());
+        };
+        if let Some(parent) = maybe_from_idx {
+            t.add_child(parent, name, data)
+        } else {
+            t.add_root(name, data)
         }
-        n
     }
 }

@@ -1,9 +1,11 @@
 use crate::aggregate::{TraversalProgress, output_colored_path};
-use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
+use crate::snapshot::Replay;
+#[cfg(test)]
+use crate::traverse::EntryData;
+use crate::traverse::{BackgroundTraversal, Traversal, Tree, TreeIndex};
 use crate::{ByteFormat, WalkOptions, WalkResult};
 use anyhow::{Context, Result};
 use owo_colors::AnsiColors as Color;
-use petgraph::Direction;
 use std::io;
 use std::path::PathBuf;
 
@@ -65,14 +67,125 @@ pub fn aggregate_tree(
         .into_iter()
         .collect::<Option<Vec<_>>>()
         .context("traversal did not produce a node for every root")?;
+    write_aggregate_tree(
+        &mut out,
+        &traversal,
+        &mut roots,
+        max_depth,
+        compute_total,
+        sort_by_size_in_bytes,
+        output_options,
+        num_errors,
+    )?;
+
+    Ok(WalkResult { num_errors })
+}
+
+/// Write an already completed traversal as an indented aggregate tree.
+///
+/// `roots` must contain the traversal's top-level nodes in their original input order. The
+/// returned error count is derived from the stored metadata-error flags.
+#[allow(clippy::too_many_arguments)]
+pub fn aggregate_tree_from_traversal(
+    out: (impl io::Write, bool),
+    traversal: &Traversal,
+    roots: &[TreeIndex],
+    byte_format: ByteFormat,
+    max_depth: usize,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+) -> Result<WalkResult> {
+    let (mut out, out_supports_colors) = out;
+    let num_errors = metadata_io_error_count(&traversal.tree, roots);
+    let mut roots = roots.to_vec();
+    write_aggregate_tree(
+        &mut out,
+        traversal,
+        &mut roots,
+        max_depth,
+        compute_total,
+        sort_by_size_in_bytes,
+        (byte_format, out_supports_colors),
+        num_errors,
+    )?;
+    Ok(WalkResult { num_errors })
+}
+
+/// Replay a verified snapshot as an indented aggregate tree, retaining only displayed levels.
+#[allow(clippy::too_many_arguments)]
+pub fn aggregate_tree_from_replay<R: io::Read + io::Seek>(
+    out: (impl io::Write, bool),
+    replay: &mut Replay<R>,
+    byte_format: ByteFormat,
+    max_depth: usize,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+) -> Result<WalkResult> {
+    let mut num_errors = 0u64;
+    let mut traversal = Traversal::new();
+    let mut parents = Vec::new();
+    let mut roots = Vec::new();
+    replay.for_each_entry(|entry| {
+        num_errors = num_errors.saturating_add(u64::from(entry.data.metadata_io_error));
+        if entry.depth > max_depth {
+            return Ok(());
+        }
+        parents.truncate(entry.depth);
+        let parent = parents.last().copied().unwrap_or(traversal.root_index);
+        let node = traversal
+            .tree
+            .try_add_child_native(parent, entry.native_name, entry.data)
+            .map_err(|err| anyhow::anyhow!("could not add snapshot entry: {err}"))?;
+        if entry.depth == 0 {
+            roots
+                .try_reserve(1)
+                .context("could not grow snapshot root table")?;
+            roots.push(node);
+        }
+        parents
+            .try_reserve(1)
+            .context("could not grow snapshot ancestor stack")?;
+        parents.push(node);
+        Ok(())
+    })?;
+
+    let (mut out, out_supports_colors) = out;
+    write_aggregate_tree(
+        &mut out,
+        &traversal,
+        &mut roots,
+        max_depth,
+        compute_total,
+        sort_by_size_in_bytes,
+        (byte_format, out_supports_colors),
+        num_errors,
+    )?;
+    Ok(WalkResult { num_errors })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_aggregate_tree(
+    out: &mut impl io::Write,
+    traversal: &Traversal,
+    roots: &mut [TreeIndex],
+    max_depth: usize,
+    compute_total: bool,
+    sort_by_size_in_bytes: bool,
+    output_options: (ByteFormat, bool),
+    num_errors: u64,
+) -> io::Result<()> {
     if sort_by_size_in_bytes {
-        roots.sort_by_key(|root| traversal.tree[*root].size);
+        roots.sort_by_key(|root| traversal.tree.data(*root).map(|entry| entry.size));
     }
     let mut total = 0u128;
-    for root in &roots {
-        total += traversal.tree[*root].size;
+    for root in roots.iter() {
+        total += traversal
+            .tree
+            .data(*root)
+            .expect("traversal roots exist")
+            .size;
         write_subtree(
-            &mut out,
+            out,
             &traversal.tree,
             *root,
             0,
@@ -83,18 +196,23 @@ pub fn aggregate_tree(
     }
 
     if roots.len() > 1 && compute_total {
-        write_entry(
-            &mut out,
-            "total",
-            total,
-            false,
-            num_errors,
-            0,
-            output_options,
-        )?;
+        write_entry(out, "total", total, false, num_errors, 0, output_options)?;
     }
+    Ok(())
+}
 
-    Ok(WalkResult { num_errors })
+pub(crate) fn metadata_io_error_count(tree: &Tree, roots: &[TreeIndex]) -> u64 {
+    let mut errors = 0u64;
+    let mut pending = roots.to_vec();
+    while let Some(index) = pending.pop() {
+        errors = errors.saturating_add(u64::from(
+            tree.data(index)
+                .expect("traversal entry exists")
+                .metadata_io_error,
+        ));
+        pending.extend(tree.children(index));
+    }
+    errors
 }
 
 /// Write `index` and, while there is depth budget left, its descendants, indented by their level.
@@ -107,31 +225,28 @@ fn write_subtree(
     sort_by_size_in_bytes: bool,
     output_options: (ByteFormat, bool),
 ) -> io::Result<()> {
-    let entry: &EntryData = &tree[index];
-    let name = entry.name.to_string_lossy();
-    write_entry(
-        out,
-        &name,
-        entry.size,
-        entry.is_dir,
-        u64::from(entry.metadata_io_error),
-        depth,
-        output_options,
-    )?;
-
-    if depth >= max_depth {
-        return Ok(());
-    }
-    for child in sorted_children(tree, index, sort_by_size_in_bytes) {
-        write_subtree(
+    let mut pending = vec![(index, depth)];
+    while let Some((index, depth)) = pending.pop() {
+        let entry = tree.entry(index).expect("traversal entry exists");
+        let name = entry.name.to_string_lossy();
+        write_entry(
             out,
-            tree,
-            child,
-            depth + 1,
-            max_depth,
-            sort_by_size_in_bytes,
+            &name,
+            entry.size,
+            entry.is_dir,
+            u64::from(entry.metadata_io_error),
+            depth,
             output_options,
         )?;
+
+        if depth < max_depth {
+            pending.extend(
+                sorted_children(tree, index, sort_by_size_in_bytes)
+                    .into_iter()
+                    .rev()
+                    .map(|child| (child, depth + 1)),
+            );
+        }
     }
     Ok(())
 }
@@ -139,14 +254,11 @@ fn write_subtree(
 /// Return the children of `index`, ordered by size ascending when `sort_by_size_in_bytes` is set,
 /// otherwise in the order they were discovered during the traversal.
 fn sorted_children(tree: &Tree, index: TreeIndex, sort_by_size_in_bytes: bool) -> Vec<TreeIndex> {
-    let mut children: Vec<TreeIndex> = tree
-        .neighbors_directed(index, Direction::Outgoing)
-        .collect();
-    // `petgraph` yields neighbors in the reverse of their insertion order, so undo that to recover
-    // the discovery order the walk produced.
+    let mut children: Vec<TreeIndex> = tree.children(index).collect();
+    // Children are linked newest-first, so undo that to recover discovery order.
     children.reverse();
     if sort_by_size_in_bytes {
-        children.sort_by_key(|child| tree[*child].size);
+        children.sort_by_key(|child| tree.data(*child).map(|entry| entry.size));
     }
     children
 }
@@ -174,6 +286,7 @@ fn write_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bstr::ByteSlice;
 
     fn walk_options() -> WalkOptions {
         WalkOptions {
@@ -339,5 +452,69 @@ mod tests {
         assert!(out[0].contains("<1 IO Error>"));
         assert!(out[1].contains(&valid.to_string_lossy().into_owned()));
         assert!(out[2].contains("total  <1 IO Error>"));
+    }
+
+    #[test]
+    fn completed_traversal_supports_depth_sorting_totals_and_errors() {
+        let mut traversal = Traversal::new();
+        let large = traversal.tree.add_child(
+            traversal.root_index,
+            "large",
+            EntryData {
+                size: 9,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        traversal.tree.add_child(
+            large,
+            "hidden",
+            EntryData {
+                size: 9,
+                metadata_io_error: true,
+                ..EntryData::default()
+            },
+        );
+        let small = traversal.tree.add_child(
+            traversal.root_index,
+            "small",
+            EntryData {
+                size: 2,
+                ..EntryData::default()
+            },
+        );
+
+        let mut out = Vec::new();
+        let result = aggregate_tree_from_traversal(
+            (&mut out, false),
+            &traversal,
+            &[large, small],
+            ByteFormat::Bytes,
+            0,
+            true,
+            true,
+        )
+        .unwrap();
+        let mut bytes = Vec::new();
+        crate::snapshot::write(&mut bytes, &traversal, &[large, small], None).unwrap();
+        let mut replay = Replay::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut replayed = Vec::new();
+        let replayed_result = aggregate_tree_from_replay(
+            (&mut replayed, false),
+            &mut replay,
+            ByteFormat::Bytes,
+            0,
+            true,
+            true,
+        )
+        .unwrap();
+        assert_eq!(replayed, out);
+        assert_eq!(replayed_result.num_errors, result.num_errors);
+        insta::assert_snapshot!(out.as_bstr(), "depth 0, size-sorted, with total and IO error", @r"
+                 2 b small
+                 9 b large
+                11 b total  <1 IO Error>
+        ");
+        assert_eq!(result.num_errors, 1);
     }
 }

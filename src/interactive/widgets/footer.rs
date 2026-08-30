@@ -15,9 +15,7 @@ pub struct Footer;
 
 pub struct FooterProps<'a> {
     pub total_bytes: u128,
-    pub entries_traversed: u64,
-    pub traversal_start: std::time::Instant,
-    pub elapsed: Option<std::time::Duration>,
+    pub traversal_stats: Option<(u64, std::time::Instant, Option<std::time::Duration>)>,
     pub format: ByteFormat,
     pub message: Option<String>,
     pub sort_mode: SortMode,
@@ -29,9 +27,7 @@ impl Footer {
     pub fn render<'a>(props: impl Borrow<FooterProps<'a>>, area: Rect, buf: &mut Buffer) {
         let FooterProps {
             total_bytes,
-            entries_traversed,
-            elapsed,
-            traversal_start,
+            traversal_stats,
             format,
             message,
             sort_mode,
@@ -60,24 +56,29 @@ impl Footer {
         }
 
         let spans = vec![
-            Span::from(format!(
-                "Sort mode: {}  Total disk usage: {}  Processed {} entries {progress}  ",
+            Some(Span::from(format!(
+                "Sort mode: {}  Total disk usage: {}  ",
                 sort_mode_label(*sort_mode),
                 format.display(*total_bytes),
-                entries_traversed,
-                progress = if let Some(elapsed) = elapsed {
-                    format!("in {:.02}s", elapsed.as_secs_f32())
-                } else {
-                    let elapsed = traversal_start.elapsed();
-                    let rate = if elapsed.is_zero() {
-                        0.0
+            ))),
+            traversal_stats
+                .as_ref()
+                .map(|(entries_traversed, traversal_start, elapsed)| {
+                    let progress = if let Some(elapsed) = elapsed {
+                        format!("in {:.02}s", elapsed.as_secs_f32())
                     } else {
-                        *entries_traversed as f32 / elapsed.as_secs_f32()
+                        let elapsed = traversal_start.elapsed();
+                        let rate = if elapsed.is_zero() {
+                            0.0
+                        } else {
+                            *entries_traversed as f32 / elapsed.as_secs_f32()
+                        };
+                        format!("in {:.0}s ({:.0}/s)", elapsed.as_secs_f32(), rate)
                     };
-                    format!("in {:.0}s ({:.0}/s)", elapsed.as_secs_f32(), rate)
-                }
-            ))
-            .into(),
+                    Span::from(format!(
+                        "Processed {entries_traversed} entries {progress}  "
+                    ))
+                }),
             message.as_ref().map(|m| {
                 Span::styled(
                     m,
@@ -129,8 +130,50 @@ fn mtime_sort_label(mtime_sort: MTimeSort) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::sort_mode_label;
+    use super::{Footer, FooterProps, sort_mode_label};
     use crate::interactive::{MTimeSort, SortMode};
+    use dua::{ByteFormat, KeysConfig};
+    use std::time::{Duration, Instant};
+    use tui::{
+        buffer::{Buffer, Cell},
+        layout::Rect,
+    };
+
+    fn rendered_footer(show_traversal_stats: bool) -> String {
+        let area = Rect::new(0, 0, 160, 1);
+        let mut buffer = Buffer::empty(area);
+        Footer::render(
+            FooterProps {
+                total_bytes: 42,
+                traversal_stats: show_traversal_stats
+                    .then(|| (7, Instant::now(), Some(Duration::from_millis(230)))),
+                format: ByteFormat::Metric,
+                message: Some("ready".into()),
+                sort_mode: SortMode::SizeDescending,
+                pending_exit: false,
+                keys: &KeysConfig::default(),
+            },
+            area,
+            &mut buffer,
+        );
+        buffer.content.iter().map(Cell::symbol).collect()
+    }
+
+    #[test]
+    fn completed_traversal_stats_can_be_hidden() {
+        let with_stats = rendered_footer(true);
+        let without_stats = rendered_footer(false);
+        insta::assert_debug_snapshot!(
+            (with_stats.trim_end(), without_stats.trim_end()),
+            "completed traversal statistics shown, then hidden",
+            @r#"
+        (
+            "Sort mode: size, large first  Total disk usage: 42  B  Processed 7 entries in 0.23s  ready",
+            "Sort mode: size, large first  Total disk usage: 42  B  ready",
+        )
+        "#
+        );
+    }
 
     #[test]
     fn modified_sort_label_includes_effective_mtime_mode() {

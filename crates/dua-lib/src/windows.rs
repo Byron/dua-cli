@@ -38,6 +38,10 @@ pub struct Entry {
     pub metadata: io::Result<Metadata>,
     /// Path containing this entry.
     pub parent_path: Arc<Path>,
+    /// Dense identifier of this directory within the current walk, or `None` for non-directories.
+    pub directory_id: Option<crate::DirectoryId>,
+    /// Dense identifier of the directory containing this entry, or `None` for a walk root.
+    pub parent_directory_id: Option<crate::DirectoryId>,
 }
 
 impl Entry {
@@ -102,6 +106,8 @@ impl Entry {
             file_type,
             metadata: Ok(metadata),
             parent_path: Arc::from(path.parent().unwrap_or(Path::new(""))),
+            directory_id: None,
+            parent_directory_id: None,
         })
     }
 
@@ -323,6 +329,8 @@ impl ReadDir {
                     file_id,
                 }),
                 parent_path: Arc::clone(&self.parent_path),
+                directory_id: None,
+                parent_directory_id: None,
             },
             next_offset,
         ))

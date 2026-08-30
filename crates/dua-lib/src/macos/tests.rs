@@ -17,7 +17,7 @@ fn metadata_and_entries_keep_clone_tracking_compact() {
     );
     assert_eq!(
         size_of::<Entry>(),
-        136,
+        144,
         "native directory entries must retain compact inline metadata"
     );
 }

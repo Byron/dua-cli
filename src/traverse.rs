@@ -3,26 +3,75 @@ use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter}
 use crossbeam::channel::Receiver;
 #[cfg(not(any(windows, target_os = "macos")))]
 use filesize::PathExt;
-use petgraph::{Directed, Direction, graph::NodeIndex, stable_graph::StableGraph};
-use std::time::Instant;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fmt, io,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-/// Node index type used by the traversal tree graph.
-pub type TreeIndex = NodeIndex;
-/// Graph type used to represent traversed filesystem entries.
-pub type Tree = StableGraph<EntryData, (), Directed>;
+const NONE: u32 = u32::MAX;
+const FLAG_OCCUPIED: u32 = 1 << 0;
+const FLAG_DIRECTORY: u32 = 1 << 1;
+const FLAG_METADATA_IO_ERROR: u32 = 1 << 2;
+const FLAG_ENTRY_COUNT: u32 = 1 << 3;
 
-/// Data stored for each filesystem entry in the traversal tree.
-#[derive(Eq, PartialEq, Clone)]
+/// Stable index of an entry in a [`Tree`].
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TreeIndex(NonZeroU32);
+
+impl TreeIndex {
+    /// Construct an index from its zero-based slot number.
+    #[must_use]
+    pub fn new(index: usize) -> Self {
+        Self::from(index)
+    }
+
+    /// Return this index as a `usize` for compact side tables.
+    #[must_use]
+    pub fn index(self) -> usize {
+        (self.0.get() - 1) as usize
+    }
+
+    fn from_raw(index: u32) -> Self {
+        debug_assert_ne!(index, NONE);
+        Self(NonZeroU32::new(index + 1).expect("tree index excludes u32::MAX"))
+    }
+}
+
+impl Default for TreeIndex {
+    fn default() -> Self {
+        Self::from_raw(0)
+    }
+}
+
+impl fmt::Debug for TreeIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TreeIndex({})", self.index())
+    }
+}
+
+impl From<u32> for TreeIndex {
+    fn from(index: u32) -> Self {
+        assert!(index != NONE, "u32::MAX is reserved for missing tree links");
+        Self::from_raw(index)
+    }
+}
+
+impl From<usize> for TreeIndex {
+    fn from(index: usize) -> Self {
+        let index = u32::try_from(index).expect("tree index exceeds u32::MAX - 1");
+        assert!(index != NONE, "u32::MAX is reserved for missing tree links");
+        Self::from_raw(index)
+    }
+}
+
+/// Metadata stored for a filesystem entry, excluding its arena-backed name.
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct EntryData {
-    /// The entry name relative to its parent.
-    pub name: PathBuf,
     /// The entry's size in bytes. If it's a directory, the size is the aggregated file size of all children
     /// plus the  size of the directory entry itself
     pub size: u128,
@@ -39,7 +88,6 @@ pub struct EntryData {
 impl Default for EntryData {
     fn default() -> EntryData {
         EntryData {
-            name: PathBuf::default(),
             size: u128::default(),
             mtime: UNIX_EPOCH,
             entry_count: None,
@@ -52,12 +100,522 @@ impl Default for EntryData {
 impl fmt::Debug for EntryData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EntryData")
-            .field("name", &self.name)
             .field("size", &self.size)
             .field("entry_count", &self.entry_count)
             // Skip mtime
             .field("metadata_io_error", &self.metadata_io_error)
             .finish()
+    }
+}
+
+/// Borrowed view of an entry in a [`Tree`].
+#[derive(Debug, Eq, PartialEq)]
+pub struct Entry<'a> {
+    /// The entry name relative to its parent.
+    pub name: Cow<'a, Path>,
+    /// The entry metadata.
+    pub data: EntryData,
+}
+
+impl std::ops::Deref for Entry<'_> {
+    type Target = EntryData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+/// Compact arena record for one filesystem entry.
+///
+/// Nodes live contiguously in [`Tree::nodes`], while names live once in the
+/// shared `Tree::names` byte arena and are referenced by `name_start` and
+/// `name_len`. Tree links are 32-bit slot indices, and `flags` packs occupancy,
+/// directory, metadata-error, and optional-entry-count state. This keeps a node
+/// at 64 bytes on supported 64-bit targets and avoids both an owned `PathBuf`
+/// and separate `petgraph` edge storage per entry—the main sources of the
+/// traversal's reduced memory footprint. Removed slots reuse `next_sibling` as
+/// a free-list link so their node storage can be recycled.
+#[derive(Clone)]
+struct TreeNode {
+    size: u128,
+    mtime: SystemTime,
+    entry_count: u64,
+    name_start: u32,
+    name_len: u32,
+    parent: u32,
+    first_child: u32,
+    next_sibling: u32,
+    flags: u32,
+}
+
+impl TreeNode {
+    fn new(name_start: u32, name_len: u32, data: EntryData) -> Self {
+        Self {
+            size: data.size,
+            mtime: data.mtime,
+            entry_count: data.entry_count.unwrap_or_default(),
+            name_start,
+            name_len,
+            parent: NONE,
+            first_child: NONE,
+            next_sibling: NONE,
+            flags: FLAG_OCCUPIED
+                | (u32::from(data.is_dir) * FLAG_DIRECTORY)
+                | (u32::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR)
+                | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT),
+        }
+    }
+
+    fn is_occupied(&self) -> bool {
+        self.flags & FLAG_OCCUPIED != 0
+    }
+
+    fn data(&self) -> EntryData {
+        EntryData {
+            size: self.size,
+            mtime: self.mtime,
+            entry_count: (self.flags & FLAG_ENTRY_COUNT != 0).then_some(self.entry_count),
+            metadata_io_error: self.flags & FLAG_METADATA_IO_ERROR != 0,
+            is_dir: self.flags & FLAG_DIRECTORY != 0,
+        }
+    }
+
+    fn set_data(&mut self, data: EntryData) {
+        self.size = data.size;
+        self.mtime = data.mtime;
+        self.entry_count = data.entry_count.unwrap_or_default();
+        self.flags = FLAG_OCCUPIED
+            | (u32::from(data.is_dir) * FLAG_DIRECTORY)
+            | (u32::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR)
+            | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT);
+    }
+}
+
+/// Failure to grow or modify a traversal tree.
+#[derive(Debug)]
+pub enum TreeError {
+    /// A backing allocation failed.
+    Allocation(std::collections::TryReserveError),
+    /// A name or node index exceeded the tree's `u32` storage limit.
+    Capacity,
+    /// A supplied node index does not exist.
+    InvalidIndex,
+    /// The child already belongs to another parent.
+    AlreadyAttached,
+    /// Attaching the child would create a cycle.
+    Cycle,
+}
+
+impl fmt::Display for TreeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Allocation(err) => err.fmt(f),
+            Self::Capacity => f.write_str("tree exceeds its u32 storage limit"),
+            Self::InvalidIndex => f.write_str("tree index does not exist"),
+            Self::AlreadyAttached => f.write_str("tree node already has a parent"),
+            Self::Cycle => f.write_str("tree attachment would create a cycle"),
+        }
+    }
+}
+
+impl std::error::Error for TreeError {}
+
+impl From<std::collections::TryReserveError> for TreeError {
+    fn from(err: std::collections::TryReserveError) -> Self {
+        Self::Allocation(err)
+    }
+}
+
+/// Arena-backed filesystem tree with stable 32-bit node indices.
+#[derive(Clone)]
+pub struct Tree {
+    /// Contiguous arena slots addressed by [`TreeIndex`]; vacant slots form the free list.
+    nodes: Vec<TreeNode>,
+    /// Append-only platform-native name bytes referenced by each node's offset and length.
+    names: Vec<u8>,
+    /// First vacant node slot, chained through `TreeNode::next_sibling`, or [`NONE`].
+    free_head: u32,
+    /// Number of occupied nodes, which may be smaller than `nodes.len()` after removals.
+    len: usize,
+}
+
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Debug for Tree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Tree")
+            .field("nodes", &self.nodes.len())
+            .field("names", &self.names.len())
+            .field("len", &self.len)
+            .finish()
+    }
+}
+
+impl Tree {
+    /// Create an empty tree.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            names: Vec::new(),
+            free_head: NONE,
+            len: 0,
+        }
+    }
+
+    /// Add a parentless node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tree exceeds its storage limits or allocation fails.
+    pub fn add_root(&mut self, name: impl AsRef<Path>, data: EntryData) -> TreeIndex {
+        self.try_add_root(name, data)
+            .expect("tree storage can be allocated")
+    }
+
+    /// Add a node that is not yet attached to the tree.
+    pub fn add_detached(&mut self, name: impl AsRef<Path>, data: EntryData) -> TreeIndex {
+        self.add_root(name, data)
+    }
+
+    /// Add a child to `parent`, placing it before previously attached children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `parent` is missing or the tree cannot grow.
+    pub fn add_child(
+        &mut self,
+        parent: TreeIndex,
+        name: impl AsRef<Path>,
+        data: EntryData,
+    ) -> TreeIndex {
+        self.try_add_child(parent, name, data)
+            .expect("tree storage can be allocated and parent is valid")
+    }
+
+    /// Try to add a parentless node.
+    pub fn try_add_root(
+        &mut self,
+        name: impl AsRef<Path>,
+        data: EntryData,
+    ) -> Result<TreeIndex, TreeError> {
+        let (name_start, name_len) = self.try_append_name(name.as_ref())?;
+        self.try_allocate(TreeNode::new(name_start, name_len, data))
+    }
+
+    /// Try to add a child to `parent`.
+    pub fn try_add_child(
+        &mut self,
+        parent: TreeIndex,
+        name: impl AsRef<Path>,
+        data: EntryData,
+    ) -> Result<TreeIndex, TreeError> {
+        if !self.contains(parent) {
+            return Err(TreeError::InvalidIndex);
+        }
+        let child = self.try_add_root(name, data)?;
+        self.attach(parent, child)?;
+        Ok(child)
+    }
+
+    pub(crate) fn try_add_child_native(
+        &mut self,
+        parent: TreeIndex,
+        name: &[u8],
+        data: EntryData,
+    ) -> Result<TreeIndex, TreeError> {
+        if !self.contains(parent) {
+            return Err(TreeError::InvalidIndex);
+        }
+        let (name_start, name_len) = self.try_append_native_name(name)?;
+        let child = self.try_allocate(TreeNode::new(name_start, name_len, data))?;
+        self.attach(parent, child)?;
+        Ok(child)
+    }
+
+    /// Attach a parentless node to `parent`, before its existing children.
+    pub fn attach(&mut self, parent: TreeIndex, child: TreeIndex) -> Result<(), TreeError> {
+        if !self.contains(parent) || !self.contains(child) {
+            return Err(TreeError::InvalidIndex);
+        }
+        if self.nodes[child.index()].parent != NONE {
+            return Err(TreeError::AlreadyAttached);
+        }
+        let mut ancestor = Some(parent);
+        while let Some(index) = ancestor {
+            if index == child {
+                return Err(TreeError::Cycle);
+            }
+            ancestor = self.parent(index);
+        }
+        let first_child = self.nodes[parent.index()].first_child;
+        self.nodes[child.index()].parent = parent.index() as u32;
+        self.nodes[child.index()].next_sibling = first_child;
+        self.nodes[parent.index()].first_child = child.index() as u32;
+        Ok(())
+    }
+
+    /// Return a node's parent, or `None` for a parentless or missing node.
+    #[must_use]
+    pub fn parent(&self, index: TreeIndex) -> Option<TreeIndex> {
+        let node = self.node(index)?;
+        (node.parent != NONE).then(|| TreeIndex::from_raw(node.parent))
+    }
+
+    /// Iterate a node's children in reverse insertion order.
+    #[must_use]
+    pub fn children(&self, index: TreeIndex) -> Children<'_> {
+        Children {
+            nodes: &self.nodes,
+            next: self.node(index).map_or(NONE, |node| node.first_child),
+        }
+    }
+
+    /// Iterate all currently occupied node indices.
+    pub fn indices(&self) -> impl Iterator<Item = TreeIndex> + '_ {
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.is_occupied())
+            .map(|(index, _)| TreeIndex::from(index))
+    }
+
+    /// Return an entry view for `index`.
+    #[must_use]
+    pub fn entry(&self, index: TreeIndex) -> Option<Entry<'_>> {
+        let node = self.node(index)?;
+        let name = self.name(index)?;
+        Some(Entry {
+            name,
+            data: node.data(),
+        })
+    }
+
+    /// Return a copy of an entry's metadata.
+    #[must_use]
+    pub fn data(&self, index: TreeIndex) -> Option<EntryData> {
+        self.node(index).map(TreeNode::data)
+    }
+
+    /// Replace an entry's metadata, returning `false` if the index is missing.
+    pub fn set_data(&mut self, index: TreeIndex, data: EntryData) -> bool {
+        let Some(node) = self.node_mut(index) else {
+            return false;
+        };
+        node.set_data(data);
+        true
+    }
+
+    /// Mutate an entry's metadata, returning `false` if the index is missing.
+    pub fn update(&mut self, index: TreeIndex, edit: impl FnOnce(&mut EntryData)) -> bool {
+        let Some(mut data) = self.data(index) else {
+            return false;
+        };
+        edit(&mut data);
+        self.set_data(index, data)
+    }
+
+    /// Return an entry's arena-backed name.
+    #[must_use]
+    pub fn name(&self, index: TreeIndex) -> Option<Cow<'_, Path>> {
+        let bytes = self.native_name(index)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt as _;
+            Some(Cow::Borrowed(Path::new(std::ffi::OsStr::from_bytes(bytes))))
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStringExt as _;
+            let wide = bytes
+                .chunks_exact(2)
+                .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+                .collect::<Vec<_>>();
+            Some(Cow::Owned(PathBuf::from(std::ffi::OsString::from_wide(
+                &wide,
+            ))))
+        }
+    }
+
+    /// Replace an entry's name. Old arena bytes remain reserved until the tree is dropped.
+    pub fn rename(&mut self, index: TreeIndex, name: impl AsRef<Path>) -> Result<(), TreeError> {
+        if !self.contains(index) {
+            return Err(TreeError::InvalidIndex);
+        }
+        let (start, len) = self.try_append_name(name.as_ref())?;
+        let node = &mut self.nodes[index.index()];
+        node.name_start = start;
+        node.name_len = len;
+        Ok(())
+    }
+
+    /// Remove `index` and all descendants, returning the number removed.
+    pub fn remove_subtree(&mut self, index: TreeIndex) -> usize {
+        if !self.contains(index) {
+            return 0;
+        }
+        self.detach(index);
+        let mut pending = vec![index];
+        let mut removed = 0;
+        while let Some(index) = pending.pop() {
+            let mut child = self.nodes[index.index()].first_child;
+            while child != NONE {
+                pending.push(TreeIndex::from_raw(child));
+                child = self.nodes[child as usize].next_sibling;
+            }
+            let node = &mut self.nodes[index.index()];
+            node.flags = 0;
+            node.parent = NONE;
+            node.first_child = NONE;
+            node.next_sibling = self.free_head;
+            self.free_head = index.index() as u32;
+            self.len -= 1;
+            removed += 1;
+        }
+        removed
+    }
+
+    /// Return whether `index` refers to a live node.
+    #[must_use]
+    pub fn contains(&self, index: TreeIndex) -> bool {
+        self.node(index).is_some()
+    }
+
+    /// Return the number of live nodes.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Return whether this tree has no live nodes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub(crate) fn native_name(&self, index: TreeIndex) -> Option<&[u8]> {
+        let node = self.node(index)?;
+        let start = node.name_start as usize;
+        Some(&self.names[start..][..node.name_len as usize])
+    }
+
+    fn node(&self, index: TreeIndex) -> Option<&TreeNode> {
+        self.nodes
+            .get(index.index())
+            .filter(|node| node.is_occupied())
+    }
+
+    fn node_mut(&mut self, index: TreeIndex) -> Option<&mut TreeNode> {
+        self.nodes
+            .get_mut(index.index())
+            .filter(|node| node.is_occupied())
+    }
+
+    fn try_allocate(&mut self, node: TreeNode) -> Result<TreeIndex, TreeError> {
+        let index = if self.free_head == NONE {
+            let index = u32::try_from(self.nodes.len()).map_err(|_| TreeError::Capacity)?;
+            if index == NONE {
+                return Err(TreeError::Capacity);
+            }
+            self.nodes.try_reserve(1)?;
+            self.nodes.push(node);
+            index
+        } else {
+            let index = self.free_head;
+            self.free_head = self.nodes[index as usize].next_sibling;
+            self.nodes[index as usize] = node;
+            index
+        };
+        self.len += 1;
+        Ok(TreeIndex::from_raw(index))
+    }
+
+    fn try_append_name(&mut self, name: &Path) -> Result<(u32, u32), TreeError> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt as _;
+            self.try_append_native_name(name.as_os_str().as_bytes())
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt as _;
+            let units = name.as_os_str().encode_wide();
+            let byte_len = units
+                .clone()
+                .count()
+                .checked_mul(2)
+                .ok_or(TreeError::Capacity)?;
+            let start = self.names.len();
+            let end = start.checked_add(byte_len).ok_or(TreeError::Capacity)?;
+            let (start, len) = (
+                u32::try_from(start).map_err(|_| TreeError::Capacity)?,
+                u32::try_from(byte_len).map_err(|_| TreeError::Capacity)?,
+            );
+            u32::try_from(end).map_err(|_| TreeError::Capacity)?;
+            self.names.try_reserve(byte_len)?;
+            self.names.extend(units.flat_map(u16::to_le_bytes));
+            Ok((start, len))
+        }
+    }
+
+    fn try_append_native_name(&mut self, name: &[u8]) -> Result<(u32, u32), TreeError> {
+        let start = self.names.len();
+        let end = start.checked_add(name.len()).ok_or(TreeError::Capacity)?;
+        let (start, len) = (
+            u32::try_from(start).map_err(|_| TreeError::Capacity)?,
+            u32::try_from(name.len()).map_err(|_| TreeError::Capacity)?,
+        );
+        u32::try_from(end).map_err(|_| TreeError::Capacity)?;
+        self.names.try_reserve(name.len())?;
+        self.names.extend_from_slice(name);
+        Ok((start, len))
+    }
+
+    fn detach(&mut self, index: TreeIndex) {
+        let parent = self.nodes[index.index()].parent;
+        if parent == NONE {
+            return;
+        }
+        let mut link = self.nodes[parent as usize].first_child;
+        let mut previous = NONE;
+        while link != NONE {
+            if link == index.index() as u32 {
+                let next = self.nodes[link as usize].next_sibling;
+                if previous == NONE {
+                    self.nodes[parent as usize].first_child = next;
+                } else {
+                    self.nodes[previous as usize].next_sibling = next;
+                }
+                self.nodes[index.index()].parent = NONE;
+                self.nodes[index.index()].next_sibling = NONE;
+                return;
+            }
+            previous = link;
+            link = self.nodes[link as usize].next_sibling;
+        }
+    }
+}
+
+/// Iterator over a node's children.
+pub struct Children<'a> {
+    nodes: &'a [TreeNode],
+    next: u32,
+}
+
+impl Iterator for Children<'_> {
+    type Item = TreeIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next == NONE {
+            return None;
+        }
+        let index = self.next;
+        self.next = self.nodes[index as usize].next_sibling;
+        Some(TreeIndex::from_raw(index))
     }
 }
 
@@ -85,7 +643,7 @@ impl Traversal {
     #[must_use]
     pub fn new() -> Self {
         let mut tree = Tree::new();
-        let root_index = tree.add_node(EntryData::default());
+        let root_index = tree.add_root("", EntryData::default());
         Self {
             tree,
             root_index,
@@ -138,7 +696,7 @@ pub enum TraversalEvent {
     /// 0. The discovered entry, or the I/O error encountered while reading it.
     /// 1. The path of the input root being traversed.
     /// 2. The input root's device ID.
-    /// 3. The input root's index in the original input list, used to place its graph node in the
+    /// 3. The input root's index in the original input list, used to place its tree node in the
     ///    per-root side table so callers can recover input order, including failed roots.
     Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64, usize),
     /// A root that could not be initialized, with its input index.
@@ -156,8 +714,8 @@ pub struct BackgroundTraversal {
     pub stats: TraversalStats,
     /// Root nodes in input order; populated as root traversal events are integrated.
     pub(crate) root_nodes: Vec<Option<TreeIndex>>,
-    /// Nodes keyed by root allocation identity and path so overlapping roots build separate trees.
-    nodes_by_path: HashMap<(usize, PathBuf), TreeIndex>,
+    /// Retained tree node for each dense directory identifier emitted by the walker.
+    nodes_by_directory: Vec<Option<TreeIndex>>,
     inodes: InodeFilter,
     throttle: Option<Throttle>,
     skip_root: bool,
@@ -319,7 +877,7 @@ impl BackgroundTraversal {
             root_idx,
             stats: TraversalStats::default(),
             root_nodes: vec![None; num_roots],
-            nodes_by_path: HashMap::new(),
+            nodes_by_directory: Vec::new(),
             inodes: InodeFilter::default(),
             throttle: Some(Throttle::new(Duration::from_millis(250), None)),
             skip_root,
@@ -330,7 +888,13 @@ impl BackgroundTraversal {
         })
     }
 
-    /// Keep graph nodes through `depth`, while still aggregating all sizes, or retain all nodes when
+    /// Return the top-level nodes in the same order as the traversal inputs once all roots exist.
+    #[must_use]
+    pub fn root_nodes(&self) -> Option<Vec<TreeIndex>> {
+        self.root_nodes.iter().copied().collect()
+    }
+
+    /// Keep tree nodes through `depth`, while still aggregating all sizes, or retain all nodes when
     /// it is `None`. For example, 0 retains roots only, 1 also retains their immediate children,
     /// and 2 also retains grandchildren.
     pub(crate) fn retain_depth(mut self, depth: Option<usize>) -> Self {
@@ -349,7 +913,9 @@ impl BackgroundTraversal {
         }
         // Entry errors carry no descendant path, so report them on the corresponding root.
         if let Some(root) = self.root_nodes[root_idx] {
-            traversal.tree[root].metadata_io_error = true;
+            traversal
+                .tree
+                .update(root, |entry| entry.metadata_io_error = true);
             return;
         }
         let name = if self.use_root_path {
@@ -360,15 +926,26 @@ impl BackgroundTraversal {
                 .unwrap_or(root_path.as_os_str())
                 .into()
         };
-        let node = traversal.tree.add_node(EntryData {
+        let node = traversal.tree.add_child(
+            self.root_idx,
             name,
-            metadata_io_error: true,
-            is_dir: true,
-            ..EntryData::default()
+            EntryData {
+                metadata_io_error: true,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        traversal.tree.update(self.root_idx, |entry| {
+            *entry.entry_count.get_or_insert(0) += 1;
         });
-        traversal.tree.add_edge(self.root_idx, node, ());
-        *traversal.tree[self.root_idx].entry_count.get_or_insert(0) += 1;
         self.root_nodes[root_idx] = Some(node);
+    }
+
+    fn set_directory_node(&mut self, directory_id: usize, node: TreeIndex) {
+        if self.nodes_by_directory.len() <= directory_id {
+            self.nodes_by_directory.resize(directory_id + 1, None);
+        }
+        self.nodes_by_directory[directory_id] = Some(node);
     }
 
     /// Integrate `event` into traversal `t` so its information is represented by it.
@@ -394,7 +971,6 @@ impl BackgroundTraversal {
     ) -> Option<bool> {
         match event {
             TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
-                let root = Arc::as_ptr(&root_path) as usize;
                 self.stats.entries_traversed += 1;
                 let mut data = EntryData::default();
                 let Ok(TraversalEntry(entry)) = entry else {
@@ -407,15 +983,11 @@ impl BackgroundTraversal {
                         .then_some(false);
                 };
                 let walk_depth = entry.depth;
-                if self.skip_root {
-                    data.name = entry.file_name.clone().into();
+                let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
+                    root_path.as_path()
                 } else {
-                    data.name = if walk_depth < 1 && self.use_root_path {
-                        (*root_path).clone()
-                    } else {
-                        entry.file_name.clone().into()
-                    }
-                }
+                    Path::new(&entry.file_name)
+                };
 
                 let mut file_size = 0u128;
                 let mut mtime: SystemTime = UNIX_EPOCH;
@@ -433,7 +1005,7 @@ impl BackgroundTraversal {
                             file_size = u128::from(
                                 size_on_disk(
                                     &entry.parent_path,
-                                    &data.name,
+                                    name,
                                     m,
                                     data.is_dir,
                                     &self.walk_options,
@@ -468,30 +1040,33 @@ impl BackgroundTraversal {
                     data.entry_count = Some(1);
                 }
                 let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
-                if let Some((index, needs_metadata)) = self.preexisting_nodes.remove(&entry.path())
-                {
+                let preexisting = if self.preexisting_nodes.is_empty() {
+                    None
+                } else {
+                    self.preexisting_nodes.remove(&entry.path())
+                };
+                if let Some((index, needs_metadata)) = preexisting {
+                    if let Some(directory_id) = entry.directory_id {
+                        self.set_directory_node(directory_id.index(), index);
+                    }
                     if needs_metadata {
-                        let existing = &mut traversal.tree[index];
-                        existing.size += file_size;
-                        *existing.entry_count.get_or_insert(0) += entry_count;
-                        if has_mtime {
-                            existing.mtime = data.mtime;
-                        }
-                        existing.metadata_io_error |= data.metadata_io_error;
-                        existing.is_dir = data.is_dir;
+                        traversal.tree.update(index, |existing| {
+                            existing.size += file_size;
+                            *existing.entry_count.get_or_insert(0) += entry_count;
+                            if has_mtime {
+                                existing.mtime = data.mtime;
+                            }
+                            existing.metadata_io_error |= data.metadata_io_error;
+                            existing.is_dir = data.is_dir;
+                        });
 
-                        let mut ancestor = traversal
-                            .tree
-                            .neighbors_directed(index, Direction::Incoming)
-                            .next();
+                        let mut ancestor = traversal.tree.parent(index);
                         while let Some(ancestor_index) = ancestor {
-                            ancestor = traversal
-                                .tree
-                                .neighbors_directed(ancestor_index, Direction::Incoming)
-                                .next();
-                            let entry = &mut traversal.tree[ancestor_index];
-                            entry.size += file_size;
-                            *entry.entry_count.get_or_insert(0) += entry_count;
+                            ancestor = traversal.tree.parent(ancestor_index);
+                            traversal.tree.update(ancestor_index, |entry| {
+                                entry.size += file_size;
+                                *entry.entry_count.get_or_insert(0) += entry_count;
+                            });
                         }
                     }
                     return self
@@ -504,53 +1079,41 @@ impl BackgroundTraversal {
 
                 let parent_index = if walk_depth == 0 {
                     self.root_idx
-                } else if self.retained_depth == Some(0) {
-                    if self.skip_root {
-                        self.root_idx
-                    } else {
-                        self.root_nodes[root_idx]
-                            .expect("root entries are emitted before their children")
-                    }
                 } else {
-                    if self.skip_root {
-                        self.nodes_by_path
-                            .entry((root, (*root_path).clone()))
-                            .or_insert(self.root_idx);
+                    let parent_id = entry
+                        .parent_directory_id
+                        .expect("non-root entries have a parent directory identifier");
+                    if self.skip_root && walk_depth == 1 {
+                        self.set_directory_node(parent_id.index(), self.root_idx);
                     }
-                    let mut parent_path = entry.parent_path.to_path_buf();
-                    loop {
-                        if let Some(index) = self.nodes_by_path.get(&(root, parent_path.clone())) {
-                            break *index;
-                        }
-                        if !parent_path.pop() {
-                            assert!(
-                                !retain_entry,
-                                "parent entries are emitted before their children"
-                            );
-                            break self.root_idx;
-                        }
-                    }
+                    self.nodes_by_directory
+                        .get(parent_id.index())
+                        .copied()
+                        .flatten()
+                        .expect("parent entries are emitted before their children")
                 };
+                let mut retained_node = None;
                 if retain_entry {
-                    let entry_index = traversal.tree.add_node(data);
-                    traversal.tree.add_edge(parent_index, entry_index, ());
+                    let entry_index = traversal.tree.add_child(parent_index, name, data);
+                    retained_node = Some(entry_index);
                     if walk_depth == 0 {
                         self.root_nodes[root_idx] = Some(entry_index);
                     }
-                    if traversal.tree[entry_index].is_dir {
-                        self.nodes_by_path.insert((root, entry.path()), entry_index);
-                    }
+                }
+                if let Some(directory_id) = entry.directory_id {
+                    self.set_directory_node(
+                        directory_id.index(),
+                        retained_node.unwrap_or(parent_index),
+                    );
                 }
 
                 let mut ancestor = Some(parent_index);
                 while let Some(index) = ancestor {
-                    ancestor = traversal
-                        .tree
-                        .neighbors_directed(index, Direction::Incoming)
-                        .next();
-                    let entry = &mut traversal.tree[index];
-                    entry.size += file_size;
-                    *entry.entry_count.get_or_insert(0) += entry_count;
+                    ancestor = traversal.tree.parent(index);
+                    traversal.tree.update(index, |entry| {
+                        entry.size += file_size;
+                        *entry.entry_count.get_or_insert(0) += entry_count;
+                    });
                 }
 
                 if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
@@ -563,8 +1126,12 @@ impl BackgroundTraversal {
             }
             TraversalEvent::Finished => {
                 self.throttle = None;
-                let root_size = traversal.tree[self.root_idx].size;
-                self.nodes_by_path = HashMap::new();
+                let root_size = traversal
+                    .tree
+                    .data(self.root_idx)
+                    .expect("traversal root exists")
+                    .size;
+                self.nodes_by_directory.clear();
                 self.stats.total_bytes = Some(root_size);
                 self.stats.elapsed = Some(self.stats.start.elapsed());
 
@@ -658,17 +1225,19 @@ mod tests {
             );
             background.integrate_traversal_event(&mut traversal, event);
             if is_file {
-                let root_size = traversal.tree[traversal.root_index].size;
+                let root_size = traversal.tree.data(traversal.root_index).unwrap().size;
                 assert!(
                     root_size >= 7,
                     "root size should include the 7-byte nested file, got {root_size}"
                 );
                 let nested_size = traversal
                     .tree
-                    .node_weights()
-                    .find(|entry| entry.name == Path::new("nested"))
-                    .unwrap()
-                    .size;
+                    .indices()
+                    .find_map(|index| {
+                        (traversal.tree.name(index).as_deref() == Some(Path::new("nested")))
+                            .then(|| traversal.tree.data(index).unwrap().size)
+                    })
+                    .unwrap();
                 assert!(
                     nested_size >= 7,
                     "nested directory size should include its 7-byte file, got {nested_size}"
@@ -708,17 +1277,11 @@ mod tests {
 
         let roots = traversal
             .tree
-            .neighbors_directed(traversal.root_index, Direction::Outgoing)
+            .children(traversal.root_index)
             .collect::<Vec<_>>();
         assert_eq!(roots.len(), 2);
         for root in roots {
-            assert_eq!(
-                traversal
-                    .tree
-                    .neighbors_directed(root, Direction::Outgoing)
-                    .count(),
-                1
-            );
+            assert_eq!(traversal.tree.children(root).count(), 1);
         }
     }
 
@@ -753,23 +1316,19 @@ mod tests {
                 .unwrap_or(false)
             {}
 
-            assert_eq!(traversal.tree.node_count(), expected_nodes);
-            assert!(traversal.tree[traversal.root_index].size >= 7);
+            assert_eq!(traversal.tree.len(), expected_nodes);
+            assert!(traversal.tree.data(traversal.root_index).unwrap().size >= 7);
             let root = traversal
                 .tree
-                .neighbors_directed(traversal.root_index, Direction::Outgoing)
+                .children(traversal.root_index)
                 .next()
                 .unwrap();
             let last_retained = if depth == 0 {
                 root
             } else {
-                traversal
-                    .tree
-                    .neighbors_directed(root, Direction::Outgoing)
-                    .next()
-                    .unwrap()
+                traversal.tree.children(root).next().unwrap()
             };
-            assert!(traversal.tree[last_retained].size >= 7);
+            assert!(traversal.tree.data(last_retained).unwrap().size >= 7);
         }
     }
 
@@ -814,9 +1373,9 @@ mod tests {
 
         assert_eq!(background.stats.io_errors, 1);
         assert!(
-            traversal.tree[root].metadata_io_error,
+            traversal.tree.data(root).unwrap().metadata_io_error,
             "a path-less descendant error is reported on its retained root: {:?}",
-            traversal.tree[root]
+            traversal.tree.entry(root).unwrap()
         );
     }
 
@@ -851,7 +1410,7 @@ mod tests {
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
                 .unwrap_or(false)
             {}
-            traversal.tree[traversal.root_index].size
+            traversal.tree.data(traversal.root_index).unwrap().size
         }
 
         let directory = tempfile::tempdir().unwrap();
@@ -911,37 +1470,83 @@ mod tests {
             .unwrap();
         assert_eq!(roots.len(), 2, "one node per input root: {roots:?}");
         assert_eq!(
-            traversal.tree[traversal.root_index].entry_count,
+            traversal
+                .tree
+                .data(traversal.root_index)
+                .unwrap()
+                .entry_count,
             Some(2),
             "the synthetic root counts both input roots"
         );
         assert!(
-            traversal.tree[roots[0]].metadata_io_error,
+            traversal.tree.data(roots[0]).unwrap().metadata_io_error,
             "the failed root records its I/O error: {:?}",
-            traversal.tree[roots[0]]
+            traversal.tree.entry(roots[0]).unwrap()
         );
         assert_eq!(
-            traversal.tree[roots[0]].name,
+            traversal.tree.name(roots[0]).unwrap(),
             Path::new("dangling"),
             "the failed root retains its display name"
         );
         assert!(
-            roots.iter().all(|root| {
-                traversal
-                    .tree
-                    .find_edge(traversal.root_index, *root)
-                    .is_some()
-            }),
+            roots
+                .iter()
+                .all(|root| traversal.tree.parent(*root) == Some(traversal.root_index)),
             "all input roots are children of the synthetic root: {roots:?}"
         );
     }
 
     #[test]
-    fn size_of_entry_data() {
+    fn tree_tracks_parents_and_reverse_insertion_order() {
+        let mut tree = Tree::new();
+        let root = tree.add_root("root", EntryData::default());
+        let first = tree.add_child(root, "first", EntryData::default());
+        let second = tree.add_child(root, "second", EntryData::default());
+
+        assert_eq!(tree.parent(first), Some(root));
+        assert_eq!(tree.parent(second), Some(root));
+        assert_eq!(tree.children(root).collect::<Vec<_>>(), [second, first]);
+    }
+
+    #[test]
+    fn tree_removal_is_stable_and_reuses_slots() {
+        let mut tree = Tree::new();
+        let root = tree.add_root("root", EntryData::default());
+        let kept = tree.add_child(root, "kept", EntryData::default());
+        let removed = tree.add_child(root, "removed", EntryData::default());
+        let nested = tree.add_child(removed, "nested", EntryData::default());
+
+        assert_eq!(tree.remove_subtree(removed), 2);
+        assert!(tree.contains(kept));
+        assert_eq!(tree.children(root).collect::<Vec<_>>(), [kept]);
+
+        let reused = tree.add_child(root, "reused", EntryData::default());
         assert!(
-            std::mem::size_of::<EntryData>() <= 80,
-            "the size of this ({}) should not exceed 80 as it affects overall memory consumption",
-            std::mem::size_of::<EntryData>()
+            reused == removed || reused == nested,
+            "a deleted slot is reused"
         );
+        assert_eq!(tree.name(reused).as_deref(), Some(Path::new("reused")));
+        assert_eq!(tree.children(root).collect::<Vec<_>>(), [reused, kept]);
+    }
+
+    #[test]
+    fn detached_nodes_can_be_renamed_and_attached() {
+        let mut tree = Tree::new();
+        let root = tree.add_root("root", EntryData::default());
+        let child = tree.add_detached("before", EntryData::default());
+
+        tree.rename(child, "after").unwrap();
+        tree.attach(root, child).unwrap();
+
+        assert_eq!(tree.name(child).as_deref(), Some(Path::new("after")));
+        assert_eq!(tree.parent(child), Some(root));
+        assert!(matches!(tree.attach(child, root), Err(TreeError::Cycle)));
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn tree_nodes_and_optional_indices_are_compact() {
+        assert_eq!(std::mem::size_of::<TreeNode>(), 64);
+        assert_eq!(std::mem::size_of::<Option<TreeIndex>>(), 4);
     }
 }

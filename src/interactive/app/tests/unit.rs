@@ -8,30 +8,31 @@ use anyhow::Result;
 use dua::WalkOptions;
 use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
 use gix::glob::pattern::Case;
-use petgraph::algo::is_isomorphic_matching;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Instant;
 use std::time::{Duration, UNIX_EPOCH};
 
-/// Trees match when their directed topology and corresponding nodes' names, entry counts, and
-/// metadata-error states match. Sizes must also match for leaf nodes without an entry count; node
-/// indices, discovery order, modification times, directory flags, and edge weights are ignored.
+/// Compare path/metadata topology while ignoring discovery order and mtimes.
 fn trees_match(left: &Tree, right: &Tree) -> bool {
-    let left = petgraph::Graph::from(left.clone());
-    let right = petgraph::Graph::from(right.clone());
-    is_isomorphic_matching(
-        &left,
-        &right,
-        |left, right| {
-            left.name == right.name
-                && left.entry_count == right.entry_count
-                && left.metadata_io_error == right.metadata_io_error
-                && (left.entry_count.is_some() || left.size == right.size)
-        },
-        |(), ()| true,
-    )
+    fn topology(tree: &Tree) -> Vec<(PathBuf, Option<u64>, bool, Option<u128>)> {
+        let mut entries = tree
+            .indices()
+            .map(|index| {
+                let data = tree.data(index).unwrap();
+                (
+                    crate::interactive::path_of(tree, index, None),
+                    data.entry_count,
+                    data.metadata_io_error,
+                    data.entry_count.is_none().then_some(data.size),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.sort();
+        entries
+    }
+    topology(left) == topology(right)
 }
 
 #[test]
@@ -41,7 +42,7 @@ fn it_can_handle_ending_traversal_reaching_top_but_skipping_levels() -> Result<(
 
     assert!(
         trees_match(&app.traversal.tree, &expected_tree),
-        "filesystem graph matches the directory structure regardless of discovery order"
+        "filesystem tree matches the directory structure regardless of discovery order"
     );
     Ok(())
 }
@@ -53,7 +54,7 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
 
     assert!(
         trees_match(&app.traversal.tree, &expected_tree),
-        "filesystem graph matches the directory structure regardless of discovery order"
+        "filesystem tree matches the directory structure regardless of discovery order"
     );
     Ok(())
 }
@@ -62,7 +63,7 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
 fn it_can_do_a_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
     let result = glob_search(&tree, root_index, "tests/fixtures/sample-02", Case::Fold).unwrap();
-    let expected = vec![TreeIndex::from(1)];
+    let expected = vec![TreeIndex::new(1)];
     assert_eq!(result, expected);
 }
 
@@ -71,7 +72,7 @@ fn it_can_do_a_case_sensitive_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
     let result_insensitive =
         glob_search(&tree, root_index, "TESTS/FIXTURES/SAMPLE-02", Case::Fold).unwrap();
-    assert_eq!(result_insensitive, vec![TreeIndex::from(1)]);
+    assert_eq!(result_insensitive, vec![TreeIndex::new(1)]);
 
     let result_sensitive = glob_search(
         &tree,
@@ -96,16 +97,16 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
         mtime_seconds: u64,
         is_dir: bool,
     ) -> TreeIndex {
-        let idx = tree.add_node(EntryData {
-            name: PathBuf::from(name),
+        let data = EntryData {
             mtime: mtime(mtime_seconds),
             is_dir,
             ..Default::default()
-        });
+        };
         if let Some(parent) = parent {
-            tree.add_edge(parent, idx, ());
+            tree.add_child(parent, name, data)
+        } else {
+            tree.add_root(name, data)
         }
-        idx
     }
 
     let mut tree = Tree::new();
@@ -122,6 +123,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
         &tree,
         root,
         SortMode::MTimeDescending(MTimeSort::RecursiveChildrenNewest),
+        None,
         None,
         EntryCheck::Disabled,
     );
@@ -150,6 +152,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
         &tree,
         root,
         SortMode::MTimeDescending(MTimeSort::RecursiveChildrenOldest),
+        None,
         None,
         EntryCheck::Disabled,
     );
@@ -192,6 +195,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
         },
         Vec::new(),
         None,
+        false,
     );
     state.navigation.view_root = root;
     state.sorting = SortMode::MTimeDescending(MTimeSort::Entry);
@@ -200,12 +204,14 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
         root,
         state.sorting,
         None,
+        None,
         EntryCheck::Disabled,
     );
 
     let tree_view = TreeView {
         traversal: &mut traversal,
         glob_tree_root: None,
+        glob_matches: None,
     };
     state.cycle_mtime_sort_mode(&tree_view);
     assert_eq!(

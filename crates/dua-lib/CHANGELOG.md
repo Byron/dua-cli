@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.3.1 (2026-08-30)
+
+### Performance
+
+ - <csr-id-95136995ea39b35e6575f9ae1c5df9618ff5c0a9/> compact traversal storage and snapshot replay
+   Admittedly, this one I waved through, but looked at the new storage for
+   a more tightly packed tree closely.
+   The parts with DirectoryId I just skipped over, as they are the most invasive
+   overall and touch a log of places.
+   Fine with me, everything seems to work, and this is beyond the time I can spend
+   on reviewing, while the value proposition is too high to skip it.
+   
+   <!-- agent -->
+   ## Traversal storage
+   
+   - Replace `petgraph` with a 64-byte arena-backed tree and compact stable indices.
+   - Store native filenames in one append-only arena and reuse deleted node slots.
+   - Route parents through dense directory IDs and keep glob matches outside the filesystem topology.
+   
+   ## Snapshot replay
+   
+   - Lend names from reusable record buffers and reuse sibling-order buffers by depth.
+   - Copy names only for retained entries and sort snapshots directly from arena bytes.
+   - Preserve the V1 encoding, validation, and platform-native path handling.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 2 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Compact traversal storage and snapshot replay ([`9513699`](https://github.com/Byron/dua-cli/commit/95136995ea39b35e6575f9ae1c5df9618ff5c0a9))
+</details>
+
 ## 3.3.0 (2026-08-28)
 
 ### New Features
@@ -20,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
+ - 3 commits contributed to the release.
  - 3 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -32,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v3.3.0 ([`6fed577`](https://github.com/Byron/dua-cli/commit/6fed577b904a12d548692978b34d187a0c74a86d))
     - Merge pull request #381 from Byron/reuse-walk-pool ([`28a7279`](https://github.com/Byron/dua-cli/commit/28a727921f55a5bb10449dfe2afa89a8eaffed39))
     - Reuse workers when restarting a walk ([`c0005aa`](https://github.com/Byron/dua-cli/commit/c0005aa9f8f1f225f609eb89c7d09a98ebbcb163))
 </details>

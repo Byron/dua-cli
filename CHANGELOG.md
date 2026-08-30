@@ -5,6 +5,294 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.44.0 (2026-08-30)
+
+This is a massive release that cost my weekend and was motivated by the chance to 
+reduce the amount of open issues to 0.
+Besides the memory usage being cut in half, one can now keep snapshots of interactive
+runs, and compare them to older snapshots, or simply view them again with different
+settings.
+Finally, it's now possible to configure keyboarding as well.
+What follows is the more elaborate, generated version of this text, and not my speech.
+
+<!-- agent -->
+This release turns traversal results into durable artifacts, shows exactly where
+disk usage moved, puts every interactive key under user control, and makes large
+traversals substantially leaner.
+
+```console
+dua interactive --export before.dua
+# ... later ...
+dua interactive --export after.dua
+dua diff before.dua after.dua
+```
+
+**Snapshots.** Completed interactive traversals can now be exported atomically to
+a deterministic, SHA-256-protected snapshot, with streaming zlib compression by
+default. Load one with `dua interactive --import` for a read-only tour, or replay
+it through `dua aggregate --import` as a flat list, a depth-limited tree, or
+folded stacks, with the usual sorting and total controls. Snapshot imports retain
+root order and traversal metadata; the aggregate renderers replay them with
+bounded memory. The interactive view
+still supports navigation, searching, sorting, marking, and opening stored paths
+that continue to exist, while refresh, trash, and deletion stay safely disabled.
+Its mark pane drops destructive prompts and colors for snapshots, or whenever
+both destructive actions are unbound. The `dua` crate exposes the snapshot,
+replay, and diff APIs for library users as well.
+
+**Diffing.** `dua diff OLD NEW` streams additions, removals, and signed size
+changes as a compact, colored context tree, then shows the largest additions and
+removals. Use `--directories-only`, `--prefix`, `--depth`, `--format`, and
+`--summary-limit` to shape the report. Both snapshots are checksum-verified in
+parallel before their canonical entry streams are merged in bounded memory;
+whole added or removed directories collapse into a single useful change.
+
+**Configurable keybindings.** Every interactive action can now be rebound or
+disabled, and `dua config show-default` documents all bindings. Pane hints follow
+the configured keys, while `--once` understands the same named and modified
+bindings as well as compact character sequences.
+
+**Lower memory use.** Traversal state now uses a compact arena-backed tree,
+shared filename storage, and dense directory IDs; snapshot replay borrows names
+and reuses decoding buffers. In a local `~/dev` scan, `/usr/bin/time -lp` measured
+maximum RSS at 268,206,080 bytes versus 524,812,288 bytes for 2.43.1—a 49%
+reduction.
+
+**More interactive polish.** Shift+U can extend a completed scan into its parent,
+the mark pane shows the selected percentage of the root, and Ctrl+Z now suspends
+and cleanly resumes the TUI on Unix.
+
+### New Features
+
+ - <csr-id-2a9deb5b01e26977dcd788a0e42f77d1eaf035da/> accept configured keys in --once
+   <!-- agent -->
+   Keyboard shortcuts are configurable, but `--once` could only synthesize plain
+   character events. That made named and modified bindings impossible to reproduce
+   in one-shot debugging runs.
+   
+   - Reuse the configuration keybinding parser for `--once`.
+   - Convert parsed bindings into terminal events.
+   - Preserve compact character sequences such as `--once=jko`.
+ - <csr-id-931472011b13234db9f22381f9fb8fa473f0bd3a/> add streaming snapshot diff command
+   <!-- agent -->
+   ## Command-line interface
+   
+   - Add `dua diff OLD NEW` to compare an earlier traversal snapshot with a later
+   one.
+   - Support byte-format selection either globally or after the subcommand, with
+   the configured format as the fallback.
+   - Add `--directories-only` for aggregate directory changes, `--prefix PATH`
+   for a component-aware subtree filter, `--depth DEPTH` for limiting the
+   displayed tree, and `--summary-limit COUNT` for sizing or hiding the largest
+   additions and removals lists.
+   - Treat the selected root or prefix as the first displayed depth level while
+   leaving summary calculations unbounded.
+   - Reject traversal-only options and input paths because diffing never walks
+   the live filesystem.
+   - Hash both decompressed snapshots in parallel before comparison, then validate
+   their records as they stream and verify each digest again at the end.
+   
+   ## Streaming comparison
+   
+   - Refactor snapshot decoding into a resumable decoder and entry iterator that
+   can replay a verified, seekable snapshot without materializing its tree.
+   - Rewind each snapshot for every pass and verify its digest again at the end
+   of replay, detecting files changed after initial validation.
+   - Expose native encoded names and duplicate-sibling ordinals from decoded
+   entries to build deterministic comparison keys on Unix and Windows.
+   - Enforce canonical sibling ordering during decoding and distinguish repeated
+   sibling names without changing the snapshot format.
+   - Merge the two canonical depth-first streams in lock-step on the main thread
+   while a background collector retains only bounded summary entries.
+   - Pair roots in stored order and deliberately avoid cross-root matching or
+   rename detection.
+   - Collapse an entirely added or removed directory to one change and skip its
+   descendants, keeping large subtree changes concise.
+   
+   ## Diff output
+   
+   - Report additions, removals, and signed size deltas with `+`, `-`, and `~`
+   markers in a compact tree with shared directory context.
+   - Stream the tree first, then report a configurable number of the largest
+   additions and removals (five by default) and the total number of changes.
+   - Compare file sizes in the default mode and aggregate directory sizes in
+   directory-only mode, including file-to-directory type changes.
+   - Preserve full `u128` size deltas and use the selected human-readable byte
+   format.
+   - Mark depth-collapsed branches with an ellipsis without hiding their entries
+   from the largest-change summary.
+   - Render terminal additions in green, removals in red, modifications in
+   yellow, and directory context in cyan while keeping redirected output free
+   of escape sequences.
+   - Use native path separators, sanitize control characters that could split
+   output lines, and emit no output for identical snapshots or unmatched
+   prefixes.
+ - <csr-id-3a30cc5319b9f472fe2d343a7b1d990e3e8d9f09/> add traversal snapshot codec
+   <!-- agent -->
+   ## Snapshot format
+   
+   - Add a deterministic version-1 `DUASNAP\0` codec for depth-first traversal
+   forests while preserving input-root order and native Unix and Windows path
+   representations.
+   - Encode parent distances, node flags, names, `u128` sizes, nanosecond
+   modification times, and optional entry counts using canonical ULEB128 fields.
+   - Validate path components, tree structure, record limits, integer encodings,
+   timestamps, node counts, checksums, truncation, and trailing data.
+   - Protect decoded snapshot data with SHA-256 and preserve deterministic child
+   ordering.
+   - Support raw snapshots and streaming zlib compression through the existing
+   `gix::zlib` dependency. Export at level 2 by default, accept levels 1–9, and
+   use level 0 for raw output.
+   - Verify seekable snapshots once and rewind them for bounded-memory replay
+   without materializing the full tree.
+   
+   ## CLI integration
+   
+   - Add `dua interactive --export` to atomically persist a completed traversal
+   through a neighboring temporary file before replacing the destination.
+   - Add `dua interactive --import` to load a snapshot into the terminal UI
+   without traversing the filesystem.
+   - Add `dua aggregate --import` with flat, tree, depth-limited, sorted, total,
+   and folded-stack output modes.
+   - Reject traversal-only paths and options when importing and print snapshot
+   provenance to standard error.
+   - Preserve stored root ordering, sizes, entry counts, modification times, and
+   metadata IO errors.
+   
+   ## Replay rendering
+   
+   - Add completed-traversal and replay renderers for aggregate, tree, and
+   folded-stack output.
+   - Keep only roots, displayed levels, or the current stack path in memory as
+   required by each output mode.
+   - Use checked arithmetic for aggregate and exclusive-size calculations and
+   report malformed snapshot totals instead of silently saturating.
+   - Handle the full `u128` snapshot size range and sanitize control characters
+   when writing terminal output.
+   
+   ## Interactive safety
+   
+   - Treat imported snapshots as read-only while retaining navigation, sorting,
+   searching, marking, and display controls.
+   - Disable entry existence checks, filesystem refreshes, upward scans,
+   gitignore discovery, permanent deletion, and trash operations.
+   - Show the actual snapshot load time until the first user event and replace
+   destructive mark prompts and styling with an explicit read-only safety notice.
+   - Allow opening a stored path when it still exists, without weakening the final
+   read-only guards around trash and permanent deletion.
+   - Expose completed traversal roots in original input order for deterministic
+   export.
+ - <csr-id-707b3166b2b9f6429c0d7ce222e1ee66f3a1940d/> make interactive keybindings configurable
+   <!-- agent -->
+   Interactive shortcuts were hard-coded, preventing users from avoiding terminal
+   conflicts or adapting the controls to their habits.
+   
+   Add per-action [keys] arrays whose defaults preserve the existing controls,
+   route every interactive pane and visible shortcut hint through those settings,
+   and expose all bindings as commented config show-default templates. Parse common
+   named keys and modifiers while handling shifted character events consistently
+   across terminal backends.
+   
+   Regression coverage verifies that overrides replace only their own defaults,
+   the documented template round-trips to the built-in defaults, modified shortcuts
+   remain distinct, and shifted punctuation works on Windows.
+ - <csr-id-2fef192f1420a5fdd1acf565703a408ef9ce8a6a/> traverse beyond the interactive root
+   <!-- agent -->
+   Interactive mode stopped at its initial root and required a restart to inspect
+   its parent.
+   
+   Handle Shift+U by scanning the parent while pruning already represented paths,
+   then reattach the existing subtree at its natural position so node identities
+   and prior work are preserved. The top-level message now advertises the shortcut
+   when expansion is possible.
+ - <csr-id-5c6f4d3cc4a0d396e086871d936a7067bf6b3e3d/> show marked percentage of total size
+   <!-- agent -->
+   Show the marked byte total as a percentage of the top-level root total in the
+   mark pane title.
+ - <csr-id-49f78a8d7d53f0c553fa04a63d858d533ea844ee/> show gross changes for collapsed diff branches
+   Not reviewed at all, only functional tests.
+   
+   <!-- agent -->
+   Depth-limited snapshot diffs now reveal the churn hidden beneath each collapsed directory.
+   
+   - Accumulate gross additions and removals while preserving bounded streaming memory.
+   - Keep directory-only output and largest-change summaries unchanged.
+   - Cover mixed changes, overflow, root boundaries, context ordering, and terminal colors.
+
+### Performance
+
+ - <csr-id-95136995ea39b35e6575f9ae1c5df9618ff5c0a9/> compact traversal storage and snapshot replay
+   Admittedly, this one I waved through, but looked at the new storage for
+   a more tightly packed tree closely.
+   The parts with DirectoryId I just skipped over, as they are the most invasive
+   overall and touch a log of places.
+   Fine with me, everything seems to work, and this is beyond the time I can spend
+   on reviewing, while the value proposition is too high to skip it.
+   
+   <!-- agent -->
+   ## Traversal storage
+   
+   - Replace `petgraph` with a 64-byte arena-backed tree and compact stable indices.
+   - Store native filenames in one append-only arena and reuse deleted node slots.
+   - Route parents through dense directory IDs and keep glob matches outside the filesystem topology.
+   
+   ## Snapshot replay
+   
+   - Lend names from reusable record buffers and reuse sibling-order buffers by depth.
+   - Copy names only for retained entries and sort snapshots directly from arena bytes.
+   - Preserve the V1 encoding, validation, and platform-native path handling.
+
+### Bug Fixes
+
+ - <csr-id-1fbf73caf93f7e04b7217d8db87dd2b4ac8d478b/> support Ctrl+Z in interactive mode
+   <!-- agent -->
+   Interactive mode consumes Ctrl+Z in raw mode, so the shell never receives the
+   usual job-control signal and the TUI cannot be resumed cleanly.
+   
+   Recognize the key globally on Unix, release crossterm's focus, cursor, raw-mode,
+   and alternate-screen state, raise SIGTSTP, then reclaim and clear the Ratatui
+   terminal after fg resumes the process. A focused regression test covers the
+   Ctrl+Z mapping.
+   
+   Validated with the repository check, unit, journey, format, and clippy targets;
+   an Expect-driven PTY run also verified stop, fg redraw, and clean shell
+   restoration.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 13 commits contributed to the release over the course of 1 calendar day.
+ - 1 day passed between releases.
+ - 9 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 4 unique issues were worked on: [#113](https://github.com/Byron/dua-cli/issues/113), [#171](https://github.com/Byron/dua-cli/issues/171), [#65](https://github.com/Byron/dua-cli/issues/65), [#82](https://github.com/Byron/dua-cli/issues/82)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#113](https://github.com/Byron/dua-cli/issues/113)**
+    - Show marked percentage of total size ([`5c6f4d3`](https://github.com/Byron/dua-cli/commit/5c6f4d3cc4a0d396e086871d936a7067bf6b3e3d))
+ * **[#171](https://github.com/Byron/dua-cli/issues/171)**
+    - Make interactive keybindings configurable ([`707b316`](https://github.com/Byron/dua-cli/commit/707b3166b2b9f6429c0d7ce222e1ee66f3a1940d))
+ * **[#65](https://github.com/Byron/dua-cli/issues/65)**
+    - Support Ctrl+Z in interactive mode ([`1fbf73c`](https://github.com/Byron/dua-cli/commit/1fbf73caf93f7e04b7217d8db87dd2b4ac8d478b))
+ * **[#82](https://github.com/Byron/dua-cli/issues/82)**
+    - Traverse beyond the interactive root ([`2fef192`](https://github.com/Byron/dua-cli/commit/2fef192f1420a5fdd1acf565703a408ef9ce8a6a))
+ * **Uncategorized**
+    - Show gross changes for collapsed diff branches ([`49f78a8`](https://github.com/Byron/dua-cli/commit/49f78a8d7d53f0c553fa04a63d858d533ea844ee))
+    - Compact traversal storage and snapshot replay ([`9513699`](https://github.com/Byron/dua-cli/commit/95136995ea39b35e6575f9ae1c5df9618ff5c0a9))
+    - Accept configured keys in --once ([`2a9deb5`](https://github.com/Byron/dua-cli/commit/2a9deb5b01e26977dcd788a0e42f77d1eaf035da))
+    - Add streaming snapshot diff command ([`9314720`](https://github.com/Byron/dua-cli/commit/931472011b13234db9f22381f9fb8fa473f0bd3a))
+    - Add traversal snapshot codec ([`3a30cc5`](https://github.com/Byron/dua-cli/commit/3a30cc5319b9f472fe2d343a7b1d990e3e8d9f09))
+    - Merge pull request #389 from Byron/configurable-keybindings ([`a54f427`](https://github.com/Byron/dua-cli/commit/a54f4274178e5b5218f6e05ed694778732cddaf8))
+    - Merge pull request #388 from Byron/up-beyond-top-level ([`d1302c3`](https://github.com/Byron/dua-cli/commit/d1302c3e2ec0127e62beac73322c4eb7b942ac47))
+    - Merge pull request #387 from Byron/ctrl-z ([`e136eca`](https://github.com/Byron/dua-cli/commit/e136eca2f9fe00ad97fa7f5e2975b0afc4a5f32e))
+    - Merge pull request #386 from Byron/show-percentage ([`8ee226b`](https://github.com/Byron/dua-cli/commit/8ee226b25fad94d2a4618738c72f14ca9e193343))
+</details>
+
 ## 2.43.1 (2026-08-29)
 
 ### Bug Fixes
