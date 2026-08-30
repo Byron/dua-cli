@@ -54,6 +54,42 @@ struct Location<'a> {
 struct TreeState {
     root_ordinal: Option<usize>,
     key: Vec<KeyPart>,
+    collapsed: Option<CollapsedChange>,
+}
+
+struct CollapsedChange {
+    root_ordinal: usize,
+    key: Vec<KeyPart>,
+    path: PathBuf,
+    depth: usize,
+    additions: Option<u128>,
+    removals: Option<u128>,
+}
+
+impl CollapsedChange {
+    fn matches(&self, location: &Location<'_>, visible_depth: usize) -> bool {
+        self.root_ordinal == location.root_ordinal && self.key == location.key[..=visible_depth]
+    }
+
+    fn record(&mut self, change: Change) -> Result<()> {
+        let (total, magnitude, direction) = match change {
+            Change::Added(magnitude)
+            | Change::Modified {
+                sign: '+',
+                magnitude,
+            } => (&mut self.additions, magnitude, "addition"),
+            Change::Removed(magnitude) | Change::Modified { magnitude, .. } => {
+                (&mut self.removals, magnitude, "removal")
+            }
+        };
+        *total = Some(
+            (*total)
+                .unwrap_or(0)
+                .checked_add(magnitude)
+                .with_context(|| format!("collapsed {direction} total overflows u128"))?,
+        );
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -210,7 +246,8 @@ impl<'a, R: Read> Cursor<'a, R> {
 ///
 /// If `directories_only` is true, report aggregate directory changes instead of file changes.
 /// `prefix` limits output to that stored path and its descendants.
-/// `max_depth` limits the displayed depth below the selected roots while still reading all entries.
+/// `max_depth` limits the displayed depth below the selected roots while still reading all entries;
+/// collapsed directories show their gross hidden additions and removals.
 /// `summary_limit` bounds each largest-addition and largest-removal list; zero hides both.
 /// Changes are streamed before their summary is printed.
 #[allow(clippy::too_many_arguments)]
@@ -256,6 +293,7 @@ pub fn diff_snapshots<Old: Read + Seek, New: Read + Seek>(
             out_is_terminal,
             prefix,
             max_depth,
+            !directories_only,
         )?;
         Ok(())
     });
@@ -264,6 +302,7 @@ pub fn diff_snapshots<Old: Read + Seek, New: Read + Seek>(
         .join()
         .map_err(|_| anyhow::anyhow!("summary collector panicked"))?;
     walk_result?;
+    flush_collapsed(&mut out, &mut state, byte_format, out_is_terminal, prefix)?;
     if summary.changes_total == 0 {
         return Ok(());
     }
@@ -403,7 +442,8 @@ fn write_tree_entry(
     out_is_terminal: bool,
     prefix: Option<&Path>,
     max_depth: Option<usize>,
-) -> io::Result<()> {
+    aggregate_hidden: bool,
+) -> Result<()> {
     let mut hierarchy = location
         .path
         .ancestors()
@@ -413,6 +453,36 @@ fn write_tree_entry(
     let base_depth = prefix
         .and_then(|prefix| hierarchy.iter().position(|path| *path == prefix))
         .unwrap_or(0);
+    let visible_depth = location
+        .depth
+        .min(base_depth.saturating_add(max_depth.unwrap_or(usize::MAX)));
+    let change_is_visible = visible_depth == location.depth;
+
+    if aggregate_hidden && !change_is_visible {
+        if state
+            .collapsed
+            .as_ref()
+            .is_none_or(|collapsed| !collapsed.matches(&location, visible_depth))
+        {
+            flush_collapsed(out, state, byte_format, out_is_terminal, prefix)?;
+            state.collapsed = Some(CollapsedChange {
+                root_ordinal: location.root_ordinal,
+                key: location.key[..=visible_depth].to_vec(),
+                path: hierarchy[visible_depth].to_owned(),
+                depth: visible_depth,
+                additions: None,
+                removals: None,
+            });
+        }
+        state
+            .collapsed
+            .as_mut()
+            .expect("collapsed change was initialized")
+            .record(change)?;
+        return Ok(());
+    }
+
+    flush_collapsed(out, state, byte_format, out_is_terminal, prefix)?;
     let common_depth = if state.root_ordinal == Some(location.root_ordinal) {
         state
             .key
@@ -423,10 +493,6 @@ fn write_tree_entry(
     } else {
         0
     };
-    let visible_depth = location
-        .depth
-        .min(base_depth.saturating_add(max_depth.unwrap_or(usize::MAX)));
-    let change_is_visible = visible_depth == location.depth;
     let context_count = if change_is_visible {
         location.depth
     } else {
@@ -467,6 +533,63 @@ fn write_tree_entry(
     Ok(())
 }
 
+fn flush_collapsed(
+    out: &mut impl io::Write,
+    state: &mut TreeState,
+    byte_format: ByteFormat,
+    out_is_terminal: bool,
+    prefix: Option<&Path>,
+) -> io::Result<()> {
+    let Some(collapsed) = state.collapsed.take() else {
+        return Ok(());
+    };
+    let mut hierarchy = collapsed
+        .path
+        .ancestors()
+        .take(collapsed.depth + 1)
+        .collect::<Vec<_>>();
+    hierarchy.reverse();
+    let base_depth = prefix
+        .and_then(|prefix| hierarchy.iter().position(|path| *path == prefix))
+        .unwrap_or(0);
+    let common_depth = if state.root_ordinal == Some(collapsed.root_ordinal) {
+        state
+            .key
+            .iter()
+            .zip(&collapsed.key)
+            .take_while(|(left, right)| left == right)
+            .count()
+    } else {
+        0
+    };
+    for (depth, path) in hierarchy
+        .iter()
+        .enumerate()
+        .take(collapsed.depth)
+        .skip(common_depth.max(base_depth))
+    {
+        write_context(
+            out,
+            display_path(path, depth == base_depth),
+            depth - base_depth,
+            false,
+            out_is_terminal,
+        )?;
+    }
+    write_collapsed_change(
+        out,
+        display_path(&collapsed.path, collapsed.depth == base_depth),
+        collapsed.depth - base_depth,
+        collapsed.additions,
+        collapsed.removals,
+        byte_format,
+        out_is_terminal,
+    )?;
+    state.root_ordinal = Some(collapsed.root_ordinal);
+    state.key = collapsed.key;
+    Ok(())
+}
+
 fn write_context(
     out: &mut impl io::Write,
     path: &Path,
@@ -482,6 +605,46 @@ fn write_context(
         writeln!(out, "{}", line.cyan())
     } else {
         writeln!(out, "{line}")
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_collapsed_change(
+    out: &mut impl io::Write,
+    path: &Path,
+    depth: usize,
+    additions: Option<u128>,
+    removals: Option<u128>,
+    byte_format: ByteFormat,
+    out_is_terminal: bool,
+) -> io::Result<()> {
+    let path = path_for_output(path);
+    let suffix = directory_suffix(path.as_ref());
+    let prefix = format!("{}{path}{suffix} …", "  ".repeat(depth));
+    if out_is_terminal {
+        write!(out, "{} (", prefix.cyan())?;
+        if let Some(size) = additions {
+            write!(out, "{}", format!("+{}", byte_format.display(size)).green())?;
+        }
+        if additions.is_some() && removals.is_some() {
+            write!(out, " ")?;
+        }
+        if let Some(size) = removals {
+            write!(out, "{}", format!("-{}", byte_format.display(size)).red())?;
+        }
+        writeln!(out, ")")
+    } else {
+        write!(out, "{prefix} (")?;
+        if let Some(size) = additions {
+            write!(out, "+{}", byte_format.display(size))?;
+        }
+        if additions.is_some() && removals.is_some() {
+            write!(out, " ")?;
+        }
+        if let Some(size) = removals {
+            write!(out, "-{}", byte_format.display(size))?;
+        }
+        writeln!(out, ")")
     }
 }
 

@@ -248,7 +248,8 @@ pub enum Command {
         /// Show only this stored path and its descendants.
         #[clap(long, value_name = "PATH")]
         prefix: Option<PathBuf>,
-        /// Limit the tree to this many levels. The root or selected prefix is the first level.
+        /// Limit the tree to this many levels, summarizing hidden additions and removals. The root
+        /// or selected prefix is the first level.
         #[clap(short = 'd', long, value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
         depth: Option<usize>,
         /// Include at most this many largest additions and removals in the summary. Use 0 to hide them.

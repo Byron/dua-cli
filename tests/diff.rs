@@ -329,7 +329,7 @@ fn depth_keeps_context_and_does_not_limit_the_summary() {
         )),
         "depth zero collapses the tree but not its summary",
         @r"
-    root/ …
+    root/ … (+1 b)
 
     Largest additions (showing 1 of 1):
     + 1 b root/dir/added
@@ -348,7 +348,7 @@ fn depth_keeps_context_and_does_not_limit_the_summary() {
         "depth one collapses descendants but not the summary",
         @r"
     root/
-      dir/ …
+      dir/ … (+1 b)
 
     Largest additions (showing 1 of 1):
     + 1 b root/dir/added
@@ -397,13 +397,141 @@ fn depth_keeps_context_and_does_not_limit_the_summary() {
         normalized_paths(String::from_utf8(output).unwrap()),
         "the selected prefix is depth zero",
         @r"
-    root/dir/ …
+    root/dir/ … (+1 b)
 
     Largest additions (showing 1 of 1):
     + 1 b root/dir/added
 
     Changes: 1
     "
+    );
+}
+
+#[test]
+fn collapsed_directories_show_gross_hidden_changes() {
+    let mut old = Traversal::new();
+    let old_synthetic = old.root_index;
+    let old_root = add(&mut old, old_synthetic, "root", 33, true);
+    let old_alpha = add(&mut old, old_root, "alpha", 25, true);
+    add(&mut old, old_alpha, "gone", 5, false);
+    add(&mut old, old_alpha, "grown", 2, false);
+    let old_dir = add(&mut old, old_alpha, "old-dir", 11, true);
+    add(&mut old, old_dir, "child", 11, false);
+    add(&mut old, old_alpha, "shrunk", 7, false);
+    add(&mut old, old_alpha, "zero-removed", 0, false);
+    let old_beta = add(&mut old, old_root, "beta", 0, true);
+    add(&mut old, old_beta, "zero-gone", 0, false);
+    let old_delta = add(&mut old, old_root, "delta", 8, true);
+    add(&mut old, old_delta, "gone", 8, false);
+    add(&mut old, old_root, "gamma", 0, true);
+
+    let mut new = Traversal::new();
+    let new_synthetic = new.root_index;
+    let new_root = add(&mut new, new_synthetic, "root", 31, true);
+    let new_alpha = add(&mut new, new_root, "alpha", 25, true);
+    add(&mut new, new_alpha, "added", 4, false);
+    add(&mut new, new_alpha, "grown", 5, false);
+    let new_dir = add(&mut new, new_alpha, "new-dir", 13, true);
+    add(&mut new, new_dir, "child", 13, false);
+    add(&mut new, new_alpha, "shrunk", 3, false);
+    add(&mut new, new_alpha, "zero-added", 0, false);
+    let new_beta = add(&mut new, new_root, "beta", 0, true);
+    add(&mut new, new_beta, "zero-added", 0, false);
+    add(&mut new, new_root, "delta", 0, true);
+    let new_gamma = add(&mut new, new_root, "gamma", 6, true);
+    add(&mut new, new_gamma, "added", 6, false);
+
+    insta::assert_snapshot!(
+        normalized_paths(diff_at_depth(
+            replay(&old, old_root),
+            replay(&new, new_root),
+            false,
+            Some(1),
+            0,
+        )),
+        "collapsed branches report gross additions and removals",
+        @r"
+    root/
+      alpha/ … (+20 b -20 b)
+      beta/ … (+0 b -0 b)
+      delta/ … (-8 b)
+      gamma/ … (+6 b)
+
+    Changes: 12
+    "
+    );
+}
+
+#[test]
+fn collapsed_branch_does_not_repeat_context_before_a_visible_sibling() {
+    let mut old = Traversal::new();
+    let old_synthetic = old.root_index;
+    let old_root = add(&mut old, old_synthetic, "root", 0, true);
+    add(&mut old, old_root, "alpha", 1, false);
+    let old_parent = add(&mut old, old_root, "parent", 0, true);
+    add(&mut old, old_parent, "hidden", 0, true);
+
+    let mut new = Traversal::new();
+    let new_synthetic = new.root_index;
+    let new_root = add(&mut new, new_synthetic, "root", 0, true);
+    add(&mut new, new_root, "alpha", 2, false);
+    let new_parent = add(&mut new, new_root, "parent", 0, true);
+    let new_hidden = add(&mut new, new_parent, "hidden", 1, true);
+    add(&mut new, new_hidden, "added", 1, false);
+    add(&mut new, new_parent, "visible", 2, false);
+
+    insta::assert_snapshot!(
+        normalized_paths(diff_at_depth(
+            replay(&old, old_root),
+            replay(&new, new_root),
+            false,
+            Some(2),
+            0,
+        )),
+        @r"
+    root/
+      ~ +1 b alpha
+      parent/
+        hidden/ … (+1 b)
+        + 2 b visible
+
+    Changes: 3
+    "
+    );
+}
+
+#[test]
+fn collapsed_totals_are_checked_for_overflow() {
+    let mut old = Traversal::new();
+    let old_synthetic = old.root_index;
+    let old_root = add(&mut old, old_synthetic, "root", 0, true);
+    add(&mut old, old_root, "dir", 0, true);
+
+    let mut new = Traversal::new();
+    let new_synthetic = new.root_index;
+    let new_root = add(&mut new, new_synthetic, "root", 0, true);
+    let new_dir = add(&mut new, new_root, "dir", 0, true);
+    add(&mut new, new_dir, "first", u128::MAX, false);
+    add(&mut new, new_dir, "second", 1, false);
+
+    let mut old = replay(&old, old_root);
+    let mut new = replay(&new, new_root);
+    let error = diff_snapshots(
+        (Vec::new(), false),
+        &mut old,
+        &mut new,
+        ByteFormat::Bytes,
+        false,
+        None,
+        Some(1),
+        0,
+    )
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("collapsed addition total overflows u128"),
+        "{error:#}"
     );
 }
 
@@ -437,6 +565,22 @@ fn tree_resets_between_roots() {
       ~ +1 b changed
     second/root/
       ~ +1 b changed
+
+    Changes: 2
+        "
+    );
+    insta::assert_snapshot!(
+        normalized_paths(diff_at_depth(
+            replay_roots(&old, &[old_first, old_second]),
+            replay_roots(&new, &[new_first, new_second]),
+            false,
+            Some(0),
+            0,
+        )),
+        "collapsed changes flush between stored roots",
+        @r"
+    first/root/ … (+1 b)
+    second/root/ … (+1 b)
 
     Changes: 2
     "
@@ -477,6 +621,30 @@ fn terminal_output_colors_changes_and_context() {
     Largest additions (showing 2 of 2):
     <ESC>[32m+ 9 b root/new-dir/<ESC>[39m
     <ESC>[32m+ 4 b root/added<ESC>[39m
+
+    Changes: 5
+        "
+    );
+
+    let mut old = fixture(true);
+    let mut new = fixture(false);
+    let mut output = Vec::new();
+    diff_snapshots(
+        (&mut output, true),
+        &mut old,
+        &mut new,
+        ByteFormat::Bytes,
+        false,
+        None,
+        Some(0),
+        0,
+    )
+    .unwrap();
+    insta::assert_snapshot!(
+        normalized_paths(String::from_utf8(output).unwrap().replace('\u{1b}', "<ESC>")),
+        "terminal colors distinguish collapsed additions and removals",
+        @r"
+    <ESC>[36mroot/ …<ESC>[39m (<ESC>[32m+16 b<ESC>[39m <ESC>[31m-10 b<ESC>[39m)
 
     Changes: 5
     "
