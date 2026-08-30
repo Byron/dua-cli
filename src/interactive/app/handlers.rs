@@ -388,7 +388,7 @@ impl AppState {
                         pane = window.mark.take().expect("option to be filled");
                         let entry_size = tree_view
                             .tree()
-                            .node_weight(entry_to_trash)
+                            .data(entry_to_trash)
                             .map_or(0, |entry| entry.size);
                         match self.trash_entry(entry_to_trash, tree_view) {
                             Ok(ed) => {
@@ -459,10 +459,7 @@ impl AppState {
             return Ok(EntryDeletionStats::default());
         }
         let path_to_delete = tree_view.path_of(index);
-        let bytes = tree_view
-            .tree()
-            .node_weight(index)
-            .map_or(0, |entry| entry.size);
+        let bytes = tree_view.tree().data(index).map_or(0, |entry| entry.size);
         let mut stats = delete_directory_recursively(path_to_delete, self.walk_options.threads);
         if stats.errors == 0 {
             stats.entries = self.delete_entries_in_traversal(index, tree_view);

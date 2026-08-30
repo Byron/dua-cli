@@ -1,6 +1,6 @@
 use crate::{
     ByteFormat,
-    snapshot::{DecodedEntry, Replay, ReplayEntries},
+    snapshot::{Replay, ReplayEntries},
 };
 use anyhow::{Context, Result};
 use owo_colors::OwoColorize;
@@ -30,6 +30,7 @@ struct Cursor<'a, R> {
     root_ordinal: usize,
     roots_seen: usize,
     key: Vec<KeyPart>,
+    key_depth: usize,
     path: PathBuf,
     path_depth: usize,
 }
@@ -101,6 +102,7 @@ impl<'a, R: Read> Cursor<'a, R> {
             root_ordinal: 0,
             roots_seen: 0,
             key: Vec::new(),
+            key_depth: 0,
             path: PathBuf::new(),
             path_depth: 0,
         };
@@ -124,16 +126,15 @@ impl<'a, R: Read> Cursor<'a, R> {
     }
 
     fn advance_raw(&mut self) -> Result<()> {
-        let Some(DecodedEntry {
-            depth,
-            data,
-            native_name,
-            sibling_ordinal,
-        }) = self.entries.next_entry()?
-        else {
+        let Some(entry) = self.entries.next_entry()? else {
             self.current = None;
             return Ok(());
         };
+        let depth = entry.depth;
+        let data = entry.data;
+        let native_name = entry.native_name;
+        let sibling_ordinal = entry.sibling_ordinal;
+        let name = entry.name();
 
         if depth == 0 {
             self.root_ordinal = self.roots_seen;
@@ -141,22 +142,29 @@ impl<'a, R: Read> Cursor<'a, R> {
                 .roots_seen
                 .checked_add(1)
                 .context("snapshot contains too many roots")?;
-            self.key.clear();
-            self.path = data.name;
+            self.key_depth = 0;
+            self.path.clear();
+            self.path.push(name.as_ref());
             self.path_depth = 0;
         } else {
-            self.key.truncate(depth);
             while self.path_depth >= depth {
                 self.path.pop();
                 self.path_depth -= 1;
             }
-            self.path.push(&data.name);
+            self.path.push(name.as_ref());
             self.path_depth = depth;
         }
-        self.key.push(KeyPart {
-            name: native_name,
-            sibling_ordinal,
-        });
+        if self.key.len() <= depth {
+            self.key.push(KeyPart {
+                name: Vec::new(),
+                sibling_ordinal,
+            });
+        }
+        let key = &mut self.key[depth];
+        key.name.clear();
+        key.name.extend_from_slice(native_name);
+        key.sibling_ordinal = sibling_ordinal;
+        self.key_depth = depth + 1;
         self.current = Some(Current {
             depth,
             size: data.size,
@@ -168,7 +176,7 @@ impl<'a, R: Read> Cursor<'a, R> {
     fn cmp_key<Rhs: Read>(&self, rhs: &Cursor<'_, Rhs>) -> Ordering {
         self.root_ordinal
             .cmp(&rhs.root_ordinal)
-            .then_with(|| self.key.cmp(&rhs.key))
+            .then_with(|| self.key[..self.key_depth].cmp(&rhs.key[..rhs.key_depth]))
     }
 
     fn advance_past_current(&mut self, prefix: Option<&Path>) -> Result<()> {
@@ -190,7 +198,7 @@ impl<'a, R: Read> Cursor<'a, R> {
     fn location(&self, current: Current) -> Location<'_> {
         Location {
             root_ordinal: self.root_ordinal,
-            key: &self.key,
+            key: &self.key[..self.key_depth],
             path: &self.path,
             depth: current.depth,
             is_dir: current.is_dir,

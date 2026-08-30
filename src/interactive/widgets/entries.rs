@@ -185,10 +185,7 @@ impl Entries {
     }
 }
 
-fn entry_in_view(
-    selected: Option<petgraph::stable_graph::NodeIndex>,
-    entries: &[EntryDataBundle],
-) -> Option<usize> {
+fn entry_in_view(selected: Option<TreeIndex>, entries: &[EntryDataBundle]) -> Option<usize> {
     selected.map(|selected| {
         entries
             .iter()

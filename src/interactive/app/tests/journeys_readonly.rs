@@ -460,7 +460,7 @@ fn configured_key_scans_the_parent_without_retraversing_the_current_root() -> Re
     let dir = index_by_name(&app, fixture_str("sample-02/dir"));
     let sub = index_by_name(&app, "sub");
     let dir_size = node_by_index(&app, dir).size;
-    let nodes_before = app.traversal.tree.node_count();
+    let nodes_before = app.traversal.tree.len();
 
     app.process_events(&mut terminal, into_codes("u"))?;
     assert_eq!(
@@ -502,7 +502,7 @@ fn configured_key_scans_the_parent_without_retraversing_the_current_root() -> Re
         "an explicit root's own metadata is not counted twice"
     );
     assert_eq!(
-        app.traversal.tree.node_count(),
+        app.traversal.tree.len(),
         nodes_before + 2,
         "only the two previously unseen siblings are added"
     );
@@ -529,7 +529,7 @@ fn shift_u_wraps_a_complete_root_at_its_natural_position() -> Result<()> {
     let count_before = node_by_index(&app, old_root)
         .entry_count
         .unwrap_or_default();
-    let nodes_before = app.traversal.tree.node_count();
+    let nodes_before = app.traversal.tree.len();
 
     app.process_events(&mut terminal, into_codes("U"))?;
     app.run_until_traversed(&mut terminal, into_events([]))?;
@@ -552,7 +552,7 @@ fn shift_u_wraps_a_complete_root_at_its_natural_position() -> Result<()> {
         "the promoted node gains the directory entry's own size"
     );
     assert_eq!(promoted_root.entry_count, Some(count_before + 1));
-    assert_eq!(app.traversal.tree.node_count(), nodes_before + 3);
+    assert_eq!(app.traversal.tree.len(), nodes_before + 3);
     assert_eq!(app.state.stats.entries_traversed, 3);
 
     Ok(())
@@ -698,7 +698,14 @@ fn snapshot_roundtrip_is_read_only() -> Result<()> {
     let root_paths = snapshot
         .roots
         .iter()
-        .map(|root| snapshot.traversal.tree[*root].name.clone())
+        .map(|root| {
+            snapshot
+                .traversal
+                .tree
+                .name(*root)
+                .expect("snapshot root exists")
+                .into_owned()
+        })
         .collect();
     let snapshot_load_duration = Duration::from_millis(123);
     let mut terminal = new_test_terminal()?;

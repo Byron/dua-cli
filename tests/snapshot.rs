@@ -1,6 +1,5 @@
 use dua::snapshot::{read, write};
 use dua::traverse::{EntryData, Traversal, TreeIndex};
-use petgraph::Direction;
 use std::{
     ffi::OsString,
     io::Cursor,
@@ -19,15 +18,10 @@ const ONE_FILE: &[u8] = &[
 fn add(
     traversal: &mut Traversal,
     parent: TreeIndex,
-    name: impl Into<PathBuf>,
+    name: impl AsRef<Path>,
     data: EntryData,
 ) -> TreeIndex {
-    let node = traversal.tree.add_node(EntryData {
-        name: name.into(),
-        ..data
-    });
-    traversal.tree.add_edge(parent, node, ());
-    node
+    traversal.tree.add_child(parent, name, data)
 }
 
 fn encoded(traversal: &Traversal, roots: &[TreeIndex]) -> Vec<u8> {
@@ -63,12 +57,25 @@ fn one_file_matches_the_golden_stream() {
     let snapshot = read(Cursor::new(bytes)).unwrap();
     assert_eq!(snapshot.roots.len(), 1);
     assert_eq!(
-        snapshot.traversal.tree[snapshot.roots[0]].name,
+        snapshot.traversal.tree.name(snapshot.roots[0]).unwrap(),
         Path::new("a")
     );
-    assert_eq!(snapshot.traversal.tree[snapshot.roots[0]].size, 1);
     assert_eq!(
-        snapshot.traversal.tree[snapshot.traversal.root_index].entry_count,
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.roots[0])
+            .unwrap()
+            .size,
+        1
+    );
+    assert_eq!(
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.traversal.root_index)
+            .unwrap()
+            .entry_count,
         Some(1)
     );
     assert_eq!(snapshot.traversal.cost, Some(Duration::ZERO));
@@ -81,13 +88,23 @@ fn empty_snapshot_round_trips() {
     let bytes = encoded(&traversal, &[]);
     let snapshot = read(Cursor::new(&bytes)).unwrap();
     assert!(snapshot.roots.is_empty());
-    assert_eq!(snapshot.traversal.tree.node_count(), 1);
+    assert_eq!(snapshot.traversal.tree.len(), 1);
     assert_eq!(
-        snapshot.traversal.tree[snapshot.traversal.root_index].size,
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.traversal.root_index)
+            .unwrap()
+            .size,
         0
     );
     assert_eq!(
-        snapshot.traversal.tree[snapshot.traversal.root_index].entry_count,
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.traversal.root_index)
+            .unwrap()
+            .entry_count,
         None
     );
 }
@@ -106,7 +123,6 @@ fn all_entry_fields_and_multiple_roots_round_trip() {
             entry_count: Some(2),
             metadata_io_error: true,
             is_dir: true,
-            ..EntryData::default()
         },
     );
     add(
@@ -135,33 +151,54 @@ fn all_entry_fields_and_multiple_roots_round_trip() {
     let snapshot = read(Cursor::new(&bytes)).unwrap();
     let first = snapshot.roots[0];
     let second = snapshot.roots[1];
-    let child = snapshot
-        .traversal
-        .tree
-        .neighbors_directed(first, Direction::Outgoing)
-        .next()
-        .unwrap();
+    let child = snapshot.traversal.tree.children(first).next().unwrap();
 
-    assert_eq!(snapshot.traversal.tree[first].name, Path::new("first/root"));
     assert_eq!(
-        snapshot.traversal.tree[first].mtime,
+        snapshot.traversal.tree.name(first).unwrap(),
+        Path::new("first/root")
+    );
+    assert_eq!(
+        snapshot.traversal.tree.data(first).unwrap().mtime,
         UNIX_EPOCH - Duration::from_nanos(1)
     );
-    assert!(snapshot.traversal.tree[first].metadata_io_error);
-    assert!(snapshot.traversal.tree[first].is_dir);
-    assert_eq!(snapshot.traversal.tree[child].size, u128::MAX);
-    assert_eq!(snapshot.traversal.tree[child].entry_count, Some(0));
+    assert!(
+        snapshot
+            .traversal
+            .tree
+            .data(first)
+            .unwrap()
+            .metadata_io_error
+    );
+    assert!(snapshot.traversal.tree.data(first).unwrap().is_dir);
+    assert_eq!(snapshot.traversal.tree.data(child).unwrap().size, u128::MAX);
     assert_eq!(
-        snapshot.traversal.tree[child].mtime,
+        snapshot.traversal.tree.data(child).unwrap().entry_count,
+        Some(0)
+    );
+    assert_eq!(
+        snapshot.traversal.tree.data(child).unwrap().mtime,
         UNIX_EPOCH + Duration::new(7, 8)
     );
-    assert_eq!(snapshot.traversal.tree[second].entry_count, Some(0));
     assert_eq!(
-        snapshot.traversal.tree[snapshot.traversal.root_index].size,
+        snapshot.traversal.tree.data(second).unwrap().entry_count,
+        Some(0)
+    );
+    assert_eq!(
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.traversal.root_index)
+            .unwrap()
+            .size,
         42
     );
     assert_eq!(
-        snapshot.traversal.tree[snapshot.traversal.root_index].entry_count,
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.traversal.root_index)
+            .unwrap()
+            .entry_count,
         Some(2)
     );
     assert_eq!(encoded(&snapshot.traversal, &snapshot.roots), bytes);
@@ -233,8 +270,11 @@ fn invalid_utf8_name_round_trips() {
     );
     let snapshot = read(Cursor::new(encoded(&traversal, &[root]))).unwrap();
     assert_eq!(
-        snapshot.traversal.tree[snapshot.roots[0]]
-            .name
+        snapshot
+            .traversal
+            .tree
+            .name(snapshot.roots[0])
+            .unwrap()
             .as_os_str()
             .as_bytes(),
         &[0xff]
@@ -256,8 +296,11 @@ fn unpaired_utf16_surrogate_round_trips() {
     );
     let snapshot = read(Cursor::new(encoded(&traversal, &[root]))).unwrap();
     assert_eq!(
-        snapshot.traversal.tree[snapshot.roots[0]]
-            .name
+        snapshot
+            .traversal
+            .tree
+            .name(snapshot.roots[0])
+            .unwrap()
             .as_os_str()
             .encode_wide()
             .collect::<Vec<_>>(),
@@ -341,7 +384,7 @@ fn rejects_invalid_child_components_and_file_parents() {
 }
 
 #[test]
-fn writer_rejects_non_tree_inputs_without_a_global_visited_set() {
+fn writer_rejects_duplicate_and_non_root_inputs() {
     let mut traversal = Traversal::new();
     let synthetic = traversal.root_index;
     let root = add(
@@ -360,68 +403,9 @@ fn writer_rejects_non_tree_inputs_without_a_global_visited_set() {
             .contains("duplicate")
     );
 
-    let left = add(
-        &mut traversal,
-        root,
-        "left",
-        EntryData {
-            is_dir: true,
-            ..EntryData::default()
-        },
-    );
-    let right = add(
-        &mut traversal,
-        root,
-        "right",
-        EntryData {
-            is_dir: true,
-            ..EntryData::default()
-        },
-    );
-    let shared = add(&mut traversal, left, "shared", EntryData::default());
-    traversal.tree.add_edge(right, shared, ());
-    assert!(
-        encoded_result(&traversal, &[root])
-            .unwrap_err()
-            .to_string()
-            .contains("cycle or shared node")
-    );
-
-    let mut traversal = Traversal::new();
-    let synthetic = traversal.root_index;
-    let root = add(
-        &mut traversal,
-        synthetic,
-        "root",
-        EntryData {
-            is_dir: true,
-            ..EntryData::default()
-        },
-    );
     let child = add(&mut traversal, root, "child", EntryData::default());
-    traversal.tree.add_edge(root, child, ());
     assert!(
-        encoded_result(&traversal, &[root])
-            .unwrap_err()
-            .to_string()
-            .contains("cycle or shared node")
-    );
-
-    let mut traversal = Traversal::new();
-    let synthetic = traversal.root_index;
-    let root = add(
-        &mut traversal,
-        synthetic,
-        "root",
-        EntryData {
-            is_dir: true,
-            ..EntryData::default()
-        },
-    );
-    traversal.tree[synthetic].name = "synthetic".into();
-    traversal.tree.add_edge(root, synthetic, ());
-    assert!(
-        encoded_result(&traversal, &[root])
+        encoded_result(&traversal, &[child])
             .unwrap_err()
             .to_string()
             .contains("cycle or shared node")

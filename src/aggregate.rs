@@ -158,13 +158,14 @@ pub fn aggregate_snapshot(
             let entry = snapshot
                 .traversal
                 .tree
-                .node_weight(root)
+                .entry(root)
                 .context("snapshot root does not exist")?;
+            let data = entry.data;
             Ok(Aggregate {
-                display_path: entry.name.clone(),
-                bytes: entry.size,
+                display_path: entry.name.into_owned(),
+                bytes: data.size,
                 errors: metadata_io_error_count(&snapshot.traversal.tree, &[root]),
-                is_file: !entry.is_dir,
+                is_file: !data.is_dir,
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -195,7 +196,7 @@ pub fn aggregate_replay<R: io::Read + io::Seek>(
             aggregates.push(Aggregate {
                 bytes: entry.data.size,
                 is_file: !entry.data.is_dir,
-                display_path: entry.data.name,
+                display_path: entry.name().into_owned(),
                 errors: error,
             });
         } else if error != 0 {
@@ -582,25 +583,31 @@ mod tests {
     #[test]
     fn snapshot_aggregate_uses_stored_roots_and_errors() {
         let mut traversal = Traversal::new();
-        let large = traversal.tree.add_node(EntryData {
-            name: "not-on-disk-large".into(),
-            size: 9,
-            is_dir: true,
-            ..EntryData::default()
-        });
-        let failed_child = traversal.tree.add_node(EntryData {
-            name: "missing".into(),
-            metadata_io_error: true,
-            ..EntryData::default()
-        });
-        let small = traversal.tree.add_node(EntryData {
-            name: "not-on-disk-small".into(),
-            size: 2,
-            ..EntryData::default()
-        });
-        traversal.tree.add_edge(traversal.root_index, large, ());
-        traversal.tree.add_edge(large, failed_child, ());
-        traversal.tree.add_edge(traversal.root_index, small, ());
+        let large = traversal.tree.add_child(
+            traversal.root_index,
+            "not-on-disk-large",
+            EntryData {
+                size: 9,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        traversal.tree.add_child(
+            large,
+            "missing",
+            EntryData {
+                metadata_io_error: true,
+                ..EntryData::default()
+            },
+        );
+        let small = traversal.tree.add_child(
+            traversal.root_index,
+            "not-on-disk-small",
+            EntryData {
+                size: 2,
+                ..EntryData::default()
+            },
+        );
         let snapshot = Snapshot {
             traversal,
             roots: vec![large, small],

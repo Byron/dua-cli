@@ -1,10 +1,11 @@
 use crate::aggregate::{TraversalProgress, output_colored_path};
 use crate::snapshot::Replay;
-use crate::traverse::{BackgroundTraversal, EntryData, Traversal, Tree, TreeIndex};
+#[cfg(test)]
+use crate::traverse::EntryData;
+use crate::traverse::{BackgroundTraversal, Traversal, Tree, TreeIndex};
 use crate::{ByteFormat, WalkOptions, WalkResult};
 use anyhow::{Context, Result};
 use owo_colors::AnsiColors as Color;
-use petgraph::Direction;
 use std::io;
 use std::path::PathBuf;
 
@@ -133,12 +134,8 @@ pub fn aggregate_tree_from_replay<R: io::Read + io::Seek>(
         let parent = parents.last().copied().unwrap_or(traversal.root_index);
         let node = traversal
             .tree
-            .try_add_node(entry.data)
-            .map_err(|err| anyhow::anyhow!("could not add snapshot node: {err:?}"))?;
-        traversal
-            .tree
-            .try_add_edge(parent, node, ())
-            .map_err(|err| anyhow::anyhow!("could not add snapshot edge: {err:?}"))?;
+            .try_add_child_native(parent, entry.native_name, entry.data)
+            .map_err(|err| anyhow::anyhow!("could not add snapshot entry: {err}"))?;
         if entry.depth == 0 {
             roots
                 .try_reserve(1)
@@ -178,11 +175,15 @@ fn write_aggregate_tree(
     num_errors: u64,
 ) -> io::Result<()> {
     if sort_by_size_in_bytes {
-        roots.sort_by_key(|root| traversal.tree[*root].size);
+        roots.sort_by_key(|root| traversal.tree.data(*root).map(|entry| entry.size));
     }
     let mut total = 0u128;
     for root in roots.iter() {
-        total += traversal.tree[*root].size;
+        total += traversal
+            .tree
+            .data(*root)
+            .expect("traversal roots exist")
+            .size;
         write_subtree(
             out,
             &traversal.tree,
@@ -204,8 +205,12 @@ pub(crate) fn metadata_io_error_count(tree: &Tree, roots: &[TreeIndex]) -> u64 {
     let mut errors = 0u64;
     let mut pending = roots.to_vec();
     while let Some(index) = pending.pop() {
-        errors = errors.saturating_add(u64::from(tree[index].metadata_io_error));
-        pending.extend(tree.neighbors_directed(index, Direction::Outgoing));
+        errors = errors.saturating_add(u64::from(
+            tree.data(index)
+                .expect("traversal entry exists")
+                .metadata_io_error,
+        ));
+        pending.extend(tree.children(index));
     }
     errors
 }
@@ -222,7 +227,7 @@ fn write_subtree(
 ) -> io::Result<()> {
     let mut pending = vec![(index, depth)];
     while let Some((index, depth)) = pending.pop() {
-        let entry: &EntryData = &tree[index];
+        let entry = tree.entry(index).expect("traversal entry exists");
         let name = entry.name.to_string_lossy();
         write_entry(
             out,
@@ -249,14 +254,11 @@ fn write_subtree(
 /// Return the children of `index`, ordered by size ascending when `sort_by_size_in_bytes` is set,
 /// otherwise in the order they were discovered during the traversal.
 fn sorted_children(tree: &Tree, index: TreeIndex, sort_by_size_in_bytes: bool) -> Vec<TreeIndex> {
-    let mut children: Vec<TreeIndex> = tree
-        .neighbors_directed(index, Direction::Outgoing)
-        .collect();
-    // `petgraph` yields neighbors in the reverse of their insertion order, so undo that to recover
-    // the discovery order the walk produced.
+    let mut children: Vec<TreeIndex> = tree.children(index).collect();
+    // Children are linked newest-first, so undo that to recover discovery order.
     children.reverse();
     if sort_by_size_in_bytes {
-        children.sort_by_key(|child| tree[*child].size);
+        children.sort_by_key(|child| tree.data(*child).map(|entry| entry.size));
     }
     children
 }
@@ -455,26 +457,32 @@ mod tests {
     #[test]
     fn completed_traversal_supports_depth_sorting_totals_and_errors() {
         let mut traversal = Traversal::new();
-        let large = traversal.tree.add_node(EntryData {
-            name: "large".into(),
-            size: 9,
-            is_dir: true,
-            ..EntryData::default()
-        });
-        let hidden_error = traversal.tree.add_node(EntryData {
-            name: "hidden".into(),
-            size: 9,
-            metadata_io_error: true,
-            ..EntryData::default()
-        });
-        let small = traversal.tree.add_node(EntryData {
-            name: "small".into(),
-            size: 2,
-            ..EntryData::default()
-        });
-        traversal.tree.add_edge(traversal.root_index, large, ());
-        traversal.tree.add_edge(large, hidden_error, ());
-        traversal.tree.add_edge(traversal.root_index, small, ());
+        let large = traversal.tree.add_child(
+            traversal.root_index,
+            "large",
+            EntryData {
+                size: 9,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        traversal.tree.add_child(
+            large,
+            "hidden",
+            EntryData {
+                size: 9,
+                metadata_io_error: true,
+                ..EntryData::default()
+            },
+        );
+        let small = traversal.tree.add_child(
+            traversal.root_index,
+            "small",
+            EntryData {
+                size: 2,
+                ..EntryData::default()
+            },
+        );
 
         let mut out = Vec::new();
         let result = aggregate_tree_from_traversal(

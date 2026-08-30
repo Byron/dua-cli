@@ -1,7 +1,5 @@
 use crate::interactive::path_of;
 use dua::traverse::{Tree, TreeIndex};
-use itertools::Itertools;
-use petgraph::Direction;
 use std::time::SystemTime;
 use std::{cmp::Ordering, path::PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
@@ -137,6 +135,7 @@ pub fn sorted_entries(
     node_idx: TreeIndex,
     sorting: SortMode,
     glob_root: Option<TreeIndex>,
+    glob_matches: Option<&[TreeIndex]>,
     check: EntryCheck,
 ) -> Vec<EntryDataBundle> {
     use SortMode::{
@@ -158,14 +157,21 @@ pub fn sorted_entries(
         }
     }
     let mtime_sort = sorting.mtime_sort().unwrap_or_default();
-    tree.neighbors_directed(node_idx, Direction::Outgoing)
+    let use_glob_path = glob_root == Some(node_idx);
+    let indices = if use_glob_path {
+        glob_matches.unwrap_or_default().to_vec()
+    } else {
+        tree.children(node_idx).collect()
+    };
+    let mut entries = indices
+        .into_iter()
         .filter_map(|idx| {
-            tree.node_weight(idx).map(|entry| {
-                let use_glob_path = glob_root.is_some_and(|glob_root| glob_root == node_idx);
+            tree.entry(idx).map(|entry| {
+                let data = entry.data;
                 let (path, exists, is_dir) = {
                     let path = path_of(tree, idx, glob_root);
                     if matches!(check, EntryCheck::Disabled) || glob_root == Some(node_idx) {
-                        (path, true, entry.is_dir)
+                        (path, true, data.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
                         let exists = meta.is_ok();
@@ -177,27 +183,28 @@ pub fn sorted_entries(
                     name: if use_glob_path {
                         path
                     } else {
-                        entry.name.clone()
+                        entry.name.into_owned()
                     },
-                    size: entry.size,
-                    mtime: mtime_for_sort(tree, idx, entry.mtime, mtime_sort),
-                    entry_count: entry.entry_count,
+                    size: data.size,
+                    mtime: mtime_for_sort(tree, idx, data.mtime, mtime_sort),
+                    entry_count: data.entry_count,
                     exists,
                     is_dir,
                 }
             })
         })
-        .sorted_by(|l, r| match sorting {
-            SizeDescending => r.size.cmp(&l.size),
-            SizeAscending => l.size.cmp(&r.size),
-            MTimeAscending(_) => l.mtime.cmp(&r.mtime),
-            MTimeDescending(_) => r.mtime.cmp(&l.mtime),
-            CountAscending => cmp_count(l, r),
-            CountDescending => cmp_count(l, r).reverse(),
-            NameAscending => cmp_name(l, r),
-            NameDescending => cmp_name(l, r).reverse(),
-        })
-        .collect()
+        .collect::<Vec<_>>();
+    entries.sort_by(|l, r| match sorting {
+        SizeDescending => r.size.cmp(&l.size),
+        SizeAscending => l.size.cmp(&r.size),
+        MTimeAscending(_) => l.mtime.cmp(&r.mtime),
+        MTimeDescending(_) => r.mtime.cmp(&l.mtime),
+        CountAscending => cmp_count(l, r),
+        CountDescending => cmp_count(l, r).reverse(),
+        NameAscending => cmp_name(l, r),
+        NameDescending => cmp_name(l, r).reverse(),
+    });
+    entries
 }
 
 fn mtime_for_sort(
@@ -227,12 +234,10 @@ fn mtime_of_descendants_with_ordering(
     node_idx: TreeIndex,
     ordering: Ordering,
 ) -> Option<SystemTime> {
-    let mut stack: Vec<_> = tree
-        .neighbors_directed(node_idx, Direction::Outgoing)
-        .collect();
+    let mut stack: Vec<_> = tree.children(node_idx).collect();
     let mut selected_mtime: Option<SystemTime> = None;
     while let Some(idx) = stack.pop() {
-        if let Some(entry) = tree.node_weight(idx) {
+        if let Some(entry) = tree.entry(idx) {
             selected_mtime = Some(selected_mtime.map_or(entry.mtime, |selected| {
                 if entry.mtime.cmp(&selected) == ordering {
                     entry.mtime
@@ -240,7 +245,7 @@ fn mtime_of_descendants_with_ordering(
                     selected
                 }
             }));
-            stack.extend(tree.neighbors_directed(idx, Direction::Outgoing));
+            stack.extend(tree.children(idx));
         }
     }
     selected_mtime

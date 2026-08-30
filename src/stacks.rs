@@ -1,13 +1,12 @@
 use crate::aggregate::TraversalProgress;
 use crate::snapshot::Replay;
 use crate::traverse::{
-    BackgroundTraversal, EntryData, Traversal, TraversalEntry, TraversalEvent, Tree, TreeIndex,
+    BackgroundTraversal, Traversal, TraversalEntry, TraversalEvent, Tree, TreeIndex,
 };
 use crate::tree::metadata_io_error_count;
 use crate::{WalkOptions, WalkResult};
 use anyhow::{Context, Result};
 use bstr::ByteSlice;
-use petgraph::Direction;
 use std::ffi::OsStr;
 use std::io;
 use std::path::PathBuf;
@@ -49,9 +48,16 @@ pub fn stacks(
 
     while let Ok(event) = background.event_rx.recv() {
         let stack = stream.then(|| stack_path(&event)).flatten();
-        let size_before = traversal.tree[traversal.root_index].size;
+        let size_before = traversal
+            .tree
+            .data(traversal.root_index)
+            .context("traversal root is missing")?
+            .size;
         let finished = background.integrate_traversal_event(&mut traversal, event) == Some(true);
-        let own_size = traversal.tree[traversal.root_index]
+        let own_size = traversal
+            .tree
+            .data(traversal.root_index)
+            .context("traversal root is missing")?
             .size
             .checked_sub(size_before)
             .context("traversal size decreased")?;
@@ -130,7 +136,7 @@ pub fn stacks_from_replay<R: io::Read + io::Seek>(
         if !open.is_empty() {
             prefix.push(';');
         }
-        prefix.push_str(&frame(&entry.data));
+        push_frame(&mut prefix, entry.name().as_os_str());
         open.push(ReplayStackEntry {
             size: entry.data.size,
             children_size: 0,
@@ -192,27 +198,25 @@ fn write_stacks(
     let mut stack: Vec<(TreeIndex, usize, String)> = roots
         .iter()
         .rev()
-        .map(|&root| (root, 0, frame(&tree[root])))
+        .map(|&root| (root, 0, frame(tree, root)))
         .collect();
 
     while let Some((index, depth, prefix)) = stack.pop() {
         let mut children_size = 0u128;
         if max_depth.is_none_or(|max_depth| depth < max_depth) {
-            for child in tree.neighbors_directed(index, Direction::Outgoing) {
+            for child in tree.children(index) {
                 children_size = children_size
-                    .checked_add(tree[child].size)
+                    .checked_add(tree.data(child).expect("tree child exists").size)
                     .context("stack child sizes overflowed")?;
-                stack.push((
-                    child,
-                    depth + 1,
-                    format!("{prefix};{}", frame(&tree[child])),
-                ));
+                stack.push((child, depth + 1, format!("{prefix};{}", frame(tree, child))));
             }
         }
         // A directory's own size is what remains after accounting for its contents; a file has no
         // children and so contributes its entire size. Zero-sized entries are left out as they add
         // nothing to a flame graph.
-        let own_size = tree[index]
+        let own_size = tree
+            .data(index)
+            .expect("tree entry exists")
             .size
             .checked_sub(children_size)
             .context("stack children exceed their parent's size")?;
@@ -225,12 +229,17 @@ fn write_stacks(
 
 /// Turn an entry name into a single flame-graph frame, encoding the `;` frame separator, control
 /// characters, and the `\` escape marker.
-fn frame(entry: &EntryData) -> String {
-    frame_name(entry.name.as_os_str())
+fn frame(tree: &Tree, index: TreeIndex) -> String {
+    frame_name(tree.name(index).expect("tree entry exists").as_os_str())
 }
 
 fn frame_name(name: &OsStr) -> String {
     let mut encoded = String::new();
+    push_frame(&mut encoded, name);
+    encoded
+}
+
+fn push_frame(encoded: &mut String, name: &OsStr) {
     for chunk in name.as_encoded_bytes().utf8_chunks() {
         for character in chunk.valid().chars() {
             match character {
@@ -242,16 +251,15 @@ fn frame_name(name: &OsStr) -> String {
         }
         encoded.extend(chunk.invalid().escape_bytes());
     }
-    encoded
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Replay, frame, stacks, stacks_from_replay, stacks_from_traversal};
+    use super::{Replay, frame_name, stacks, stacks_from_replay, stacks_from_traversal};
     use crate::traverse::{EntryData, Traversal};
     use crate::{TraversalOptions, WalkOptions};
     use bstr::ByteSlice;
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, ffi::OsStr};
 
     fn walk_options() -> WalkOptions {
         WalkOptions {
@@ -279,10 +287,7 @@ mod tests {
     }
 
     fn folded_frame(path: impl Into<std::path::PathBuf>) -> String {
-        frame(&EntryData {
-            name: path.into(),
-            ..EntryData::default()
-        })
+        frame_name(path.into().as_os_str())
     }
 
     #[test]
@@ -355,7 +360,12 @@ mod tests {
         {}
 
         assert_eq!(
-            folded_total, traversal.tree[traversal.root_index].size,
+            folded_total,
+            traversal
+                .tree
+                .data(traversal.root_index)
+                .expect("traversal root exists")
+                .size,
             "the folded lines account for every byte the traversal totals up"
         );
     }
@@ -456,33 +466,41 @@ mod tests {
     #[test]
     fn completed_traversal_rolls_hidden_entries_into_the_cutoff() {
         let mut traversal = Traversal::new();
-        let root = traversal.tree.add_node(EntryData {
-            name: "first".into(),
-            size: 9,
-            is_dir: true,
-            ..EntryData::default()
-        });
-        let cutoff = traversal.tree.add_node(EntryData {
-            name: "cutoff".into(),
-            size: 9,
-            is_dir: true,
-            ..EntryData::default()
-        });
-        let hidden_error = traversal.tree.add_node(EntryData {
-            name: "hidden".into(),
-            size: 7,
-            metadata_io_error: true,
-            ..EntryData::default()
-        });
-        let second = traversal.tree.add_node(EntryData {
-            name: "second".into(),
-            size: 2,
-            ..EntryData::default()
-        });
-        traversal.tree.add_edge(traversal.root_index, root, ());
-        traversal.tree.add_edge(root, cutoff, ());
-        traversal.tree.add_edge(cutoff, hidden_error, ());
-        traversal.tree.add_edge(traversal.root_index, second, ());
+        let root = traversal.tree.add_child(
+            traversal.root_index,
+            "first",
+            EntryData {
+                size: 9,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        let cutoff = traversal.tree.add_child(
+            root,
+            "cutoff",
+            EntryData {
+                size: 9,
+                is_dir: true,
+                ..EntryData::default()
+            },
+        );
+        traversal.tree.add_child(
+            cutoff,
+            "hidden",
+            EntryData {
+                size: 7,
+                metadata_io_error: true,
+                ..EntryData::default()
+            },
+        );
+        let second = traversal.tree.add_child(
+            traversal.root_index,
+            "second",
+            EntryData {
+                size: 2,
+                ..EntryData::default()
+            },
+        );
 
         let mut out = Vec::new();
         let result = stacks_from_traversal(&mut out, &traversal, &[root, second], Some(1)).unwrap();
@@ -511,20 +529,24 @@ mod tests {
             ),
         ] {
             let mut traversal = Traversal::new();
-            let root = traversal.tree.add_node(EntryData {
-                name: "root".into(),
-                size: parent_size,
-                is_dir: true,
-                ..EntryData::default()
-            });
-            traversal.tree.add_edge(traversal.root_index, root, ());
-            for size in child_sizes {
-                let child = traversal.tree.add_node(EntryData {
-                    name: "child".into(),
-                    size,
+            let root = traversal.tree.add_child(
+                traversal.root_index,
+                "root",
+                EntryData {
+                    size: parent_size,
+                    is_dir: true,
                     ..EntryData::default()
-                });
-                traversal.tree.add_edge(root, child, ());
+                },
+            );
+            for size in child_sizes {
+                traversal.tree.add_child(
+                    root,
+                    "child",
+                    EntryData {
+                        size,
+                        ..EntryData::default()
+                    },
+                );
             }
 
             let Err(error) = stacks_from_traversal(Vec::new(), &traversal, &[root], None) else {
@@ -536,12 +558,7 @@ mod tests {
 
     #[test]
     fn frame_names_are_encoded_without_collisions() {
-        let encode = |name: &str| {
-            frame(&EntryData {
-                name: name.into(),
-                ..EntryData::default()
-            })
-        };
+        let encode = |name: &str| frame_name(OsStr::new(name));
 
         assert_eq!(encode("a;b"), r"a\x3bb");
         assert_eq!(encode("a_b"), "a_b");

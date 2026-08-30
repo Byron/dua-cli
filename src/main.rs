@@ -165,7 +165,14 @@ fn main() -> Result<()> {
                     let input_paths = snapshot
                         .roots
                         .iter()
-                        .map(|root| snapshot.traversal.tree[*root].name.clone())
+                        .map(|root| {
+                            snapshot
+                                .traversal
+                                .tree
+                                .name(*root)
+                                .expect("snapshot root exists")
+                                .into_owned()
+                        })
                         .collect();
                     (
                         input_paths,

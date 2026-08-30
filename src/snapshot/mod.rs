@@ -2,12 +2,11 @@
 
 use crate::traverse::{EntryData, Traversal, TreeIndex};
 use anyhow::{Context, Result, anyhow, bail};
-use petgraph::Direction;
 use std::{
+    borrow::Cow,
     collections::HashSet,
-    ffi::OsString,
     io::{self, BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -35,17 +34,23 @@ const KNOWN_FLAGS: u8 = FLAG_DIRECTORY | FLAG_METADATA_IO_ERROR | FLAG_ENTRY_COU
 pub struct Snapshot {
     /// The reconstructed traversal tree.
     pub traversal: Traversal,
-    /// Top-level graph nodes in original input order.
+    /// Top-level tree nodes in original input order.
     pub roots: Vec<TreeIndex>,
 }
 
-pub(crate) struct DecodedEntry {
+pub(crate) struct DecodedEntry<'a> {
     /// Zero-based depth in the serialized forest; top-level roots have depth zero.
     pub(crate) depth: usize,
     pub(crate) data: EntryData,
-    /// Lossless platform-native bytes of `data.name`, used for canonical ordering and diff keys.
-    pub(crate) native_name: Vec<u8>,
+    /// Lossless platform-native bytes borrowed from the decoder's reusable record buffer.
+    pub(crate) native_name: &'a [u8],
     pub(crate) sibling_ordinal: u64,
+}
+
+impl<'a> DecodedEntry<'a> {
+    pub(crate) fn name(&self) -> Cow<'a, Path> {
+        native_name_from_bytes(self.native_name)
+    }
 }
 
 struct DecodeSummary {
@@ -57,7 +62,8 @@ struct DecodeSummary {
 struct OpenNode {
     id: u64,
     is_dir: bool,
-    last_child: Option<(Vec<u8>, u64)>,
+    has_child: bool,
+    last_child_ordinal: u64,
 }
 
 enum SnapshotReader<R> {
@@ -74,6 +80,7 @@ enum SnapshotReader<R> {
 struct Decoder<R> {
     reader: HashingReader<BufReader<SnapshotReader<R>>>,
     open_nodes: Vec<OpenNode>,
+    sibling_names: Vec<Vec<u8>>,
     record: Vec<u8>,
     node_count: u64,
     total_size: u128,
@@ -233,20 +240,8 @@ pub(crate) struct ReplayEntries<'a, R> {
 }
 
 impl<R: Read> ReplayEntries<'_, R> {
-    pub(crate) fn next_entry(&mut self) -> Result<Option<DecodedEntry>> {
-        let entry = self.decoder.next_entry()?;
-        if entry.is_none()
-            && self
-                .decoder
-                .summary
-                .as_ref()
-                .expect("end of snapshot stores its summary")
-                .digest
-                != self.expected_digest
-        {
-            bail!("snapshot changed since it was verified");
-        }
-        Ok(entry)
+    pub(crate) fn next_entry(&mut self) -> Result<Option<DecodedEntry<'_>>> {
+        self.decoder.next_entry(Some(&self.expected_digest))
     }
 }
 
@@ -270,7 +265,7 @@ impl<R: Read + Seek> Replay<R> {
 
     pub(crate) fn for_each_entry(
         &mut self,
-        mut on_entry: impl FnMut(DecodedEntry) -> Result<()>,
+        mut on_entry: impl for<'entry> FnMut(DecodedEntry<'entry>) -> Result<()>,
     ) -> Result<()> {
         let mut entries = self.entries()?;
         while let Some(entry) = entries.next_entry()? {
@@ -334,18 +329,18 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
             if index == traversal.root_index {
                 bail!("snapshot traversal contains a cycle or shared node at {index:?}");
             }
-            let data = traversal
+            let entry = traversal
                 .tree
-                .node_weight(index)
+                .entry(index)
                 .ok_or_else(|| anyhow!("snapshot node {index:?} does not exist"))?;
-            let mut incoming = traversal
-                .tree
-                .neighbors_directed(index, Direction::Incoming);
-            if incoming.next() != Some(expected_parent) || incoming.next().is_some() {
+            if traversal.tree.parent(index) != Some(expected_parent) {
                 bail!("snapshot traversal contains a cycle or shared node at {index:?}");
             }
-            let name = native_name_bytes(&data.name);
-            validate_name(&name, parent_id == 0)?;
+            let name = traversal
+                .tree
+                .native_name(index)
+                .expect("existing tree entry has a name");
+            validate_name(name, parent_id == 0)?;
             let node_id = node_count
                 .checked_add(1)
                 .context("snapshot contains too many nodes")?;
@@ -356,9 +351,9 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
 
             record.clear();
             push_uleb128(&mut record, u128::from(parent_distance));
-            let mut flags = (u8::from(data.is_dir) * FLAG_DIRECTORY)
-                | (u8::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR);
-            if data.entry_count.is_some() {
+            let mut flags = (u8::from(entry.is_dir) * FLAG_DIRECTORY)
+                | (u8::from(entry.metadata_io_error) * FLAG_METADATA_IO_ERROR);
+            if entry.entry_count.is_some() {
                 flags |= FLAG_ENTRY_COUNT;
             }
             record.push(flags);
@@ -366,12 +361,12 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
                 &mut record,
                 u128::try_from(name.len()).context("snapshot name is too long")?,
             );
-            record.extend_from_slice(&name);
-            push_uleb128(&mut record, data.size);
-            let (seconds, nanos) = split_time(data.mtime)?;
+            record.extend_from_slice(name);
+            push_uleb128(&mut record, entry.size);
+            let (seconds, nanos) = split_time(entry.mtime)?;
             push_uleb128(&mut record, u128::from(zigzag_encode(seconds)));
             push_uleb128(&mut record, u128::from(nanos));
-            if let Some(count) = data.entry_count {
+            if let Some(count) = entry.entry_count {
                 push_uleb128(&mut record, u128::from(count));
             }
             if record.len() > MAX_RECORD_LEN {
@@ -380,32 +375,31 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
             write_uleb128(&mut writer, record.len() as u128)?;
             writer.write_all(&record)?;
 
-            let mut children = traversal
-                .tree
-                .neighbors_directed(index, Direction::Outgoing)
-                .map(|child| {
-                    let child_data = traversal
+            let mut children = traversal.tree.children(index).collect::<Vec<_>>();
+            for &child in &children {
+                validate_name(
+                    traversal
                         .tree
-                        .node_weight(child)
-                        .ok_or_else(|| anyhow!("snapshot child {child:?} does not exist"))?;
-                    let name = native_name_bytes(&child_data.name);
-                    validate_name(&name, false)?;
-                    Ok((child, name))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            if !children.is_empty() && !data.is_dir {
+                        .native_name(child)
+                        .ok_or_else(|| anyhow!("snapshot child {child:?} does not exist"))?,
+                    false,
+                )?;
+            }
+            if !children.is_empty() && !entry.is_dir {
                 bail!("snapshot file node {index:?} has children");
             }
             children.sort_by(|left, right| {
-                left.1
-                    .cmp(&right.1)
-                    .then_with(|| left.0.index().cmp(&right.0.index()))
+                traversal
+                    .tree
+                    .native_name(*left)
+                    .cmp(&traversal.tree.native_name(*right))
+                    .then_with(|| left.index().cmp(&right.index()))
             });
             stack.extend(
                 children
                     .into_iter()
                     .rev()
-                    .map(|(child, _)| (child, index, node_id)),
+                    .map(|child| (child, index, node_id)),
             );
             node_count = node_id;
         }
@@ -431,12 +425,8 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
         let parent = parents.last().copied().unwrap_or(traversal.root_index);
         let node = traversal
             .tree
-            .try_add_node(entry.data)
-            .map_err(|err| anyhow!("could not add snapshot node: {err:?}"))?;
-        traversal
-            .tree
-            .try_add_edge(parent, node, ())
-            .map_err(|err| anyhow!("could not add snapshot edge: {err:?}"))?;
+            .try_add_child_native(parent, entry.native_name, entry.data)
+            .map_err(|err| anyhow!("could not add snapshot entry: {err}"))?;
         if entry.depth == 0 {
             roots
                 .try_reserve(1)
@@ -450,19 +440,22 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
         Ok(())
     })?;
 
-    let synthetic_root = &mut traversal.tree[traversal.root_index];
-    synthetic_root.size = summary.total_size;
-    synthetic_root.entry_count = (!roots.is_empty()).then_some(summary.total_entries);
+    traversal
+        .tree
+        .update(traversal.root_index, |synthetic_root| {
+            synthetic_root.size = summary.total_size;
+            synthetic_root.entry_count = (!roots.is_empty()).then_some(summary.total_entries);
+        });
 
     Ok(Snapshot { traversal, roots })
 }
 
 fn decode(
     reader: impl Read,
-    mut on_entry: impl FnMut(DecodedEntry) -> Result<()>,
+    mut on_entry: impl for<'entry> FnMut(DecodedEntry<'entry>) -> Result<()>,
 ) -> Result<DecodeSummary> {
     let mut decoder = Decoder::new(reader)?;
-    while let Some(entry) = decoder.next_entry()? {
+    while let Some(entry) = decoder.next_entry(None)? {
         on_entry(entry)?;
     }
     Ok(decoder.summary.expect("end of snapshot stores its summary"))
@@ -493,6 +486,7 @@ impl<R: Read> Decoder<R> {
         Ok(Self {
             reader,
             open_nodes: Vec::new(),
+            sibling_names: Vec::new(),
             record: Vec::new(),
             node_count: 0,
             total_size: 0,
@@ -501,7 +495,10 @@ impl<R: Read> Decoder<R> {
         })
     }
 
-    fn next_entry(&mut self) -> Result<Option<DecodedEntry>> {
+    fn next_entry(
+        &mut self,
+        expected_digest: Option<&[u8; DIGEST_LEN]>,
+    ) -> Result<Option<DecodedEntry<'_>>> {
         if self.summary.is_some() {
             return Ok(None);
         }
@@ -511,6 +508,15 @@ impl<R: Read> Decoder<R> {
             .map_err(|err| anyhow!("invalid snapshot integer at byte {length_offset}: {err}"))?;
         if record_len == 0 {
             self.finish()?;
+            if expected_digest.is_some_and(|expected| {
+                self.summary
+                    .as_ref()
+                    .expect("end of snapshot stores its summary")
+                    .digest
+                    != *expected
+            }) {
+                bail!("snapshot changed since it was verified");
+            }
             return Ok(None);
         }
         let record_len = usize::try_from(record_len)
@@ -535,13 +541,12 @@ impl<R: Read> Decoder<R> {
             .node_count
             .checked_add(1)
             .context("snapshot contains too many nodes")?;
-        let (parent_id, data) = parse_record(&self.record, node_id)
+        let (parent_id, native_name, data) = parse_record(&self.record, node_id)
             .map_err(|err| anyhow!("invalid snapshot record at byte {record_offset}: {err}"))?;
-        if usize::try_from(node_id).map_or(true, |id| id >= TreeIndex::end().index()) {
-            bail!("snapshot exceeds petgraph's node-index limit");
+        if node_id >= u64::from(u32::MAX) {
+            bail!("snapshot exceeds the tree node-index limit");
         }
 
-        let native_name = native_name_bytes(&data.name);
         let sibling_ordinal = if parent_id == 0 {
             self.open_nodes.clear();
             0
@@ -553,6 +558,7 @@ impl<R: Read> Decoder<R> {
             {
                 self.open_nodes.pop();
             }
+            let parent_depth = self.open_nodes.len().saturating_sub(1);
             let parent = self.open_nodes.last_mut().with_context(|| {
                 format!(
                     "invalid snapshot record at byte {record_offset}: parent is outside the current depth-first subtree"
@@ -561,18 +567,23 @@ impl<R: Read> Decoder<R> {
             if !parent.is_dir {
                 bail!("invalid snapshot record at byte {record_offset}: parent is not a directory");
             }
-            let ordinal = match parent.last_child.as_ref() {
-                Some((previous, _)) if previous > &native_name => {
-                    bail!(
-                        "invalid snapshot record at byte {record_offset}: sibling names are not in canonical order"
-                    );
-                }
-                Some((previous, ordinal)) if previous == &native_name => ordinal
+            let previous = &mut self.sibling_names[parent_depth];
+            let ordinal = if parent.has_child && previous.as_slice() > native_name {
+                bail!(
+                    "invalid snapshot record at byte {record_offset}: sibling names are not in canonical order"
+                );
+            } else if parent.has_child && previous.as_slice() == native_name {
+                parent
+                    .last_child_ordinal
                     .checked_add(1)
-                    .context("snapshot contains too many duplicate sibling names")?,
-                _ => 0,
+                    .context("snapshot contains too many duplicate sibling names")?
+            } else {
+                0
             };
-            parent.last_child = Some((native_name.clone(), ordinal));
+            previous.clear();
+            previous.extend_from_slice(native_name);
+            parent.has_child = true;
+            parent.last_child_ordinal = ordinal;
             ordinal
         };
 
@@ -591,10 +602,19 @@ impl<R: Read> Decoder<R> {
         self.open_nodes
             .try_reserve(1)
             .context("could not grow snapshot ancestor stack")?;
+        if self.sibling_names.len() <= depth {
+            self.sibling_names
+                .try_reserve(1)
+                .context("could not grow snapshot sibling buffers")?;
+            self.sibling_names.push(Vec::new());
+        } else {
+            self.sibling_names[depth].clear();
+        }
         self.open_nodes.push(OpenNode {
             id: node_id,
             is_dir: data.is_dir,
-            last_child: None,
+            has_child: false,
+            last_child_ordinal: 0,
         });
         self.node_count = node_id;
         Ok(Some(DecodedEntry {
@@ -641,7 +661,7 @@ impl<R: Read> Decoder<R> {
     }
 }
 
-fn parse_record(record: &[u8], node_id: u64) -> Result<(u64, EntryData)> {
+fn parse_record(record: &[u8], node_id: u64) -> Result<(u64, &[u8], EntryData)> {
     let mut cursor = io::Cursor::new(record);
     let parent_distance = read_u64(&mut cursor)?;
     let parent_id = node_id
@@ -661,10 +681,14 @@ fn parse_record(record: &[u8], node_id: u64) -> Result<(u64, EntryData)> {
     if name_len > MAX_NAME_LEN {
         bail!("name exceeds the {MAX_NAME_LEN}-byte limit");
     }
-    let mut name = vec![0; name_len];
-    cursor.read_exact(&mut name)?;
-    validate_name(&name, parent_id == 0)?;
-    let name = native_name_from_bytes(name);
+    let name_start = usize::try_from(cursor.position()).context("record offset is too large")?;
+    let name_end = name_start
+        .checked_add(name_len)
+        .filter(|end| *end <= record.len())
+        .context("record ends within its name")?;
+    let name = &record[name_start..name_end];
+    cursor.set_position(name_end as u64);
+    validate_name(name, parent_id == 0)?;
 
     let size = read_uleb128(&mut cursor, 128)?;
     let seconds = zigzag_decode(read_u64(&mut cursor)?);
@@ -684,8 +708,8 @@ fn parse_record(record: &[u8], node_id: u64) -> Result<(u64, EntryData)> {
 
     Ok((
         parent_id,
+        name,
         EntryData {
-            name,
             size,
             mtime,
             entry_count,
@@ -799,12 +823,18 @@ fn read_uleb128(input: &mut impl Read, bits: u32) -> io::Result<u128> {
 }
 
 #[cfg(unix)]
+fn native_name_from_bytes(name: &[u8]) -> Cow<'_, Path> {
+    use std::os::unix::ffi::OsStrExt as _;
+    Cow::Borrowed(Path::new(std::ffi::OsStr::from_bytes(name)))
+}
+
+#[cfg(all(test, unix))]
 fn native_name_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt as _;
     path.as_os_str().as_bytes().to_vec()
 }
 
-#[cfg(windows)]
+#[cfg(all(test, windows))]
 fn native_name_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt as _;
     path.as_os_str()
@@ -813,21 +843,17 @@ fn native_name_bytes(path: &Path) -> Vec<u8> {
         .collect()
 }
 
-#[cfg(unix)]
-fn native_name_from_bytes(name: Vec<u8>) -> PathBuf {
-    use std::os::unix::ffi::OsStringExt as _;
-    PathBuf::from(OsString::from_vec(name))
-}
-
 #[cfg(windows)]
-fn native_name_from_bytes(name: Vec<u8>) -> PathBuf {
+fn native_name_from_bytes(name: &[u8]) -> Cow<'_, Path> {
     use std::os::windows::ffi::OsStringExt as _;
     debug_assert_eq!(name.len() % 2, 0);
     let wide = name
         .chunks_exact(2)
         .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
         .collect::<Vec<_>>();
-    PathBuf::from(OsString::from_wide(&wide))
+    Cow::Owned(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+        &wide,
+    )))
 }
 
 #[cfg(unix)]

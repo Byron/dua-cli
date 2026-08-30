@@ -10,7 +10,6 @@ use dua::{
     traverse::{Tree, TreeIndex},
 };
 use gix::glob::pattern::Case;
-use petgraph::Direction;
 use std::borrow::Borrow;
 use tui::{
     buffer::Buffer,
@@ -201,8 +200,8 @@ fn glob_search_neighbours(
     path: &mut BString,
     case: Case,
 ) {
-    for node_index in tree.neighbors_directed(root_index, Direction::Outgoing) {
-        if let Some(node) = tree.node_weight(node_index) {
+    for node_index in tree.children(root_index) {
+        if let Some(node) = tree.entry(node_index) {
             let previous_len = path.len();
             let basename_start = if path.is_empty() {
                 None
@@ -210,7 +209,7 @@ fn glob_search_neighbours(
                 path.push(b'/');
                 Some(previous_len + 1)
             };
-            path.extend_from_slice(gix::path::into_bstr(&node.name).as_ref());
+            path.extend_from_slice(gix::path::into_bstr(node.name.as_ref()).as_ref());
             if glob.matches_repo_relative_path(
                 path.as_ref(),
                 basename_start,

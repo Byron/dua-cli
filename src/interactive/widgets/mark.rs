@@ -86,7 +86,7 @@ impl MarkPane {
     ) -> Option<Self> {
         match self.marked.entry(index) {
             Entry::Vacant(entry) => {
-                if let Some(e) = tree_view.tree().node_weight(index) {
+                if let Some(e) = tree_view.tree().entry(index) {
                     let sorting_index = self.last_sorting_index + 1;
                     self.last_sorting_index = sorting_index;
                     entry.insert(EntryMark {

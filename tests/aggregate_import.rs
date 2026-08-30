@@ -14,20 +14,24 @@ fn aggregate_import_renders_without_accessing_stored_paths() {
     let dir = tempfile::tempdir().unwrap();
     let missing_root = dir.path().join("snapshot-root-that-does-not-exist");
     let mut traversal = Traversal::new();
-    let root = traversal.tree.add_node(EntryData {
-        name: missing_root.clone(),
-        size: 5,
-        entry_count: Some(1),
-        is_dir: true,
-        ..EntryData::default()
-    });
-    let child = traversal.tree.add_node(EntryData {
-        name: "child".into(),
-        size: 2,
-        ..EntryData::default()
-    });
-    traversal.tree.add_edge(traversal.root_index, root, ());
-    traversal.tree.add_edge(root, child, ());
+    let root = traversal.tree.add_child(
+        traversal.root_index,
+        &missing_root,
+        EntryData {
+            size: 5,
+            entry_count: Some(1),
+            is_dir: true,
+            ..EntryData::default()
+        },
+    );
+    traversal.tree.add_child(
+        root,
+        "child",
+        EntryData {
+            size: 2,
+            ..EntryData::default()
+        },
+    );
 
     let mut snapshot = Vec::new();
     dua::snapshot::write(&mut snapshot, &traversal, &[root], Some(2)).unwrap();
@@ -68,12 +72,14 @@ fn aggregate_import_renders_without_accessing_stored_paths() {
 #[test]
 fn aggregate_import_displays_the_maximum_snapshot_size() {
     let mut traversal = Traversal::new();
-    let root = traversal.tree.add_node(EntryData {
-        name: "largest".into(),
-        size: u128::MAX,
-        ..EntryData::default()
-    });
-    traversal.tree.add_edge(traversal.root_index, root, ());
+    let root = traversal.tree.add_child(
+        traversal.root_index,
+        "largest",
+        EntryData {
+            size: u128::MAX,
+            ..EntryData::default()
+        },
+    );
 
     let mut snapshot = Vec::new();
     dua::snapshot::write(&mut snapshot, &traversal, &[root], Some(2)).unwrap();

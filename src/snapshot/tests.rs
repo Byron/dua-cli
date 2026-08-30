@@ -1,5 +1,5 @@
 use super::*;
-use std::io::Cursor;
+use std::{io::Cursor, path::PathBuf};
 
 #[test]
 fn replay_rejects_source_changes_after_validation() {
@@ -37,6 +37,53 @@ fn replay_defers_record_validation_until_replay() {
 }
 
 #[test]
+fn decoder_lends_record_names_and_reuses_depth_buffers() {
+    let root_name = native_name_bytes(Path::new("root-with-a-long-name"));
+    let child_name = native_name_bytes(Path::new("long-child-name"));
+    let leaf_name = native_name_bytes(Path::new("x"));
+    let bytes = stream(
+        &[
+            record(1, FLAG_DIRECTORY, &root_name, 0, 0, 0, None),
+            native_record(1, FLAG_DIRECTORY, "a"),
+            record(1, 0, &child_name, 0, 0, 0, None),
+            native_record(3, FLAG_DIRECTORY, "b"),
+            record(1, 0, &leaf_name, 0, 0, 0, None),
+        ],
+        5,
+    );
+    let mut decoder = Decoder::new(Cursor::new(bytes)).unwrap();
+
+    let borrowed_name = {
+        let entry = decoder.next_entry(None).unwrap().unwrap();
+        assert_eq!(entry.native_name, root_name);
+        entry.native_name.as_ptr()
+    };
+    let name_offset = decoder
+        .record
+        .windows(root_name.len())
+        .position(|bytes| bytes == root_name)
+        .unwrap();
+    assert_eq!(borrowed_name, decoder.record[name_offset..].as_ptr());
+    let record_buffer = decoder.record.as_ptr();
+
+    decoder.next_entry(None).unwrap().unwrap();
+    assert_eq!(decoder.record.as_ptr(), record_buffer);
+    decoder.next_entry(None).unwrap().unwrap();
+    let depth_buffer = decoder.sibling_names[1].as_ptr();
+    let depth_capacity = decoder.sibling_names[1].capacity();
+
+    decoder.next_entry(None).unwrap().unwrap();
+    assert_eq!(decoder.sibling_names[1].as_ptr(), depth_buffer);
+    assert_eq!(decoder.sibling_names[1].capacity(), depth_capacity);
+    assert!(decoder.sibling_names[1].is_empty());
+
+    decoder.next_entry(None).unwrap().unwrap();
+    assert_eq!(decoder.sibling_names[1].as_ptr(), depth_buffer);
+    assert_eq!(decoder.sibling_names[1], leaf_name);
+    assert!(decoder.next_entry(None).unwrap().is_none());
+}
+
+#[test]
 fn compressed_snapshot_round_trips_and_replays() {
     let mut traversal = Traversal::new();
     let root_index = traversal.root_index;
@@ -64,14 +111,22 @@ fn compressed_snapshot_round_trips_and_replays() {
     let bytes = compressed(&traversal, &[root]);
     assert!(is_zlib_header(&bytes));
     let snapshot = read(Cursor::new(&bytes)).unwrap();
-    assert_eq!(snapshot.traversal.tree[snapshot.roots[0]].size, 42);
+    assert_eq!(
+        snapshot
+            .traversal
+            .tree
+            .data(snapshot.roots[0])
+            .unwrap()
+            .size,
+        42
+    );
 
     let mut replay = Replay::new(Cursor::new(bytes)).unwrap();
     for _ in 0..2 {
         let mut names = Vec::new();
         replay
             .for_each_entry(|entry| {
-                names.push(entry.data.name);
+                names.push(entry.name().into_owned());
                 Ok(())
             })
             .unwrap();
@@ -352,15 +407,10 @@ fn rejects_windows_timestamp_precision_loss() {
 fn add(
     traversal: &mut Traversal,
     parent: TreeIndex,
-    name: impl Into<PathBuf>,
+    name: impl AsRef<Path>,
     data: EntryData,
 ) -> TreeIndex {
-    let node = traversal.tree.add_node(EntryData {
-        name: name.into(),
-        ..data
-    });
-    traversal.tree.add_edge(parent, node, ());
-    node
+    traversal.tree.add_child(parent, name, data)
 }
 
 fn encoded(traversal: &Traversal, roots: &[TreeIndex]) -> Vec<u8> {

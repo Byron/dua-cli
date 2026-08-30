@@ -30,6 +30,7 @@ use crossbeam::{
 use std::{
     collections::HashMap,
     io,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -93,6 +94,27 @@ pub struct Options {
     pub apfs_clone_metadata: bool,
 }
 
+/// Dense identifier of a directory within one filesystem walk.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DirectoryId(NonZeroU32);
+
+impl DirectoryId {
+    fn new(index: usize) -> Self {
+        let stored = u32::try_from(index)
+            .ok()
+            .and_then(|index| index.checked_add(1))
+            .and_then(NonZeroU32::new)
+            .expect("directory identifier overflow");
+        Self(stored)
+    }
+
+    /// Return the zero-based identifier for indexing compact side tables.
+    #[must_use]
+    pub fn index(self) -> usize {
+        (self.0.get() - 1) as usize
+    }
+}
+
 /// A filesystem entry produced by [`walk`].
 #[cfg(not(any(windows, target_os = "macos")))]
 pub struct Entry {
@@ -106,6 +128,10 @@ pub struct Entry {
     pub metadata: io::Result<Metadata>,
     /// Path containing this entry.
     pub parent_path: Arc<Path>,
+    /// Dense identifier of this directory within the current walk, or `None` for non-directories.
+    pub directory_id: Option<DirectoryId>,
+    /// Dense identifier of the directory containing this entry, or `None` for a walk root.
+    pub parent_directory_id: Option<DirectoryId>,
 }
 
 enum Job {
@@ -113,6 +139,8 @@ enum Job {
     ReadDir {
         root_idx: usize,
         path: Arc<Path>,
+        /// Dense identifier of the directory being read.
+        directory_id: usize,
         /// Depth to be assigned to entries read from `path`; always at least `1`.
         /// The directory at `path` is one level shallower.
         entry_depth: usize,
@@ -122,6 +150,8 @@ enum Job {
     StatCompletion {
         root_idx: usize,
         path: Arc<Path>,
+        /// Dense identifier of the directory containing these entries.
+        directory_id: usize,
         /// Depth assigned to every entry in this chunk; always at least `1`, i.e. a file in a directory.
         entry_depth: usize,
         entries: Vec<fs::DirEntry>,
@@ -188,6 +218,8 @@ struct PoolShared {
     idle: Vec<AtomicBool>,
     /// A round-robin cursor for the first idle worker to inspect.
     next_wake: AtomicUsize,
+    /// Allocates dense identifiers to directories as they are discovered.
+    next_directory_id: AtomicUsize,
 }
 
 struct Pool {
@@ -249,7 +281,12 @@ pub fn walk(
     descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
 ) -> Walk {
     let root_path = root.to_owned();
-    let root = Entry::from_path(root, options);
+    let mut root = Entry::from_path(root, options);
+    if let Ok(entry) = &mut root
+        && entry.file_type.is_dir()
+    {
+        entry.directory_id = Some(DirectoryId::new(0));
+    }
     let pool = match &root {
         Ok(entry) if entry.file_type.is_dir() && descend(entry) => {
             let path = Arc::from(entry.path());
@@ -259,12 +296,14 @@ pub fn walk(
                 order,
                 Arc::new(move |_, entry| descend(entry)),
                 options,
+                1,
             );
             start_jobs(
                 &pool,
                 vec![Job::ReadDir {
                     root_idx: 0,
                     path,
+                    directory_id: 0,
                     entry_depth: 1,
                 }],
             );
@@ -293,12 +332,18 @@ impl Walk {
         let Some(pool) = self.pool.as_ref() else {
             return false;
         };
-        let root = Entry::from_path(&self.root, self.options);
+        let mut root = Entry::from_path(&self.root, self.options);
+        if let Ok(entry) = &mut root
+            && entry.file_type.is_dir()
+        {
+            entry.directory_id = Some(DirectoryId::new(0));
+        }
         let job = match &root {
             Ok(entry) if entry.file_type.is_dir() && (pool.shared.descend)(0, entry) => {
                 Some(Job::ReadDir {
                     root_idx: 0,
                     path: Arc::from(entry.path()),
+                    directory_id: 0,
                     entry_depth: 1,
                 })
             }
@@ -306,6 +351,9 @@ impl Walk {
         };
         self.next.push(root);
         if let Some(job) = job {
+            pool.shared
+                .next_directory_id
+                .store(1, AtomicOrdering::Relaxed);
             self.finished = false;
             start_jobs(pool, vec![job]);
         }
@@ -416,7 +464,7 @@ fn start_root_walk<Root>(
         "root indices must be unique"
     );
     let descend = Arc::new(descend);
-    let (next, root_jobs) = begin_walks(
+    let (next, root_jobs, next_directory_id) = begin_walks(
         roots
             .into_iter()
             .map(|(root_idx, root)| (root_idx, prepare(root))),
@@ -425,7 +473,14 @@ fn start_root_walk<Root>(
     let pool = if root_jobs.is_empty() {
         None
     } else {
-        let pool = start_pool(threads.max(1), jobs_per_root, order, descend, options);
+        let pool = start_pool(
+            threads.max(1),
+            jobs_per_root,
+            order,
+            descend,
+            options,
+            next_directory_id,
+        );
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
@@ -516,6 +571,8 @@ impl Entry {
             file_type: metadata.file_type(),
             metadata: Ok(metadata),
             parent_path: Arc::from(path.parent().unwrap_or(Path::new(""))),
+            directory_id: None,
+            parent_directory_id: None,
         })
     }
 
@@ -530,6 +587,8 @@ impl Entry {
             file_type: entry.file_type()?,
             metadata: entry.metadata(),
             parent_path,
+            directory_id: None,
+            parent_directory_id: None,
         })
     }
 }
@@ -540,6 +599,7 @@ fn start_pool(
     order: Order,
     descend: Arc<Descend>,
     options: Options,
+    next_directory_id: usize,
 ) -> Pool {
     #[cfg(not(any(windows, target_os = "macos")))]
     let _ = options;
@@ -563,6 +623,7 @@ fn start_pool(
             .collect(),
         idle: (0..threads).map(|_| AtomicBool::new(false)).collect(),
         next_wake: AtomicUsize::new(0),
+        next_directory_id: AtomicUsize::new(next_directory_id),
     });
     let handles: Vec<_> = workers
         .into_iter()
@@ -589,21 +650,33 @@ fn start_pool(
 fn begin_walks(
     roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
     descend: &Descend,
-) -> (Vec<(usize, RootEvent)>, Vec<Job>) {
+) -> (Vec<(usize, RootEvent)>, Vec<Job>, usize) {
     let mut next = Vec::new();
     let mut jobs = Vec::new();
+    let mut next_directory_id = 0;
     for (root_idx, mut entry) in roots {
         if let Ok(entry) = &mut entry {
             entry.depth = 0;
+            entry.parent_directory_id = None;
+            if entry.file_type.is_dir() {
+                entry.directory_id = Some(DirectoryId::new(next_directory_id));
+                next_directory_id += 1;
+            } else {
+                entry.directory_id = None;
+            }
         }
         let has_job = if let Ok(entry) = &entry
             && entry.metadata.is_ok()
             && entry.file_type.is_dir()
             && descend(root_idx, entry)
         {
+            let directory_id = entry
+                .directory_id
+                .expect("directory roots receive an identifier");
             jobs.push(Job::ReadDir {
                 root_idx,
                 path: Arc::from(entry.path()),
+                directory_id: directory_id.index(),
                 entry_depth: 1,
             });
             true
@@ -616,7 +689,7 @@ fn begin_walks(
         }
     }
     next.reverse();
-    (next, jobs)
+    (next, jobs, next_directory_id)
 }
 
 /// Seed an idle pool with one initial job per active root.
@@ -727,21 +800,31 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
         Job::ReadDir {
             root_idx: root,
             path,
+            directory_id,
             entry_depth,
         } => {
             if matches!(shared.order, Order::Completion) {
-                read_dir_completion(root, path, entry_depth, worker, shared);
+                read_dir_completion(root, path, directory_id, entry_depth, worker, shared);
             } else {
-                read_dir_parent_first(root, path, entry_depth, worker, shared);
+                read_dir_parent_first(root, path, directory_id, entry_depth, worker, shared);
             }
         }
         #[cfg(not(any(windows, target_os = "macos")))]
         Job::StatCompletion {
             root_idx: root,
             path,
+            directory_id,
             entry_depth,
             entries,
-        } => stat_entries_completion(root, path, entry_depth, entries, worker, shared),
+        } => stat_entries_completion(
+            root,
+            path,
+            directory_id,
+            entry_depth,
+            entries,
+            worker,
+            shared,
+        ),
     }
 }
 
@@ -754,6 +837,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
 fn read_dir_completion(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     entry_depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
@@ -787,6 +871,7 @@ fn read_dir_completion(
                     worker.push(Job::StatCompletion {
                         root_idx,
                         path: Arc::clone(&path),
+                        directory_id,
                         entry_depth,
                         entries: std::mem::replace(
                             &mut chunk,
@@ -804,6 +889,7 @@ fn read_dir_completion(
         worker.push(Job::StatCompletion {
             root_idx,
             path,
+            directory_id,
             entry_depth,
             entries: chunk,
         });
@@ -845,6 +931,7 @@ fn native_read_dir(
 fn read_dir_completion(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
@@ -868,7 +955,10 @@ fn read_dir_completion(
     };
     let mut entries = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut jobs = Vec::new();
-    for entry in dir_entries {
+    for mut entry in dir_entries {
+        if let Ok(entry) = &mut entry {
+            assign_directory_ids(entry, directory_id, shared);
+        }
         if let Ok(entry) = &entry
             && entry.file_type.is_dir()
             && (shared.descend)(root_idx, entry)
@@ -876,6 +966,10 @@ fn read_dir_completion(
             jobs.push(Job::ReadDir {
                 root_idx,
                 path: Arc::from(entry.path()),
+                directory_id: entry
+                    .directory_id
+                    .expect("directories receive an identifier")
+                    .index(),
                 entry_depth: depth + 1,
             });
         }
@@ -925,6 +1019,7 @@ fn publish_completion_batch(
 fn read_dir_parent_first(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
@@ -939,14 +1034,20 @@ fn read_dir_parent_first(
     let mut jobs = Vec::new();
     let entries = dir_entries
         .map(|entry| {
-            entry.inspect(|entry| {
-                if entry.file_type.is_dir() && (shared.descend)(root_idx, entry) {
+            entry.map(|mut entry| {
+                assign_directory_ids(&mut entry, directory_id, shared);
+                if entry.file_type.is_dir() && (shared.descend)(root_idx, &entry) {
                     jobs.push(Job::ReadDir {
                         root_idx,
                         path: Arc::from(entry.path()),
+                        directory_id: entry
+                            .directory_id
+                            .expect("directories receive an identifier")
+                            .index(),
                         entry_depth: depth + 1,
                     });
                 }
+                entry
             })
         })
         .collect();
@@ -957,6 +1058,7 @@ fn read_dir_parent_first(
 fn stat_entries_completion(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     depth: usize,
     entries: Vec<fs::DirEntry>,
     worker: &Worker<Job>,
@@ -966,14 +1068,20 @@ fn stat_entries_completion(
     let entries = entries
         .into_iter()
         .map(|entry| {
-            Entry::from_dir_entry(depth, Arc::clone(&path), entry).inspect(|entry| {
-                if entry.file_type.is_dir() && (shared.descend)(root_idx, entry) {
+            Entry::from_dir_entry(depth, Arc::clone(&path), entry).map(|mut entry| {
+                assign_directory_ids(&mut entry, directory_id, shared);
+                if entry.file_type.is_dir() && (shared.descend)(root_idx, &entry) {
                     jobs.push(Job::ReadDir {
                         root_idx,
                         path: Arc::from(entry.path()),
+                        directory_id: entry
+                            .directory_id
+                            .expect("directories receive an identifier")
+                            .index(),
                         entry_depth: entry.depth + 1,
                     });
                 }
+                entry
             })
         })
         .collect();
@@ -1003,11 +1111,12 @@ fn stat_entries_completion(
 fn read_dir_parent_first(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    read_dir_inline(root_idx, path, depth, worker, shared);
+    read_dir_inline(root_idx, path, directory_id, depth, worker, shared);
 }
 
 /// Convert a directory's entries on the worker that enumerates it, then schedule its children.
@@ -1017,6 +1126,7 @@ fn read_dir_parent_first(
 fn read_dir_inline(
     root_idx: usize,
     path: Arc<Path>,
+    directory_id: usize,
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
@@ -1033,18 +1143,38 @@ fn read_dir_inline(
         .map(|entry| {
             entry
                 .and_then(|entry| Entry::from_dir_entry(depth, Arc::clone(&path), entry))
-                .inspect(|entry| {
-                    if entry.file_type.is_dir() && (shared.descend)(root_idx, entry) {
+                .map(|mut entry| {
+                    assign_directory_ids(&mut entry, directory_id, shared);
+                    if entry.file_type.is_dir() && (shared.descend)(root_idx, &entry) {
                         jobs.push(Job::ReadDir {
                             root_idx,
                             path: Arc::from(entry.path()),
+                            directory_id: entry
+                                .directory_id
+                                .expect("directories receive an identifier")
+                                .index(),
                             entry_depth: depth + 1,
                         });
                     }
+                    entry
                 })
         })
         .collect();
     finish_directory(root_idx, Ok(entries), jobs, worker, shared);
+}
+
+fn assign_directory_ids(entry: &mut Entry, parent_directory_id: usize, shared: &PoolShared) {
+    entry.parent_directory_id = Some(DirectoryId::new(parent_directory_id));
+    entry.directory_id = entry.file_type.is_dir().then(|| {
+        DirectoryId::new(
+            shared
+                .next_directory_id
+                .fetch_update(AtomicOrdering::Relaxed, AtomicOrdering::Relaxed, |id| {
+                    id.checked_add(1)
+                })
+                .expect("directory identifier overflow"),
+        )
+    });
 }
 
 /// Publish a completed directory read and schedule its accepted child-directory jobs.
@@ -1115,6 +1245,49 @@ fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn directory_ids_are_compact_dense_and_match_parents() {
+        assert_eq!(size_of::<Option<DirectoryId>>(), 4);
+
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("a/child")).unwrap();
+        fs::create_dir(dir.path().join("b")).unwrap();
+        fs::write(dir.path().join("a/file"), b"x").unwrap();
+        fs::write(dir.path().join("file"), b"x").unwrap();
+
+        let entries = walk(
+            dir.path(),
+            4,
+            Order::ParentFirst,
+            Options::default(),
+            |_| true,
+        )
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+        let directories = entries
+            .iter()
+            .filter_map(|entry| entry.directory_id.map(|id| (entry.path(), id)))
+            .collect::<HashMap<_, _>>();
+        let mut ids = directories
+            .values()
+            .map(|id| id.index())
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        assert_eq!(ids, (0..directories.len()).collect::<Vec<_>>());
+
+        for entry in entries {
+            assert_eq!(entry.directory_id.is_some(), entry.file_type.is_dir());
+            if entry.depth == 0 {
+                assert_eq!(entry.parent_directory_id, None);
+            } else {
+                assert_eq!(
+                    entry.parent_directory_id,
+                    directories.get(entry.path().parent().unwrap()).copied()
+                );
+            }
+        }
+    }
 
     #[test]
     fn parallel_walk_is_parent_first_and_does_not_follow_symlinks() {

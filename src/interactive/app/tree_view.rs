@@ -1,12 +1,15 @@
 use super::{EntryDataBundle, SortMode, sorted_entries};
 use crate::interactive::{EntryCheck, path_of};
-use dua::traverse::{EntryData, Traversal, Tree, TreeIndex};
-use petgraph::{Direction, visit::Bfs};
-use std::path::{Path, PathBuf};
+use dua::traverse::{Traversal, Tree, TreeIndex};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub struct TreeView<'a> {
     pub traversal: &'a mut Traversal,
     pub glob_tree_root: Option<TreeIndex>,
+    pub glob_matches: Option<Arc<[TreeIndex]>>,
 }
 
 impl TreeView<'_> {
@@ -19,26 +22,13 @@ impl TreeView<'_> {
     }
 
     pub fn fs_parent_of(&self, idx: TreeIndex) -> Option<TreeIndex> {
-        self.traversal
-            .tree
-            .neighbors_directed(idx, petgraph::Incoming)
-            .find(|idx| match self.glob_tree_root {
-                None => true,
-                Some(glob_root) => *idx != glob_root,
-            })
+        self.traversal.tree.parent(idx)
     }
 
     pub fn view_parent_of(&self, idx: TreeIndex) -> Option<TreeIndex> {
-        let mut iter = self
-            .traversal
-            .tree
-            .neighbors_directed(idx, petgraph::Incoming);
-        match self.glob_tree_root {
-            None => iter.next(),
-            Some(glob_root) => iter
-                .clone()
-                .find(|idx| *idx == glob_root)
-                .or_else(|| iter.next()),
+        match self.glob_tree_root.zip(self.glob_matches.as_deref()) {
+            Some((glob_root, matches)) if matches.binary_search(&idx).is_ok() => Some(glob_root),
+            _ => self.traversal.tree.parent(idx),
         }
     }
 
@@ -57,6 +47,7 @@ impl TreeView<'_> {
             view_root,
             sorting,
             self.glob_tree_root,
+            self.glob_matches.as_deref(),
             check,
         )
     }
@@ -66,27 +57,24 @@ impl TreeView<'_> {
     }
 
     pub fn remove_entries(&mut self, root_index: TreeIndex, remove_root_node: bool) -> usize {
-        let mut entries_deleted = 0;
-        let mut bfs = Bfs::new(self.tree(), root_index);
-
-        while let Some(nx) = bfs.next(&self.tree()) {
-            if nx == root_index && !remove_root_node {
-                continue;
-            }
-            self.tree_mut().remove_node(nx);
-            entries_deleted += 1;
+        if remove_root_node {
+            return self.tree_mut().remove_subtree(root_index);
         }
-        entries_deleted
+        let children = self.tree().children(root_index).collect::<Vec<_>>();
+        children
+            .into_iter()
+            .map(|child| self.tree_mut().remove_subtree(child))
+            .sum()
     }
 
     pub fn exists(&self, idx: TreeIndex) -> bool {
-        self.tree().node_weight(idx).is_some()
+        self.tree().contains(idx)
     }
 
     pub fn total_size(&self) -> u128 {
         self.tree()
-            .neighbors_directed(self.traversal.root_index, Direction::Outgoing)
-            .filter_map(|idx| self.tree().node_weight(idx).map(|w| w.size))
+            .children(self.traversal.root_index)
+            .filter_map(|idx| self.tree().data(idx).map(|entry| entry.size))
             .sum()
     }
 
@@ -94,23 +82,19 @@ impl TreeView<'_> {
         loop {
             let (size_of_children, item_count) = self
                 .tree()
-                .neighbors_directed(index, Direction::Outgoing)
+                .children(index)
                 .filter_map(|idx| {
                     self.tree()
-                        .node_weight(idx)
-                        .map(|w| (w.size, w.entry_count.unwrap_or(1)))
+                        .data(idx)
+                        .map(|entry| (entry.size, entry.entry_count.unwrap_or(1)))
                 })
                 .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
                 .unwrap_or_default();
 
-            let node = self
-                .traversal
-                .tree
-                .node_weight_mut(index)
-                .expect("valid index");
-
-            node.size = size_of_children;
-            node.entry_count = Some(item_count);
+            self.traversal.tree.update(index, |entry| {
+                entry.size = size_of_children;
+                entry.entry_count = Some(item_count);
+            });
 
             match self.fs_parent_of(index) {
                 None => break,
@@ -120,11 +104,7 @@ impl TreeView<'_> {
     }
 }
 
-fn current_path(
-    tree: &petgraph::stable_graph::StableGraph<EntryData, ()>,
-    root: petgraph::stable_graph::NodeIndex,
-    glob_root: Option<TreeIndex>,
-) -> PathBuf {
+fn current_path(tree: &Tree, root: TreeIndex, glob_root: Option<TreeIndex>) -> PathBuf {
     match path_of(tree, root, glob_root) {
         ref p if p.as_os_str().is_empty() => Path::new(".")
             .canonicalize()

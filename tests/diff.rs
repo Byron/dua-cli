@@ -12,15 +12,16 @@ fn add(
     size: u128,
     is_dir: bool,
 ) -> TreeIndex {
-    let node = traversal.tree.add_node(EntryData {
-        name: name.as_ref().into(),
-        size,
-        entry_count: is_dir.then_some(0),
-        is_dir,
-        ..EntryData::default()
-    });
-    traversal.tree.add_edge(parent, node, ());
-    node
+    traversal.tree.add_child(
+        parent,
+        name,
+        EntryData {
+            size,
+            entry_count: is_dir.then_some(0),
+            is_dir,
+            ..EntryData::default()
+        },
+    )
 }
 
 fn replay(traversal: &Traversal, root: TreeIndex) -> Replay<IoCursor<Vec<u8>>> {

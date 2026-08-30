@@ -114,17 +114,28 @@ impl TerminalApp {
         if read_only {
             state.gitignored_entries = None;
             state.stats = TraversalStats {
-                entries_traversed: u64::try_from(traversal.tree.node_count().saturating_sub(1))
+                entries_traversed: u64::try_from(traversal.tree.len().saturating_sub(1))
                     .unwrap_or(u64::MAX),
                 elapsed: snapshot_load_duration,
                 io_errors: traversal
                     .tree
-                    .node_weights()
-                    .filter(|entry| entry.metadata_io_error)
+                    .indices()
+                    .filter(|index| {
+                        traversal
+                            .tree
+                            .data(*index)
+                            .is_some_and(|entry| entry.metadata_io_error)
+                    })
                     .count()
                     .try_into()
                     .unwrap_or(u64::MAX),
-                total_bytes: Some(traversal.tree[traversal.root_index].size),
+                total_bytes: Some(
+                    traversal
+                        .tree
+                        .data(traversal.root_index)
+                        .expect("traversal root exists")
+                        .size,
+                ),
                 ..TraversalStats::default()
             };
         }
@@ -135,6 +146,10 @@ impl TerminalApp {
             state.navigation().view_root,
             state.sorting,
             state.glob_root(),
+            state
+                .glob_navigation
+                .as_ref()
+                .map(|navigation| navigation.matches.as_ref()),
             EntryCheck::new(state.scan.is_some(), state.allow_entry_check),
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);

@@ -15,8 +15,7 @@ use dua::{
     Config, WalkResult,
     traverse::{BackgroundTraversal, EntryData, Traversal, TreeIndex},
 };
-use petgraph::Direction;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use tui::{
     Terminal, backend::Backend, buffer::Buffer, layout::Rect, style::Color, widgets::Widget,
 };
@@ -151,10 +150,7 @@ impl AppState {
         let cwd = std::env::current_dir().ok()?;
         let mut common_parent = None;
         let mut roots = Vec::new();
-        for index in tree
-            .tree()
-            .neighbors_directed(tree.traversal.root_index, Direction::Outgoing)
-        {
+        for index in tree.tree().children(tree.traversal.root_index) {
             let path = tree.path_of(index);
             let path = if path.is_absolute() {
                 path
@@ -191,11 +187,13 @@ impl AppState {
 
         let old_root = tree.traversal.root_index;
         let new_root = if wrap_root {
-            tree.tree_mut().add_node(EntryData {
-                name: parent.clone(),
-                is_dir: true,
-                ..EntryData::default()
-            })
+            tree.tree_mut().add_root(
+                &parent,
+                EntryData {
+                    is_dir: true,
+                    ..EntryData::default()
+                },
+            )
         } else {
             old_root
         };
@@ -219,7 +217,7 @@ impl AppState {
             Ok(traversal) => traversal,
             Err(err) => {
                 if wrap_root {
-                    tree.tree_mut().remove_node(new_root);
+                    tree.tree_mut().remove_subtree(new_root);
                 }
                 return Err(err);
             }
@@ -228,40 +226,44 @@ impl AppState {
         let previous_selection = self.navigation.selected;
         if wrap_root {
             let current_root = self.root_path.as_ref().expect("complete root is set");
-            let entry = tree
-                .tree_mut()
-                .node_weight_mut(old_root)
+            tree.tree_mut()
+                .rename(
+                    old_root,
+                    current_root
+                        .file_name()
+                        .expect("filesystem roots have no parent"),
+                )
                 .expect("root exists");
-            entry.name = current_root
-                .file_name()
-                .expect("filesystem roots have no parent")
-                .into();
-            entry.is_dir = true;
-            let children = tree
-                .tree()
-                .neighbors_directed(old_root, Direction::Outgoing)
-                .collect::<Vec<_>>();
+            tree.tree_mut()
+                .update(old_root, |entry| entry.is_dir = true);
+            let children = tree.tree().children(old_root).collect::<Vec<_>>();
             for child in children {
-                let name = tree.tree()[child]
-                    .name
+                let name = tree
+                    .tree()
+                    .name(child)
+                    .expect("child exists")
                     .file_name()
                     .expect("children have a file name")
                     .to_owned();
-                tree.tree_mut()[child].name = name.into();
+                tree.tree_mut().rename(child, name).expect("child exists");
             }
-            tree.tree_mut().add_edge(new_root, old_root, ());
+            tree.tree_mut()
+                .attach(new_root, old_root)
+                .expect("old root is detached");
         } else {
-            let root = tree
-                .tree_mut()
-                .node_weight_mut(old_root)
+            tree.tree_mut()
+                .rename(old_root, &parent)
                 .expect("root exists");
-            root.name.clone_from(&parent);
-            root.is_dir = true;
+            tree.tree_mut()
+                .update(old_root, |entry| entry.is_dir = true);
             for (path, index) in &preexisting {
-                tree.tree_mut()[*index].name = path
-                    .file_name()
-                    .expect("paths with a parent have a file name")
-                    .into();
+                tree.tree_mut()
+                    .rename(
+                        *index,
+                        path.file_name()
+                            .expect("paths with a parent have a file name"),
+                    )
+                    .expect("preexisting node exists");
             }
         }
 
@@ -284,7 +286,15 @@ impl AppState {
             self.entries
                 .iter()
                 .position(|entry| entry.index == selected)
-                .map(|position| (tree.tree()[selected].name.clone(), position))
+                .map(|position| {
+                    (
+                        tree.tree()
+                            .name(selected)
+                            .expect("selected node exists")
+                            .into_owned(),
+                        position,
+                    )
+                })
         });
         self.root_path = Some(parent.clone());
         self.root_paths = vec![parent];
@@ -743,9 +753,9 @@ impl AppState {
         }
 
         let previous_selection = self.navigation().selected.and_then(|sel_index| {
-            tree.tree().node_weight(sel_index).map(|w| {
+            tree.tree().name(sel_index).map(|name| {
                 (
-                    w.name.clone(),
+                    name.into_owned(),
                     self.entries
                         .iter()
                         .enumerate()
@@ -854,6 +864,10 @@ impl AppState {
         TreeView {
             traversal,
             glob_tree_root: self.glob_navigation.as_ref().map(|n| n.tree_root),
+            glob_matches: self
+                .glob_navigation
+                .as_ref()
+                .map(|navigation| Arc::clone(&navigation.matches)),
         }
     }
 
@@ -873,27 +887,27 @@ impl AppState {
             Ok(matches) if matches.is_empty() => {
                 self.message = Some("No match found".into());
             }
-            Ok(matches) => {
+            Ok(mut matches) => {
                 if let Some(glob_source) = &self.glob_navigation {
-                    tree_view.tree_mut().remove_node(glob_source.tree_root);
+                    tree_view.tree_mut().remove_subtree(glob_source.tree_root);
                 }
 
-                let tree_root = tree_view.tree_mut().add_node(EntryData::default());
+                matches.sort_unstable();
+                let matches: Arc<[TreeIndex]> = matches.into();
+                let tree_root = tree_view.tree_mut().add_detached("", EntryData::default());
                 let glob_source = Navigation {
                     tree_root,
                     view_root: tree_root,
                     selected: Some(tree_root),
+                    matches: Arc::clone(&matches),
                     ..Default::default()
                 };
                 self.glob_navigation = Some(glob_source);
 
-                for idx in matches {
-                    tree_view.tree_mut().add_edge(tree_root, idx, ());
-                }
-
                 let glob_tree_view = TreeView {
                     traversal: tree_view.traversal,
                     glob_tree_root: Some(tree_root),
+                    glob_matches: Some(matches),
                 };
                 let new_entries =
                     glob_tree_view.sorted_entries(tree_root, self.sorting, self.entry_check());
@@ -949,7 +963,7 @@ impl AppState {
         use FocussedPane::Main;
         self.focussed = Main;
         if let Some(glob_source) = &self.glob_navigation {
-            tree_view.tree_mut().remove_node(glob_source.tree_root);
+            tree_view.tree_mut().remove_subtree(glob_source.tree_root);
         }
         self.glob_navigation = None;
         window.glob = None;
