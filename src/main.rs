@@ -11,7 +11,7 @@ use std::{
 };
 
 #[cfg(feature = "tui-crossplatform")]
-use crate::interactive::input::{input_channel, input_channel_from_chars};
+use crate::interactive::input::{input_channel, input_channel_from_keys};
 #[cfg(feature = "tui-crossplatform")]
 use crate::interactive::terminal::TerminalApp;
 #[cfg(feature = "tui-crossplatform")]
@@ -147,6 +147,11 @@ fn main() -> Result<()> {
                 bail!("--import cannot be used with traversal options or input paths");
             }
             let export = export.map(std::path::absolute).transpose()?;
+            let once_events = once
+                .as_deref()
+                .map(input_channel_from_keys)
+                .transpose()
+                .map_err(anyhow::Error::msg)?;
             let traversal = merge_traversal_args(&global_traversal, &subcommand_traversal);
             let config = dua::Config::load()?;
             let enable_focus_change = config.notifications.any_enabled();
@@ -188,7 +193,7 @@ fn main() -> Result<()> {
             }
 
             let mut stderr = io::stderr();
-            let terminal_guard = if once.is_some() {
+            let terminal_guard = if once_events.is_some() {
                 InteractiveTerminalGuard {
                     raw_mode: false,
                     alternate_screen: false,
@@ -228,10 +233,8 @@ fn main() -> Result<()> {
                 app.traverse()?;
             }
 
-            let res = match once {
-                Some(input) => {
-                    app.process_events_once(&mut terminal, input_channel_from_chars(input.as_str()))
-                }
+            let res = match once_events {
+                Some(events) => app.process_events_once(&mut terminal, events),
                 None => app.process_events(
                     &mut terminal,
                     input_channel(app.state.terminal_focus.clone()),

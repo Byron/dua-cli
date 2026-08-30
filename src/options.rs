@@ -227,7 +227,7 @@ pub enum Command {
         /// Do not check entries for presence when listing a directory to avoid slugging performance on slow filesystems.
         #[clap(long, short = 'e', conflicts_with = "import")]
         no_entry_check: bool,
-        /// Exit automatically after traversal, optionally replaying the given single-character keys first.
+        /// Exit automatically after traversal, optionally replaying a configured keybinding or compact character sequence first.
         #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "")]
         once: Option<String>,
     },

@@ -76,18 +76,27 @@ pub fn input_channel(focus: TerminalFocus) -> Receiver<Event> {
     key_receive
 }
 
-/// Return a receiver that yields one character-key event for each character in `input`.
-pub fn input_channel_from_chars(input: &str) -> Receiver<Event> {
+/// Return a receiver for a configured-key expression, or a legacy sequence of character keys.
+pub fn input_channel_from_keys(input: &str) -> Result<Receiver<Event>, String> {
     let (key_send, key_receive) = crossbeam::channel::unbounded();
-    for event in input
-        .chars()
-        .map(|character| Event::Key(KeyCode::Char(character).into()))
-    {
+    let events = if input.is_empty() {
+        Vec::new()
+    } else {
+        match input.parse::<dua::KeyBinding>() {
+            Ok(binding) => vec![Event::Key(binding.to_event())],
+            Err(err) if input.contains('+') => return Err(err),
+            Err(_) => input
+                .chars()
+                .map(|character| Event::Key(KeyCode::Char(character).into()))
+                .collect(),
+        }
+    };
+    for event in events {
         if key_send.send(event).is_err() {
             break;
         }
     }
-    key_receive
+    Ok(key_receive)
 }
 
 #[cfg(test)]
@@ -119,5 +128,29 @@ mod tests {
         assert!(focus.is_focussed());
         assert!(matches!(receiver.try_recv(), Ok(Event::Key(_))));
         assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn once_input_accepts_configured_key_syntax_and_legacy_sequences() {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+
+        let modified = input_channel_from_keys("ctrl+r").unwrap();
+        assert_eq!(
+            modified.recv().unwrap(),
+            Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL))
+        );
+
+        let named = input_channel_from_keys("page-down").unwrap();
+        assert_eq!(named.recv().unwrap(), Event::Key(KeyCode::PageDown.into()));
+
+        let legacy = input_channel_from_keys("jk").unwrap();
+        assert_eq!(
+            legacy.recv().unwrap(),
+            Event::Key(KeyCode::Char('j').into())
+        );
+        assert_eq!(
+            legacy.recv().unwrap(),
+            Event::Key(KeyCode::Char('k').into())
+        );
     }
 }

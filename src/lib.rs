@@ -10,7 +10,7 @@ pub use dua_core::Options as TraversalOptions;
 mod aggregate;
 mod common;
 mod config;
-pub use config::{Config, KeyBindings, KeysConfig};
+pub use config::{Config, KeyBinding, KeyBindings, KeysConfig};
 mod crossdev;
 mod diff;
 pub use diff::diff_snapshots;

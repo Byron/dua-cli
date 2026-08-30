@@ -159,8 +159,9 @@ impl<'de> Deserialize<'de> for KeyBindings {
     }
 }
 
+/// One key and its optional modifiers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct KeyBinding {
+pub struct KeyBinding {
     code: Key,
     modifiers: Vec<Modifier>,
 }
@@ -379,7 +380,9 @@ impl fmt::Display for Modifier {
 
 #[cfg(feature = "tui-crossplatform")]
 impl KeyBinding {
-    fn matches(&self, key: crossterm::event::KeyEvent) -> bool {
+    /// Convert this binding into the terminal event it describes.
+    #[must_use]
+    pub fn to_event(&self) -> crossterm::event::KeyEvent {
         use crossterm::event::{KeyEvent, KeyModifiers};
 
         let modifiers = self
@@ -393,13 +396,19 @@ impl KeyBinding {
                         Modifier::Shift => KeyModifiers::SHIFT,
                     }
             });
+        KeyEvent::new(self.code.to_crossterm(), modifiers)
+    }
+
+    fn matches(&self, key: crossterm::event::KeyEvent) -> bool {
+        use crossterm::event::{KeyEvent, KeyModifiers};
+
         let mut key_modifiers = key.modifiers;
         if !self.modifiers.contains(&Modifier::Shift)
             && matches!(self.code, Key::Char(character) if !character.is_alphanumeric())
         {
             key_modifiers.remove(KeyModifiers::SHIFT);
         }
-        KeyEvent::new(self.code.to_crossterm(), modifiers) == KeyEvent::new(key.code, key_modifiers)
+        self.to_event() == KeyEvent::new(key.code, key_modifiers)
     }
 }
 
