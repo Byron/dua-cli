@@ -11,7 +11,8 @@ use std::{
 };
 
 const MAGIC: &[u8; 8] = b"DUASNAP\0";
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
+const VERSION_1: u16 = 1;
 const HEADER_LEN: usize = 12;
 const MAX_NAME_LEN: usize = 1024 * 1024;
 const MAX_RECORD_LEN: usize = 2 * 1024 * 1024;
@@ -79,10 +80,12 @@ enum SnapshotReader<R> {
 
 struct Decoder<R> {
     reader: HashingReader<BufReader<SnapshotReader<R>>>,
+    allocation: Option<(usize, usize)>,
     open_nodes: Vec<OpenNode>,
     sibling_names: Vec<Vec<u8>>,
     record: Vec<u8>,
     node_count: u64,
+    name_bytes: u64,
     total_size: u128,
     total_entries: u64,
     summary: Option<DecodeSummary>,
@@ -285,7 +288,7 @@ impl<R: Read + Seek> Replay<R> {
     }
 }
 
-/// Write `traversal` as a deterministic version-1 snapshot, optionally compressed with zlib.
+/// Write `traversal` as a deterministic version-2 snapshot, optionally compressed with zlib.
 ///
 /// `roots` must contain the traversal's top-level nodes in original input order.
 pub fn write(
@@ -305,13 +308,6 @@ pub fn write(
 }
 
 fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> Result<()> {
-    let mut writer = gix::hash::io::Write::new(BufWriter::new(writer), gix::hash::Kind::Sha256);
-    let mut header = [0; HEADER_LEN];
-    header[..MAGIC.len()].copy_from_slice(MAGIC);
-    header[8..10].copy_from_slice(&VERSION.to_le_bytes());
-    header[10] = PATH_ENCODING;
-    writer.write_all(&header)?;
-
     let mut seen_roots = HashSet::with_capacity(roots.len());
     for &root in roots {
         if !seen_roots.insert(root) {
@@ -319,6 +315,32 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
         }
     }
     drop(seen_roots);
+
+    let mut stack = roots.to_vec();
+    let mut stored_node_count = 0u64;
+    let mut stored_name_bytes = 0u64;
+    while let Some(index) = stack.pop() {
+        let name = traversal
+            .tree
+            .native_name(index)
+            .ok_or_else(|| anyhow!("snapshot node {index:?} does not exist"))?;
+        stored_node_count = stored_node_count
+            .checked_add(1)
+            .context("snapshot contains too many nodes")?;
+        stored_name_bytes = stored_name_bytes
+            .checked_add(u64::try_from(name.len()).context("snapshot names are too long")?)
+            .context("snapshot names are too long")?;
+        stack.extend(traversal.tree.children(index));
+    }
+
+    let mut writer = gix::hash::io::Write::new(BufWriter::new(writer), gix::hash::Kind::Sha256);
+    let mut header = [0; HEADER_LEN];
+    header[..MAGIC.len()].copy_from_slice(MAGIC);
+    header[8..10].copy_from_slice(&VERSION.to_le_bytes());
+    header[10] = PATH_ENCODING;
+    writer.write_all(&header)?;
+    write_uleb128(&mut writer, u128::from(stored_node_count))?;
+    write_uleb128(&mut writer, u128::from(stored_name_bytes))?;
 
     let mut stack = Vec::new();
     let mut record = Vec::new();
@@ -414,13 +436,20 @@ fn write_raw(writer: impl Write, traversal: &Traversal, roots: &[TreeIndex]) -> 
     Ok(())
 }
 
-/// Read and fully verify a version-1 snapshot before returning its traversal.
+/// Read and fully verify a version-1 or version-2 snapshot before returning its traversal.
 pub fn read(reader: impl Read) -> Result<Snapshot> {
+    let mut decoder = Decoder::new(reader)?;
     let mut traversal = Traversal::new();
     traversal.cost = Some(Duration::ZERO);
+    if let Some((node_count, name_bytes)) = decoder.allocation {
+        traversal
+            .tree
+            .try_reserve_exact(node_count, name_bytes)
+            .map_err(|err| anyhow!("could not preallocate snapshot tree: {err}"))?;
+    }
     let mut parents = Vec::new();
     let mut roots = Vec::new();
-    let summary = decode(reader, |entry| {
+    while let Some(entry) = decoder.next_entry(None)? {
         parents.truncate(entry.depth);
         let parent = parents.last().copied().unwrap_or(traversal.root_index);
         let node = traversal
@@ -437,8 +466,10 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
             .try_reserve(1)
             .context("could not grow snapshot ancestor stack")?;
         parents.push(node);
-        Ok(())
-    })?;
+    }
+    let summary = decoder
+        .summary
+        .context("snapshot ended without a summary")?;
 
     traversal
         .tree
@@ -450,17 +481,6 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
     Ok(Snapshot { traversal, roots })
 }
 
-fn decode(
-    reader: impl Read,
-    mut on_entry: impl for<'entry> FnMut(DecodedEntry<'entry>) -> Result<()>,
-) -> Result<DecodeSummary> {
-    let mut decoder = Decoder::new(reader)?;
-    while let Some(entry) = decoder.next_entry(None)? {
-        on_entry(entry)?;
-    }
-    Ok(decoder.summary.expect("end of snapshot stores its summary"))
-}
-
 impl<R: Read> Decoder<R> {
     fn new(reader: R) -> Result<Self> {
         let mut reader = HashingReader::new(BufReader::new(SnapshotReader::new(reader)?));
@@ -470,7 +490,7 @@ impl<R: Read> Decoder<R> {
             bail!("invalid snapshot at byte 0: bad magic");
         }
         let version = u16::from_le_bytes([header[8], header[9]]);
-        if version != VERSION {
+        if version != VERSION_1 && version != VERSION {
             bail!("invalid snapshot at byte 8: unsupported version {version}");
         }
         if header[10] != PATH_ENCODING {
@@ -483,12 +503,41 @@ impl<R: Read> Decoder<R> {
             bail!("invalid snapshot at byte 11: unknown header flags");
         }
 
+        let allocation = match version {
+            VERSION_1 => None,
+            VERSION => {
+                let node_count_offset = reader.offset;
+                let node_count = read_u64(&mut reader).map_err(|err| {
+                    anyhow!("invalid snapshot integer at byte {node_count_offset}: {err}")
+                })?;
+                if node_count >= u64::from(u32::MAX) {
+                    bail!("snapshot exceeds the tree node-index limit");
+                }
+                let name_bytes_offset = reader.offset;
+                let name_bytes = read_u64(&mut reader).map_err(|err| {
+                    anyhow!("invalid snapshot integer at byte {name_bytes_offset}: {err}")
+                })?;
+                if name_bytes > u64::from(u32::MAX) {
+                    bail!("snapshot exceeds the tree name-storage limit");
+                }
+                Some((
+                    usize::try_from(node_count)
+                        .context("snapshot node count exceeds this address space")?,
+                    usize::try_from(name_bytes)
+                        .context("snapshot name storage exceeds this address space")?,
+                ))
+            }
+            _ => unreachable!("snapshot version was checked above"),
+        };
+
         Ok(Self {
             reader,
+            allocation,
             open_nodes: Vec::new(),
             sibling_names: Vec::new(),
             record: Vec::new(),
             node_count: 0,
+            name_bytes: 0,
             total_size: 0,
             total_entries: 0,
             summary: None,
@@ -545,6 +594,15 @@ impl<R: Read> Decoder<R> {
             .map_err(|err| anyhow!("invalid snapshot record at byte {record_offset}: {err}"))?;
         if node_id >= u64::from(u32::MAX) {
             bail!("snapshot exceeds the tree node-index limit");
+        }
+        self.name_bytes = self
+            .name_bytes
+            .checked_add(u64::try_from(native_name.len()).context("snapshot names are too long")?)
+            .context("snapshot names are too long")?;
+        if self.allocation.is_some_and(|(node_count, name_bytes)| {
+            node_id > node_count as u64 || self.name_bytes > name_bytes as u64
+        }) {
+            bail!("snapshot exceeds its declared storage requirements");
         }
 
         let sibling_ordinal = if parent_id == 0 {
@@ -634,6 +692,11 @@ impl<R: Read> Decoder<R> {
                 "invalid snapshot at byte {count_offset}: footer names {footer_count} nodes but read {}",
                 self.node_count
             );
+        }
+        if self.allocation.is_some_and(|(node_count, name_bytes)| {
+            self.node_count != node_count as u64 || self.name_bytes != name_bytes as u64
+        }) {
+            bail!("snapshot does not match its declared storage requirements");
         }
 
         let actual = self.reader.hash.clone().try_finalize()?;

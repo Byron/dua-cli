@@ -267,6 +267,29 @@ impl Tree {
         }
     }
 
+    pub(crate) fn try_reserve_exact(
+        &mut self,
+        additional_nodes: usize,
+        additional_name_bytes: usize,
+    ) -> Result<(), TreeError> {
+        let node_count = self
+            .nodes
+            .len()
+            .checked_add(additional_nodes)
+            .ok_or(TreeError::Capacity)?;
+        let name_bytes = self
+            .names
+            .len()
+            .checked_add(additional_name_bytes)
+            .ok_or(TreeError::Capacity)?;
+        if node_count > u32::MAX as usize || name_bytes > u32::MAX as usize {
+            return Err(TreeError::Capacity);
+        }
+        self.nodes.try_reserve_exact(additional_nodes)?;
+        self.names.try_reserve_exact(additional_name_bytes)?;
+        Ok(())
+    }
+
     /// Add a parentless node.
     ///
     /// # Panics
