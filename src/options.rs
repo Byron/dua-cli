@@ -1,3 +1,4 @@
+use clap::builder::TypedValueParser;
 use clap_complete::Shell;
 use dua::ByteFormat as LibraryByteFormat;
 use std::path::PathBuf;
@@ -36,6 +37,16 @@ fn dft_format() -> ByteFormat {
 }
 
 const DEFAULT_DIFF_SUMMARY_LIMIT: usize = 5;
+
+fn parse_percentage(value: &str) -> Result<f64, String> {
+    let percentage = value
+        .parse::<f64>()
+        .map_err(|_| format!("invalid percentage: {value}"))?;
+    (0.0..=100.0)
+        .contains(&percentage)
+        .then_some(percentage)
+        .ok_or_else(|| "percentage must be between 0 and 100".to_owned())
+}
 
 #[cfg(feature = "tui-crossplatform")]
 fn parse_snapshot_compression_level(value: &str) -> Result<i32, String> {
@@ -299,8 +310,34 @@ pub enum Command {
         #[clap(flatten)]
         args: StackArgs,
         /// Write the SVG to this file instead of opening a temporary file.
-        #[clap(short = 'o', long, value_name = "FILE")]
+        #[clap(short = 'o', long, value_name = "FILE", help_heading = "SVG Options")]
         output: Option<PathBuf>,
+        /// Set the frame color palette.
+        #[clap(
+            long,
+            default_value = inferno::flamegraph::defaults::COLORS,
+            value_parser = clap::builder::PossibleValuesParser::new(inferno::flamegraph::Palette::VARIANTS).map(|name| name.parse::<inferno::flamegraph::Palette>().expect("known palette")),
+            value_name = "PALETTE",
+            help_heading = "SVG Options"
+        )]
+        palette: inferno::flamegraph::Palette,
+        /// Set the image width in pixels. By default, the SVG uses the available width.
+        #[clap(long, value_name = "PIXELS", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..), help_heading = "SVG Options")]
+        width: Option<usize>,
+        /// Omit frames narrower than this percentage.
+        #[clap(long, default_value_t = inferno::flamegraph::defaults::MIN_WIDTH, value_name = "PERCENT", value_parser = parse_percentage, help_heading = "SVG Options")]
+        min_width: f64,
+        /// Set the graph title.
+        #[clap(
+            long,
+            default_value = "Disk Usage Flame Graph",
+            value_name = "TEXT",
+            help_heading = "SVG Options"
+        )]
+        title: String,
+        /// Grow stacks from top to bottom.
+        #[clap(long, help_heading = "SVG Options")]
+        inverted: bool,
     },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
@@ -401,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn stack_commands_accept_only_stack_options() {
+    fn stack_commands_accept_only_relevant_options() {
         let args = Args::try_parse_from(["dua", "stacks", "--import", "scan.dua", "--depth", "2"])
             .expect("stacks accepts snapshot and depth options");
         assert!(matches!(
@@ -415,17 +452,47 @@ mod tests {
             }) if path == std::path::Path::new("scan.dua")
         ));
 
-        let args =
-            Args::try_parse_from(["dua", "flamegraph", "--output", "usage.svg", "somewhere"])
-                .expect("flamegraph accepts an output and traversal input");
-        assert!(matches!(
-            args.command,
-            Some(super::Command::Flamegraph {
-                args: super::StackArgs { traversal, .. },
-                output: Some(path),
-            }) if path == std::path::Path::new("usage.svg")
-                && traversal.input == [PathBuf::from("somewhere")]
-        ));
+        let args = Args::try_parse_from([
+            "dua",
+            "flamegraph",
+            "--output",
+            "usage.svg",
+            "--palette",
+            "blue",
+            "--width",
+            "640",
+            "--min-width",
+            "0.5",
+            "--title",
+            "Disk map",
+            "--inverted",
+            "somewhere",
+        ])
+        .expect("flamegraph accepts SVG and traversal options");
+        let Some(super::Command::Flamegraph {
+            args: super::StackArgs { traversal, .. },
+            output: Some(path),
+            palette,
+            width,
+            min_width,
+            title,
+            inverted,
+        }) = args.command
+        else {
+            panic!("expected flamegraph subcommand");
+        };
+        assert_eq!(path, std::path::Path::new("usage.svg"));
+        assert_eq!(traversal.input, [PathBuf::from("somewhere")]);
+        assert_eq!(palette, "blue".parse().unwrap());
+        assert_eq!(width, Some(640));
+        assert!((min_width - 0.5).abs() < f64::EPSILON);
+        assert_eq!(title, "Disk map");
+        assert!(inverted);
+
+        for value in ["-1", "101", "NaN"] {
+            Args::try_parse_from(["dua", "flamegraph", "--min-width", value])
+                .expect_err("minimum width must be a finite percentage");
+        }
 
         for flag in ["--format", "--stats", "--no-sort", "--no-total", "--stack"] {
             let err = Args::try_parse_from(["dua", "stacks", flag])
@@ -609,6 +676,19 @@ mod tests {
             assert!(help.contains("--depth"));
             for irrelevant in ["--format", "--stats", "--no-sort", "--no-total"] {
                 assert!(!help.contains(irrelevant), "{name} exposes {irrelevant}");
+            }
+            for svg_option in [
+                "--palette",
+                "--width",
+                "--min-width",
+                "--title",
+                "--inverted",
+            ] {
+                assert_eq!(
+                    help.contains(svg_option),
+                    name == "flamegraph",
+                    "{name} has the wrong visibility for {svg_option}"
+                );
             }
         }
     }

@@ -326,7 +326,15 @@ fn main() -> Result<()> {
                 stdout.lock(),
             )?
         }
-        Some(Flamegraph { args, output }) => {
+        Some(Flamegraph {
+            args,
+            output,
+            palette,
+            width,
+            min_width,
+            title,
+            inverted,
+        }) => {
             if global_format_used {
                 bail!("flamegraph cannot be used with --format");
             }
@@ -339,7 +347,19 @@ fn main() -> Result<()> {
                 args,
                 &mut stacks,
             )?;
-            let path = write_flamegraph(stacks, output)?;
+            let mut options = inferno::flamegraph::Options::default();
+            options.colors = palette;
+            options.image_width = width;
+            options.min_width = min_width;
+            options.title = title;
+            options.direction = if inverted {
+                inferno::flamegraph::Direction::Inverted
+            } else {
+                inferno::flamegraph::Direction::Straight
+            };
+            "bytes".clone_into(&mut options.count_name);
+            "Path:".clone_into(&mut options.name_type);
+            let path = write_flamegraph(stacks, output, &mut options)?;
             if open {
                 open::that(&path)
                     .with_context(|| format!("Could not open flame graph {}", path.display()))?;
@@ -499,13 +519,16 @@ fn run_stacks(
     }
 }
 
-fn write_flamegraph(stacks: Vec<u8>, output: Option<PathBuf>) -> Result<PathBuf> {
+fn write_flamegraph(
+    stacks: Vec<u8>,
+    output: Option<PathBuf>,
+    options: &mut inferno::flamegraph::Options<'_>,
+) -> Result<PathBuf> {
     let stacks = String::from_utf8(stacks).expect("folded stacks are valid UTF-8");
-    let mut options = inferno::flamegraph::Options::default();
     if let Some(path) = output {
         let file = fs::File::create(&path)
             .with_context(|| format!("Could not create flame graph {}", path.display()))?;
-        inferno::flamegraph::from_lines(&mut options, stacks.lines(), file)
+        inferno::flamegraph::from_lines(options, stacks.lines(), file)
             .with_context(|| format!("Could not write flame graph {}", path.display()))?;
         Ok(path)
     } else {
@@ -514,7 +537,7 @@ fn write_flamegraph(stacks: Vec<u8>, output: Option<PathBuf>) -> Result<PathBuf>
             .suffix(".svg")
             .tempfile()
             .context("Could not create temporary flame graph")?;
-        inferno::flamegraph::from_lines(&mut options, stacks.lines(), &mut file)
+        inferno::flamegraph::from_lines(options, stacks.lines(), &mut file)
             .with_context(|| format!("Could not write flame graph {}", file.path().display()))?;
         let (file, path) = file
             .keep()
@@ -1009,13 +1032,19 @@ mod tests {
     fn writes_explicit_and_temporary_flamegraphs() {
         let dir = tempfile::tempdir().expect("temporary directory");
         let explicit = dir.path().join("usage.svg");
-        let path = write_flamegraph(b"root;child 4\n".to_vec(), Some(explicit.clone()))
-            .expect("explicit flame graph");
+        let mut options = inferno::flamegraph::Options::default();
+        let path = write_flamegraph(
+            b"root;child 4\n".to_vec(),
+            Some(explicit.clone()),
+            &mut options,
+        )
+        .expect("explicit flame graph");
         assert_eq!(path, explicit);
         assert!(fs::read_to_string(&path).unwrap().contains("child"));
 
-        let path =
-            write_flamegraph(b"root;child 4\n".to_vec(), None).expect("temporary flame graph");
+        let mut options = inferno::flamegraph::Options::default();
+        let path = write_flamegraph(b"root;child 4\n".to_vec(), None, &mut options)
+            .expect("temporary flame graph");
         assert_eq!(path.extension().and_then(|ext| ext.to_str()), Some("svg"));
         assert!(fs::read_to_string(&path).unwrap().contains("<svg"));
         fs::remove_file(path).expect("remove retained temporary flame graph");
