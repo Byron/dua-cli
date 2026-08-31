@@ -89,24 +89,9 @@ impl TraversalArgs {
 }
 
 #[derive(Debug, Clone, clap::Args)]
-#[cfg_attr(
-    target_os = "macos",
-    expect(
-        clippy::struct_excessive_bools,
-        reason = "independent command-line switches map directly to booleans"
-    )
-)]
 pub struct TraversalArgs {
-    /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
-    /// Set to 1 to use only a single thread.
-    #[clap(
-        short = 't',
-        long = "threads",
-        default_value_t = DEFAULT_THREADS,
-        env = "DUA_THREADS",
-        help_heading = "Traversal Options"
-    )]
-    pub threads: usize,
+    #[clap(flatten)]
+    pub scan: ScanArgs,
 
     /// The format with which to print byte counts.
     #[clap(
@@ -118,6 +103,27 @@ pub struct TraversalArgs {
         help_heading = "Traversal Options"
     )]
     pub format: Option<ByteFormat>,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+#[cfg_attr(
+    target_os = "macos",
+    expect(
+        clippy::struct_excessive_bools,
+        reason = "independent command-line switches map directly to booleans"
+    )
+)]
+pub struct ScanArgs {
+    /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
+    /// Set to 1 to use only a single thread.
+    #[clap(
+        short = 't',
+        long = "threads",
+        default_value_t = DEFAULT_THREADS,
+        env = "DUA_THREADS",
+        help_heading = "Traversal Options"
+    )]
+    pub threads: usize,
 
     /// Display apparent size instead of disk usage.
     #[clap(
@@ -184,6 +190,33 @@ pub struct TraversalArgs {
     /// One or more input files or directories. If unset, we will use all entries in the current working directory.
     #[clap(value_parser)]
     pub input: Vec<PathBuf>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct StackArgs {
+    #[clap(flatten)]
+    pub traversal: ScanArgs,
+
+    /// Load a traversal snapshot instead of scanning the filesystem.
+    #[clap(
+        long,
+        value_name = "FILE",
+        conflicts_with_all = [
+            "input",
+            "threads",
+            "apparent_size",
+            "count_hard_links",
+            "stay_on_filesystem",
+            "ignore_dirs",
+            "ignore_from"
+        ]
+    )]
+    #[cfg_attr(target_os = "macos", clap(conflicts_with = "deduplicate_apfs_clones"))]
+    pub import: Option<PathBuf>,
+
+    /// Limit folded output to this many levels. The inputs form the first level.
+    #[clap(short = 'd', long, value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+    pub depth: Option<usize>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -256,6 +289,19 @@ pub enum Command {
         #[clap(long, value_name = "COUNT", default_value_t = DEFAULT_DIFF_SUMMARY_LIMIT)]
         summary_limit: usize,
     },
+    /// Print folded stacks for flame-graph tools
+    Stacks {
+        #[clap(flatten)]
+        args: StackArgs,
+    },
+    /// Render disk usage as an SVG flame graph
+    Flamegraph {
+        #[clap(flatten)]
+        args: StackArgs,
+        /// Write the SVG to this file instead of opening a temporary file.
+        #[clap(short = 'o', long, value_name = "FILE")]
+        output: Option<PathBuf>,
+    },
     /// Aggregate the consumed space of one or more directories or files
     #[clap(name = "aggregate", visible_alias = "a")]
     Aggregate {
@@ -289,11 +335,14 @@ pub enum Command {
         #[clap(long)]
         no_total: bool,
         /// Print folded stacks for flame-graph tools instead of a table or tree.
-        #[clap(long, conflicts_with_all = ["statistics", "no_sort", "no_total"])]
+        #[clap(
+            long,
+            hide = true,
+            conflicts_with_all = ["statistics", "no_sort", "no_total"]
+        )]
         stack: bool,
         /// Print an indented tree that descends this many levels into each input, instead of the
-        /// flat listing. With `--stack`, limit the folded output to the same depth. The inputs form
-        /// the first level, so a depth of 1 lists just them.
+        /// flat listing. The inputs form the first level, so a depth of 1 lists just them.
         #[clap(short = 'd', long, conflicts_with = "statistics", value_name = "DEPTH", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
         depth: Option<usize>,
     },
@@ -352,6 +401,40 @@ mod tests {
     }
 
     #[test]
+    fn stack_commands_accept_only_stack_options() {
+        let args = Args::try_parse_from(["dua", "stacks", "--import", "scan.dua", "--depth", "2"])
+            .expect("stacks accepts snapshot and depth options");
+        assert!(matches!(
+            args.command,
+            Some(super::Command::Stacks {
+                args: super::StackArgs {
+                    import: Some(path),
+                    depth: Some(2),
+                    ..
+                }
+            }) if path == std::path::Path::new("scan.dua")
+        ));
+
+        let args =
+            Args::try_parse_from(["dua", "flamegraph", "--output", "usage.svg", "somewhere"])
+                .expect("flamegraph accepts an output and traversal input");
+        assert!(matches!(
+            args.command,
+            Some(super::Command::Flamegraph {
+                args: super::StackArgs { traversal, .. },
+                output: Some(path),
+            }) if path == std::path::Path::new("usage.svg")
+                && traversal.input == [PathBuf::from("somewhere")]
+        ));
+
+        for flag in ["--format", "--stats", "--no-sort", "--no-total", "--stack"] {
+            let err = Args::try_parse_from(["dua", "stacks", flag])
+                .expect_err("display option should not be available to stacks");
+            assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+        }
+    }
+
+    #[test]
     fn traversal_options_before_aggregate_still_parse_as_subcommand() {
         let args = Args::try_parse_from(["dua", "--format", "metric", "aggregate", "--stats", "."])
             .expect("root traversal options can precede aggregate");
@@ -365,7 +448,7 @@ mod tests {
             panic!("expected aggregate subcommand");
         };
         assert!(statistics);
-        assert_eq!(traversal.input, [std::path::PathBuf::from(".")]);
+        assert_eq!(traversal.scan.input, [std::path::PathBuf::from(".")]);
     }
 
     #[test]
@@ -382,12 +465,12 @@ mod tests {
         ])
         .expect("ignore-from parses at both levels");
 
-        assert_eq!(args.traversal.ignore_from, [PathBuf::from("global")]);
+        assert_eq!(args.traversal.scan.ignore_from, [PathBuf::from("global")]);
         let Some(super::Command::Aggregate { traversal, .. }) = args.command else {
             panic!("expected aggregate subcommand");
         };
         assert_eq!(
-            traversal.ignore_from,
+            traversal.scan.ignore_from,
             [PathBuf::from("sub-one"), PathBuf::from("sub-two")]
         );
     }
@@ -513,6 +596,21 @@ mod tests {
             .to_string();
         assert!(aggregate_help.contains("Traversal Options"));
         assert!(aggregate_help.contains("--format"));
+        assert!(!aggregate_help.contains("--stack"));
+
+        for name in ["stacks", "flamegraph"] {
+            let help = cmd
+                .find_subcommand_mut(name)
+                .expect("stack command")
+                .render_long_help()
+                .to_string();
+            assert!(help.contains("Traversal Options"));
+            assert!(help.contains("--import"));
+            assert!(help.contains("--depth"));
+            for irrelevant in ["--format", "--stats", "--no-sort", "--no-total"] {
+                assert!(!help.contains(irrelevant), "{name} exposes {irrelevant}");
+            }
+        }
     }
 
     #[test]
@@ -646,7 +744,7 @@ mod tests {
         assert_eq!(import, None);
         assert_eq!(export, Some(PathBuf::from("scan.dua")));
         assert_eq!(compression, 2);
-        assert_eq!(traversal.input, [PathBuf::from("somewhere")]);
+        assert_eq!(traversal.scan.input, [PathBuf::from("somewhere")]);
 
         assert!(matches!(
             Args::try_parse_from([

@@ -245,13 +245,20 @@ LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
 
 ### Flame graphs
 
-The `aggregate --stack` option prints the traversal as folded stacks - the "collapsed" format read
-by flame-graph tools like [`inferno`](https://github.com/jonhoo/inferno).
-Each line is an entry's path with `;` between its components, a space, and its size
-in bytes, so an interactive drill-down can be turned into a single shareable SVG:
+`dua stacks` prints folded stacks—the "collapsed" interchange format read by flame-graph tools.
+Each line is an entry's path with `;` between its components, a space, and its size in bytes:
 
 ```bash
-dua aggregate --stack | inferno-flamegraph > disk-usage.svg
+dua stacks > disk-usage.folded
+```
+
+`dua flamegraph` renders the same data with [`inferno`](https://github.com/jonhoo/inferno), writes
+the SVG to a temporary file, and opens it. Pass an output path to write the SVG without opening it.
+Both commands accept the usual traversal options as well as `--depth` and `--import`:
+
+```bash
+dua flamegraph
+dua flamegraph -o disk-usage.svg
 ```
 
 ### Configuration
