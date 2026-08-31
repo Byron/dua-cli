@@ -52,7 +52,6 @@ tui-crossplatform = [
     "crossterm",
     "dep:signal-hook",
     "tui",
-    "open",
     "unicode-segmentation",
     "unicode-width",
 ]
@@ -66,6 +65,7 @@ byte-unit = { version = "5.2.5", features = ["u128"] }
 itertools = "0.15.0"
 num_cpus = "1.10.0"
 anyhow = "1.0.31"
+inferno = { version = "0.12.8", default-features = false }
 trash = { version = "5.2.0", optional = true, default-features = false, features = [
     "coinit_apartmentthreaded", "chrono"
 ] }
@@ -78,7 +78,7 @@ crossterm = { version = "0.29.0", optional = true }
 tui = { package = "ratatui", version = "0.30.2", optional = true, default-features = false, features = [
     "crossterm",
 ] }
-open = { version = "5.0", optional = true }
+open = "5.0"
 wild = "2.0.4"
 owo-colors = "4.0.0"
 human_format = "1.0.3"
