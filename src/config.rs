@@ -433,6 +433,8 @@ pub struct KeysConfig {
     pub quit_immediately: KeyBindings,
     /// Suspend the process and return control to the shell on Unix.
     pub suspend: KeyBindings,
+    /// Clear and repaint the screen.
+    pub repaint: KeyBindings,
     /// Move focus to the next open pane.
     pub cycle_panes: KeyBindings,
     /// Show or hide help.
@@ -525,6 +527,7 @@ impl Default for KeysConfig {
             quit: KeyBindings::defaults(&["q"]),
             quit_immediately: KeyBindings::defaults(&["ctrl+c"]),
             suspend: KeyBindings::defaults(&["ctrl+z"]),
+            repaint: KeyBindings::defaults(&["ctrl+l"]),
             cycle_panes: KeyBindings::defaults(&["tab"]),
             toggle_help: KeyBindings::defaults(&["?"]),
             open_search: KeyBindings::defaults(&["/"]),
@@ -638,6 +641,7 @@ impl Config {
             "# quit = \"q\"\n",
             "# quit_immediately = \"ctrl+c\"\n",
             "# suspend = \"ctrl+z\" # Unix only.\n",
+            "# repaint = \"ctrl+l\"\n",
             "# cycle_panes = \"tab\"\n",
             "# toggle_help = \"?\"\n",
             "# open_search = \"/\"\n",
@@ -723,6 +727,7 @@ mod tests {
             "quit",
             "quit_immediately",
             "suspend",
+            "repaint",
             "cycle_panes",
             "toggle_help",
             "open_search",

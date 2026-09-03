@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use pretty_assertions::assert_eq;
 use std::{ffi::OsString, fs, time::Duration};
+use tui::backend::Backend;
 
 use crate::interactive::app::tests::utils::{into_codes, into_events};
 use crate::interactive::widgets::Column;
@@ -620,6 +621,24 @@ fn tracks_terminal_focus_events() -> Result<()> {
 
     app.process_events(&mut terminal, into_events([Event::FocusGained]))?;
     assert!(app.state.terminal_focus.is_focussed());
+    Ok(())
+}
+
+#[test]
+fn ctrl_l_repaints_the_screen() -> Result<()> {
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
+    let expected = terminal.backend().buffer().clone();
+    terminal.backend_mut().clear()?;
+
+    app.process_events(
+        &mut terminal,
+        into_events([Event::Key(KeyEvent::new(
+            KeyCode::Char('l'),
+            KeyModifiers::CONTROL,
+        ))]),
+    )?;
+
+    assert_eq!(terminal.backend().buffer(), &expected);
     Ok(())
 }
 

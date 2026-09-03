@@ -136,6 +136,8 @@ pub struct HelpText {
     pub mark_trash_2: &'static str,
 
     pub app_title: &'static str,
+    pub app_suspend: &'static str,
+    pub app_repaint: &'static str,
     pub app_quit: &'static str,
 }
 
@@ -198,6 +200,8 @@ const EN: HelpText = HelpText {
     mark_trash_2: "The entries can be restored from the trash bin.",
 
     app_title: "Application control",
+    app_suspend: "Suspend the application and return control to the shell.",
+    app_repaint: "Clear and repaint the screen.",
     app_quit: "Close the application. No questions asked!",
 };
 
@@ -260,6 +264,8 @@ const JA: HelpText = HelpText {
     mark_trash_2: "エントリはゴミ箱から復元できる。",
 
     app_title: "アプリ操作",
+    app_suspend: "アプリケーションを一時停止してシェルに戻る。",
+    app_repaint: "画面を消去して再描画する。",
     app_quit: "アプリケーションを終了する。確認なし！",
 };
 
