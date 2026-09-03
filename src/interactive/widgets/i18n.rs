@@ -15,6 +15,7 @@ pub enum Language {
     Japanese,
     Korean,
     Chinese,
+    German,
 }
 
 impl Language {
@@ -34,6 +35,7 @@ impl Language {
             Language::Japanese => &JA,
             Language::Korean => &KO,
             Language::Chinese => &ZH,
+            Language::German => &DE,
         }
     }
 }
@@ -56,6 +58,7 @@ where
         .as_ref()
         .and_then(|locale| utf8_locale(locale.as_ref()))
     {
+        Some(("de", _)) => Language::German,
         Some(("ja", _)) => Language::Japanese,
         Some(("ko", _)) => Language::Korean,
         Some(("zh", "zh" | "zh_CN" | "zh_SG" | "zh_Hans")) => Language::Chinese,
@@ -406,6 +409,70 @@ const ZH: HelpText = HelpText {
     app_quit: "直接关闭应用程序，不作确认！",
 };
 
+const DE: HelpText = HelpText {
+    block_title: "Hilfe",
+
+    pane_control_title: "Bereichssteuerung",
+    pane_q_quit: "Bereich schließen; Hauptansicht beenden (evtl. bestätigen).",
+    pane_esc_close: "Aktuellen Bereich schließen.",
+    pane_esc_close_2: "In der Hauptansicht zum übergeordneten Verzeichnis wechseln.",
+    pane_qesc_close: "Aktuellen Bereich schließen.",
+    pane_qesc_close_2: "Beendet das Programm, wenn kein Bereich geöffnet ist.",
+    pane_tab: "Zwischen allen geöffneten Bereichen wechseln.",
+    pane_tab_2: "„Markierte Einträge“ zum Löschen gewählter Dateien öffnen.",
+    pane_help_toggle: "Diesen Hilfebereich ein- oder ausblenden.",
+
+    nav_title: "Navigation",
+    nav_down: "Einen Eintrag nach unten bewegen.",
+    nav_up: "Einen Eintrag nach oben bewegen.",
+    nav_descend: "In das ausgewählte Verzeichnis wechseln.",
+    nav_ascend: "Eine Ebene ins übergeordnete Verzeichnis wechseln.",
+    nav_down10: "10 Einträge nach unten bewegen.",
+    nav_up10: "10 Einträge nach oben bewegen.",
+    nav_top: "Zum Anfang der Liste springen.",
+    nav_bottom: "Zum Ende der Liste springen.",
+
+    disp_title: "Anzeige",
+    disp_sort_size: "Sortierung nach Größe absteigend/aufsteigend umschalten.",
+    disp_sort_mtime: "Nach Änderungszeit ab-/aufsteigend sortieren.",
+    disp_show_mtime: "Änderungszeit anzeigen oder mtime-Sortiermodus wechseln.",
+    disp_show_mtime_2: "mtime-Sortierung: Eintrag, neuester/ältester Untereintrag.",
+    disp_sort_count: "Nach Eintragsanzahl ab-/aufsteigend sortieren.",
+    disp_show_count: "Eintragsanzahl ein- oder ausblenden.",
+    disp_sort_name: "Nach Namen auf-/absteigend sortieren.",
+    disp_cycle_bar: "Zwischen Prozent- und Balkenanzeige wechseln.",
+
+    oms_title: "Öffnen/Markieren/Suchen",
+    oms_open: "Ausgewählten Eintrag mit dem zugeordneten Programm öffnen.",
+    oms_toggle_down: "Markierung umschalten und einen Eintrag nach unten gehen.",
+    oms_mark_down: "Zum Löschen markieren und einen Eintrag nach unten gehen.",
+    oms_toggle: "Markierung des ausgewählten Eintrags umschalten.",
+    oms_mark_cleanup: "Bereinigungskandidaten in der aktuellen Ansicht markieren.",
+    oms_toggle_cleanup: "Erkennung von Bereinigungskandidaten umschalten.",
+    oms_mark_gitignored: "Von Git ignorierte Einträge dieser Ansicht markieren.",
+    oms_toggle_gitignored: "Erkennung von Git-ignorierten Einträgen umschalten.",
+    oms_toggle_all: "Markierung aller Einträge umschalten.",
+    oms_search: "Glob-Suche im Git-Stil.",
+    oms_search_2: "Die Suche beginnt im aktuellen Verzeichnis.",
+    oms_refresh_one: "Nur den ausgewählten Eintrag aktualisieren.",
+    oms_refresh_all: "Alle Einträge in der aktuellen Ansicht aktualisieren.",
+
+    mark_title: "Bereich „Markierte Einträge“",
+    mark_remove: "Ausgewählten Eintrag aus der Liste entfernen.",
+    mark_remove_all: "Alle Einträge aus der Liste entfernen.",
+    mark_delete: "Alle markierten Einträge ohne Rückfrage endgültig löschen.",
+    mark_delete_2: "Dieser Vorgang kann nicht rückgängig gemacht werden!",
+    #[cfg(feature = "trash-move")]
+    mark_trash: "Alle markierten Einträge in den Papierkorb verschieben.",
+    #[cfg(feature = "trash-move")]
+    mark_trash_2: "Einträge können aus dem Papierkorb wiederhergestellt werden.",
+
+    app_title: "Anwendungssteuerung",
+    app_suspend: "Anwendung anhalten und Steuerung an die Shell zurückgeben.",
+    app_repaint: "Bildschirm leeren und neu zeichnen.",
+    app_quit: "Anwendung ohne Rückfrage schließen!",
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,6 +510,12 @@ mod tests {
     }
 
     #[test]
+    fn german_locale_selects_german_when_codeset_is_missing_or_utf8() {
+        assert_eq!(detect([None, None, Some("de_DE.UTF-8")]), Language::German);
+        assert_eq!(detect([None, None, Some("de")]), Language::German);
+    }
+
+    #[test]
     fn chinese_locale_selects_chinese_when_codeset_is_missing_or_utf8() {
         assert_eq!(detect([None, None, Some("zh_CN.UTF-8")]), Language::Chinese);
         assert_eq!(detect([None, None, Some("zh_SG.UTF8")]), Language::Chinese);
@@ -459,6 +532,10 @@ mod tests {
 
     #[test]
     fn explicit_non_utf8_supported_locales_are_english() {
+        assert_eq!(
+            detect([None, None, Some("de_DE.ISO-8859-1")]),
+            Language::English
+        );
         assert_eq!(
             detect([None, None, Some("ja_JP.SJIS")]),
             Language::English,

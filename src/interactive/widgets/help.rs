@@ -292,7 +292,11 @@ mod tests {
     }
 
     fn rendered_with_keys(language: Language, keys: &KeysConfig) -> String {
-        let area = Rect::new(0, 0, 120, 80);
+        rendered_at_width(language, keys, 120)
+    }
+
+    fn rendered_at_width(language: Language, keys: &KeysConfig, width: u16) -> String {
+        let area = Rect::new(0, 0, width, 80);
         let mut buf = Buffer::empty(area);
         HelpPane {
             language,
@@ -338,6 +342,26 @@ mod tests {
             "The Japanese strings are actually rendered."
         );
         assert!(ja_collapsed.contains("ナビゲーション"));
+    }
+
+    #[test]
+    fn german_instructions_fit_an_80_column_pane() {
+        let text = rendered_at_width(Language::German, &KeysConfig::default(), 80);
+        let german = Language::German.help_text();
+        for expected in [
+            german.pane_q_quit,
+            german.pane_tab_2,
+            german.disp_sort_mtime,
+            german.disp_show_mtime_2,
+            german.disp_sort_count,
+            german.oms_toggle_down,
+            german.oms_mark_down,
+            german.oms_mark_gitignored,
+        ] {
+            assert!(text.contains(expected), "clipped help text: {expected}");
+        }
+        #[cfg(feature = "trash-move")]
+        assert!(text.contains(german.mark_trash_2));
     }
 
     #[test]

@@ -236,11 +236,15 @@ dua interactive
 ```
 
 The help screen can be localized via the standard POSIX locale environment variables, in the
-usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; Japanese
-(`ja`), Korean (`ko`), and Simplified Chinese (`zh`, `zh_CN`, `zh_SG`, or `zh_Hans`) are also
-available when the locale uses UTF-8 or omits the codeset:
+usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; German (`de`),
+Japanese (`ja`), Korean (`ko`), and Simplified Chinese (`zh`, `zh_CN`, `zh_SG`, or `zh_Hans`) are
+also available when the locale uses UTF-8 or omits the codeset:
+
+Please [open an issue](https://github.com/Byron/dua-cli/issues/new) to request support for your
+language, if you would be available for reviewing it as well.
 
 ```bash
+LANG=de_DE.UTF-8 dua i   # then press '?' for the German help screen
 LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
 LANG=ko_KR.UTF-8 dua i   # then press '?' for the Korean help screen
 LANG=zh_CN.UTF-8 dua i   # then press '?' for the Simplified Chinese help screen
