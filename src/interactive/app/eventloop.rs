@@ -580,7 +580,7 @@ impl AppState {
                 return Ok(None);
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if key != refresh_key() {
+                if key != refresh_key() && !config.keys.repaint.matches(key) {
                     self.received_events = true;
                 }
                 key
@@ -611,6 +611,13 @@ impl AppState {
                 #[cfg(unix)]
                 _ if keys.suspend.matches(key) => {
                     suspend_terminal(terminal, config.notifications.any_enabled())?;
+                }
+                _ if keys.repaint.matches(key) => {
+                    terminal
+                        .backend_mut()
+                        .clear()
+                        .map_err(|err| anyhow::Error::msg(err.to_string()))?;
+                    terminal.swap_buffers();
                 }
                 _ if keys.cycle_panes.matches(key) => {
                     self.cycle_focus(window);

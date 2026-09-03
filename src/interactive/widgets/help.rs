@@ -227,6 +227,9 @@ impl HelpPane {
             }
             title(t.app_title);
             {
+                #[cfg(unix)]
+                hotkey(keys.suspend.to_string(), t.app_suspend, None);
+                hotkey(keys.repaint.to_string(), t.app_repaint, None);
                 hotkey(keys.quit_immediately.to_string(), t.app_quit, None);
                 spacer();
             }
@@ -343,6 +346,8 @@ mod tests {
             r#"
             [keys]
             quit_immediately = ["alt+x"]
+            suspend = ["alt+z"]
+            repaint = ["ctrl+r"]
             descend = ["f"]
             delete_marked = []
             "#,
@@ -351,6 +356,11 @@ mod tests {
 
         let text = rendered_with_keys(Language::English, &config.keys);
         assert!(text.contains("Alt + x"));
+        #[cfg(unix)]
+        assert!(
+            text.contains("Alt + z => Suspend the application and return control to the shell.")
+        );
+        assert!(text.contains("Ctrl + r => Clear and repaint the screen."));
         assert!(text.contains("f => Descent"));
         assert!(text.contains("<unmapped> => Permanently delete all marked entries"));
         assert!(!text.contains("Ctrl + c"));
