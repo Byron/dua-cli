@@ -236,11 +236,12 @@ dua interactive
 ```
 
 The help screen can be localized via the standard POSIX locale environment variables, in the
-usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; currently
-Japanese (`ja`) is also available when the locale uses UTF-8 or omits the codeset:
+usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; Japanese
+(`ja`) and Korean (`ko`) are also available when the locale uses UTF-8 or omits the codeset:
 
 ```bash
 LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
+LANG=ko_KR.UTF-8 dua i   # then press '?' for the Korean help screen
 ```
 
 ### Flame graphs
