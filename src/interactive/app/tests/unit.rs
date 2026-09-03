@@ -2,7 +2,7 @@ use crate::interactive::app::tests::utils::{
     initialized_app_and_terminal_from_fixture, sample_01_tree, sample_02_tree,
 };
 use crate::interactive::app::{state::AppState, tree_view::TreeView};
-use crate::interactive::widgets::glob_search;
+use crate::interactive::widgets::{Language, glob_search};
 use crate::interactive::{EntryCheck, MTimeSort, SortMode, sorted_entries};
 use anyhow::Result;
 use dua::WalkOptions;
@@ -62,7 +62,14 @@ fn it_can_handle_ending_traversal_without_reaching_the_top() -> Result<()> {
 #[test]
 fn it_can_do_a_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
-    let result = glob_search(&tree, root_index, "tests/fixtures/sample-02", Case::Fold).unwrap();
+    let result = glob_search(
+        &tree,
+        root_index,
+        "tests/fixtures/sample-02",
+        Case::Fold,
+        Language::English,
+    )
+    .unwrap();
     let expected = vec![TreeIndex::new(1)];
     assert_eq!(result, expected);
 }
@@ -70,8 +77,14 @@ fn it_can_do_a_glob_search() {
 #[test]
 fn it_can_do_a_case_sensitive_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
-    let result_insensitive =
-        glob_search(&tree, root_index, "TESTS/FIXTURES/SAMPLE-02", Case::Fold).unwrap();
+    let result_insensitive = glob_search(
+        &tree,
+        root_index,
+        "TESTS/FIXTURES/SAMPLE-02",
+        Case::Fold,
+        Language::English,
+    )
+    .unwrap();
     assert_eq!(result_insensitive, vec![TreeIndex::new(1)]);
 
     let result_sensitive = glob_search(
@@ -79,6 +92,7 @@ fn it_can_do_a_case_sensitive_glob_search() {
         root_index,
         "TESTS/FIXTURES/SAMPLE-02",
         Case::Sensitive,
+        Language::English,
     )
     .unwrap();
     assert!(result_sensitive.is_empty());

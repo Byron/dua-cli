@@ -16,7 +16,7 @@ use std::{
 };
 use tui::{Terminal, backend::TestBackend};
 
-use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp};
+use crate::interactive::{app::tests::FIXTURE_PATH, terminal::TerminalApp, widgets::Language};
 
 pub fn into_events<'a>(events: impl IntoIterator<Item = Event> + 'a) -> Receiver<Event> {
     let (key_send, key_receive) = crossbeam::channel::unbounded();
@@ -209,7 +209,7 @@ pub fn untraversed_app_and_terminal_with_closure(
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();
 
-    let app = TerminalApp::initialize(
+    let mut app = TerminalApp::initialize(
         &mut terminal,
         walk_options,
         ByteFormat::Metric,
@@ -220,6 +220,7 @@ pub fn untraversed_app_and_terminal_with_closure(
         dua::traverse::Traversal::new(),
         None,
     )?;
+    app.state.language = Language::English;
 
     Ok((terminal, app))
 }

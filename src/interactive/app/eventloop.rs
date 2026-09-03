@@ -87,7 +87,7 @@ impl AppState {
         snapshot_export: Option<(PathBuf, Option<i32>)>,
     ) -> Result<()> {
         if self.read_only {
-            bail!("Snapshots are read-only");
+            bail!(self.language.ui_text().snapshots_read_only);
         }
         let bg_traversal = BackgroundTraversal::start(
             traversal.root_index,
@@ -118,7 +118,7 @@ impl AppState {
         if self.read_only {
             let path = tree_view.path_of(self.navigation().view_root);
             if path.as_os_str().is_empty() {
-                PathBuf::from("<snapshot>")
+                PathBuf::from(self.language.ui_text().snapshot_label)
             } else {
                 path
             }
@@ -173,15 +173,15 @@ impl AppState {
 
     fn scan_parent(&mut self, tree: &mut TreeView<'_>) -> Result<()> {
         if self.read_only {
-            self.message = Some("Snapshots are read-only".into());
+            self.message = Some(self.language.ui_text().snapshots_read_only.into());
             return Ok(());
         }
         if self.scan.is_some() {
-            self.message = Some("Traversal already running".into());
+            self.message = Some(self.language.ui_text().traversal_running.into());
             return Ok(());
         }
         let Some((parent, preexisting, wrap_root)) = self.parent_scan_target(tree) else {
-            self.message = Some("Top level reached".into());
+            self.message = Some(self.language.ui_text().top_level.into());
             return Ok(());
         };
 
@@ -477,6 +477,7 @@ impl AppState {
                                     traversal,
                                     &roots,
                                     compression_level,
+                                    self.language,
                                 )?;
                             }
                             self.scan = None;
@@ -486,6 +487,7 @@ impl AppState {
                         self.refresh_screen(window, traversal, display, terminal, config)?;
                         if is_finished {
                             let message = notification::scan_finished(
+                                self.language,
                                 self.stats.entries_traversed,
                                 self.stats.total_bytes.unwrap_or_default(),
                                 self.stats.elapsed.unwrap_or_else(|| self.stats.start.elapsed()),
@@ -750,12 +752,12 @@ impl AppState {
         what: Refresh,
     ) -> anyhow::Result<()> {
         if self.read_only {
-            self.message = Some("Snapshots are read-only".into());
+            self.message = Some(self.language.ui_text().snapshots_read_only.into());
             return Ok(());
         }
         // If another traversal is already running do not do anything.
         if self.scan.is_some() {
-            self.message = Some("Traversal already running".into());
+            self.message = Some(self.language.ui_text().traversal_running.into());
             return Ok(());
         }
 
@@ -890,9 +892,10 @@ impl AppState {
             self.navigation.view_root,
             glob_pattern,
             case,
+            self.language,
         ) {
             Ok(matches) if matches.is_empty() => {
-                self.message = Some("No match found".into());
+                self.message = Some(self.language.ui_text().no_match.into());
             }
             Ok(mut matches) => {
                 if let Some(glob_source) = &self.glob_navigation {

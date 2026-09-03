@@ -4,8 +4,10 @@ use crate::interactive::widgets::tui_ext::{
     util::{block_width, rect, rect::line_bound},
 };
 use crate::interactive::{
-    CursorDirection, app::tree_view::TreeView, fit_string_graphemes_with_ellipsis,
-    widgets::entry_color,
+    CursorDirection,
+    app::tree_view::TreeView,
+    fit_string_graphemes_with_ellipsis,
+    widgets::{Language, entry_color},
 };
 use crossterm::event::{KeyEvent, KeyEventKind};
 use dua::{ByteFormat, KeysConfig, traverse::TreeIndex};
@@ -62,6 +64,7 @@ pub struct MarkPaneProps<'a> {
     pub root_total_size: u128,
     pub keys: &'a KeysConfig,
     pub safety_notice: Option<&'static str>,
+    pub language: Language,
 }
 
 impl MarkPane {
@@ -266,6 +269,7 @@ impl MarkPane {
             root_total_size,
             keys,
             safety_notice,
+            language,
         } = props.borrow();
 
         let marked: &_ = &self.marked;
@@ -274,11 +278,11 @@ impl MarkPane {
         } else {
             self.total_size as f64 / *root_total_size as f64 * 100.0
         };
-        let title = format!(
-            "Marked {} items ({}, {percentage:.2}% of {}) ",
-            COUNT.format(self.item_count as f64),
-            format.display(self.total_size),
-            format.display(*root_total_size)
+        let title = language.marked_title(
+            &COUNT.format(self.item_count as f64),
+            &format.display(self.total_size).to_string(),
+            percentage,
+            &format.display(*root_total_size).to_string(),
         );
         let selected = self.selected;
         let has_focus = self.has_focus;
@@ -302,7 +306,7 @@ impl MarkPane {
                         " {}  {}",
                         v.path.display(),
                         if v.num_errors_during_deletion != 0 {
-                            format!("{} IO deletion errors", v.num_errors_during_deletion)
+                            language.deletion_errors(v.num_errors_during_deletion)
                         } else {
                             String::new()
                         }
@@ -401,6 +405,7 @@ impl MarkPane {
                 sub_modifier: Modifier::empty(),
                 ..Style::default()
             };
+            let t = language.ui_text();
             if let Some(notice) = safety_notice {
                 Paragraph::new(*notice).render(help_line_area, buf);
             } else {
@@ -415,7 +420,7 @@ impl MarkPane {
                         },
                     ),
                     #[cfg(feature = "trash-move")]
-                    Span::styled(" to trash or ", default_style),
+                    Span::styled(t.mark_to_trash_or, default_style),
                     Span::styled(
                         format!(" {} ", keys.delete_marked),
                         Style {
@@ -425,7 +430,7 @@ impl MarkPane {
                             ..default_style
                         },
                     ),
-                    Span::styled(" to delete without prompt", default_style),
+                    Span::styled(t.mark_to_delete, default_style),
                 ])))
                 .style(default_style)
                 .render(help_line_area, buf);
@@ -463,6 +468,7 @@ impl MarkPane {
         );
 
         if has_focus {
+            let t = language.ui_text();
             let help_text = format!(
                 " ⇊ = {}|↓ = {}|⇈ = {}|↑ = {} ",
                 keys.page_down.primary(),
@@ -485,8 +491,8 @@ impl MarkPane {
             }
             let bound = line_bound(bound, bound.height.saturating_sub(1) as usize);
             let help_text = format!(
-                " mark-toggle = {} | remove-all = {}",
-                keys.remove_mark, keys.remove_all_marks
+                " {} = {} | {} = {}",
+                t.mark_toggle, keys.remove_mark, t.mark_remove_all, keys.remove_all_marks
             );
             let help_text_block_width = block_width(&help_text);
             if help_text_block_width <= bound.width {
@@ -529,6 +535,7 @@ pub fn calculate_size_and_count(marked: &EntryMarkMap) -> (u128, u64) {
 mod mark_pane_tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyModifiers};
+    use tui::buffer::Cell;
 
     #[test]
     fn title_shows_percentage_of_root_size() {
@@ -546,6 +553,7 @@ mod mark_pane_tests {
                 keys: &KeysConfig::default(),
                 root_total_size: 1_000_000_000,
                 safety_notice: None,
+                language: Language::English,
             },
             area,
             &mut buffer,
@@ -589,6 +597,7 @@ mod mark_pane_tests {
                 keys: &config.keys,
                 root_total_size: 0,
                 safety_notice: None,
+                language: Language::English,
             },
             area,
             &mut buffer,
@@ -658,6 +667,7 @@ mod mark_pane_tests {
                 keys: &KeysConfig::default(),
                 root_total_size: 0,
                 safety_notice: Some(" Snapshot is read-only; marked entries cannot be deleted "),
+                language: Language::English,
             },
             area,
             &mut buffer,
@@ -681,6 +691,37 @@ mod mark_pane_tests {
         }
         "#
         );
+    }
+
+    #[test]
+    fn title_prompt_and_actions_follow_the_selected_language() {
+        let area = Rect::new(0, 0, 120, 4);
+        let mut buffer = Buffer::empty(area);
+
+        MarkPane {
+            has_focus: true,
+            ..Default::default()
+        }
+        .render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                keys: &KeysConfig::default(),
+                root_total_size: 0,
+                safety_notice: None,
+                language: Language::Korean,
+            },
+            area,
+            &mut buffer,
+        );
+
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        let rendered: String = rendered.split_whitespace().collect();
+        assert!(rendered.contains("표시된항목0개"));
+        assert!(rendered.contains("확인없이삭제"));
+        assert!(rendered.contains("표시전환"));
+        assert!(rendered.contains("모두해제"));
+        assert!(!rendered.contains("Marked"));
     }
 
     #[test]

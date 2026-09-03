@@ -3,6 +3,7 @@ use crate::interactive::app::tests::utils::{
     new_test_terminal,
 };
 use crate::interactive::terminal::TerminalApp;
+use crate::interactive::widgets::Language;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use dua::{ByteFormat, Config, WalkOptions};
@@ -137,6 +138,7 @@ $precious.tmp
         dua::traverse::Traversal::new(),
         None,
     )?;
+    app.state.language = Language::English;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;
 
@@ -278,6 +280,7 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         dua::traverse::Traversal::new(),
         None,
     )?;
+    app.state.language = Language::English;
     app.traverse()?;
     app.run_until_traversed(&mut terminal, key_receive)?;
 

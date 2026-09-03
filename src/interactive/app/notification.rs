@@ -1,27 +1,28 @@
 //! Utilities to produce notifications.
 use std::{io, time::Duration};
 
+use crate::interactive::widgets::Language;
 use dua::ByteFormat;
 
 pub fn scan_finished(
+    language: Language,
     entries: u64,
     bytes: u128,
     elapsed: Duration,
     errors: u64,
     format: ByteFormat,
 ) -> String {
-    let errors = match errors {
-        0 => String::new(),
-        count => format!(", {count} errors"),
-    };
-    format!(
-        "Scan finished: {entries} entries, {} in {}{errors}",
-        format.display(bytes),
-        duration(elapsed)
+    language.notification_summary(
+        language.ui_text().notification_scan,
+        entries,
+        &format.display(bytes).to_string(),
+        &duration(elapsed),
+        errors,
     )
 }
 
 pub fn deletion_finished(
+    language: Language,
     action: &str,
     entries: usize,
     bytes: u128,
@@ -29,14 +30,12 @@ pub fn deletion_finished(
     errors: usize,
     format: ByteFormat,
 ) -> String {
-    let errors = match errors {
-        0 => String::new(),
-        count => format!(", {count} errors"),
-    };
-    format!(
-        "{action} finished: {entries} entries, {} in {}{errors}",
-        format.display(bytes),
-        duration(elapsed)
+    language.notification_summary(
+        action,
+        u64::try_from(entries).unwrap_or(u64::MAX),
+        &format.display(bytes).to_string(),
+        &duration(elapsed),
+        u64::try_from(errors).unwrap_or(u64::MAX),
     )
 }
 
@@ -105,6 +104,7 @@ mod tests {
     fn formats_scan_statistics_concisely() {
         assert_eq!(
             scan_finished(
+                Language::English,
                 42,
                 2_000_000,
                 Duration::from_millis(1250),
@@ -116,6 +116,7 @@ mod tests {
 
         assert_eq!(
             scan_finished(
+                Language::English,
                 42,
                 2_000_000,
                 Duration::from_millis(11250),

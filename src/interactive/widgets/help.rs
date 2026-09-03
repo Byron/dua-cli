@@ -18,13 +18,13 @@ use tui::{
 #[derive(Default, Clone)]
 pub struct HelpPane {
     pub scroll: u16,
-    pub language: Language,
 }
 
 pub struct HelpPaneProps<'a> {
     pub border_style: Style,
     pub has_focus: bool,
     pub keys: &'a KeysConfig,
+    pub language: Language,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -37,13 +37,6 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
-    pub fn with_locale_from_env() -> Self {
-        HelpPane {
-            language: Language::from_env(),
-            ..Default::default()
-        }
-    }
-
     pub fn process_events(&mut self, key: KeyEvent, keys: &KeysConfig) {
         if key.kind == KeyEventKind::Release {
             return;
@@ -82,7 +75,7 @@ impl HelpPane {
     ) {
         let props = props.borrow();
         let keys = props.keys;
-        let t = self.language.help_text();
+        let t = props.language.help_text();
         let build_lines = || {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
@@ -298,15 +291,12 @@ mod tests {
     fn rendered_at_width(language: Language, keys: &KeysConfig, width: u16) -> String {
         let area = Rect::new(0, 0, width, 80);
         let mut buf = Buffer::empty(area);
-        HelpPane {
-            language,
-            ..Default::default()
-        }
-        .render(
+        HelpPane::default().render(
             HelpPaneProps {
                 border_style: Style::default(),
                 has_focus: false,
                 keys,
+                language,
             },
             area,
             &mut buf,
@@ -413,10 +403,7 @@ mod tests {
             ('5', 49),
             ('6', 51),
         ] {
-            let mut pane = HelpPane {
-                scroll: 50,
-                ..Default::default()
-            };
+            let mut pane = HelpPane { scroll: 50 };
             pane.process_events(KeyCode::Char(key).into(), &config.keys);
             assert_eq!(pane.scroll, expected, "configured binding {key}");
         }

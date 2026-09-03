@@ -6,10 +6,13 @@ use tui::{
     widgets::{Paragraph, Widget},
 };
 
+use super::Language;
+
 pub struct Header;
 
 impl Header {
-    pub fn render(bg_color: Color, area: Rect, buf: &mut Buffer) {
+    pub fn render(language: Language, bg_color: Color, area: Rect, buf: &mut Buffer) {
+        let t = language.ui_text();
         let standard = Style {
             fg: Color::Black.into(),
             bg: bg_color.into(),
@@ -38,9 +41,9 @@ impl Header {
             text("nalyzer v"),
             text(env!("CARGO_PKG_VERSION")),
             text("    "),
-            italic("(press "),
+            italic(t.header_help_before_key),
             modified("?", Modifier::BOLD | Modifier::UNDERLINED),
-            italic(" for help)"),
+            italic(t.header_help_after_key),
         ];
         Paragraph::new(Text::from(Line::from(spans)))
             .style(Style {
@@ -48,5 +51,25 @@ impl Header {
                 ..Default::default()
             })
             .render(area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tui::buffer::Cell;
+
+    #[test]
+    fn localizes_only_the_help_prompt() {
+        let area = Rect::new(0, 0, 80, 1);
+        let mut buffer = Buffer::empty(area);
+        Header::render(Language::Chinese, Color::White, area, &mut buffer);
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        let rendered: String = rendered.split_whitespace().collect();
+
+        assert!(rendered.contains("DiskUsageAnalyzer"));
+        assert!(rendered.contains("按"));
+        assert!(rendered.contains("查看帮助"));
+        assert!(!rendered.contains("press"));
     }
 }

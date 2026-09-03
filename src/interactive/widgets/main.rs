@@ -54,15 +54,16 @@ impl MainWindow {
             state,
             config,
         } = props.borrow();
+        let language = state.language;
 
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
-        let safety_notice = mark_safety_notice(state.read_only, &config.keys);
+        let safety_notice = mark_safety_notice(state.read_only, &config.keys, language);
 
         let header_bg_color =
             header_background_color(self.has_marks() && safety_notice.is_none(), state.focussed);
-        Header::render(header_bg_color, header_area, buffer);
+        Header::render(language, header_bg_color, header_area, buffer);
 
         let (entries_area, help_pane, mark_pane) = {
             let (left_pane, right_pane) = content_layout(content_area);
@@ -95,6 +96,7 @@ impl MainWindow {
                 root_total_size: *total_bytes,
                 keys: &config.keys,
                 safety_notice,
+                language,
             };
             pane.render(props, mark_area, buffer);
         }
@@ -104,6 +106,7 @@ impl MainWindow {
                 border_style: help_style,
                 has_focus: matches!(state.focussed, Help),
                 keys: &config.keys,
+                language,
             };
             pane.render(props, help_area, buffer);
         }
@@ -122,6 +125,7 @@ impl MainWindow {
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
             keys: &config.keys,
+            language,
         };
         self.entries.render(props, entries_area, buffer);
 
@@ -130,6 +134,7 @@ impl MainWindow {
                 border_style: glob_style,
                 has_focus: matches!(state.focussed, Glob),
                 keys: &config.keys,
+                language,
             };
             pane.render(props, glob_area, buffer, cursor);
         }
@@ -147,6 +152,7 @@ impl MainWindow {
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
                 keys: &config.keys,
+                language,
             },
             footer_area,
             buffer,
@@ -177,13 +183,18 @@ fn content_layout(content_area: Rect) -> (Rect, Rect) {
     (regions[0], regions[1])
 }
 
-fn mark_safety_notice(read_only: bool, keys: &dua::KeysConfig) -> Option<&'static str> {
+fn mark_safety_notice(
+    read_only: bool,
+    keys: &dua::KeysConfig,
+    language: crate::interactive::widgets::Language,
+) -> Option<&'static str> {
+    let t = language.ui_text();
     if read_only {
-        Some(" Snapshot is read-only; marked entries cannot be deleted ")
+        Some(t.mark_snapshot_read_only)
     } else if keys.delete_marked.is_empty()
         && (!cfg!(feature = "trash-move") || keys.trash_marked.is_empty())
     {
-        Some(" No destructive keys are mapped; marked entries are safe ")
+        Some(t.mark_no_destructive_keys)
     } else {
         None
     }
@@ -224,18 +235,19 @@ fn pane_border_style(focused_pane: FocussedPane) -> (Style, Style, Style, Style)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interactive::widgets::Language;
 
     #[test]
     fn marks_are_only_dangerous_when_a_destructive_action_is_available() {
         let config = dua::Config::default();
-        assert!(mark_safety_notice(false, &config.keys).is_none());
+        assert!(mark_safety_notice(false, &config.keys, Language::English).is_none());
         assert_eq!(header_background_color(true, Mark), Color::LightRed);
 
-        assert!(mark_safety_notice(true, &config.keys).is_some());
+        assert!(mark_safety_notice(true, &config.keys, Language::English).is_some());
         assert_eq!(header_background_color(false, Mark), Color::White);
 
         let config: dua::Config =
             toml::from_str("[keys]\ndelete_marked = []\ntrash_marked = []").expect("valid config");
-        assert!(mark_safety_notice(false, &config.keys).is_some());
+        assert!(mark_safety_notice(false, &config.keys, Language::English).is_some());
     }
 }
