@@ -54,16 +54,16 @@ where
         .find(|value| !value.as_ref().is_empty());
     match locale
         .as_ref()
-        .and_then(|locale| utf8_language(locale.as_ref()))
+        .and_then(|locale| utf8_locale(locale.as_ref()))
     {
-        Some("ja") => Language::Japanese,
-        Some("ko") => Language::Korean,
-        Some("zh") => Language::Chinese,
+        Some(("ja", _)) => Language::Japanese,
+        Some(("ko", _)) => Language::Korean,
+        Some(("zh", "zh" | "zh_CN" | "zh_SG" | "zh_Hans")) => Language::Chinese,
         _ => Language::English,
     }
 }
 
-fn utf8_language(locale: &str) -> Option<&str> {
+fn utf8_locale(locale: &str) -> Option<(&str, &str)> {
     let locale = locale.split_once('@').map_or(locale, |(locale, _)| locale);
     let (language_region, codeset) = match locale.split_once('.') {
         Some((language_region, codeset)) => (language_region, Some(codeset)),
@@ -72,7 +72,9 @@ fn utf8_language(locale: &str) -> Option<&str> {
     let language = language_region
         .split_once('_')
         .map_or(language_region, |(language, _)| language);
-    codeset.is_none_or(is_utf8_codeset).then_some(language)
+    codeset
+        .is_none_or(is_utf8_codeset)
+        .then_some((language, language_region))
 }
 
 fn is_utf8_codeset(codeset: &str) -> bool {
@@ -443,7 +445,16 @@ mod tests {
     #[test]
     fn chinese_locale_selects_chinese_when_codeset_is_missing_or_utf8() {
         assert_eq!(detect([None, None, Some("zh_CN.UTF-8")]), Language::Chinese);
+        assert_eq!(detect([None, None, Some("zh_SG.UTF8")]), Language::Chinese);
+        assert_eq!(detect([None, None, Some("zh_Hans")]), Language::Chinese);
         assert_eq!(detect([None, None, Some("zh")]), Language::Chinese);
+    }
+
+    #[test]
+    fn traditional_chinese_locales_are_english() {
+        for locale in ["zh_TW.UTF-8", "zh_HK.UTF-8", "zh_MO.UTF-8", "zh_Hant"] {
+            assert_eq!(detect([None, None, Some(locale)]), Language::English);
+        }
     }
 
     #[test]

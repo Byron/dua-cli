@@ -237,8 +237,8 @@ dua interactive
 
 The help screen can be localized via the standard POSIX locale environment variables, in the
 usual order of precedence `LC_ALL` > `LC_MESSAGES` > `LANG`. English is the default; Japanese
-(`ja`), Korean (`ko`), and Simplified Chinese (`zh`) are also available when the locale uses UTF-8
-or omits the codeset:
+(`ja`), Korean (`ko`), and Simplified Chinese (`zh`, `zh_CN`, `zh_SG`, or `zh_Hans`) are also
+available when the locale uses UTF-8 or omits the codeset:
 
 ```bash
 LANG=ja_JP.UTF-8 dua i   # then press '?' for the Japanese help screen
