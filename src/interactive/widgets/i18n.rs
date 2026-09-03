@@ -13,6 +13,7 @@ pub enum Language {
     #[default]
     English,
     Japanese,
+    Korean,
 }
 
 impl Language {
@@ -30,6 +31,7 @@ impl Language {
         match self {
             Language::English => &EN,
             Language::Japanese => &JA,
+            Language::Korean => &KO,
         }
     }
 }
@@ -38,10 +40,8 @@ impl Language {
 ///
 /// Empty values are treated as unset (as glibc does) and fall through to the
 /// next variable. The language code is the part before the first `_`, `.` or
-/// `@`. Missing codesets are treated as UTF-8, so `ja`, `ja_JP`,
-/// `ja_JP.UTF-8`, `ja.UTF8` and `ja_JP.UTF-8@modifier` map to
-/// [`Language::Japanese`]. Explicit non-UTF-8 Japanese codesets such as
-/// `ja_JP.SJIS` map to [`Language::English`].
+/// `@`. Missing codesets are treated as UTF-8. Supported languages with an
+/// explicit non-UTF-8 codeset map to [`Language::English`].
 fn detect<S>(locales: impl IntoIterator<Item = Option<S>>) -> Language
 where
     S: AsRef<str>,
@@ -50,13 +50,17 @@ where
         .into_iter()
         .flatten()
         .find(|value| !value.as_ref().is_empty());
-    match locale {
-        Some(locale) if is_japanese_utf8(locale.as_ref()) => Language::Japanese,
+    match locale
+        .as_ref()
+        .and_then(|locale| utf8_language(locale.as_ref()))
+    {
+        Some("ja") => Language::Japanese,
+        Some("ko") => Language::Korean,
         _ => Language::English,
     }
 }
 
-fn is_japanese_utf8(locale: &str) -> bool {
+fn utf8_language(locale: &str) -> Option<&str> {
     let locale = locale.split_once('@').map_or(locale, |(locale, _)| locale);
     let (language_region, codeset) = match locale.split_once('.') {
         Some((language_region, codeset)) => (language_region, Some(codeset)),
@@ -65,7 +69,7 @@ fn is_japanese_utf8(locale: &str) -> bool {
     let language = language_region
         .split_once('_')
         .map_or(language_region, |(language, _)| language);
-    language == "ja" && codeset.is_none_or(is_utf8_codeset)
+    codeset.is_none_or(is_utf8_codeset).then_some(language)
 }
 
 fn is_utf8_codeset(codeset: &str) -> bool {
@@ -269,6 +273,70 @@ const JA: HelpText = HelpText {
     app_quit: "アプリケーションを終了する。確認なし！",
 };
 
+const KO: HelpText = HelpText {
+    block_title: "도움말",
+
+    pane_control_title: "패널 제어",
+    pane_q_quit: "현재 패널을 닫습니다. 기본 화면에서는 종료합니다(확인이 필요할 수 있음).",
+    pane_esc_close: "현재 패널을 닫습니다.",
+    pane_esc_close_2: "기본 화면에서는 상위 디렉터리로 이동합니다.",
+    pane_qesc_close: "현재 패널을 닫습니다.",
+    pane_qesc_close_2: "열린 패널이 없으면 프로그램을 종료합니다.",
+    pane_tab: "열린 모든 패널을 순환합니다.",
+    pane_tab_2: "'표시된 항목' 패널을 활성화하여 선택한 파일을 삭제합니다.",
+    pane_help_toggle: "이 도움말 패널을 표시하거나 숨깁니다.",
+
+    nav_title: "탐색",
+    nav_down: "한 항목 아래로 이동합니다.",
+    nav_up: "한 항목 위로 이동합니다.",
+    nav_descend: "선택한 디렉터리로 들어갑니다.",
+    nav_ascend: "상위 디렉터리로 한 단계 이동합니다.",
+    nav_down10: "10개 항목 아래로 이동합니다.",
+    nav_up10: "10개 항목 위로 이동합니다.",
+    nav_top: "목록의 맨 위로 이동합니다.",
+    nav_bottom: "목록의 맨 아래로 이동합니다.",
+
+    disp_title: "표시",
+    disp_sort_size: "크기 기준 내림차순/오름차순 정렬을 전환합니다.",
+    disp_sort_mtime: "수정 시간 기준 내림차순/오름차순 정렬을 전환합니다.",
+    disp_show_mtime: "수정 시간을 표시하거나 mtime 정렬 모드를 순환합니다.",
+    disp_show_mtime_2: "mtime 정렬 중: 항목, 하위 항목 중 최신, 하위 항목 중 가장 오래됨.",
+    disp_sort_count: "항목 수 기준 내림차순/오름차순 정렬을 전환합니다.",
+    disp_show_count: "항목 수를 표시하거나 숨깁니다.",
+    disp_sort_name: "이름 기준 오름차순/내림차순 정렬을 전환합니다.",
+    disp_cycle_bar: "백분율 및 막대 표시 옵션을 순환합니다.",
+
+    oms_title: "열기/표시/검색",
+    oms_open: "선택한 항목을 연결된 프로그램으로 엽니다.",
+    oms_toggle_down: "현재 선택한 항목의 표시 상태를 전환하고 아래로 이동합니다.",
+    oms_mark_down: "현재 선택한 항목을 삭제 대상으로 표시하고 아래로 이동합니다.",
+    oms_toggle: "현재 선택한 항목의 표시 상태를 전환합니다.",
+    oms_mark_cleanup: "현재 보기에서 정리 후보를 표시합니다.",
+    oms_toggle_cleanup: "정리 후보 감지를 전환합니다.",
+    oms_mark_gitignored: "현재 보기에서 Git이 무시하는 항목을 표시합니다.",
+    oms_toggle_gitignored: "Git 무시 항목 감지를 전환합니다.",
+    oms_toggle_all: "모든 항목의 표시 상태를 전환합니다.",
+    oms_search: "Git 방식의 glob 검색.",
+    oms_search_2: "검색은 현재 디렉터리에서 시작됩니다.",
+    oms_refresh_one: "선택한 항목만 새로 고칩니다.",
+    oms_refresh_all: "현재 보기의 모든 항목을 새로 고칩니다.",
+
+    mark_title: "표시된 항목 패널",
+    mark_remove: "선택한 항목을 목록에서 제거합니다.",
+    mark_remove_all: "모든 항목을 목록에서 제거합니다.",
+    mark_delete: "표시된 모든 항목을 확인 없이 영구적으로 삭제합니다.",
+    mark_delete_2: "이 작업은 취소할 수 없습니다!",
+    #[cfg(feature = "trash-move")]
+    mark_trash: "표시된 모든 항목을 휴지통으로 이동합니다.",
+    #[cfg(feature = "trash-move")]
+    mark_trash_2: "항목을 휴지통에서 복원할 수 있습니다.",
+
+    app_title: "애플리케이션 제어",
+    app_suspend: "애플리케이션을 일시 중단하고 셸로 제어권을 돌려줍니다.",
+    app_repaint: "화면을 지우고 다시 그립니다.",
+    app_quit: "애플리케이션을 종료합니다. 확인하지 않습니다!",
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,7 +368,13 @@ mod tests {
     }
 
     #[test]
-    fn explicit_non_utf8_japanese_locales_are_english() {
+    fn korean_locale_selects_korean_when_codeset_is_missing_or_utf8() {
+        assert_eq!(detect([None, None, Some("ko_KR.UTF-8")]), Language::Korean);
+        assert_eq!(detect([None, None, Some("ko")]), Language::Korean);
+    }
+
+    #[test]
+    fn explicit_non_utf8_supported_locales_are_english() {
         assert_eq!(
             detect([None, None, Some("ja_JP.SJIS")]),
             Language::English,
@@ -310,10 +384,14 @@ mod tests {
             detect([None, None, Some("ja_JP.EUC-JP")]),
             Language::English
         );
+        assert_eq!(
+            detect([None, None, Some("ko_KR.EUC-KR")]),
+            Language::English
+        );
     }
 
     #[test]
-    fn non_japanese_locales_are_english() {
+    fn unsupported_locales_are_english() {
         assert_eq!(detect([None, None, Some("en_US.UTF-8")]), Language::English);
         assert_eq!(detect([None, None, Some("C")]), Language::English);
         assert_eq!(detect([None, None, Some("POSIX")]), Language::English);
