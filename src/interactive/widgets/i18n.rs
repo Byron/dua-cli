@@ -14,6 +14,7 @@ pub enum Language {
     English,
     Japanese,
     Korean,
+    Chinese,
 }
 
 impl Language {
@@ -32,6 +33,7 @@ impl Language {
             Language::English => &EN,
             Language::Japanese => &JA,
             Language::Korean => &KO,
+            Language::Chinese => &ZH,
         }
     }
 }
@@ -56,6 +58,7 @@ where
     {
         Some("ja") => Language::Japanese,
         Some("ko") => Language::Korean,
+        Some("zh") => Language::Chinese,
         _ => Language::English,
     }
 }
@@ -337,6 +340,70 @@ const KO: HelpText = HelpText {
     app_quit: "애플리케이션을 종료합니다. 확인하지 않습니다!",
 };
 
+const ZH: HelpText = HelpText {
+    block_title: "帮助",
+
+    pane_control_title: "面板控制",
+    pane_q_quit: "关闭当前面板。在主视图中退出（可能需要确认）。",
+    pane_esc_close: "关闭当前面板。",
+    pane_esc_close_2: "在主视图中，返回上级目录。",
+    pane_qesc_close: "关闭当前面板。",
+    pane_qesc_close_2: "如果没有打开的面板，则退出程序。",
+    pane_tab: "在所有打开的面板之间循环切换。",
+    pane_tab_2: "激活“已标记项目”面板以删除所选文件。",
+    pane_help_toggle: "显示或隐藏此帮助面板。",
+
+    nav_title: "导航",
+    nav_down: "向下移动 1 个条目。",
+    nav_up: "向上移动 1 个条目。",
+    nav_descend: "进入所选目录。",
+    nav_ascend: "返回上一级目录。",
+    nav_down10: "向下移动 10 个条目。",
+    nav_up10: "向上移动 10 个条目。",
+    nav_top: "移到列表顶部。",
+    nav_bottom: "移到列表底部。",
+
+    disp_title: "显示",
+    disp_sort_size: "在按大小降序/升序排序之间切换。",
+    disp_sort_mtime: "在按修改时间降序/升序排序之间切换。",
+    disp_show_mtime: "显示修改时间或循环切换 mtime 排序模式。",
+    disp_show_mtime_2: "按 mtime 排序时：当前条目、子项中最新、子项中最旧。",
+    disp_sort_count: "在按条目数降序/升序排序之间切换。",
+    disp_show_count: "显示或隐藏条目数。",
+    disp_sort_name: "在按名称升序/降序排序之间切换。",
+    disp_cycle_bar: "循环切换百分比和条形图显示选项。",
+
+    oms_title: "打开/标记/搜索",
+    oms_open: "使用关联的程序打开所选条目。",
+    oms_toggle_down: "切换当前所选条目的标记状态并下移。",
+    oms_mark_down: "将当前所选条目标记为待删除并下移。",
+    oms_toggle: "切换当前所选条目的标记状态。",
+    oms_mark_cleanup: "标记当前视图中的清理候选项。",
+    oms_toggle_cleanup: "切换清理候选项检测。",
+    oms_mark_gitignored: "标记当前视图中被 Git 忽略的条目。",
+    oms_toggle_gitignored: "切换 Git 忽略条目检测。",
+    oms_toggle_all: "切换所有条目的标记状态。",
+    oms_search: "Git 风格的 glob 搜索。",
+    oms_search_2: "从当前目录开始搜索。",
+    oms_refresh_one: "仅刷新所选条目。",
+    oms_refresh_all: "刷新当前视图中的所有条目。",
+
+    mark_title: "已标记条目面板",
+    mark_remove: "从列表中移除所选条目。",
+    mark_remove_all: "从列表中移除所有条目。",
+    mark_delete: "不经提示永久删除所有已标记条目。",
+    mark_delete_2: "此操作无法撤销！",
+    #[cfg(feature = "trash-move")]
+    mark_trash: "将所有已标记条目移到回收站。",
+    #[cfg(feature = "trash-move")]
+    mark_trash_2: "可以从回收站恢复这些条目。",
+
+    app_title: "应用控制",
+    app_suspend: "暂停应用程序并将控制权交还给 shell。",
+    app_repaint: "清空并重绘屏幕。",
+    app_quit: "直接关闭应用程序，不作确认！",
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +441,12 @@ mod tests {
     }
 
     #[test]
+    fn chinese_locale_selects_chinese_when_codeset_is_missing_or_utf8() {
+        assert_eq!(detect([None, None, Some("zh_CN.UTF-8")]), Language::Chinese);
+        assert_eq!(detect([None, None, Some("zh")]), Language::Chinese);
+    }
+
+    #[test]
     fn explicit_non_utf8_supported_locales_are_english() {
         assert_eq!(
             detect([None, None, Some("ja_JP.SJIS")]),
@@ -386,6 +459,10 @@ mod tests {
         );
         assert_eq!(
             detect([None, None, Some("ko_KR.EUC-KR")]),
+            Language::English
+        );
+        assert_eq!(
+            detect([None, None, Some("zh_CN.GB18030")]),
             Language::English
         );
     }
