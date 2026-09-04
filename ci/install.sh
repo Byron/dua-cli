@@ -88,12 +88,8 @@ need mktemp
 need tar
 
 # Optional dependencies
-if [ -z $crate ] || [ -z $tag ] || [ -z $target ]; then
+if [ -z $crate ] || [ -z $target ]; then
     need cut
-fi
-
-if [ -z $tag ]; then
-    need rev
 fi
 
 if [ -z $target ]; then
@@ -117,7 +113,8 @@ say_err "Crate: $crate"
 url="$url/releases"
 
 if [ -z $tag ]; then
-    tag=$(curl -s "$url/latest" | cut -d'"' -f2 | rev | cut -d'/' -f1 | rev)
+    latest_url=$(curl -LSfs -o /dev/null -w '%{url_effective}' "$url/latest") || err "failed to determine latest release"
+    tag=${latest_url##*/}
     say_err "Tag: latest ($tag)"
 else
     say_err "Tag: $tag"
@@ -139,7 +136,10 @@ url="$url/download/$tag/$crate-$tag-$target.tar.gz"
 
 say_err "Downloading: $url"
 td=$(mktemp -d || mktemp -d -t tmp)
-curl -sL $url | tar -C $td -xz
+archive="$td/archive.tar.gz"
+curl -LSfs "$url" -o "$archive" || err "failed to download $url"
+tar -C "$td" -xzf "$archive" || err "failed to extract archive from $url"
+rm "$archive"
 
 for f in $(cd $td && find . -type f); do
     test -x $td/$f || continue

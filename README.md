@@ -4,6 +4,8 @@
 
 **dua** (-> _Disk Usage Analyzer_) is a tool to conveniently learn about the usage of disk space of a given directory. It's parallel by default and will max out your SSD, providing relevant information as fast as possible. Optionally delete superfluous data, and do so more quickly than `rm`.
 
+Run `dua i` to launch the [interactive mode](#interactive-mode) for exploring and deleting files.
+
 [![asciicast](https://asciinema.org/a/kDnXUOeqBxZVMoWuFNqzfpeey.svg)](https://asciinema.org/a/kDnXUOeqBxZVMoWuFNqzfpeey)
 
 ### Installation
@@ -14,7 +16,7 @@
 
 ```sh
 curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh | \
-    sh -s -- --git Byron/dua-cli --crate dua --tag v2.29.0
+    sh -s -- --git Byron/dua-cli --crate dua
 ```
 
 #### MacOS via [MacPorts](https://www.macports.org):
@@ -37,7 +39,7 @@ Linux requires the target to be specified explicitly to obtain the MUSL build.
 
 ```sh
 curl -LSfs https://raw.githubusercontent.com/Byron/dua-cli/master/ci/install.sh | \
-    sh -s -- --git Byron/dua-cli --target x86_64-unknown-linux-musl --crate dua --tag v2.29.0
+    sh -s -- --git Byron/dua-cli --target x86_64-unknown-linux-musl --crate dua
 ```
 
 #### Windows via [Scoop](https://scoop.sh/)

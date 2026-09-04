@@ -237,6 +237,14 @@ jobs:
           asset_name: ${{ env.ASSET }}
           asset_content_type: application/octet-stream
 
+  validate-release-install:
+    name: validate release installation
+    needs: ["build-release"]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh ci/validate-release-install.sh "$GITHUB_REF_NAME"
+
   winget-release:
     name: winget-release
     needs: ["build-release"]
