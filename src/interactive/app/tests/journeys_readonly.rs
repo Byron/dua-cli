@@ -5,7 +5,7 @@ use std::{ffi::OsString, fs, time::Duration};
 use tui::backend::Backend;
 
 use crate::interactive::app::tests::utils::{into_codes, into_events};
-use crate::interactive::widgets::Column;
+use crate::interactive::widgets::{Column, Language};
 use crate::interactive::{
     MTimeSort, SortMode,
     app::tests::{
@@ -739,6 +739,7 @@ fn snapshot_roundtrip_is_read_only() -> Result<()> {
         snapshot.traversal,
         Some(snapshot_load_duration),
     )?;
+    app.state.language = Language::English;
 
     assert!(app.state.read_only);
     assert_eq!(app.state.stats.elapsed, Some(snapshot_load_duration));

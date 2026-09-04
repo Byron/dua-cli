@@ -18,13 +18,13 @@ use tui::{
 #[derive(Default, Clone)]
 pub struct HelpPane {
     pub scroll: u16,
-    pub language: Language,
 }
 
 pub struct HelpPaneProps<'a> {
     pub border_style: Style,
     pub has_focus: bool,
     pub keys: &'a KeysConfig,
+    pub language: Language,
 }
 
 fn margin(r: Rect, margin: u16) -> Rect {
@@ -37,13 +37,6 @@ fn margin(r: Rect, margin: u16) -> Rect {
 }
 
 impl HelpPane {
-    pub fn with_locale_from_env() -> Self {
-        HelpPane {
-            language: Language::from_env(),
-            ..Default::default()
-        }
-    }
-
     pub fn process_events(&mut self, key: KeyEvent, keys: &KeysConfig) {
         if key.kind == KeyEventKind::Release {
             return;
@@ -82,7 +75,7 @@ impl HelpPane {
     ) {
         let props = props.borrow();
         let keys = props.keys;
-        let t = self.language.help_text();
+        let t = props.language.help_text();
         let build_lines = || {
             let lines = RefCell::new(Vec::<Line<'_>>::with_capacity(30));
             let add_newlines = |n| {
@@ -292,17 +285,18 @@ mod tests {
     }
 
     fn rendered_with_keys(language: Language, keys: &KeysConfig) -> String {
-        let area = Rect::new(0, 0, 120, 80);
+        rendered_at_width(language, keys, 120)
+    }
+
+    fn rendered_at_width(language: Language, keys: &KeysConfig, width: u16) -> String {
+        let area = Rect::new(0, 0, width, 80);
         let mut buf = Buffer::empty(area);
-        HelpPane {
-            language,
-            ..Default::default()
-        }
-        .render(
+        HelpPane::default().render(
             HelpPaneProps {
                 border_style: Style::default(),
                 has_focus: false,
                 keys,
+                language,
             },
             area,
             &mut buf,
@@ -338,6 +332,26 @@ mod tests {
             "The Japanese strings are actually rendered."
         );
         assert!(ja_collapsed.contains("ナビゲーション"));
+    }
+
+    #[test]
+    fn german_instructions_fit_an_80_column_pane() {
+        let text = rendered_at_width(Language::German, &KeysConfig::default(), 80);
+        let german = Language::German.help_text();
+        for expected in [
+            german.pane_q_quit,
+            german.pane_tab_2,
+            german.disp_sort_mtime,
+            german.disp_show_mtime_2,
+            german.disp_sort_count,
+            german.oms_toggle_down,
+            german.oms_mark_down,
+            german.oms_mark_gitignored,
+        ] {
+            assert!(text.contains(expected), "clipped help text: {expected}");
+        }
+        #[cfg(feature = "trash-move")]
+        assert!(text.contains(german.mark_trash_2));
     }
 
     #[test]
@@ -389,10 +403,7 @@ mod tests {
             ('5', 49),
             ('6', 51),
         ] {
-            let mut pane = HelpPane {
-                scroll: 50,
-                ..Default::default()
-            };
+            let mut pane = HelpPane { scroll: 50 };
             pane.process_events(KeyCode::Char(key).into(), &config.keys);
             assert_eq!(pane.scroll, expected, "configured binding {key}");
         }

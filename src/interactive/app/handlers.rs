@@ -36,6 +36,12 @@ pub enum MarkEntryMode {
     MarkForDeletion,
 }
 
+#[derive(Clone, Copy)]
+enum AnnotationKind {
+    Cleanup,
+    Gitignored,
+}
+
 /// Aggregate outcome of an entire deletion or trash operation.
 ///
 /// This combines the results for all selected entries and adds the operation's
@@ -83,12 +89,13 @@ impl AppState {
     pub fn open_that(&mut self, tree_view: &TreeView<'_>) {
         if let Some(idx) = self.navigation().selected {
             let path = tree_view.path_of(idx);
+            let t = self.language.ui_text();
             if self.read_only && !path.exists() {
-                self.message = Some(format!("Snapshot path is unavailable: {}", path.display()));
+                self.message = Some(format!("{}{}", t.snapshot_path_unavailable, path.display()));
                 return;
             }
             if let Err(err) = open::that(&path) {
-                self.message = Some(format!("Failed to open {}: {err}", path.display()));
+                self.message = Some(format!("{}{}: {err}", t.failed_to_open, path.display()));
             }
         }
     }
@@ -127,11 +134,9 @@ impl AppState {
             }
             None => {
                 self.message = Some(if self.can_scan_parent(tree_view) {
-                    format!(
-                        "Top level reached. Press {scan_parent_key} to scan the parent directory"
-                    )
+                    self.language.top_level_with_scan(scan_parent_key)
                 } else {
-                    "Top level reached".into()
+                    self.language.ui_text().top_level.into()
                 });
             }
         }
@@ -171,7 +176,9 @@ impl AppState {
                     self.update_entry_annotations(tree_view);
                     self.reset_message();
                 }
-                None => self.message = Some("Entry is a file or an empty directory".into()),
+                None => {
+                    self.message = Some(self.language.ui_text().entry_file_or_empty.into());
+                }
             }
         }
     }
@@ -246,7 +253,12 @@ impl AppState {
 
     pub fn toggle_gitignored_entries(&mut self, tree_view: &TreeView<'_>) {
         if self.read_only {
-            self.message = Some("Gitignored entry detection is unavailable for snapshots".into());
+            self.message = Some(
+                self.language
+                    .ui_text()
+                    .gitignore_snapshot_unavailable
+                    .into(),
+            );
             return;
         }
         self.gitignored_entries = self.gitignored_entries.is_none().then(BTreeSet::new);
@@ -274,9 +286,9 @@ impl AppState {
 
     pub fn reset_message(&mut self) {
         if self.scan.is_some() {
-            self.message = Some("-> scanning <-".into());
+            self.message = Some(self.language.ui_text().scanning.into());
         } else {
-            self.message = annotation_message(
+            self.message = self.language.annotation_message(
                 self.cleanup_candidates.as_ref().map_or(0, BTreeSet::len),
                 self.gitignored_entries.as_ref().map_or(0, BTreeSet::len),
             );
@@ -286,7 +298,7 @@ impl AppState {
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {
         self.focussed = match self.focussed {
             Main | Mark | Glob => {
-                window.help = Some(HelpPane::with_locale_from_env());
+                window.help = Some(HelpPane::default());
                 Help
             }
             Help => {
@@ -332,12 +344,12 @@ impl AppState {
             .and_then(|p| p.process_events(key, &config.keys));
         window.mark = match res {
             Some((pane, Some(_))) if self.read_only => {
-                self.message = Some("Snapshots are read-only".into());
+                self.message = Some(self.language.ui_text().snapshots_read_only.into());
                 Some(pane)
             }
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
-                    self.message = Some("Deleting items...".to_string());
+                    self.message = Some(self.language.ui_text().deleting_items.into());
                     let start = Instant::now();
                     let mut entries_deleted = 0;
                     let mut bytes_deleted = 0;
@@ -350,7 +362,8 @@ impl AppState {
                             Ok(stats) => {
                                 entries_deleted += stats.entries;
                                 bytes_deleted += stats.bytes;
-                                self.message = Some(format!("Deleted {entries_deleted} items..."));
+                                self.message =
+                                    Some(self.language.deletion_progress(entries_deleted, false));
                                 Ok(pane)
                             }
                             Err(stats) => {
@@ -363,7 +376,7 @@ impl AppState {
                     });
                     self.message = None;
                     self.notify_deletion_finished(
-                        "Deletion",
+                        self.language.ui_text().notification_deletion,
                         DeletionStats {
                             entries: entries_deleted,
                             bytes: bytes_deleted,
@@ -377,7 +390,7 @@ impl AppState {
                 }
                 #[cfg(feature = "trash-move")]
                 Some(MarkMode::Trash) => {
-                    self.message = Some("Trashing items...".to_string());
+                    self.message = Some(self.language.ui_text().trashing_items.into());
                     let start = Instant::now();
                     let mut entries_trashed = 0;
                     let mut bytes_trashed = 0;
@@ -394,7 +407,8 @@ impl AppState {
                             Ok(ed) => {
                                 entries_trashed += ed;
                                 bytes_trashed += entry_size;
-                                self.message = Some(format!("Trashed {entries_trashed} items..."));
+                                self.message =
+                                    Some(self.language.deletion_progress(entries_trashed, true));
                                 Ok(pane)
                             }
                             Err(c) => {
@@ -405,7 +419,7 @@ impl AppState {
                     });
                     self.message = None;
                     self.notify_deletion_finished(
-                        "Trash",
+                        self.language.ui_text().notification_trash,
                         DeletionStats {
                             entries: entries_trashed,
                             bytes: bytes_trashed,
@@ -434,6 +448,7 @@ impl AppState {
         config: &Config,
     ) {
         let message = notification::deletion_finished(
+            self.language,
             action,
             stats.entries,
             stats.bytes,
@@ -589,13 +604,13 @@ impl AppState {
         match self.cleanup_candidates.clone() {
             Some(cleanup_candidates) => self.mark_annotation_candidates(
                 cleanup_candidates,
-                "No cleanup candidates in view",
-                "Cleanup candidates are already marked",
-                "cleanup candidates",
+                AnnotationKind::Cleanup,
                 window,
                 tree_view,
             ),
-            None => self.message = Some("Cleanup candidate detection is disabled".into()),
+            None => {
+                self.message = Some(self.language.ui_text().cleanup_detection_disabled.into());
+            }
         }
     }
 
@@ -603,22 +618,20 @@ impl AppState {
         match self.gitignored_entries.clone() {
             Some(gitignored_entries) => self.mark_annotation_candidates(
                 gitignored_entries,
-                "No gitignored entries in view",
-                "Gitignored entries are already marked",
-                "gitignored entries",
+                AnnotationKind::Gitignored,
                 window,
                 tree_view,
             ),
-            None => self.message = Some("Gitignored entry detection is disabled".into()),
+            None => {
+                self.message = Some(self.language.ui_text().gitignore_detection_disabled.into());
+            }
         }
     }
 
     fn mark_annotation_candidates(
         &mut self,
         annotation_candidates: BTreeSet<TreeIndex>,
-        none_in_view_message: &str,
-        already_marked_message: &str,
-        marked_label: &str,
+        kind: AnnotationKind,
         window: &mut MainWindow,
         tree_view: &TreeView<'_>,
     ) {
@@ -639,13 +652,22 @@ impl AppState {
         }
 
         if candidates.is_empty() {
-            self.message = Some(if annotation_candidates.is_empty() {
-                none_in_view_message.into()
-            } else {
-                already_marked_message.into()
-            });
+            let t = self.language.ui_text();
+            self.message = Some(
+                match (kind, annotation_candidates.is_empty()) {
+                    (AnnotationKind::Cleanup, true) => t.no_cleanup_candidates,
+                    (AnnotationKind::Cleanup, false) => t.cleanup_candidates_already_marked,
+                    (AnnotationKind::Gitignored, true) => t.no_gitignored_entries,
+                    (AnnotationKind::Gitignored, false) => t.gitignored_entries_already_marked,
+                }
+                .into(),
+            );
         } else {
-            self.message = Some(format!("Marked {} {marked_label}", candidates.len()));
+            self.message =
+                Some(self.language.marked_candidates(
+                    candidates.len(),
+                    matches!(kind, AnnotationKind::Gitignored),
+                ));
         }
     }
 
@@ -669,29 +691,6 @@ impl AppState {
                 ));
             }
         }
-    }
-}
-
-fn annotation_message(cleanup_count: usize, gitignored_count: usize) -> Option<String> {
-    match (cleanup_count, gitignored_count) {
-        (0, 0) => None,
-        (cleanup, 0) => {
-            let label = if cleanup == 1 {
-                "cleanup candidate"
-            } else {
-                "cleanup candidates"
-            };
-            Some(format!("{cleanup} {label}"))
-        }
-        (0, gitignored) => {
-            let label = if gitignored == 1 {
-                "gitignored entry"
-            } else {
-                "gitignored entries"
-            };
-            Some(format!("{gitignored} {label}"))
-        }
-        (cleanup, gitignored) => Some(format!("{cleanup} cleanup, {gitignored} gitignored")),
     }
 }
 

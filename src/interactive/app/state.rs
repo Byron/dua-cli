@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use dua::WalkOptions;
 use dua::traverse::{BackgroundTraversal, TraversalStats};
 
-use crate::interactive::widgets::Column;
+use crate::interactive::widgets::{Column, Language};
 
 use super::{EntryDataBundle, SortMode, input::TerminalFocus, navigation::Navigation};
 
@@ -37,6 +37,8 @@ pub struct FilesystemScan {
     reason = "independent UI state flags are clearer than an artificial state machine"
 )]
 pub struct AppState {
+    /// Language used for all interactive interface text in this session.
+    pub language: Language,
     /// Navigation state for the main traversal view.
     pub navigation: Navigation,
     /// Navigation state for an active glob-filtered view, if one is open.
@@ -90,6 +92,7 @@ impl AppState {
         read_only: bool,
     ) -> Self {
         AppState {
+            language: Language::from_env(),
             navigation: Navigation::default(),
             glob_navigation: None,
             entries: vec![],

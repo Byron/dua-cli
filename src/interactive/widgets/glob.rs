@@ -1,3 +1,4 @@
+use crate::interactive::widgets::Language;
 use crate::interactive::widgets::tui_ext::{
     draw_text_nowrap_fn,
     util::{block_width, rect},
@@ -27,6 +28,7 @@ pub struct GlobPaneProps<'a> {
     pub border_style: Style,
     pub has_focus: bool,
     pub keys: &'a KeysConfig,
+    pub language: Language,
 }
 
 pub struct GlobPane {
@@ -124,11 +126,13 @@ impl GlobPane {
             border_style,
             has_focus,
             keys,
+            language,
         } = props.borrow();
 
+        let t = language.ui_text();
         let title = match self.case {
-            Case::Sensitive => "Git-Glob (case-sensitive)",
-            Case::Fold => "Git-Glob (case-insensitive)",
+            Case::Sensitive => t.glob_case_sensitive,
+            Case::Fold => t.glob_case_insensitive,
         };
 
         let block = Block::default()
@@ -144,7 +148,7 @@ impl GlobPane {
             .render(margin_left_right(inner_block_area, 1), buffer);
 
         if *has_focus {
-            draw_top_right_help(area, title, buffer, keys);
+            draw_top_right_help(area, title, buffer, keys, *language);
 
             cursor.show = true;
             cursor.x = inner_block_area.x
@@ -162,10 +166,22 @@ impl GlobPane {
     }
 }
 
-fn draw_top_right_help(area: Rect, title: &str, buf: &mut Buffer, keys: &KeysConfig) -> Rect {
+fn draw_top_right_help(
+    area: Rect,
+    title: &str,
+    buf: &mut Buffer,
+    keys: &KeysConfig,
+    language: Language,
+) -> Rect {
+    let t = language.ui_text();
     let help_text = format!(
-        " search = {} | case = {} | cancel = {} ",
-        keys.search_confirm, keys.search_toggle_case, keys.close_pane
+        " {} = {} | {} = {} | {} = {} ",
+        t.glob_search,
+        keys.search_confirm,
+        t.glob_case,
+        keys.search_toggle_case,
+        t.glob_cancel,
+        keys.close_pane
     );
     let help_text_block_width = block_width(&help_text);
     let bound = Rect {
@@ -231,9 +247,10 @@ pub fn glob_search(
     root_index: TreeIndex,
     glob: &str,
     case: gix::glob::pattern::Case,
+    language: Language,
 ) -> Result<Vec<TreeIndex>> {
     let glob = gix::glob::Pattern::from_bytes_without_negation(glob.as_bytes())
-        .with_context(|| anyhow!("Glob was empty or only whitespace"))?;
+        .with_context(|| anyhow!(language.ui_text().glob_empty))?;
     let mut results = Vec::new();
     let mut path = BString::default();
     glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path, case);
@@ -244,6 +261,7 @@ pub fn glob_search(
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEventKind, KeyEventState, KeyModifiers};
+    use tui::buffer::Cell;
 
     #[test]
     fn default_toggle_case_key_does_not_type_into_input() {
@@ -320,6 +338,7 @@ mod tests {
                 border_style: Style::default(),
                 has_focus: true,
                 keys: &keys,
+                language: Language::English,
             },
             area,
             &mut buffer,
@@ -343,5 +362,31 @@ mod tests {
         }
         "#
         );
+    }
+
+    #[test]
+    fn pane_title_and_actions_follow_the_selected_language() {
+        let area = Rect::new(0, 0, 100, 3);
+        let mut buffer = Buffer::empty(area);
+
+        GlobPane::default().render(
+            GlobPaneProps {
+                border_style: Style::default(),
+                has_focus: true,
+                keys: &KeysConfig::default(),
+                language: Language::Chinese,
+            },
+            area,
+            &mut buffer,
+            &mut Cursor::default(),
+        );
+
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        let rendered: String = rendered.split_whitespace().collect();
+        assert!(rendered.contains("Git-Glob"));
+        assert!(rendered.contains("不区分大小写"));
+        assert!(rendered.contains("搜索"));
+        assert!(rendered.contains("取消"));
+        assert!(!rendered.contains("case-insensitive"));
     }
 }

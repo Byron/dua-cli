@@ -26,7 +26,7 @@ use dua::{
 };
 use tui::{Terminal, backend::Backend};
 
-use crate::interactive::widgets::MainWindow;
+use crate::interactive::widgets::{Language, MainWindow};
 
 use super::{DisplayOptions, sorted_entries, state::AppState};
 
@@ -228,26 +228,24 @@ pub(super) fn write_snapshot_atomically(
     traversal: &Traversal,
     roots: &[TreeIndex],
     compression_level: Option<i32>,
+    language: Language,
 ) -> Result<()> {
+    let t = language.ui_text();
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let mut temporary = tempfile::NamedTempFile::new_in(parent).with_context(|| {
-        format!(
-            "Could not create a temporary snapshot beside {}",
-            path.display()
-        )
-    })?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .with_context(|| format!("{}{}", t.snapshot_temporary_failed, path.display()))?;
     dua::snapshot::write(temporary.as_file_mut(), traversal, roots, compression_level)
-        .with_context(|| format!("Could not write snapshot to {}", path.display()))?;
+        .with_context(|| format!("{}{}", t.snapshot_write_failed, path.display()))?;
     temporary.as_file_mut().flush()?;
     temporary.as_file().sync_all()?;
     temporary
         .into_temp_path()
         .persist(path)
         .map_err(|err| err.error)
-        .with_context(|| format!("Could not install snapshot at {}", path.display()))?;
+        .with_context(|| format!("{}{}", t.snapshot_install_failed, path.display()))?;
     Ok(())
 }
 
