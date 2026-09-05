@@ -31,6 +31,8 @@ pub struct EntriesProps<'a> {
     pub current_path: PathBuf,
     /// Size display mode used for byte and percentage columns.
     pub display: DisplayOptions,
+    /// Whether directories are shown as `dir/` instead of `/dir`.
+    pub directory_suffix: bool,
     /// Currently selected tree entry, if one is selected.
     pub selected: Option<TreeIndex>,
     /// Entries to display in the pane, already sorted for the current view.
@@ -70,6 +72,7 @@ impl Entries {
         let EntriesProps {
             current_path,
             display,
+            directory_suffix,
             entries,
             selected,
             marked,
@@ -154,7 +157,7 @@ impl Entries {
             ) as usize;
 
             let name = shorten_input(
-                name_with_prefix(name.to_string_lossy(), *is_dir),
+                name_with_directory_marker(name.to_string_lossy(), *is_dir, *directory_suffix),
                 available_width,
             );
             let style = name_style(
@@ -571,34 +574,26 @@ fn fill_background_to_right(mut s: Cow<'_, str>, entire_width: u16) -> Cow<'_, s
     }
 }
 
-fn name_with_prefix(mut name: Cow<'_, str>, is_dir: bool) -> Cow<'_, str> {
-    let prefix = if is_dir {
-        // Note that these names never happen on non-root items, so this is a root-item special case.
-        // It was necessary since we can't trust the 'actual' root anymore as it might be the CWD or
-        // `main()` cwd' into the one path that was provided by the user.
-        // The idea was to keep explicit roots as specified without adjustment, which works with this
-        // logic unless somebody provides `name` as is, then we will prefix it which is a little confusing.
-        // Overall, this logic makes the folder display more consistent.
-        if name == "."
-            || name == ".."
-            || name.starts_with('/')
-            || name.starts_with("./")
-            || name.starts_with("../")
-        {
-            None
-        } else {
-            Some("/")
+fn name_with_directory_marker(
+    mut name: Cow<'_, str>,
+    is_dir: bool,
+    directory_suffix: bool,
+) -> Cow<'_, str> {
+    if directory_suffix {
+        if is_dir && !name.chars().last().is_some_and(std::path::is_separator) {
+            name.to_mut().push('/');
         }
-    } else {
-        Some(" ")
-    };
-    match prefix {
-        None => name,
-        Some(prefix) => {
-            name.to_mut().insert_str(0, prefix);
-            name
-        }
+    } else if !is_dir {
+        name.to_mut().insert(0, ' ');
+    } else if name != "."
+        && name != ".."
+        && !name.starts_with('/')
+        && !name.starts_with("./")
+        && !name.starts_with("../")
+    {
+        name.to_mut().insert(0, '/');
     }
+    name
 }
 
 fn name_style(
@@ -776,7 +771,10 @@ mod entries_test {
     use std::collections::HashSet;
     use std::path::Path;
 
-    use super::{name_style, shorten_input, show_mtime_column, title as entry_title};
+    use super::{
+        name_style, name_with_directory_marker, shorten_input, show_mtime_column,
+        title as entry_title,
+    };
     use crate::interactive::widgets::{Column, Language};
     use crate::interactive::{MTimeSort, SortMode};
     use dua::ByteFormat;
@@ -809,6 +807,25 @@ mod entries_test {
             assert_eq!(actual, expected);
             assert!(actual.as_ref().width() <= target_width);
         }
+    }
+
+    #[test]
+    fn directory_marker_can_be_moved_to_a_suffix_by_config() {
+        let suffix = toml::from_str::<dua::Config>("directory_suffix = true").unwrap();
+        for (config, directory, file) in [
+            (dua::Config::default(), "/dir", " file"),
+            (suffix, "dir/", "file"),
+        ] {
+            assert_eq!(
+                name_with_directory_marker("dir".into(), true, config.directory_suffix),
+                directory
+            );
+            assert_eq!(
+                name_with_directory_marker("file".into(), false, config.directory_suffix),
+                file
+            );
+        }
+        assert_eq!(name_with_directory_marker("/".into(), true, true), "/");
     }
 
     #[test]
