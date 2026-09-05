@@ -115,6 +115,7 @@ impl MainWindow {
         let props = EntriesProps {
             current_path: current_path.clone(),
             display: *display,
+            directory_suffix: config.directory_suffix,
             entries: &state.entries,
             marked,
             cleanup_candidates: state.cleanup_candidates.as_ref(),

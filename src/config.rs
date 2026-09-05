@@ -14,6 +14,10 @@ use std::{fmt, path::PathBuf, str::FromStr};
 /// ```toml
 /// format = "binary"
 ///
+/// # Show directories as `dir/` instead of `/dir` in interactive mode.
+/// # If unset, behavior defaults to false.
+/// # directory_suffix = false
+///
 /// # Controls whether Git-ignored entry detection is enabled in interactive mode.
 /// # Supported values: true, false.
 /// # If unset, behavior defaults to true.
@@ -37,6 +41,10 @@ use std::{fmt, path::PathBuf, str::FromStr};
 pub struct Config {
     /// Byte count format to use when `--format` and `DUA_FORMAT` are not set.
     pub format: Option<crate::ByteFormat>,
+
+    /// Whether directories are shown as `dir/` instead of `/dir` in interactive mode.
+    /// If unset, defaults to `false`.
+    pub directory_suffix: bool,
 
     /// Keybinding-related settings.
     pub keys: KeysConfig,
@@ -615,6 +623,10 @@ impl Config {
             "# Byte count format to use when --format and DUA_FORMAT are not set.\n",
             "# Supported values: metric, binary, bytes, gb, gib, mb, mib.\n",
             "# format = \"binary\"\n",
+            "#\n",
+            "# Show directories as `dir/` instead of `/dir` (NCDU style) in interactive mode.\n",
+            "# If unset, behavior defaults to false.\n",
+            "# directory_suffix = false\n",
             "#\n",
             "# Controls whether Git-ignored entry detection is enabled in interactive mode.\n",
             "# Supported values: true, false.\n",
