@@ -348,6 +348,10 @@ impl AppState {
                 self.message = Some(self.language.ui_text().snapshots_read_only.into());
                 Some(pane)
             }
+            Some((pane, Some(_))) if self.scan.is_some() => {
+                self.message = Some(self.language.ui_text().traversal_running.into());
+                Some(pane)
+            }
             Some((pane, mode)) => match mode {
                 Some(MarkMode::Delete) => {
                     self.message = Some(self.language.ui_text().deleting_items.into());

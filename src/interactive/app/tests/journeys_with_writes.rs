@@ -30,6 +30,83 @@ fn marked_file_names(app: &TerminalApp, message: &str) -> BTreeSet<String> {
 }
 
 #[test]
+fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
+    use crate::interactive::app::{state::FilesystemScan, tree_view::TreeView};
+    use dua::traverse::BackgroundTraversal;
+
+    let dir = TempDir::new()?;
+    let root = dir.path().join("to-delete");
+    fs::create_dir(&root)?;
+    fs::write(root.join("file"), b"keep until the scan finishes")?;
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_paths(std::slice::from_ref(&root))?;
+    app.process_events(
+        &mut terminal,
+        into_events([
+            Event::Key(KeyCode::Char('d').into()),
+            Event::Key(KeyCode::Tab.into()),
+        ]),
+    )?;
+    let marked = marked_file_names(&app, "directory is marked");
+    let node_count = app.traversal.tree.len();
+
+    // Keep a scan active until its Finished event is processed.
+    app.state.scan = Some(FilesystemScan {
+        active_traversal: BackgroundTraversal::start(
+            app.traversal.root_index,
+            &app.state.walk_options,
+            Vec::new(),
+            None,
+            false,
+            false,
+        )?,
+        previous_selection: None,
+        snapshot_export: None,
+    });
+    let delete_key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    for key in [
+        delete_key,
+        #[cfg(feature = "trash-move")]
+        KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+    ] {
+        app.state.dispatch_to_mark_pane(
+            key,
+            &mut app.window,
+            &mut TreeView {
+                traversal: &mut app.traversal,
+                glob_tree_root: None,
+                glob_matches: None,
+            },
+            app.display,
+            &mut terminal,
+            &app.config,
+        );
+        assert_eq!(
+            app.state.message.as_deref(),
+            Some("Traversal already running")
+        );
+        assert!(root.join("file").exists());
+        assert_eq!(app.traversal.tree.len(), node_count);
+        assert_eq!(
+            marked_file_names(&app, "marks survive the blocked action"),
+            marked
+        );
+        assert!(app.state.scan.is_some());
+    }
+
+    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
+    app.run_until_traversed(&mut terminal, key_receive)?;
+    app.process_events(&mut terminal, into_events([Event::Key(delete_key)]))?;
+    assert!(
+        !root.exists(),
+        "deletion succeeds when retried after the scan"
+    );
+    assert!(app.window.mark.is_none());
+    assert_eq!(app.traversal.tree.len(), 1);
+    Ok(())
+}
+
+#[test]
 #[cfg(not(target_os = "windows"))] // it stopped working here, don't know if it's truly broken or if it's the test. Let's wait for windows users to report.
 fn basic_user_journey_with_deletion() -> Result<()> {
     use crate::interactive::app::tests::utils::into_events;
