@@ -110,6 +110,7 @@ pub struct HelpText {
     pub pane_qesc_close_2: &'static str,
     pub pane_tab: &'static str,
     pub pane_tab_2: &'static str,
+    pub pane_toggle_right_panes: &'static str,
     pub pane_help_toggle: &'static str,
 
     pub nav_title: &'static str,
@@ -172,8 +173,9 @@ const EN: HelpText = HelpText {
     pane_esc_close_2: "In main view, ascend to the parent directory.",
     pane_qesc_close: "Close the current pane.",
     pane_qesc_close_2: "Closes the program if no pane is open.",
-    pane_tab: "Cycle between all open panes.",
+    pane_tab: "Cycle between visible panes.",
     pane_tab_2: "Activate 'Marked Items' pane to delete selected files.",
+    pane_toggle_right_panes: "Minimize or restore the entire right side.",
     pane_help_toggle: "Show or hide this help pane.",
 
     nav_title: "Navigation",
@@ -236,8 +238,9 @@ const JA: HelpText = HelpText {
     pane_esc_close_2: "メイン画面では親ディレクトリへ移動する。",
     pane_qesc_close: "現在のペインを閉じる。",
     pane_qesc_close_2: "開いているペインがなければプログラムを終了する。",
-    pane_tab: "開いているペインを順番に切り替える。",
+    pane_tab: "表示中のペインを順番に切り替える。",
     pane_tab_2: "「マーク済み」ペインを有効化して選択ファイルを削除する。",
+    pane_toggle_right_panes: "右側全体を最小化または元に戻す。",
     pane_help_toggle: "このヘルプペインの表示/非表示を切り替える。",
 
     nav_title: "ナビゲーション",
@@ -300,8 +303,9 @@ const KO: HelpText = HelpText {
     pane_esc_close_2: "기본 화면에서는 상위 디렉터리로 이동합니다.",
     pane_qesc_close: "현재 패널을 닫습니다.",
     pane_qesc_close_2: "열린 패널이 없으면 프로그램을 종료합니다.",
-    pane_tab: "열린 모든 패널을 순환합니다.",
+    pane_tab: "표시된 패널 사이에서 순서대로 전환합니다.",
     pane_tab_2: "'표시된 항목' 패널을 활성화하여 선택한 파일을 삭제합니다.",
+    pane_toggle_right_panes: "오른쪽 전체를 최소화하거나 복원합니다.",
     pane_help_toggle: "이 도움말 패널을 표시하거나 숨깁니다.",
 
     nav_title: "탐색",
@@ -364,8 +368,9 @@ const ZH: HelpText = HelpText {
     pane_esc_close_2: "在主视图中，返回上级目录。",
     pane_qesc_close: "关闭当前面板。",
     pane_qesc_close_2: "如果没有打开的面板，则退出程序。",
-    pane_tab: "在所有打开的面板之间循环切换。",
+    pane_tab: "在可见面板之间循环切换。",
     pane_tab_2: "激活“已标记项目”面板以删除所选文件。",
+    pane_toggle_right_panes: "最小化或还原整个右侧区域。",
     pane_help_toggle: "显示或隐藏此帮助面板。",
 
     nav_title: "导航",
@@ -428,8 +433,9 @@ const DE: HelpText = HelpText {
     pane_esc_close_2: "In der Hauptansicht zum übergeordneten Verzeichnis wechseln.",
     pane_qesc_close: "Aktuellen Bereich schließen.",
     pane_qesc_close_2: "Beendet das Programm, wenn kein Bereich geöffnet ist.",
-    pane_tab: "Zwischen allen geöffneten Bereichen wechseln.",
+    pane_tab: "Zwischen sichtbaren Bereichen wechseln.",
     pane_tab_2: "„Markierte Einträge“ zum Löschen gewählter Dateien öffnen.",
+    pane_toggle_right_panes: "Gesamte rechte Seite minimieren oder wiederherstellen.",
     pane_help_toggle: "Diesen Hilfebereich ein- oder ausblenden.",
 
     nav_title: "Navigation",
@@ -501,6 +507,8 @@ pub struct UiText {
     pub glob_cancel: &'static str,
     pub glob_empty: &'static str,
 
+    pub marked_label: &'static str,
+    pub toggle_collapse: &'static str,
     pub mark_snapshot_read_only: &'static str,
     pub mark_no_destructive_keys: &'static str,
     #[cfg(feature = "trash-move")]
@@ -803,6 +811,8 @@ const EN_UI: UiText = UiText {
     glob_case: "case",
     glob_cancel: "cancel",
     glob_empty: "Glob was empty or only whitespace",
+    marked_label: "Marked",
+    toggle_collapse: "toggle-collapse",
     mark_snapshot_read_only: " Snapshot is read-only; marked entries cannot be deleted ",
     mark_no_destructive_keys: " No destructive keys are mapped; marked entries are safe ",
     #[cfg(feature = "trash-move")]
@@ -865,6 +875,8 @@ const JA_UI: UiText = UiText {
     glob_case: "大小",
     glob_cancel: "取消",
     glob_empty: "glob が空か空白のみです",
+    marked_label: "マーク済み",
+    toggle_collapse: "折りたたみ切替",
     mark_snapshot_read_only: " スナップショットは読み取り専用のため削除できません ",
     mark_no_destructive_keys: " 削除キーは未設定です。マーク済み項目は安全です ",
     #[cfg(feature = "trash-move")]
@@ -927,6 +939,8 @@ const KO_UI: UiText = UiText {
     glob_case: "대소문자",
     glob_cancel: "취소",
     glob_empty: "glob이 비어 있거나 공백뿐입니다",
+    marked_label: "표시됨",
+    toggle_collapse: "접기 전환",
     mark_snapshot_read_only: " 스냅샷은 읽기 전용이므로 표시된 항목을 삭제할 수 없습니다 ",
     mark_no_destructive_keys: " 삭제 키가 지정되지 않아 표시된 항목은 안전합니다 ",
     #[cfg(feature = "trash-move")]
@@ -989,6 +1003,8 @@ const ZH_UI: UiText = UiText {
     glob_case: "大小写",
     glob_cancel: "取消",
     glob_empty: "glob 为空或仅包含空白",
+    marked_label: "已标记",
+    toggle_collapse: "切换折叠",
     mark_snapshot_read_only: " 快照为只读；无法删除已标记条目 ",
     mark_no_destructive_keys: " 未映射破坏性按键；已标记条目是安全的 ",
     #[cfg(feature = "trash-move")]
@@ -1051,6 +1067,8 @@ const DE_UI: UiText = UiText {
     glob_case: "case",
     glob_cancel: "cancel",
     glob_empty: "Glob ist leer oder enthält nur Leerzeichen",
+    marked_label: "Markiert",
+    toggle_collapse: "ein-/ausklappen",
     mark_snapshot_read_only: " Snapshot ist schreibgeschützt; markierte Einträge sind nicht löschbar ",
     mark_no_destructive_keys: " Keine Lösch-Tasten belegt; markierte Einträge sind sicher ",
     #[cfg(feature = "trash-move")]

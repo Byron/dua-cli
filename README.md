@@ -229,6 +229,9 @@ Launch into interactive mode with the `i` or `interactive` subcommand. Get help 
 shortcuts with `?`.
 Use this mode to explore, and/or to delete files and directories to release disk space.
 
+Press `]` to minimize or restore the entire right side. `Tab` cycles through visible panes;
+`?` restores and focuses Help when the right side is minimized.
+
 Please note that great care has been taken to prevent accidental deletions due to a multi-stage
 process, which makes this mode viable for exploration.
 
@@ -291,6 +294,7 @@ For example:
 esc_navigates_back = true
 
 close_pane = "esc"
+toggle_right_panes = "]"
 sort_by_name = "ctrl+n"
 
 # Disable permanent deletion and moving entries to the trash.
