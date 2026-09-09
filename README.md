@@ -255,6 +255,33 @@ LANG=ko_KR.UTF-8 dua i   # Korean interface
 LANG=zh_CN.UTF-8 dua i   # Simplified Chinese interface
 ```
 
+### Cleanup Mode
+
+`dua clean [DIRECTORY]...` finds disposable directories and lists them largest first as sizing
+finishes. With no paths, it searches the current directory. *Nothing is deleted automatically.*
+
+```bash
+dua clean ~/dev
+dua clean --depth 3 ~/dev ~/Downloads
+```
+
+Candidates include `node_modules`, Python caches and virtual environments, Cargo project `target`
+directories, and Zig's `.zig-cache`, `zig-cache`, and `zig-out`. In Git repositories, candidates
+must be ignored and contain no tracked files. Directories containing a `.git` entry (regardless
+of case) and paths excluded by traversal options are skipped.
+
+The hub groups sibling candidates and deeper candidates under their shared parent. Open a group
+to browse, sort, or search within it; go back to return to the hub. Use the usual marking and
+deletion keys. Marking a group selects only its candidates, leaving other contents untouched.
+
+- `R` in the hub repeats discovery; `r` rechecks the selected candidate or existing group members.
+- Inside a candidate, either refresh key rechecks the whole candidate. Refresh clears all marks.
+- Discovery is unlimited by default. `--depth 0` checks only the supplied directories for great speedups;
+  candidates are always sized completely.
+
+Traversal options, `--no-entry-check`, and `--once` are supported. Parent scanning, snapshot
+import, and snapshot export are unavailable.
+
 ### Flame graphs
 
 `dua stacks` prints folded stacks—the "collapsed" interchange format read by flame-graph tools.

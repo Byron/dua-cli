@@ -1,21 +1,8 @@
-use std::{collections::BTreeSet, ffi::OsStr};
+use std::collections::BTreeSet;
 
 use dua::traverse::TreeIndex;
 
 use super::EntryDataBundle;
-
-/// Refresh with: `sed -n '/^const CLEANUP_DIR_NAMES_SORTED/,/^];/p' src/interactive/app/cleanup.rs | rg -o '"[^"]+"' | LC_ALL=C sort | sed 's/^/    /; s/$/,/'`.
-const CLEANUP_DIR_NAMES_SORTED_FOR_BISECT: &[&str] = &[
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".tox",
-    ".venv",
-    "__pycache__",
-    "node_modules",
-    "target",
-    "venv",
-];
 
 /// Return the indices of existing directories that match known cleanup names.
 pub fn cleanup_candidates(entries: &[EntryDataBundle]) -> BTreeSet<TreeIndex> {
@@ -29,18 +16,12 @@ pub fn cleanup_candidates(entries: &[EntryDataBundle]) -> BTreeSet<TreeIndex> {
 fn is_cleanup_candidate(entry: &EntryDataBundle) -> bool {
     entry.exists
         && entry.is_dir
-        && is_cleanup_dir_name(
+        && dua::clean::is_cleanup_dir_name(
             entry
                 .name
                 .file_name()
                 .unwrap_or_else(|| entry.name.as_os_str()),
         )
-}
-
-fn is_cleanup_dir_name(name: &OsStr) -> bool {
-    CLEANUP_DIR_NAMES_SORTED_FOR_BISECT
-        .binary_search_by(|candidate| OsStr::new(candidate).cmp(name))
-        .is_ok()
 }
 
 #[cfg(test)]
@@ -80,15 +61,5 @@ mod tests {
         }
         assert!(!is_cleanup_candidate(&entry("build", true)));
         assert!(!is_cleanup_candidate(&entry("dist", true)));
-    }
-
-    #[test]
-    fn cleanup_directory_names_remain_sorted_for_bisection() {
-        assert!(
-            CLEANUP_DIR_NAMES_SORTED_FOR_BISECT
-                .windows(2)
-                .all(|names| OsStr::new(names[0]) < OsStr::new(names[1])),
-            "CLEANUP_DIR_NAMES_SORTED must remain sorted for binary search"
-        );
     }
 }

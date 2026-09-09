@@ -5,7 +5,7 @@ use std::collections::HashMap;
 const UNRESOLVED_DIRECTORY_LINKS: u64 = u64::MAX;
 
 /// Tracks hard-linked inodes and, on macOS, fully shared APFS data streams.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub(crate) struct InodeFilter {
     inner: HashMap<(u64, u64), u64>,
     #[cfg(target_os = "macos")]
@@ -13,6 +13,39 @@ pub(crate) struct InodeFilter {
 }
 
 impl InodeFilter {
+    /// Whether accepting this entry can affect accounting in another cleanup candidate.
+    pub(crate) fn needs_tracking(entry: &crate::walk::Entry, options: &crate::WalkOptions) -> bool {
+        let Some(Ok(metadata)) = &entry.metadata else {
+            return false;
+        };
+        if !options.count_hard_links {
+            #[cfg(unix)]
+            {
+                #[cfg(not(target_os = "macos"))]
+                use std::os::unix::fs::MetadataExt;
+                if metadata.nlink() > 1 {
+                    return true;
+                }
+                #[cfg(target_os = "macos")]
+                if entry.file_type.is_dir() {
+                    return true;
+                }
+            }
+            #[cfg(windows)]
+            if metadata.hard_link_id().is_some() {
+                return true;
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if !options.apparent_size
+            && options.metadata_options.apfs_clone_metadata
+            && metadata.clone_id().is_some()
+        {
+            return true;
+        }
+        false
+    }
+
     #[cfg(unix)]
     /// Register file metadata and return `true` if this link should be counted.
     pub(crate) fn add(
@@ -153,7 +186,7 @@ mod apfs {
         }
     }
 
-    #[derive(Debug, Default, Clone)]
+    #[derive(Debug, Default)]
     pub(super) struct ApfsFilter {
         streams: HashSet<(u64, u64)>,
         inodes: HashSet<(u64, u64)>,

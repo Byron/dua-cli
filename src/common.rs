@@ -410,7 +410,7 @@ pub fn canonicalize_ignore_dirs(ignore_dirs: &[PathBuf]) -> BTreeSet<PathBuf> {
 /// the directory it was given, if it was given exactly one - so that is what patterns should see.
 /// Roots outside via `traversal_root` of the current directory have no such path, and fall back to
 /// being relative to the root they were found under.
-fn pattern_relative_path<'a>(
+pub(crate) fn pattern_relative_path<'a>(
     path: &'a Path,
     cwd: &Path,
     traversal_root: &Path,

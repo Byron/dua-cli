@@ -4,14 +4,14 @@ use crate::interactive::widgets::tui_ext::{
     util::{block_width, rect},
 };
 use anyhow::{Context, Result, anyhow};
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use dua::{
     KeysConfig,
     traverse::{Tree, TreeIndex},
 };
 use gix::glob::pattern::Case;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, path::PathBuf};
 use tui::{
     buffer::Buffer,
     layout::Rect,
@@ -212,43 +212,44 @@ fn margin_left_right(r: Rect, margin: u16) -> Rect {
     }
 }
 
-fn glob_search_neighbours(
+fn glob_search_entry(
     results: &mut Vec<TreeIndex>,
     tree: &Tree,
-    root_index: TreeIndex,
+    entry: (TreeIndex, &std::path::Path),
     glob: &gix::glob::Pattern,
     path: &mut BString,
     case: Case,
 ) {
-    for node_index in tree.children(root_index) {
-        if let Some(node) = tree.entry(node_index) {
-            let previous_len = path.len();
-            let basename_start = if path.is_empty() {
-                None
-            } else {
-                path.push(b'/');
-                Some(previous_len + 1)
-            };
-            path.extend_from_slice(gix::path::into_bstr(node.name.as_ref()).as_ref());
-            if glob.matches_repo_relative_path(
-                path.as_ref(),
-                basename_start,
-                Some(node.is_dir),
-                case,
-                gix::glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
-            ) {
-                results.push(node_index);
-            } else {
-                glob_search_neighbours(results, tree, node_index, glob, path, case);
-            }
-            path.truncate(previous_len);
+    let (index, name) = entry;
+    if let Some(node) = tree.data(index) {
+        let previous_len = path.len();
+        if !path.is_empty() {
+            path.push(b'/');
         }
+        path.extend_from_slice(
+            gix::path::to_unix_separators_on_windows(gix::path::into_bstr(name)).as_ref(),
+        );
+        if glob.matches_repo_relative_path(
+            path.as_ref(),
+            path.rfind_byte(b'/').map(|position| position + 1),
+            Some(node.is_dir),
+            case,
+            gix::glob::wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
+        ) {
+            results.push(index);
+        } else {
+            for child in tree.children(index) {
+                let name = tree.name(child).expect("child exists");
+                glob_search_entry(results, tree, (child, &name), glob, path, case);
+            }
+        }
+        path.truncate(previous_len);
     }
 }
 
 pub fn glob_search(
     tree: &Tree,
-    root_index: TreeIndex,
+    entries: impl IntoIterator<Item = (TreeIndex, PathBuf)>,
     glob: &str,
     case: gix::glob::pattern::Case,
     language: Language,
@@ -257,7 +258,9 @@ pub fn glob_search(
         .with_context(|| anyhow!(language.ui_text().glob_empty))?;
     let mut results = Vec::new();
     let mut path = BString::default();
-    glob_search_neighbours(&mut results, tree, root_index, &glob, &mut path, case);
+    for (index, name) in entries {
+        glob_search_entry(&mut results, tree, (index, &name), &glob, &mut path, case);
+    }
     Ok(results)
 }
 

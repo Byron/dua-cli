@@ -728,6 +728,66 @@ fn once_finishes_traversal_without_user_events() -> Result<()> {
 }
 
 #[test]
+fn scanning_redraws_while_waiting_for_filesystem_events() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+    let (_scan_sender, scan_receiver) = crossbeam::channel::bounded(0);
+    let active = &mut app.state.scan.as_mut().unwrap().active_traversal;
+    active.event_rx = scan_receiver;
+    active.stats.entries_traversed = 42;
+    let visible = app.traversal.tree.add_child(
+        app.traversal.root_index,
+        "visible",
+        dua::traverse::EntryData {
+            size: 42,
+            ..Default::default()
+        },
+    );
+    let before = terminal.backend().buffer().clone();
+
+    // A focus event does not redraw; it only lets a broken event loop fail instead of hanging.
+    let (wake, events) = crossbeam::channel::bounded(0);
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(5));
+        let _ = wake.send(Event::FocusGained);
+    });
+    app.state.process_event(
+        &mut app.window,
+        &mut app.traversal,
+        &mut app.display,
+        &mut terminal,
+        &events,
+        &app.config,
+    )?;
+
+    assert!(app.state.scan.is_some(), "the scan is still running");
+    assert!(!app.state.received_events, "no user interaction is needed");
+    assert_eq!(app.state.stats.entries_traversed, 42);
+    assert_eq!(app.state.entries[0].index, visible);
+    assert_ne!(terminal.backend().buffer(), &before);
+    Ok(())
+}
+
+#[test]
+fn disconnected_traversal_reports_an_error_instead_of_waiting_forever() -> Result<()> {
+    let (mut terminal, mut app) = untraversed_app_and_terminal_from_fixture(&["sample-01"])?;
+    app.traverse()?;
+    let (sender, receiver) = crossbeam::channel::bounded(0);
+    drop(sender);
+    app.state.scan.as_mut().unwrap().active_traversal.event_rx = receiver;
+
+    let Err(error) = app.process_events_once(&mut terminal, into_events([])) else {
+        panic!("a disconnected traversal must report an error");
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("Filesystem traversal stopped unexpectedly")
+    );
+    Ok(())
+}
+
+#[test]
 fn tracks_terminal_focus_events() -> Result<()> {
     let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&["sample-01"])?;
 

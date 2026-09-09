@@ -1,6 +1,9 @@
 mod bytevis;
+pub mod clean_hub;
 mod cleanup;
 mod common;
+mod deletion;
+mod deletion_progress;
 mod eventloop;
 mod gitignore;
 mod handlers;

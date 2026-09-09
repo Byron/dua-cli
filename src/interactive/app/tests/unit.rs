@@ -64,7 +64,8 @@ fn it_can_do_a_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
     let result = glob_search(
         &tree,
-        root_index,
+        tree.children(root_index)
+            .map(|index| (index, tree.name(index).unwrap().into_owned())),
         "tests/fixtures/sample-02",
         Case::Fold,
         Language::English,
@@ -79,7 +80,8 @@ fn it_can_do_a_case_sensitive_glob_search() {
     let (tree, root_index) = sample_02_tree(false);
     let result_insensitive = glob_search(
         &tree,
-        root_index,
+        tree.children(root_index)
+            .map(|index| (index, tree.name(index).unwrap().into_owned())),
         "TESTS/FIXTURES/SAMPLE-02",
         Case::Fold,
         Language::English,
@@ -89,7 +91,8 @@ fn it_can_do_a_case_sensitive_glob_search() {
 
     let result_sensitive = glob_search(
         &tree,
-        root_index,
+        tree.children(root_index)
+            .map(|index| (index, tree.name(index).unwrap().into_owned())),
         "TESTS/FIXTURES/SAMPLE-02",
         Case::Sensitive,
         Language::English,
@@ -135,10 +138,9 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
 
     let recursive = sorted_entries(
         &tree,
-        root,
+        tree.children(root),
         SortMode::MTimeDescending(MTimeSort::RecursiveChildrenNewest),
-        None,
-        None,
+        false,
         EntryCheck::Disabled,
     );
     assert_eq!(
@@ -164,10 +166,9 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
 
     let recursive_oldest = sorted_entries(
         &tree,
-        root,
+        tree.children(root),
         SortMode::MTimeDescending(MTimeSort::RecursiveChildrenOldest),
-        None,
-        None,
+        false,
         EntryCheck::Disabled,
     );
     assert_eq!(
@@ -194,6 +195,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
     let mut traversal = Traversal {
         tree,
         root_index: root,
+        clean_search_roots: std::collections::HashMap::new(),
         start_time: Instant::now(),
         cost: None,
     };
@@ -215,15 +217,15 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
     state.sorting = SortMode::MTimeDescending(MTimeSort::Entry);
     state.entries = sorted_entries(
         &traversal.tree,
-        root,
+        traversal.tree.children(root),
         state.sorting,
-        None,
-        None,
+        false,
         EntryCheck::Disabled,
     );
 
     let tree_view = TreeView {
         traversal: &mut traversal,
+        scope: None,
         glob_tree_root: None,
         glob_matches: None,
     };

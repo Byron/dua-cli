@@ -6,8 +6,8 @@ use crate::interactive::{
     DisplayOptions,
     state::{AppState, Cursor, FocussedPane},
     widgets::{
-        COLOR_MARKED, Entries, EntriesProps, Footer, FooterProps, GlobPane, GlobPaneProps, Header,
-        HelpPane, HelpPaneProps, Language, MarkPane, MarkPaneProps,
+        COLOR_MARKED, Entries, EntriesProps, EntryRow, Footer, FooterProps, GlobPane,
+        GlobPaneProps, Header, HelpPane, HelpPaneProps, Language, MarkPane, MarkPaneProps,
     },
 };
 use Constraint::{Length, Max, Min, Percentage};
@@ -73,7 +73,8 @@ impl MainWindow {
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
-        let safety_notice = mark_safety_notice(state.read_only, &config.keys, language);
+        let safety_notice =
+            mark_safety_notice(state.read_only, state.is_deleting(), &config.keys, language);
 
         let header_bg_color =
             header_background_color(self.has_marks() && safety_notice.is_none(), state.focussed);
@@ -123,6 +124,7 @@ impl MainWindow {
                     root_total_size: *total_bytes,
                     keys: &config.keys,
                     safety_notice,
+                    allow_changes: !state.is_deleting(),
                     language,
                 };
                 pane.render(props, mark_area, buffer);
@@ -155,23 +157,47 @@ impl MainWindow {
         }
 
         let marked = self.mark.as_ref().map(|pane| pane.marked());
+        let entries = state.entries.iter().map(|entry| EntryRow {
+            entry,
+            marked: marked.is_some_and(|marks| marks.contains_key(&entry.index)),
+            cleanup: state
+                .cleanup_candidates
+                .as_ref()
+                .is_some_and(|set| set.contains(&entry.index)),
+            gitignored: state
+                .gitignored_entries
+                .as_ref()
+                .is_some_and(|set| set.contains(&entry.index)),
+            suffix: None,
+        });
         let props = EntriesProps {
             current_path: current_path.clone(),
             display: *display,
             directory_suffix: config.directory_suffix,
-            entries: &state.entries,
-            marked,
-            cleanup_candidates: state.cleanup_candidates.as_ref(),
-            gitignored_entries: state.gitignored_entries.as_ref(),
-            selected: state.navigation().selected,
+            selected: state
+                .entries
+                .iter()
+                .position(|entry| Some(entry.index) == state.navigation().selected),
             border_style: entries_style,
             is_focussed: matches!(state.focussed, Main),
+            show_hints: true,
             sort_mode: state.sorting,
             show_columns: &state.show_columns,
             keys: &config.keys,
             language,
         };
-        self.entries.render(props, entries_area, buffer);
+        if let Some(hub) = state.clean_hub.as_ref().filter(|hub| hub.root.is_none()) {
+            hub.render(
+                &mut self.entries,
+                props,
+                marked,
+                state.cleanup_candidates.is_some(),
+                entries_area,
+                buffer,
+            );
+        } else {
+            self.entries.render(props, entries, entries_area, buffer);
+        }
 
         if let Some((glob_area, pane)) = glob_pane {
             let props = GlobPaneProps {
@@ -298,11 +324,14 @@ fn render_collapse_hint(
 
 fn mark_safety_notice(
     read_only: bool,
+    deleting: bool,
     keys: &dua::KeysConfig,
     language: crate::interactive::widgets::Language,
 ) -> Option<&'static str> {
     let t = language.ui_text();
-    if read_only {
+    if deleting {
+        Some(t.deletion_running)
+    } else if read_only {
         Some(t.mark_snapshot_read_only)
     } else if keys.delete_marked.is_empty()
         && (!cfg!(feature = "trash-move") || keys.trash_marked.is_empty())
@@ -566,14 +595,19 @@ mod tests {
     #[test]
     fn marks_are_only_dangerous_when_a_destructive_action_is_available() {
         let config = dua::Config::default();
-        assert!(mark_safety_notice(false, &config.keys, Language::English).is_none());
+        assert!(mark_safety_notice(false, false, &config.keys, Language::English).is_none());
         assert_eq!(header_background_color(true, Mark), Color::LightRed);
 
-        assert!(mark_safety_notice(true, &config.keys, Language::English).is_some());
+        assert!(mark_safety_notice(true, false, &config.keys, Language::English).is_some());
         assert_eq!(header_background_color(false, Mark), Color::White);
+
+        assert_eq!(
+            mark_safety_notice(false, true, &config.keys, Language::English),
+            Some(Language::English.ui_text().deletion_running)
+        );
 
         let config: dua::Config =
             toml::from_str("[keys]\ndelete_marked = []\ntrash_marked = []").expect("valid config");
-        assert!(mark_safety_notice(false, &config.keys, Language::English).is_some());
+        assert!(mark_safety_notice(false, false, &config.keys, Language::English).is_some());
     }
 }

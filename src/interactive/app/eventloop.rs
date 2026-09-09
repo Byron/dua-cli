@@ -20,6 +20,7 @@ use tui::{
     Terminal, backend::Backend, buffer::Buffer, layout::Rect, style::Color, widgets::Widget,
 };
 
+use super::deletion::DeletionEvent;
 use super::notification;
 use super::state::{AppState, Cursor};
 #[cfg(unix)]
@@ -89,21 +90,35 @@ impl AppState {
         if self.read_only {
             bail!(self.language.ui_text().snapshots_read_only);
         }
-        let bg_traversal = BackgroundTraversal::start(
-            traversal.root_index,
-            &self.walk_options,
-            self.root_paths.clone(),
-            self.walk_options
-                .ignore_patterns
-                .as_ref()
-                .map(|_| self.root_paths.as_slice()),
-            false,
-            true,
-        )?;
+        if self.is_deleting() {
+            bail!(self.language.ui_text().deletion_running);
+        }
+        let bg_traversal = if let Some(hub) = &self.clean_hub {
+            BackgroundTraversal::start_clean(
+                traversal.root_index,
+                &self.walk_options,
+                hub.inputs.clone(),
+                hub.depth,
+                None,
+            )?
+        } else {
+            BackgroundTraversal::start(
+                traversal.root_index,
+                &self.walk_options,
+                self.root_paths.clone(),
+                self.walk_options
+                    .ignore_patterns
+                    .as_ref()
+                    .map(|_| self.root_paths.as_slice()),
+                false,
+                true,
+            )?
+        };
         self.navigation_mut().view_root = traversal.root_index;
         self.scan = Some(FilesystemScan {
             active_traversal: bg_traversal,
             previous_selection: None,
+            previous_cleanup_view: None,
             snapshot_export,
         });
         Ok(())
@@ -114,7 +129,7 @@ impl AppState {
     }
 
     /// Return the path displayed for the current view without resolving snapshot paths on disk.
-    fn display_path(&self, tree_view: &TreeView<'_>) -> PathBuf {
+    pub(super) fn display_path(&self, tree_view: &TreeView<'_>) -> PathBuf {
         if self.read_only {
             let path = tree_view.path_of(self.navigation().view_root);
             if path.as_os_str().is_empty() {
@@ -129,7 +144,9 @@ impl AppState {
 
     fn parent_scan_target(&self, tree: &TreeView<'_>) -> Option<ParentScan> {
         if self.read_only
+            || self.clean_hub.is_some()
             || self.scan.is_some()
+            || self.is_deleting()
             || self.glob_navigation.is_some()
             || self.navigation.view_root != tree.traversal.root_index
         {
@@ -172,6 +189,9 @@ impl AppState {
     }
 
     fn scan_parent(&mut self, tree: &mut TreeView<'_>) -> Result<()> {
+        if self.block_deletion_changes() {
+            return Ok(());
+        }
         if self.read_only {
             self.message = Some(self.language.ui_text().snapshots_read_only.into());
             return Ok(());
@@ -302,6 +322,7 @@ impl AppState {
         self.scan = Some(FilesystemScan {
             active_traversal,
             previous_selection,
+            previous_cleanup_view: None,
             snapshot_export: None,
         });
         self.reset_message();
@@ -404,7 +425,7 @@ impl AppState {
         B: Backend,
     {
         let (_keep_alive, no_events) = crossbeam::channel::bounded(0);
-        while self.scan.is_some() {
+        while self.scan.is_some() || self.is_deleting() {
             if let Some(result) =
                 self.process_event(window, traversal, display, terminal, &no_events, config)?
             {
@@ -426,9 +447,52 @@ impl AppState {
     where
         B: Backend,
     {
-        if let Some(FilesystemScan {
+        if let Some(deletion) = &self.deletion {
+            let input = if deletion.input_closed {
+                crossbeam::channel::never()
+            } else {
+                events.clone()
+            };
+            let removals = deletion.task.events.clone();
+            let tick = deletion.tick.clone();
+            crossbeam::select! {
+                recv(input) -> event => {
+                    match event {
+                        Ok(event) => {
+                            if let Some(result) = self.flush_deletion(traversal, window, config)? {
+                                return Ok(Some(result));
+                            }
+                            return self.process_terminal_event(window, traversal, display, terminal, event, config);
+                        }
+                        Err(_) => {
+                            self.deletion.as_mut().expect("active deletion").input_closed = true;
+                        }
+                    }
+                },
+                recv(removals) -> event => {
+                    let event = event.context("Deletion worker stopped unexpectedly")?;
+                    let deletion = self.deletion.as_mut().expect("active deletion");
+                    deletion.pending.push(event);
+                    deletion.pending.extend(removals.try_iter().take(1023));
+                    // Bound pending path storage as well as the worker channel. The timer is
+                    // independent of traffic, so a busy worker cannot starve progress redraws.
+                    if deletion.pending.len() >= 16_384
+                        || deletion.pending.iter().any(|event| matches!(event, DeletionEvent::Finished { .. })) {
+                        let result = self.flush_deletion(traversal, window, config)?;
+                        self.refresh_screen(window, traversal, display, terminal, config)?;
+                        return Ok(result);
+                    }
+                },
+                recv(tick) -> _ => {
+                    let result = self.flush_deletion(traversal, window, config)?;
+                    self.refresh_screen(window, traversal, display, terminal, config)?;
+                    return Ok(result);
+                }
+            }
+        } else if let Some(FilesystemScan {
             active_traversal,
             previous_selection,
+            previous_cleanup_view,
             snapshot_export,
         }) = self.scan.as_mut()
         {
@@ -450,13 +514,12 @@ impl AppState {
                     }
                 },
                 recv(&active_traversal.event_rx) -> event => {
-                    let Ok(event) = event else {
-                        return Ok(None);
-                    };
+                    let event = event.context("Filesystem traversal stopped unexpectedly")?;
 
                     if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
                         self.stats = active_traversal.stats;
                         let previous_selection = previous_selection.clone();
+                        let previous_cleanup_view = previous_cleanup_view.clone();
                         if is_finished {
                             let root_index = active_traversal.root_idx;
                             let export = snapshot_export
@@ -483,6 +546,21 @@ impl AppState {
                             self.scan = None;
                             traversal.cost = Some(traversal.start_time.elapsed());
                         }
+                        if is_finished && !self.received_events
+                            && let Some((source_path, view_path)) = &previous_cleanup_view
+                        {
+                            let mut tree = self.tree_view(traversal);
+                            if let Some(source) = tree.index_at_path(source_path) {
+                                self.navigation.view_root = source;
+                                if self.glob_navigation.is_some() && let Some(glob) = &window.glob {
+                                    // Rebuild replaced IDs within the original search directory.
+                                    self.search_glob_pattern(&mut tree, &glob.input, glob.case);
+                                }
+                            }
+                            if let Some(view) = tree.index_at_path(view_path) {
+                                self.navigation_mut().view_root = view;
+                            }
+                        }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal, config)?;
                         if is_finished {
@@ -503,6 +581,13 @@ impl AppState {
                             }
                         }
                     }
+                },
+                default(std::time::Duration::from_secs(1)) => {
+                    // Keep progress visible while discovery or filesystem I/O is waiting.
+                    self.stats = active_traversal.stats;
+                    let previous_selection = previous_selection.clone();
+                    self.update_state_during_traversal(traversal, previous_selection.as_ref(), false);
+                    self.refresh_screen(window, traversal, display, terminal, config)?;
                 }
             }
         } else {
@@ -527,14 +612,15 @@ impl AppState {
         is_finished: bool,
     ) {
         let tree_view = self.tree_view(traversal);
-        self.entries = tree_view.sorted_entries(
-            self.navigation().view_root,
-            self.sorting,
-            self.entry_check(),
-        );
-        self.update_entry_annotations(&tree_view);
+        self.update_entries(&tree_view);
 
         if !self.received_events {
+            if let Some(hub) = &mut self.clean_hub
+                && hub.root.is_none()
+                && let Some((path, _)) = previous_selection
+            {
+                hub.select_path(path);
+            }
             let previously_selected_entry =
                 previous_selection.and_then(|(selected_name, selected_idx)| {
                     self.entries
@@ -553,7 +639,7 @@ impl AppState {
 
     pub(crate) fn entry_check(&self) -> EntryCheck {
         EntryCheck::new(
-            self.scan.is_some(),
+            self.scan.is_some() || self.is_deleting(),
             self.allow_entry_check && !self.read_only,
         )
     }
@@ -600,12 +686,17 @@ impl AppState {
         let close_pane = keys.close_pane.matches(key);
         let quit = !glob_focussed && keys.quit.matches(key);
         let mut handled = true;
-        if keys.esc_navigates_back && close_pane && self.focussed == Main {
+        if self.process_clean_key(key, window, &mut tree_view, config)? {
+            self.pending_exit = false;
+        } else if keys.esc_navigates_back && close_pane && self.focussed == Main {
             self.pending_exit = false;
             self.exit_node_with_traversal(&tree_view, &keys.scan_parent.primary());
         } else if close_pane || quit {
             if let Some(result) = self.handle_quit(&mut tree_view, window) {
-                return Ok(Some(result?));
+                result?;
+                if let Some(result) = self.exit_after_deletion() {
+                    return Ok(Some(result));
+                }
             }
         } else {
             self.pending_exit = false;
@@ -634,9 +725,9 @@ impl AppState {
                     self.toggle_help_pane(window);
                 }
                 _ if !glob_focussed && keys.quit_immediately.matches(key) => {
-                    return Ok(Some(WalkResult {
-                        num_errors: self.stats.io_errors,
-                    }));
+                    if let Some(result) = self.exit_after_deletion() {
+                        return Ok(Some(result));
+                    }
                 }
                 _ => {
                     handled = false;
@@ -646,14 +737,7 @@ impl AppState {
 
         if !handled {
             match self.focussed {
-                Mark => self.dispatch_to_mark_pane(
-                    key,
-                    window,
-                    &mut tree_view,
-                    *display,
-                    terminal,
-                    config,
-                ),
+                Mark => self.dispatch_to_mark_pane(key, window, &mut tree_view, *display, config),
                 Help => {
                     window
                         .help
@@ -671,7 +755,11 @@ impl AppState {
                 }
                 Main => {
                     if keys.open_entry.matches(key) {
-                        self.open_that(&tree_view);
+                        self.open_path(
+                            self.navigation()
+                                .selected
+                                .map(|index| tree_view.path_of(index)),
+                        );
                     } else if keys.toggle_mark.matches(key) {
                         self.mark_entry(
                             CursorMode::KeepPosition,
@@ -702,18 +790,8 @@ impl AppState {
                         self.refresh(&mut tree_view, window, Refresh::Selected)?;
                     } else if keys.refresh_all.matches(key) {
                         self.refresh(&mut tree_view, window, Refresh::AllInView)?;
-                    } else if keys.move_to_top.matches(key) {
-                        self.change_entry_selection(CursorDirection::ToTop);
-                    } else if keys.move_to_bottom.matches(key) {
-                        self.change_entry_selection(CursorDirection::ToBottom);
-                    } else if keys.page_up.matches(key) {
-                        self.change_entry_selection(CursorDirection::PageUp);
-                    } else if keys.move_up.matches(key) {
-                        self.change_entry_selection(CursorDirection::Up);
-                    } else if keys.move_down.matches(key) {
-                        self.change_entry_selection(CursorDirection::Down);
-                    } else if keys.page_down.matches(key) {
-                        self.change_entry_selection(CursorDirection::PageDown);
+                    } else if let Some(direction) = CursorDirection::from_key(key, keys) {
+                        self.change_entry_selection(direction);
                     } else if keys.sort_by_size.matches(key) {
                         self.cycle_sorting(&tree_view);
                     } else if keys.sort_by_mtime.matches(key) {
@@ -748,12 +826,15 @@ impl AppState {
         Ok(None)
     }
 
-    fn refresh(
+    pub(super) fn refresh(
         &mut self,
         tree: &mut TreeView<'_>,
         window: &mut MainWindow,
         what: Refresh,
     ) -> anyhow::Result<()> {
+        if self.block_deletion_changes() {
+            return Ok(());
+        }
         if self.read_only {
             self.message = Some(self.language.ui_text().snapshots_read_only.into());
             return Ok(());
@@ -764,18 +845,18 @@ impl AppState {
             return Ok(());
         }
 
-        let previous_selection = self.navigation().selected.and_then(|sel_index| {
-            tree.tree().name(sel_index).map(|name| {
-                (
-                    name.into_owned(),
-                    self.entries
-                        .iter()
-                        .enumerate()
-                        .find_map(|(idx, e)| (e.index == sel_index).then_some(idx))
-                        .expect("selected item is always in entries"),
-                )
-            })
-        });
+        let previous_selection = self
+            .entries
+            .iter()
+            .enumerate()
+            .find(|(_, entry)| Some(entry.index) == self.navigation().selected)
+            .map(|(position, entry)| (entry.name.clone(), position))
+            .or_else(|| {
+                self.clean_hub
+                    .as_ref()?
+                    .selected_path()
+                    .map(|path| (path.to_owned(), 0))
+            });
 
         // If we are displaying the root of the glob search results then cancel the search.
         if let Some(glob_tree_root) = tree.glob_tree_root
@@ -784,87 +865,103 @@ impl AppState {
             self.quit_glob_mode(tree, window);
         }
 
-        let (paths, remove_root_node, skip_root, use_root_path, index, parent_index) = match what {
-            Refresh::Selected => {
-                let Some(selected) = self.navigation().selected else {
-                    return Ok(());
-                };
-                let parent_index = tree
-                    .fs_parent_of(selected)
-                    .expect("there is always a parent to a selection");
-
-                let mut path = tree.path_of(selected);
-                if path.to_str() == Some("") {
-                    path = PathBuf::from(".");
-                }
-
-                let (paths, use_root_path, skip_root) = if self.navigation().view_root
-                    == tree.traversal.root_index
-                    && self.root_paths.len() > 1
-                {
-                    (vec![path], true, false)
-                } else {
-                    (vec![path], false, false)
-                };
-
+        let previous_cleanup_view = (self.clean_hub.is_some()
+            && self.navigation().view_root != tree.traversal.root_index)
+            .then(|| {
                 (
-                    paths,
-                    true,
-                    skip_root,
-                    use_root_path,
-                    selected,
-                    parent_index,
+                    tree.path_of(self.navigation.view_root),
+                    tree.path_of(self.navigation().view_root),
                 )
-            }
-            Refresh::AllInView => {
-                let (paths, use_root_path, skip_root) = if self.navigation().view_root
-                    == tree.traversal.root_index
-                    && self.root_paths.len() > 1
-                {
-                    (self.root_paths.clone(), true, false)
+            });
+        let remove_root_node = matches!(what, Refresh::Selected);
+        let index = if remove_root_node {
+            let Some(selected) = self
+                .clean_hub
+                .as_ref()
+                .filter(|hub| hub.root.is_none())
+                .and_then(|hub| hub.selected_members().first().copied())
+                .or(self.navigation().selected)
+            else {
+                return Ok(());
+            };
+            selected
+        } else {
+            self.navigation().view_root
+        };
+        let (indices, parent_index, active_traversal) = if self.clean_hub.is_some() {
+            let (indices, traversal) = self.clean_refresh(tree, index)?;
+            (indices, tree.traversal.root_index, traversal)
+        } else {
+            let parent = if remove_root_node {
+                tree.fs_parent_of(index).expect("selection has a parent")
+            } else {
+                index
+            };
+            let multi_root = self.navigation().view_root == tree.traversal.root_index
+                && self.root_paths.len() > 1;
+            let paths = if multi_root && !remove_root_node {
+                self.root_paths.clone()
+            } else {
+                let path = tree.path_of(index);
+                vec![if path.as_os_str().is_empty() {
+                    PathBuf::from(".")
                 } else {
-                    let mut path = tree.path_of(self.navigation().view_root);
-                    if path.to_str() == Some("") {
-                        path = PathBuf::from(".");
-                    }
-                    (vec![path], false, true)
-                };
-
-                (
+                    path
+                }]
+            };
+            (
+                if remove_root_node {
+                    vec![index]
+                } else {
+                    tree.tree().children(index).collect()
+                },
+                parent,
+                BackgroundTraversal::start(
+                    parent,
+                    &self.walk_options,
                     paths,
-                    false,
-                    skip_root,
-                    use_root_path,
-                    self.navigation().view_root,
-                    self.navigation().view_root,
-                )
-            }
+                    self.walk_options
+                        .ignore_patterns
+                        .as_ref()
+                        .map(|_| self.root_paths.as_slice()),
+                    !remove_root_node && !multi_root,
+                    multi_root,
+                )?,
+            )
         };
 
-        tree.remove_entries(index, remove_root_node);
+        // Tree slots are reused: old marks and bookmarks must not target replacement entries.
+        window.mark = None;
+        self.navigation.bookmarks.clear();
+        tree.traversal
+            .remove_children(parent_index, &indices.into_iter().collect());
         tree.recompute_sizes_recursively(parent_index);
+        if let Some(navigation) = self.glob_navigation.as_mut() {
+            navigation.bookmarks.clear();
+            navigation.matches = navigation
+                .matches
+                .iter()
+                .copied()
+                .filter(|index| tree.exists(*index))
+                .collect();
+            tree.glob_matches = Some(Arc::clone(&navigation.matches));
+        }
+        for navigation in
+            std::iter::once(&mut self.navigation).chain(self.glob_navigation.iter_mut())
+        {
+            if !tree.exists(navigation.view_root) {
+                navigation.view_root = navigation.tree_root;
+            }
+            navigation.selected = navigation.selected.filter(|index| tree.exists(*index));
+        }
 
-        self.entries = tree.sorted_entries(
-            self.navigation().view_root,
-            self.sorting,
-            self.entry_check(),
-        );
-        self.update_entry_annotations(tree);
-        self.navigation_mut().selected = self.entries.first().map(|e| e.index);
+        self.sync_clean_hub(tree);
+        self.update_entries(tree);
 
         self.scan = Some(FilesystemScan {
-            active_traversal: BackgroundTraversal::start(
-                parent_index,
-                &self.walk_options,
-                paths,
-                self.walk_options
-                    .ignore_patterns
-                    .as_ref()
-                    .map(|_| self.root_paths.as_slice()),
-                skip_root,
-                use_root_path,
-            )?,
+            active_traversal,
             previous_selection,
+            previous_cleanup_view,
             snapshot_export: None,
         });
 
@@ -872,15 +969,18 @@ impl AppState {
         Ok(())
     }
 
-    fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {
-        TreeView {
+    pub(super) fn tree_view<'a>(&mut self, traversal: &'a mut Traversal) -> TreeView<'a> {
+        let mut tree = TreeView {
             traversal,
+            scope: None,
             glob_tree_root: self.glob_navigation.as_ref().map(|n| n.tree_root),
             glob_matches: self
                 .glob_navigation
                 .as_ref()
                 .map(|navigation| Arc::clone(&navigation.matches)),
-        }
+        };
+        self.sync_clean_hub(&mut tree);
+        tree
     }
 
     fn search_glob_pattern(
@@ -890,13 +990,15 @@ impl AppState {
         case: gix::glob::pattern::Case,
     ) {
         use FocussedPane::Main;
-        match glob_search(
-            tree_view.tree(),
-            self.navigation.view_root,
-            glob_pattern,
-            case,
-            self.language,
-        ) {
+        let entries = tree_view
+            .children(self.navigation.view_root)
+            .into_iter()
+            .filter_map(|index| {
+                tree_view
+                    .name_in(self.navigation.view_root, index)
+                    .map(|name| (index, name))
+            });
+        match glob_search(tree_view.tree(), entries, glob_pattern, case, self.language) {
             Ok(matches) if matches.is_empty() => {
                 self.message = Some(self.language.ui_text().no_match.into());
             }
@@ -919,6 +1021,7 @@ impl AppState {
 
                 let glob_tree_view = TreeView {
                     traversal: tree_view.traversal,
+                    scope: tree_view.scope.clone(),
                     glob_tree_root: Some(tree_root),
                     glob_matches: Some(matches),
                 };
@@ -982,16 +1085,11 @@ impl AppState {
         window.glob = None;
 
         tree_view.glob_tree_root.take();
-        self.entries = tree_view.sorted_entries(
-            self.navigation().view_root,
-            self.sorting,
-            self.entry_check(),
-        );
-        self.update_entry_annotations(tree_view);
+        self.update_entries(tree_view);
     }
 }
 
-enum Refresh {
+pub(super) enum Refresh {
     /// Refresh the directory currently in view
     AllInView,
     /// Refresh only the selected item

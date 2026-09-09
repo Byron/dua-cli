@@ -11,6 +11,7 @@ pub struct Navigation {
     pub view_root: TreeIndex,
     pub selected: Option<TreeIndex>,
     pub bookmarks: BTreeMap<TreeIndex, TreeIndex>,
+    /// Real entries exposed by a scoped root or glob search; empty for ordinary tree roots.
     pub matches: Arc<[TreeIndex]>,
 }
 
@@ -38,15 +39,6 @@ impl Navigation {
         self.bookmarks.insert(view_root, previously_selected);
         self.view_root = previously_selected;
         self.selected = Some(new_selected);
-    }
-
-    pub fn exit_node(&mut self, parent_idx: TreeIndex, entries: &[EntryDataBundle]) {
-        self.view_root = parent_idx;
-        self.selected = self
-            .bookmarks
-            .get(&parent_idx)
-            .copied()
-            .or_else(|| entries.first().map(|b| b.index));
     }
 
     pub fn next_index(

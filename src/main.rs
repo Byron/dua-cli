@@ -44,6 +44,7 @@ fn open_snapshot_file(path: &Path) -> Result<fs::File> {
     Ok(file)
 }
 
+#[cfg(feature = "tui-crossplatform")]
 fn read_snapshot_file(path: &Path) -> Result<dua::snapshot::Snapshot> {
     dua::snapshot::read(open_snapshot_file(path)?)
         .with_context(|| format!("Could not read snapshot {}", path.display()))
@@ -92,9 +93,9 @@ fn marked_path_for_output(path: &Path, stdout_is_terminal: bool) -> std::borrow:
 }
 
 fn main() -> Result<()> {
-    #[cfg(feature = "tui-crossplatform")]
-    use options::Command::Interactive;
     use options::Command::{Aggregate, Completions, Config, Diff, Flamegraph, Stacks};
+    #[cfg(feature = "tui-crossplatform")]
+    use options::Command::{Clean, Interactive};
 
     let matches = options::Args::command().get_matches_from(wild::args_os());
     let global_traversal_options_used = traversal_options_on_command_line(&matches);
@@ -137,14 +138,40 @@ fn main() -> Result<()> {
 
     let res = match command {
         #[cfg(feature = "tui-crossplatform")]
-        Some(Interactive {
-            traversal: subcommand_traversal,
-            export,
-            compression,
-            import,
-            no_entry_check,
-            once,
-        }) => {
+        Some(command @ (Interactive { .. } | Clean { .. })) => {
+            let (
+                subcommand_traversal,
+                export,
+                compression,
+                import,
+                no_entry_check,
+                once,
+                clean_depth,
+            ) = match command {
+                Interactive {
+                    traversal,
+                    export,
+                    compression,
+                    import,
+                    no_entry_check,
+                    once,
+                } => (
+                    traversal,
+                    export,
+                    compression,
+                    import,
+                    no_entry_check,
+                    once,
+                    None,
+                ),
+                Clean {
+                    traversal,
+                    depth,
+                    no_entry_check,
+                    once,
+                } => (traversal, None, 0, None, no_entry_check, once, Some(depth)),
+                _ => unreachable!("only terminal commands enter this arm"),
+            };
             if import.is_some() && global_traversal_options_used {
                 bail!("--import cannot be used with traversal options or input paths");
             }
@@ -162,40 +189,47 @@ fn main() -> Result<()> {
             let snapshot = import.as_deref().map(read_snapshot_file).transpose()?;
             let snapshot_load_duration = snapshot_load_start.map(|start| start.elapsed());
             let read_only = snapshot.is_some();
-            let (input_paths, initial_traversal, walk_options, root_path) = if let Some(snapshot) =
-                snapshot
-            {
-                let input_paths = snapshot
-                    .roots
-                    .iter()
-                    .map(|root| {
-                        snapshot
-                            .traversal
-                            .tree
-                            .name(*root)
-                            .expect("snapshot root exists")
-                            .into_owned()
-                    })
-                    .collect();
-                (
-                    input_paths,
-                    snapshot.traversal,
-                    snapshot_walk_options(),
-                    None,
-                )
-            } else {
-                let walk_options = walk_options_from(&traversal.scan)?;
-                let has_complete_root = traversal.scan.input.is_empty()
-                    || traversal.scan.input.len() == 1 && traversal.scan.input[0].is_dir();
-                let input_paths = extract_paths_maybe_set_cwd(traversal.scan.input, &walk_options)?;
-                let root_path = has_complete_root.then(std::env::current_dir).transpose()?;
-                (
-                    input_paths,
-                    dua::traverse::Traversal::new(),
-                    walk_options,
-                    root_path,
-                )
-            };
+            let (input_paths, initial_traversal, walk_options, root_path) =
+                if let Some(snapshot) = snapshot {
+                    let input_paths = snapshot
+                        .roots
+                        .iter()
+                        .map(|root| {
+                            snapshot
+                                .traversal
+                                .tree
+                                .name(*root)
+                                .expect("snapshot root exists")
+                                .into_owned()
+                        })
+                        .collect();
+                    (
+                        input_paths,
+                        snapshot.traversal,
+                        snapshot_walk_options(),
+                        None,
+                    )
+                } else {
+                    let walk_options = walk_options_from(&traversal.scan)?;
+                    let (input_paths, root_path) = if clean_depth.is_some() {
+                        (clean_input_paths(traversal.scan.input)?, None)
+                    } else {
+                        let has_complete_root = traversal.scan.input.is_empty()
+                            || traversal.scan.input.len() == 1 && traversal.scan.input[0].is_dir();
+                        let input_paths =
+                            extract_paths_maybe_set_cwd(traversal.scan.input, &walk_options)?;
+                        (
+                            input_paths,
+                            has_complete_root.then(std::env::current_dir).transpose()?,
+                        )
+                    };
+                    (
+                        input_paths,
+                        dua::traverse::Traversal::new(),
+                        walk_options,
+                        root_path,
+                    )
+                };
 
             let no_tty_msg = "Interactive mode requires a connected terminal";
             if !io::stderr().is_terminal() {
@@ -237,7 +271,9 @@ fn main() -> Result<()> {
                 initial_traversal,
                 snapshot_load_duration,
             )?;
-            if let Some(path) = export {
+            if let Some(depth) = clean_depth {
+                app.traverse_clean(depth)?;
+            } else if let Some(path) = export {
                 app.traverse_and_export(path, (compression != 0).then_some(compression))?;
             } else if !read_only {
                 app.traverse()?;
@@ -801,6 +837,27 @@ fn extract_paths_maybe_set_cwd(
         .collect())
 }
 
+#[cfg(feature = "tui-crossplatform")]
+fn clean_input_paths(mut paths: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    if paths.is_empty() {
+        paths.push(PathBuf::from("."));
+    }
+    paths
+        .into_iter()
+        .map(|path| {
+            let path = std::path::absolute(path)?;
+            if !path
+                .symlink_metadata()
+                .with_context(|| format!("Could not read clean input {}", path.display()))?
+                .is_dir()
+            {
+                bail!("Clean input {} is not a directory", path.display());
+            }
+            Ok(path)
+        })
+        .collect()
+}
+
 #[cfg(unix)]
 fn device_id(path: &Path) -> io::Result<u64> {
     use std::os::unix::fs::MetadataExt;
@@ -967,6 +1024,27 @@ mod tests {
             "marked��[31m",
             "TAB and ESC control characters are sanitized for terminal output"
         );
+    }
+
+    #[cfg(feature = "tui-crossplatform")]
+    #[test]
+    fn clean_inputs_keep_the_working_directory_and_reject_files() {
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(
+            super::clean_input_paths(vec![]).unwrap(),
+            std::slice::from_ref(&cwd)
+        );
+        let fixture = tempfile::tempdir().unwrap();
+        let directory = fixture.path().join("project");
+        fs::create_dir(&directory).unwrap();
+        assert_eq!(
+            super::clean_input_paths(vec![directory.clone()]).unwrap(),
+            [directory]
+        );
+        let file = fixture.path().join("file");
+        fs::write(&file, b"source").unwrap();
+        assert!(super::clean_input_paths(vec![file]).is_err());
+        assert_eq!(std::env::current_dir().unwrap(), cwd);
     }
 
     #[cfg(feature = "tui-crossplatform")]

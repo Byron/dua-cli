@@ -5,11 +5,14 @@ use crossbeam::channel::Receiver;
 use filesize::PathExt;
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt, io,
     num::NonZeroU32,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -464,6 +467,23 @@ impl Tree {
         }
     }
 
+    /// Return the filesystem path formed by the names of `index` and its ancestors.
+    ///
+    /// # Panics
+    /// Panics if `index` is missing.
+    #[must_use]
+    pub fn path_of(&self, index: TreeIndex) -> PathBuf {
+        let names: Vec<_> = std::iter::successors(Some(index), |index| self.parent(*index))
+            .map(|index| self.name(index).expect("node exists"))
+            .collect();
+        names
+            .iter()
+            .rev()
+            .map(|name| name.as_os_str())
+            .filter(|name| !name.is_empty())
+            .collect()
+    }
+
     /// Replace an entry's name. Old arena bytes remain reserved until the tree is dropped.
     pub fn rename(&mut self, index: TreeIndex, name: impl AsRef<Path>) -> Result<(), TreeError> {
         if !self.contains(index) {
@@ -482,7 +502,39 @@ impl Tree {
             return 0;
         }
         self.detach(index);
-        let mut pending = vec![index];
+        self.remove_detached_subtrees(vec![index])
+    }
+
+    /// Remove selected direct children of `parent` and their descendants in one sibling pass.
+    ///
+    /// Missing indices and indices that are not direct children of `parent` are ignored.
+    /// Returns the total number of removed nodes; parent sizes and counts are unchanged.
+    pub fn remove_children(&mut self, parent: TreeIndex, children: &HashSet<TreeIndex>) -> usize {
+        let Some(node) = self.node(parent) else {
+            return 0;
+        };
+        let mut current = node.first_child;
+        let mut previous = NONE;
+        let mut pending = Vec::new();
+        while current != NONE {
+            let index = TreeIndex::from_raw(current);
+            let next = self.nodes[current as usize].next_sibling;
+            if children.contains(&index) {
+                if previous == NONE {
+                    self.nodes[parent.index()].first_child = next;
+                } else {
+                    self.nodes[previous as usize].next_sibling = next;
+                }
+                pending.push(index);
+            } else {
+                previous = current;
+            }
+            current = next;
+        }
+        self.remove_detached_subtrees(pending)
+    }
+
+    fn remove_detached_subtrees(&mut self, mut pending: Vec<TreeIndex>) -> usize {
         let mut removed = 0;
         while let Some(index) = pending.pop() {
             let mut child = self.nodes[index.index()].first_child;
@@ -649,6 +701,8 @@ pub struct Traversal {
     pub tree: Tree,
     /// The top-level node of the tree.
     pub root_index: TreeIndex,
+    /// Original discovery root for each published cleanup candidate, keyed by absolute path.
+    pub clean_search_roots: HashMap<PathBuf, PathBuf>,
     /// The time at which the instance was created, typically the start of the traversal.
     pub start_time: Instant,
     /// The time it cost to compute the traversal, when done.
@@ -670,6 +724,7 @@ impl Traversal {
         Self {
             tree,
             root_index,
+            clean_search_roots: HashMap::new(),
             start_time: Instant::now(),
             cost: None,
         }
@@ -679,6 +734,20 @@ impl Traversal {
     #[must_use]
     pub fn is_costly(&self) -> bool {
         self.cost.is_none_or(|d| d.as_secs_f32() > 10.0)
+    }
+
+    /// Remove selected children and their cleanup provenance in one sibling pass.
+    pub fn remove_children(&mut self, parent: TreeIndex, children: &HashSet<TreeIndex>) -> usize {
+        if parent == self.root_index && !self.clean_search_roots.is_empty() {
+            for &index in children {
+                if self.tree.parent(index) == Some(parent)
+                    && let Some(name) = self.tree.name(index)
+                {
+                    self.clean_search_roots.remove(name.as_ref());
+                }
+            }
+        }
+        self.tree.remove_children(parent, children)
     }
 }
 
@@ -714,6 +783,17 @@ pub struct TraversalEntry(pub(crate) crate::walk::Entry);
 
 /// Events emitted by a background filesystem traversal.
 pub enum TraversalEvent {
+    /// Lightweight discovery progress, as deltas since the previous update.
+    DiscoveryProgress {
+        /// Number of directory entries inspected.
+        entries: u64,
+        /// Number of I/O errors encountered.
+        io_errors: u64,
+    },
+    /// Begin staging a cleanup candidate, with its stream index and original discovery root.
+    CandidateStarted(usize, PathBuf),
+    /// Finish the indexed candidate; only accepted candidates become visible.
+    CandidateFinished(usize, bool),
     /// A discovered entry and its traversal context:
     ///
     /// 0. The discovered entry, or the I/O error encountered while reading it.
@@ -747,9 +827,162 @@ pub struct BackgroundTraversal {
     preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
     /// Receiver used to obtain traversal events from the worker thread.
     pub event_rx: Receiver<TraversalEvent>,
+    clean_stages: HashMap<usize, CleanStage>,
+    _cancelled: Option<CancelOnDrop>,
+}
+
+struct CleanStage {
+    staging_root: TreeIndex,
+    search_root: PathBuf,
+    /// Only entries affecting shared inode/clone accounting retain their metadata until acceptance.
+    deferred_inodes: Vec<(TreeIndex, crate::walk::Entry, u128)>,
+    valid: bool,
+}
+
+struct CancelOnDrop(Arc<AtomicBool>);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+enum CleanInput {
+    Discover {
+        paths: Vec<PathBuf>,
+        depth: Option<usize>,
+        pattern_root: Option<PathBuf>,
+    },
+    Refresh(Vec<(PathBuf, PathBuf)>),
+}
+
+impl CleanInput {
+    fn discover(
+        self,
+        options: WalkOptions,
+        mut send: impl FnMut(crate::clean::DiscoveryEvent) -> bool,
+    ) {
+        match self {
+            Self::Discover {
+                paths,
+                depth,
+                pattern_root,
+            } => {
+                crate::clean::discover(paths, options, depth, pattern_root, send);
+            }
+            Self::Refresh(candidates) => {
+                let mut keep_going = true;
+                for (path, search_root) in candidates {
+                    if !keep_going {
+                        break;
+                    }
+                    crate::clean::discover(
+                        vec![path],
+                        options.clone(),
+                        Some(0),
+                        Some(search_root),
+                        |event| {
+                            keep_going = send(event);
+                            keep_going
+                        },
+                    );
+                }
+            }
+        }
+    }
 }
 
 impl BackgroundTraversal {
+    /// Discover cleanup candidates and publish each root once its detailed scan is complete.
+    pub fn start_clean(
+        root_idx: TreeIndex,
+        walk_options: &WalkOptions,
+        input: Vec<PathBuf>,
+        depth: Option<usize>,
+        pattern_root: Option<&Path>,
+    ) -> anyhow::Result<Self> {
+        Self::start_clean_inner(
+            root_idx,
+            walk_options,
+            CleanInput::Discover {
+                paths: input,
+                depth,
+                pattern_root: pattern_root.map(Path::to_path_buf),
+            },
+        )
+    }
+
+    /// Revalidate published candidate paths with each candidate's original discovery root.
+    pub fn refresh_clean_candidates(
+        root_idx: TreeIndex,
+        walk_options: &WalkOptions,
+        candidates: Vec<(PathBuf, PathBuf)>,
+    ) -> anyhow::Result<Self> {
+        Self::start_clean_inner(root_idx, walk_options, CleanInput::Refresh(candidates))
+    }
+
+    fn start_clean_inner(
+        root_idx: TreeIndex,
+        walk_options: &WalkOptions,
+        input: CleanInput,
+    ) -> anyhow::Result<Self> {
+        let (entry_tx, event_rx) = crossbeam::channel::bounded(100);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        std::thread::Builder::new()
+            .name("dua-clean-dispatcher".into())
+            .spawn({
+                let walk_options = walk_options.clone();
+                let cancelled = Arc::clone(&cancelled);
+                move || {
+                    use crate::clean::DiscoveryEvent;
+                    if walk_options.threads <= 1 {
+                        let mut index = 0;
+                        input.discover(walk_options.clone(), |event| {
+                            if cancelled.load(Ordering::Relaxed) {
+                                return false;
+                            }
+                            match event {
+                                DiscoveryEvent::Candidate { path, search_root } => {
+                                    let keep_going = walk_clean_candidate(
+                                        &walk_options,
+                                        path,
+                                        search_root,
+                                        index,
+                                        &entry_tx,
+                                        &cancelled,
+                                    );
+                                    index += 1;
+                                    keep_going
+                                }
+                                DiscoveryEvent::Progress { entries, io_errors } => entry_tx
+                                    .send(TraversalEvent::DiscoveryProgress { entries, io_errors })
+                                    .is_ok(),
+                            }
+                        });
+                    } else {
+                        walk_clean_candidates(input, &walk_options, &entry_tx, &cancelled);
+                    }
+                    let _ = entry_tx.send(TraversalEvent::Finished);
+                }
+            })?;
+        Ok(Self {
+            walk_options: walk_options.clone(),
+            root_idx,
+            stats: TraversalStats::default(),
+            root_nodes: Vec::new(),
+            nodes_by_directory: Vec::new(),
+            inodes: InodeFilter::default(),
+            throttle: Some(Throttle::new(Duration::from_millis(250), None)),
+            skip_root: false,
+            use_root_path: true,
+            retained_depth: None,
+            preexisting_nodes: HashMap::new(),
+            event_rx,
+            clean_stages: HashMap::new(),
+            _cancelled: Some(CancelOnDrop(cancelled)),
+        })
+    }
+
     /// Start a background thread to perform the actual tree walk, and dispatch the results
     /// as events to be received on [`BackgroundTraversal::event_rx`].
     pub fn start(
@@ -908,6 +1141,8 @@ impl BackgroundTraversal {
             retained_depth: None,
             preexisting_nodes,
             event_rx: entry_rx,
+            clean_stages: HashMap::new(),
+            _cancelled: None,
         })
     }
 
@@ -950,7 +1185,7 @@ impl BackgroundTraversal {
                 .into()
         };
         let node = traversal.tree.add_child(
-            self.root_idx,
+            self.integration_root(root_idx),
             name,
             EntryData {
                 metadata_io_error: true,
@@ -958,9 +1193,11 @@ impl BackgroundTraversal {
                 ..EntryData::default()
             },
         );
-        traversal.tree.update(self.root_idx, |entry| {
-            *entry.entry_count.get_or_insert(0) += 1;
-        });
+        traversal
+            .tree
+            .update(self.integration_root(root_idx), |entry| {
+                *entry.entry_count.get_or_insert(0) += 1;
+            });
         self.root_nodes[root_idx] = Some(node);
     }
 
@@ -969,6 +1206,53 @@ impl BackgroundTraversal {
             self.nodes_by_directory.resize(directory_id + 1, None);
         }
         self.nodes_by_directory[directory_id] = Some(node);
+    }
+
+    fn integration_root(&self, index: usize) -> TreeIndex {
+        self.clean_stages
+            .get(&index)
+            .map_or(self.root_idx, |stage| stage.staging_root)
+    }
+
+    fn commit_clean_inodes(
+        &mut self,
+        traversal: &mut Traversal,
+        entries: Vec<(TreeIndex, crate::walk::Entry, u128)>,
+    ) {
+        for (node, entry, original_size) in entries {
+            let metadata = entry
+                .metadata
+                .as_ref()
+                .and_then(|m| m.as_ref().ok())
+                .expect("accepted metadata");
+            let counted = self.walk_options.count_hard_links || self.inodes.add(&entry, metadata);
+            let size = if counted { original_size } else { 0 };
+            #[cfg(target_os = "macos")]
+            let size = if counted
+                && !self.walk_options.apparent_size
+                && self.walk_options.metadata_options.apfs_clone_metadata
+            {
+                u128::from(self.inodes.allocated_size(metadata))
+            } else {
+                size
+            };
+            let removed_bytes = original_size - size;
+            let removed_entry = u64::from(!counted && !entry.file_type.is_dir());
+            traversal.tree.update(node, |data| {
+                data.size -= removed_bytes;
+                if removed_entry != 0 {
+                    data.entry_count = Some(0);
+                }
+            });
+            let mut ancestor = traversal.tree.parent(node);
+            while let Some(index) = ancestor {
+                traversal.tree.update(index, |data| {
+                    data.size -= removed_bytes;
+                    *data.entry_count.get_or_insert(0) -= removed_entry;
+                });
+                ancestor = traversal.tree.parent(index);
+            }
+        }
     }
 
     /// Integrate `event` into traversal `t` so its information is represented by it.
@@ -993,10 +1277,76 @@ impl BackgroundTraversal {
         event: TraversalEvent,
     ) -> Option<bool> {
         match event {
+            TraversalEvent::DiscoveryProgress { entries, io_errors } => {
+                self.stats.entries_traversed += entries;
+                self.stats.io_errors += io_errors;
+                return self
+                    .throttle
+                    .as_ref()
+                    .is_some_and(|t| t.can_update())
+                    .then_some(false);
+            }
+            TraversalEvent::CandidateStarted(candidate_index, search_root) => {
+                if self.clean_stages.is_empty() {
+                    self.nodes_by_directory.clear();
+                }
+                self.root_nodes
+                    .resize(self.root_nodes.len().max(candidate_index + 1), None);
+                let staging_root = traversal.tree.add_root("", EntryData::default());
+                assert!(
+                    self.clean_stages
+                        .insert(
+                            candidate_index,
+                            CleanStage {
+                                staging_root,
+                                search_root,
+                                deferred_inodes: Vec::new(),
+                                valid: true,
+                            }
+                        )
+                        .is_none()
+                );
+            }
+            TraversalEvent::CandidateFinished(candidate_index, accepted) => {
+                let stage = self
+                    .clean_stages
+                    .remove(&candidate_index)
+                    .expect("candidate has started");
+                let candidate = self.root_nodes[candidate_index];
+                if let Some(candidate) = candidate.filter(|_| accepted && stage.valid) {
+                    self.commit_clean_inodes(traversal, stage.deferred_inodes);
+                    traversal.clean_search_roots.insert(
+                        traversal
+                            .tree
+                            .name(candidate)
+                            .expect("staged root exists")
+                            .into_owned(),
+                        stage.search_root,
+                    );
+                    traversal.tree.detach(candidate);
+                    traversal
+                        .tree
+                        .attach(traversal.root_index, candidate)
+                        .expect("staged root is detached");
+                    let data = traversal.tree.data(candidate).expect("staged root exists");
+                    traversal.tree.update(traversal.root_index, |root| {
+                        root.size += data.size;
+                        *root.entry_count.get_or_insert(0) += data.entry_count.unwrap_or(0);
+                    });
+                } else {
+                    self.root_nodes[candidate_index] = None;
+                }
+                traversal.tree.remove_subtree(stage.staging_root);
+                return Some(false);
+            }
             TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
                 self.stats.entries_traversed += 1;
+                let is_clean = self.clean_stages.contains_key(&root_idx);
                 let mut data = EntryData::default();
                 let Ok(TraversalEntry(entry)) = entry else {
+                    if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
+                        stage.valid = false;
+                    }
                     self.stats.io_errors += 1;
                     self.record_error_on_root(traversal, root_idx, &root_path);
                     return self
@@ -1018,7 +1368,7 @@ impl BackgroundTraversal {
                 data.is_dir = entry.file_type.is_dir();
                 if let Some(Ok(m)) = &entry.metadata {
                     if self.walk_options.count_hard_links
-                        || self.inodes.add(&entry, m)
+                        || (is_clean || self.inodes.add(&entry, m))
                             && (self.walk_options.cross_filesystems
                                 || crossdev::is_same_device(device_id, m))
                     {
@@ -1032,7 +1382,7 @@ impl BackgroundTraversal {
                                     m,
                                     data.is_dir,
                                     &self.walk_options,
-                                    &mut self.inodes,
+                                    (!is_clean).then_some(&mut self.inodes),
                                 )
                                 .unwrap_or_else(|_| {
                                     self.stats.io_errors += 1;
@@ -1059,6 +1409,11 @@ impl BackgroundTraversal {
 
                 data.mtime = mtime;
                 data.size = file_size;
+                if data.metadata_io_error
+                    && let Some(stage) = self.clean_stages.get_mut(&root_idx)
+                {
+                    stage.valid = false;
+                }
                 if data.is_dir {
                     data.entry_count = Some(1);
                 }
@@ -1101,7 +1456,7 @@ impl BackgroundTraversal {
                 let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
 
                 let parent_index = if walk_depth == 0 {
-                    self.root_idx
+                    self.integration_root(root_idx)
                 } else {
                     let parent_id = entry
                         .parent_directory_id
@@ -1139,11 +1494,25 @@ impl BackgroundTraversal {
                     });
                 }
 
+                if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
+                    self.clean_stages
+                        .get_mut(&root_idx)
+                        .expect("candidate has started")
+                        .deferred_inodes
+                        .push((
+                            retained_node.expect("clean retains all entries"),
+                            entry,
+                            file_size,
+                        ));
+                }
                 if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
                     return Some(false);
                 }
             }
             TraversalEvent::RootError(root_path, root_idx) => {
+                if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
+                    stage.valid = false;
+                }
                 self.stats.io_errors += 1;
                 self.record_error_on_root(traversal, root_idx, &root_path);
             }
@@ -1165,6 +1534,301 @@ impl BackgroundTraversal {
     }
 }
 
+struct CleanCandidate {
+    path: Arc<PathBuf>,
+    search_root: PathBuf,
+    device: u64,
+    accepted: Arc<AtomicBool>,
+}
+
+impl CleanCandidate {
+    fn new(options: &WalkOptions, path: PathBuf, search_root: PathBuf) -> io::Result<Self> {
+        let device = if options.cross_filesystems {
+            0
+        } else {
+            crossdev::init(&search_root)?
+        };
+        Ok(Self {
+            path: Arc::new(path),
+            search_root,
+            device,
+            accepted: Arc::new(AtomicBool::new(true)),
+        })
+    }
+
+    fn forward_entry(
+        &self,
+        options: &WalkOptions,
+        cwd: &Path,
+        index: usize,
+        entry: io::Result<crate::walk::Entry>,
+        tx: &crossbeam::channel::Sender<TraversalEvent>,
+    ) -> bool {
+        if self.accepted.load(Ordering::Relaxed) {
+            if let Ok(entry) = &entry {
+                let entry_path = entry.path();
+                let excluded = options.ignore_dirs.contains(entry_path.as_path())
+                    || options.ignore_patterns.as_ref().is_some_and(|patterns| {
+                        crate::pattern_relative_path(&entry_path, cwd, &self.search_root)
+                            .is_some_and(|relative| {
+                                patterns.is_excluded(relative, entry.file_type.is_dir())
+                            })
+                    });
+                let boundary = !options.cross_filesystems
+                    && entry
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.as_ref().ok())
+                        .is_some_and(|m| !crossdev::is_same_device(self.device, m));
+                let git_marker = crate::clean::is_git_dir_name(&entry.file_name)
+                    || (entry
+                        .file_name
+                        .as_encoded_bytes()
+                        .eq_ignore_ascii_case(b"HEAD")
+                        && gix::discover::is_git(entry.parent_path.as_ref()).is_ok());
+                if git_marker
+                    || excluded
+                    || boundary
+                    || (entry.depth == 0 && !entry.file_type.is_dir())
+                {
+                    log::debug!(
+                        "Skipping cleanup candidate {} because of {}",
+                        self.path.display(),
+                        entry_path.display()
+                    );
+                    self.accepted.store(false, Ordering::Relaxed);
+                }
+            }
+            if self.accepted.load(Ordering::Relaxed) {
+                let failed = entry
+                    .as_ref()
+                    .map_or(true, |entry| !matches!(&entry.metadata, Some(Ok(_))));
+                if failed {
+                    self.accepted.store(false, Ordering::Relaxed);
+                }
+                return tx
+                    .send(TraversalEvent::Entry(
+                        entry.map(TraversalEntry),
+                        Arc::clone(&self.path),
+                        self.device,
+                        index,
+                    ))
+                    .is_ok();
+            }
+        }
+        // Rejected candidates can still have jobs in flight. Count them while those jobs drain.
+        tx.send(TraversalEvent::DiscoveryProgress {
+            entries: 1,
+            io_errors: 0,
+        })
+        .is_ok()
+    }
+}
+
+fn walk_clean_candidates(
+    input: CleanInput,
+    options: &WalkOptions,
+    tx: &crossbeam::channel::Sender<TraversalEvent>,
+    cancelled: &Arc<AtomicBool>,
+) {
+    std::thread::scope(|scope| {
+        // One discovery reader and a shared sizing pool, within the existing I/O thread budget.
+        let (mut roots, walk) = crate::walk::stream_roots(
+            options.threads - 1,
+            crate::walk::Order::ParentFirst,
+            options.metadata_options,
+        );
+        let (candidate_tx, candidate_rx) = crossbeam::channel::bounded(32);
+        // Bound active candidate staging, not just the queue waiting to reach the walker.
+        let (slot_tx, slot_rx) = crossbeam::channel::bounded(32);
+        for _ in 0..32 {
+            slot_tx.send(()).expect("slots fit");
+        }
+        let discovery = std::thread::Builder::new()
+            .name("dua-clean-discovery".into())
+            .spawn_scoped(scope, move || {
+                let mut index = 0;
+                input.discover(options.clone(), |event| {
+                    if cancelled.load(Ordering::Relaxed) {
+                        return false;
+                    }
+                    match event {
+                        crate::clean::DiscoveryEvent::Progress { entries, io_errors } => tx
+                            .send(TraversalEvent::DiscoveryProgress { entries, io_errors })
+                            .is_ok(),
+                        crate::clean::DiscoveryEvent::Candidate { path, search_root } => {
+                            let candidate =
+                                match CleanCandidate::new(options, path.clone(), search_root) {
+                                    Ok(candidate) => candidate,
+                                    Err(err) => {
+                                        log::debug!(
+                                            "Could not inspect cleanup root {}: {err}",
+                                            path.display()
+                                        );
+                                        return tx
+                                            .send(TraversalEvent::DiscoveryProgress {
+                                                entries: 0,
+                                                io_errors: 1,
+                                            })
+                                            .is_ok();
+                                    }
+                                };
+                            if slot_rx.recv().is_err() {
+                                return false;
+                            }
+                            let device = candidate.device;
+                            let accepted = Arc::clone(&candidate.accepted);
+                            let cancelled = Arc::clone(cancelled);
+                            let cross_filesystems = options.cross_filesystems;
+                            if candidate_tx.send((index, candidate)).is_err() {
+                                return false;
+                            }
+                            let submitted = roots
+                                .add_root(index, path, move |entry| {
+                                    accepted.load(Ordering::Relaxed)
+                                        && !cancelled.load(Ordering::Relaxed)
+                                        && (cross_filesystems
+                                            || entry
+                                                .metadata
+                                                .as_ref()
+                                                .and_then(|m| m.as_ref().ok())
+                                                .is_none_or(|m| {
+                                                    crossdev::is_same_device(device, m)
+                                                }))
+                                })
+                                .is_ok();
+                            index += 1;
+                            submitted
+                        }
+                    }
+                });
+            });
+        if let Err(err) = discovery {
+            log::error!("Could not start cleanup discovery: {err}");
+            let _ = tx.send(TraversalEvent::DiscoveryProgress {
+                entries: 0,
+                io_errors: 1,
+            });
+            return;
+        }
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let mut candidates = HashMap::new();
+        for (index, event) in walk {
+            if cancelled.load(Ordering::Relaxed) {
+                break;
+            }
+            // Discovery queues context before submitting a root, so it is available even when
+            // another root's metadata finishes first.
+            while !candidates.contains_key(&index) {
+                let (candidate_index, candidate) =
+                    candidate_rx.recv().expect("submitted root has context");
+                if tx
+                    .send(TraversalEvent::CandidateStarted(
+                        candidate_index,
+                        candidate.search_root.clone(),
+                    ))
+                    .is_err()
+                {
+                    cancelled.store(true, Ordering::Relaxed);
+                    break;
+                }
+                candidates.insert(candidate_index, candidate);
+            }
+            if cancelled.load(Ordering::Relaxed) {
+                break;
+            }
+            let keep_going = match event {
+                crate::walk::RootEvent::Entry(entry) => {
+                    candidates[&index].forward_entry(options, &cwd, index, entry, tx)
+                }
+                crate::walk::RootEvent::Finished => {
+                    let candidate = candidates.remove(&index).expect("root has started");
+                    let sent = tx
+                        .send(TraversalEvent::CandidateFinished(
+                            index,
+                            candidate.accepted.load(Ordering::Relaxed),
+                        ))
+                        .is_ok();
+                    slot_tx.send(()).ok();
+                    sent
+                }
+            };
+            if !keep_going {
+                cancelled.store(true, Ordering::Relaxed);
+                break;
+            }
+        }
+        // Unblock discovery before the scope joins it, including cancellation while at capacity.
+        drop(slot_tx);
+        drop(candidate_rx);
+    });
+}
+
+fn walk_clean_candidate(
+    options: &WalkOptions,
+    path: PathBuf,
+    search_root: PathBuf,
+    index: usize,
+    tx: &crossbeam::channel::Sender<TraversalEvent>,
+    cancelled: &AtomicBool,
+) -> bool {
+    if cancelled.load(Ordering::Relaxed) {
+        return false;
+    }
+    let candidate = match CleanCandidate::new(options, path, search_root) {
+        Ok(candidate) => candidate,
+        Err(err) => {
+            log::debug!("Could not inspect cleanup root: {err}");
+            return tx
+                .send(TraversalEvent::DiscoveryProgress {
+                    entries: 0,
+                    io_errors: 1,
+                })
+                .is_ok();
+        }
+    };
+    if tx
+        .send(TraversalEvent::CandidateStarted(
+            index,
+            candidate.search_root.clone(),
+        ))
+        .is_err()
+    {
+        return false;
+    }
+    // Inspect exclusions as well: deleting their containing candidate would delete them too.
+    let mut unfiltered = options.clone();
+    unfiltered.ignore_dirs.clear();
+    unfiltered.ignore_patterns = None;
+    let roots = vec![WalkRoot {
+        index: 0,
+        path: candidate.path.as_ref().clone(),
+        #[cfg(any(windows, target_os = "macos"))]
+        entry: None,
+        pattern_root: None,
+        device_id: candidate.device,
+    }];
+    let cwd = std::env::current_dir().unwrap_or_default();
+    for (_, event) in unfiltered.iter_from_paths(roots, false, crate::walk::Order::ParentFirst) {
+        if cancelled.load(Ordering::Relaxed) {
+            return false;
+        }
+        if let crate::walk::RootEvent::Entry(entry) = event {
+            if !candidate.forward_entry(options, &cwd, index, entry, tx) {
+                return false;
+            }
+            if !candidate.accepted.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    }
+    tx.send(TraversalEvent::CandidateFinished(
+        index,
+        candidate.accepted.load(Ordering::Relaxed),
+    ))
+    .is_ok()
+}
+
 #[cfg(not(any(windows, target_os = "macos")))]
 /// Return disk usage for `name` on Unix-like platforms.
 fn size_on_disk(
@@ -1173,7 +1837,7 @@ fn size_on_disk(
     meta: &crate::walk::Metadata,
     _is_dir: bool,
     _options: &WalkOptions,
-    _inodes: &mut InodeFilter,
+    _inodes: Option<&mut InodeFilter>,
 ) -> io::Result<u64> {
     name.size_on_disk_fast(meta)
 }
@@ -1187,13 +1851,14 @@ fn size_on_disk(
     meta: &crate::walk::Metadata,
     _is_dir: bool,
     options: &WalkOptions,
-    inodes: &mut InodeFilter,
+    inodes: Option<&mut InodeFilter>,
 ) -> io::Result<u64> {
-    Ok(if options.metadata_options.apfs_clone_metadata {
-        inodes.allocated_size(meta)
-    } else {
-        meta.allocated_size()
-    })
+    Ok(inodes
+        .filter(|_| options.metadata_options.apfs_clone_metadata)
+        .map_or_else(
+            || meta.allocated_size(),
+            |inodes| inodes.allocated_size(meta),
+        ))
 }
 
 #[cfg(windows)]
@@ -1205,7 +1870,7 @@ fn size_on_disk(
     meta: &crate::walk::Metadata,
     is_dir: bool,
     _options: &WalkOptions,
-    _inodes: &mut InodeFilter,
+    _inodes: Option<&mut InodeFilter>,
 ) -> io::Result<u64> {
     Ok(if is_dir { 0 } else { meta.allocated_size() })
 }
@@ -1213,6 +1878,379 @@ fn size_on_disk(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn clean_walk_options() -> WalkOptions {
+        WalkOptions {
+            threads: 2,
+            count_hard_links: false,
+            apparent_size: true,
+            cross_filesystems: true,
+            ignore_dirs: std::collections::BTreeSet::new(),
+            ignore_patterns: None,
+            metadata_options: crate::TraversalOptions::default(),
+        }
+    }
+
+    #[test]
+    fn clean_candidates_can_finish_out_of_order_without_sharing_unaccepted_inodes() {
+        let directory = tempfile::tempdir().unwrap();
+        let paths = ["slow", "fast", "last"].map(|name| directory.path().join(name));
+        for path in &paths {
+            std::fs::create_dir(path).unwrap();
+        }
+        std::fs::write(paths[0].join("payload"), b"content").unwrap();
+        for path in &paths[1..] {
+            std::fs::hard_link(paths[0].join("payload"), path.join("payload")).unwrap();
+        }
+        let mut traversal = Traversal::new();
+        let options = clean_walk_options();
+        let mut background = BackgroundTraversal::start_clean(
+            traversal.root_index,
+            &options,
+            vec![directory.path().to_owned()],
+            Some(0),
+            None,
+        )
+        .unwrap();
+        while background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            != Some(true)
+        {}
+
+        for index in 0..2 {
+            background.integrate_traversal_event(
+                &mut traversal,
+                TraversalEvent::CandidateStarted(index, directory.path().to_owned()),
+            );
+        }
+        for (index, path) in paths[..2].iter().enumerate() {
+            for entry in crate::walk::walk(
+                path,
+                1,
+                crate::walk::Order::ParentFirst,
+                options.metadata_options,
+                |_| true,
+            ) {
+                background.integrate_traversal_event(
+                    &mut traversal,
+                    TraversalEvent::Entry(
+                        entry.map(TraversalEntry),
+                        Arc::new(path.clone()),
+                        0,
+                        index,
+                    ),
+                );
+            }
+        }
+        assert_eq!(traversal.tree.children(traversal.root_index).count(), 0);
+        background
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(1, true));
+        let fast = background.root_nodes[1].unwrap();
+        let payload = traversal.tree.children(fast).next().unwrap();
+        assert_eq!(traversal.tree.data(payload).unwrap().size, 7);
+        assert_eq!(traversal.tree.children(traversal.root_index).count(), 1);
+        background
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(0, false));
+        background.integrate_traversal_event(
+            &mut traversal,
+            TraversalEvent::CandidateStarted(2, directory.path().to_owned()),
+        );
+        for entry in crate::walk::walk(
+            &paths[2],
+            1,
+            crate::walk::Order::ParentFirst,
+            options.metadata_options,
+            |_| true,
+        ) {
+            background.integrate_traversal_event(
+                &mut traversal,
+                TraversalEvent::Entry(entry.map(TraversalEntry), Arc::new(paths[2].clone()), 0, 2),
+            );
+        }
+        background
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(2, true));
+        let last = background.root_nodes[2].unwrap();
+        let payload = traversal.tree.children(last).next().unwrap();
+        assert_eq!(
+            traversal.tree.data(payload).unwrap().size,
+            0,
+            "rejecting the slow root must not erase the fast root's accepted accounting"
+        );
+        assert!(background.clean_stages.is_empty());
+        assert!(background.root_nodes[0].is_none());
+    }
+
+    #[test]
+    fn clean_streams_more_candidates_than_its_capacity_with_any_thread_budget() {
+        let directory = tempfile::tempdir().unwrap();
+        for index in 0..40 {
+            let candidate = directory
+                .path()
+                .join(format!("project-{index}/node_modules"));
+            std::fs::create_dir_all(candidate.join("child")).unwrap();
+            std::fs::write(candidate.join("child/payload"), b"content").unwrap();
+            if index % 10 == 0 {
+                std::fs::create_dir(candidate.join("child/.git")).unwrap();
+            }
+        }
+        for threads in [1, 2, 4] {
+            let mut traversal = Traversal::new();
+            let mut options = clean_walk_options();
+            options.threads = threads;
+            let mut background = BackgroundTraversal::start_clean(
+                traversal.root_index,
+                &options,
+                vec![directory.path().to_owned()],
+                None,
+                None,
+            )
+            .unwrap();
+            loop {
+                let event = background
+                    .event_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("scan makes progress");
+                if background.integrate_traversal_event(&mut traversal, event) == Some(true) {
+                    break;
+                }
+            }
+            assert_eq!(traversal.tree.children(traversal.root_index).count(), 36);
+            assert_eq!(background.stats.io_errors, 0);
+            assert!(background.clean_stages.is_empty());
+            for root in traversal.tree.children(traversal.root_index) {
+                let child = traversal.tree.children(root).next().unwrap();
+                let payload = traversal.tree.children(child).next().unwrap();
+                assert_eq!(traversal.tree.data(payload).unwrap().size, 7);
+            }
+        }
+    }
+
+    #[test]
+    fn clean_roots_are_published_only_after_sizing_and_vetting() {
+        let directory = tempfile::tempdir().unwrap();
+        let good = directory.path().join("good/node_modules");
+        let bad = directory.path().join("bad/node_modules");
+        std::fs::create_dir_all(&good).unwrap();
+        std::fs::create_dir_all(bad.join("nested/.git")).unwrap();
+        std::fs::write(good.join("payload"), b"content").unwrap();
+        std::fs::write(bad.join("payload"), b"private").unwrap();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start_clean(
+            traversal.root_index,
+            &clean_walk_options(),
+            vec![directory.path().to_owned()],
+            None,
+            None,
+        )
+        .unwrap();
+        let mut published = 0;
+        loop {
+            let event = background.event_rx.recv().unwrap();
+            if matches!(&event, TraversalEvent::CandidateFinished(_, true)) {
+                published += 1;
+            }
+            let finished = background.integrate_traversal_event(&mut traversal, event);
+            assert_eq!(
+                traversal.tree.children(traversal.root_index).count(),
+                published,
+                "in-progress and rejected candidates must remain hidden"
+            );
+            if finished == Some(true) {
+                break;
+            }
+        }
+        let roots = traversal
+            .tree
+            .children(traversal.root_index)
+            .collect::<Vec<_>>();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            traversal.tree.name(roots[0]).unwrap(),
+            good.canonicalize().unwrap()
+        );
+        assert_eq!(traversal.tree.children(roots[0]).count(), 1);
+        assert!(traversal.tree.data(roots[0]).unwrap().size >= 7);
+        assert_eq!(
+            traversal.tree.len(),
+            3,
+            "discarded staging trees leave no live nodes"
+        );
+        assert_eq!(background.stats.io_errors, 0);
+        assert_eq!(traversal.clean_search_roots.len(), 1);
+        traversal.remove_children(roots[0], &traversal.tree.children(roots[0]).collect());
+        assert_eq!(traversal.clean_search_roots.len(), 1);
+        traversal.remove_children(traversal.root_index, &HashSet::from([roots[0]]));
+        assert!(traversal.clean_search_roots.is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn concurrent_clean_candidates_deduplicate_only_accepted_apfs_clones() {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let directory = tempfile::tempdir().unwrap();
+        let paths =
+            ["bad", "first", "second"].map(|name| directory.path().join(name).join("node_modules"));
+        for path in &paths {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::create_dir_all(paths[0].join("nested/.git")).unwrap();
+        let original = paths[0].join("payload");
+        std::fs::write(&original, vec![1; 8192]).unwrap();
+        for path in &paths[1..] {
+            std::fs::copy(&original, path.join("payload")).unwrap();
+        }
+        let allocated = u128::from(std::fs::metadata(&original).unwrap().blocks()) * 512;
+        for deduplicate in [false, true] {
+            let mut options = clean_walk_options();
+            options.threads = 4;
+            options.apparent_size = false;
+            options.metadata_options.apfs_clone_metadata = deduplicate;
+            let mut traversal = Traversal::new();
+            let mut background = BackgroundTraversal::start_clean(
+                traversal.root_index,
+                &options,
+                vec![directory.path().to_owned()],
+                None,
+                None,
+            )
+            .unwrap();
+            while background
+                .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                != Some(true)
+            {}
+            assert_eq!(traversal.clean_search_roots.len(), 2);
+            let total: u128 = traversal
+                .tree
+                .children(traversal.root_index)
+                .map(|root| {
+                    let payload = traversal.tree.children(root).next().unwrap();
+                    traversal.tree.data(payload).unwrap().size
+                })
+                .sum();
+            assert_eq!(total, allocated * if deduplicate { 1 } else { 2 });
+        }
+    }
+
+    #[test]
+    fn clean_rejects_case_variants_of_nested_gitfiles() {
+        for marker in [".git", ".GIT", ".Git"] {
+            let directory = tempfile::tempdir().unwrap();
+            let repo = gix::init(directory.path().join("admin")).unwrap();
+            let search = directory.path().join("scan");
+            let nested = search.join("node_modules/nested");
+            std::fs::create_dir_all(&nested).unwrap();
+            std::fs::write(
+                nested.join(marker),
+                format!("gitdir: {}\n", repo.path().display()),
+            )
+            .unwrap();
+            let mut traversal = Traversal::new();
+            let mut background = BackgroundTraversal::start_clean(
+                traversal.root_index,
+                &clean_walk_options(),
+                vec![search],
+                None,
+                None,
+            )
+            .unwrap();
+            while background
+                .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                != Some(true)
+            {}
+            assert_eq!(traversal.tree.len(), 1, "protect the {marker} worktree");
+            assert!(traversal.clean_search_roots.is_empty());
+        }
+    }
+
+    #[test]
+    fn clean_empty_scan_finishes_without_roots() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("ordinary"), b"content").unwrap();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start_clean(
+            traversal.root_index,
+            &clean_walk_options(),
+            vec![directory.path().to_owned()],
+            None,
+            None,
+        )
+        .unwrap();
+        while background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            != Some(true)
+        {}
+        assert_eq!(traversal.tree.len(), 1);
+        assert_eq!(background.stats.total_bytes, Some(0));
+        assert!(background.stats.elapsed.is_some());
+    }
+
+    #[test]
+    fn clean_rejection_restores_hardlink_accounting() {
+        let directory = tempfile::tempdir().unwrap();
+        let bad = directory.path().join("a/node_modules");
+        let good = directory.path().join("b/node_modules");
+        std::fs::create_dir_all(bad.join("nested/repo/.git")).unwrap();
+        std::fs::create_dir_all(&good).unwrap();
+        std::fs::write(bad.join("payload"), b"content").unwrap();
+        std::fs::hard_link(bad.join("payload"), good.join("payload")).unwrap();
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start_clean(
+            traversal.root_index,
+            &clean_walk_options(),
+            vec![bad, good.clone()],
+            None,
+            None,
+        )
+        .unwrap();
+        while background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            != Some(true)
+        {}
+        let roots = traversal
+            .tree
+            .children(traversal.root_index)
+            .collect::<Vec<_>>();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            traversal.tree.name(roots[0]).unwrap(),
+            good.canonicalize().unwrap()
+        );
+        let payload = traversal.tree.children(roots[0]).next().unwrap();
+        assert_eq!(
+            traversal.tree.data(payload).unwrap().size,
+            7,
+            "a rejected root must not consume the accepted root's hardlink accounting"
+        );
+    }
+
+    #[test]
+    fn clean_rejects_containers_of_excluded_entries() {
+        let directory = tempfile::tempdir().unwrap();
+        let candidate = directory.path().join("node_modules");
+        let protected = candidate.join("precious");
+        std::fs::create_dir_all(&protected).unwrap();
+        std::fs::write(protected.join("file"), b"keep").unwrap();
+        let mut options = clean_walk_options();
+        options
+            .ignore_dirs
+            .insert(protected.canonicalize().unwrap());
+        let mut traversal = Traversal::new();
+        let mut background = BackgroundTraversal::start_clean(
+            traversal.root_index,
+            &options,
+            vec![candidate],
+            None,
+            None,
+        )
+        .unwrap();
+        while background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            != Some(true)
+        {}
+        assert_eq!(traversal.tree.len(), 1);
+        assert_eq!(background.stats.io_errors, 0);
+    }
 
     #[test]
     fn ancestor_sizes_update_before_traversal_finishes() {
@@ -1551,6 +2589,55 @@ mod tests {
         );
         assert_eq!(tree.name(reused).as_deref(), Some(Path::new("reused")));
         assert_eq!(tree.children(root).collect::<Vec<_>>(), [reused, kept]);
+    }
+
+    #[test]
+    fn tree_removes_selected_children_in_one_batch() {
+        let mut tree = Tree::new();
+        let root_data = EntryData {
+            size: 100,
+            entry_count: Some(10),
+            ..EntryData::default()
+        };
+        let root = tree.add_root("root", root_data);
+        let tail = tree.add_child(root, "tail", EntryData::default());
+        let kept = tree.add_child(root, "kept", EntryData::default());
+        let kept_child = tree.add_child(kept, "kept-child", EntryData::default());
+        let middle = tree.add_child(root, "middle", EntryData::default());
+        let nested = tree.add_child(middle, "nested", EntryData::default());
+        let head = tree.add_child(root, "head", EntryData::default());
+        let other_root = tree.add_root("other", EntryData::default());
+        let other_child = tree.add_child(other_root, "other-child", EntryData::default());
+        let missing = TreeIndex::from(100_usize);
+
+        assert_eq!(
+            tree.remove_children(
+                root,
+                &HashSet::from([head, middle, tail, nested, kept_child, other_child, missing]),
+            ),
+            4,
+            "only selected direct children and their subtrees are removed"
+        );
+        assert_eq!(tree.len(), 5);
+        assert_eq!(tree.children(root).collect::<Vec<_>>(), [kept]);
+        assert_eq!(tree.children(kept).collect::<Vec<_>>(), [kept_child]);
+        assert_eq!(tree.children(other_root).collect::<Vec<_>>(), [other_child]);
+        assert_eq!(
+            tree.data(root),
+            Some(root_data),
+            "accounting remains with the caller"
+        );
+        assert_eq!(tree.remove_children(missing, &HashSet::from([kept])), 0);
+        assert_eq!(tree.remove_children(root, &HashSet::new()), 0);
+
+        let reused = tree.add_child(root, "reused", EntryData::default());
+        assert!([head, middle, nested, tail].contains(&reused));
+        assert_eq!(tree.children(root).collect::<Vec<_>>(), [reused, kept]);
+        assert_eq!(
+            tree.remove_children(root, &HashSet::from([reused, kept])),
+            3
+        );
+        assert!(tree.children(root).next().is_none());
     }
 
     #[test]
