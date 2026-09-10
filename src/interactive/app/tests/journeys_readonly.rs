@@ -20,6 +20,121 @@ use crate::interactive::{
 };
 
 #[test]
+fn minimized_right_panes_preserve_state_and_skip_focus() -> Result<()> {
+    use crate::interactive::state::FocussedPane::{Glob, Help, Main, Mark};
+
+    let fixture = tempfile::tempdir()?;
+    let paths = [fixture.path().join("first"), fixture.path().join("second")];
+    for path in &paths {
+        fs::write(path, b"keep")?;
+    }
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_paths(&paths)?;
+    app.process_events_once(&mut terminal, into_codes("x?j"))?;
+    let help_scroll = app.window.help.as_ref().unwrap().scroll;
+    assert!(help_scroll > 0);
+    assert!(app.state.focussed == Help);
+
+    app.process_events_once(&mut terminal, into_codes("]"))?;
+    assert!(
+        app.state.focussed == Main,
+        "minimizing returns focus to the list"
+    );
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(app.state.focussed == Main, "Tab skips minimized panes");
+    app.process_events_once(
+        &mut terminal,
+        into_events(
+            ['r', 't']
+                .map(|key| Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL))),
+        ),
+    )?;
+    for path in &paths {
+        assert_eq!(
+            fs::read(path)?,
+            b"keep",
+            "minimized marks cannot be deleted"
+        );
+    }
+    assert_eq!(app.window.mark.as_ref().unwrap().marked().len(), 1);
+    assert_eq!(terminal.backend().buffer()[(38, 11)].symbol(), "1");
+
+    app.process_events_once(&mut terminal, into_codes("/[abc]"))?;
+    assert!(app.state.focussed == Glob);
+    assert_eq!(app.window.glob.as_ref().unwrap().input, "[abc]");
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(app.state.focussed == Main);
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(app.state.focussed == Glob);
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Esc]))?;
+
+    app.process_events_once(&mut terminal, into_codes("x"))?;
+    assert_eq!(app.window.mark.as_ref().unwrap().marked().len(), 2);
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(
+        app.state.focussed == Main,
+        "adding marks keeps the sidebar minimized"
+    );
+    assert_eq!(terminal.backend().buffer()[(38, 11)].symbol(), "2");
+    app.process_events_once(&mut terminal, into_codes("?"))?;
+    assert!(app.state.focussed == Help);
+    assert_eq!(app.window.help.as_ref().unwrap().scroll, help_scroll);
+
+    app.process_events_once(&mut terminal, into_codes("]]"))?;
+    assert!(app.state.focussed == Main, "restoring does not move focus");
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab, KeyCode::Tab]))?;
+    assert!(app.state.focussed == Mark);
+    assert!(app.window.mark.as_ref().unwrap().has_focus());
+    app.process_events_once(&mut terminal, into_codes("]"))?;
+    assert!(app.state.focussed == Main);
+    assert!(!app.window.mark.as_ref().unwrap().has_focus());
+    assert_eq!(app.window.mark.as_ref().unwrap().marked().len(), 2);
+    Ok(())
+}
+
+#[test]
+fn right_pane_toggle_handles_remapping_disabling_and_empty_panes() -> Result<()> {
+    use crate::interactive::state::FocussedPane::{Help, Main};
+
+    let (mut terminal, mut app) = initialized_app_and_terminal_from_fixture(&["sample-02"])?;
+    app.process_events_once(&mut terminal, into_codes("]"))?;
+    app.process_events_once(&mut terminal, into_codes("x"))?;
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(
+        app.window.mark.as_ref().unwrap().has_focus(),
+        "empty toggle has no effect"
+    );
+    app.process_events_once(&mut terminal, into_codes("]"))?;
+    app.process_events_once(&mut terminal, into_codes("a"))?;
+    assert!(app.window.mark.is_none());
+    app.process_events_once(&mut terminal, into_codes("]x"))?;
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(
+        app.state.focussed == Main,
+        "empty panes retain the minimized preference"
+    );
+
+    app.config.keys = toml::from_str::<dua::Config>("[keys]\ntoggle_right_panes = 'z'\n")?.keys;
+    app.process_events_once(&mut terminal, into_codes("]"))?;
+    app.process_events_once(&mut terminal, into_keys([KeyCode::Tab]))?;
+    assert!(
+        app.state.focussed == Main,
+        "remapping replaces the default binding"
+    );
+    app.process_events_once(&mut terminal, into_codes("z?"))?;
+    assert!(app.state.focussed == Help);
+    app.process_events_once(&mut terminal, into_codes("z"))?;
+    assert!(app.state.focussed == Main);
+
+    app.config.keys = toml::from_str::<dua::Config>("[keys]\ntoggle_right_panes = []\n")?.keys;
+    app.process_events_once(&mut terminal, into_codes("?]"))?;
+    assert!(
+        app.state.focussed == Help,
+        "disabled binding does not minimize"
+    );
+    Ok(())
+}
+
+#[test]
 fn init_from_pdu_results() -> Result<()> {
     use crate::interactive::app::tests::utils::new_test_terminal;
     let _terminal = new_test_terminal()?;

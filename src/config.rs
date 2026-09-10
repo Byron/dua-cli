@@ -443,8 +443,10 @@ pub struct KeysConfig {
     pub suspend: KeyBindings,
     /// Clear and repaint the screen.
     pub repaint: KeyBindings,
-    /// Move focus to the next open pane.
+    /// Move focus to the next visible pane.
     pub cycle_panes: KeyBindings,
+    /// Minimize or restore the entire right side.
+    pub toggle_right_panes: KeyBindings,
     /// Show or hide help.
     pub toggle_help: KeyBindings,
     /// Open the glob-search pane.
@@ -537,6 +539,7 @@ impl Default for KeysConfig {
             suspend: KeyBindings::defaults(&["ctrl+z"]),
             repaint: KeyBindings::defaults(&["ctrl+l"]),
             cycle_panes: KeyBindings::defaults(&["tab"]),
+            toggle_right_panes: KeyBindings::defaults(&["]"]),
             toggle_help: KeyBindings::defaults(&["?"]),
             open_search: KeyBindings::defaults(&["/"]),
             move_down: KeyBindings::defaults(&["j", "down"]),
@@ -655,6 +658,7 @@ impl Config {
             "# suspend = \"ctrl+z\" # Unix only.\n",
             "# repaint = \"ctrl+l\"\n",
             "# cycle_panes = \"tab\"\n",
+            "# toggle_right_panes = \"]\" # Minimize or restore the entire right side.\n",
             "# toggle_help = \"?\"\n",
             "# open_search = \"/\"\n",
             "#\n",
@@ -741,6 +745,7 @@ mod tests {
             "suspend",
             "repaint",
             "cycle_panes",
+            "toggle_right_panes",
             "toggle_help",
             "open_search",
             "move_down",

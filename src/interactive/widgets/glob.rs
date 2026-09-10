@@ -122,6 +122,10 @@ impl GlobPane {
         buffer: &mut Buffer,
         cursor: &mut Cursor,
     ) {
+        if area.width < 4 || area.height < 3 {
+            cursor.show = false;
+            return;
+        }
         let GlobPaneProps {
             border_style,
             has_focus,

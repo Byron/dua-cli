@@ -139,6 +139,11 @@ impl HelpPane {
                     );
                 }
                 hotkey(keys.cycle_panes.to_string(), t.pane_tab, Some(t.pane_tab_2));
+                hotkey(
+                    keys.toggle_right_panes.to_string(),
+                    t.pane_toggle_right_panes,
+                    None,
+                );
                 hotkey(keys.toggle_help.to_string(), t.pane_help_toggle, None);
                 spacer();
             }
@@ -313,6 +318,23 @@ mod tests {
     }
 
     #[test]
+    fn right_side_toggle_is_documented() {
+        assert!(
+            rendered(Language::English).contains("] => Minimize or restore the entire right side.")
+        );
+        for (binding, expected) in [("\"alt+]\"", "Alt + ]"), ("[]", "<unmapped>")] {
+            let config: dua::Config =
+                toml::from_str(&format!("[keys]\ntoggle_right_panes = {binding}"))
+                    .expect("valid key configuration");
+            assert!(
+                rendered_with_keys(Language::English, &config.keys).contains(&format!(
+                    "{expected} => Minimize or restore the entire right side."
+                ))
+            );
+        }
+    }
+
+    #[test]
     fn japanese_replaces_the_english_strings() {
         let en = rendered(Language::English);
         let ja = rendered(Language::Japanese);
@@ -341,6 +363,7 @@ mod tests {
         for expected in [
             german.pane_q_quit,
             german.pane_tab_2,
+            german.pane_toggle_right_panes,
             german.disp_sort_mtime,
             german.disp_show_mtime_2,
             german.disp_sort_count,

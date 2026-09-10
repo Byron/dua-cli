@@ -296,7 +296,28 @@ impl AppState {
         }
     }
 
+    pub fn toggle_right_panes(&mut self, window: &mut MainWindow) {
+        if window.help.is_none() && window.mark.is_none() {
+            return;
+        }
+        window.right_panes_minimized = !window.right_panes_minimized;
+        if window.right_panes_minimized {
+            if let Some(pane) = window.mark.as_mut() {
+                pane.set_focus(false);
+            }
+            if matches!(self.focussed, Help | Mark) {
+                self.focussed = Main;
+            }
+        }
+    }
+
     pub fn toggle_help_pane(&mut self, window: &mut MainWindow) {
+        if window.right_panes_minimized {
+            window.right_panes_minimized = false;
+            window.help.get_or_insert_with(HelpPane::default);
+            self.focussed = Help;
+            return;
+        }
         self.focussed = match self.focussed {
             Main | Mark | Glob => {
                 window.help = Some(HelpPane::default());
@@ -311,6 +332,14 @@ impl AppState {
     pub fn cycle_focus(&mut self, window: &mut MainWindow) {
         if let Some(p) = window.mark.as_mut() {
             p.set_focus(false);
+        }
+        if window.right_panes_minimized {
+            self.focussed = if self.focussed == Main && window.glob.is_some() {
+                Glob
+            } else {
+                Main
+            };
+            return;
         }
         self.focussed = match (
             self.focussed,
@@ -339,6 +368,9 @@ impl AppState {
     ) where
         B: Backend,
     {
+        if window.right_panes_minimized {
+            return;
+        }
         let res = window
             .mark
             .take()

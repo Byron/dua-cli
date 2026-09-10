@@ -624,6 +624,9 @@ impl AppState {
                 _ if keys.cycle_panes.matches(key) => {
                     self.cycle_focus(window);
                 }
+                _ if !glob_focussed && keys.toggle_right_panes.matches(key) => {
+                    self.toggle_right_panes(window);
+                }
                 _ if !glob_focussed && keys.open_search.matches(key) => {
                     self.toggle_glob_search(window);
                 }

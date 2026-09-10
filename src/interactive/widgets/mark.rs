@@ -68,7 +68,6 @@ pub struct MarkPaneProps<'a> {
 }
 
 impl MarkPane {
-    #[cfg(test)]
     pub fn has_focus(&self) -> bool {
         self.has_focus
     }
