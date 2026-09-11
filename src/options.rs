@@ -154,7 +154,7 @@ pub struct ScanArgs {
     )]
     pub count_hard_links: bool,
 
-    /// Count fully shared APFS file clones only once. This costs about 6% performance.
+    /// Count fully shared APFS file clones only once. Collecting clone metadata makes scans slower.
     #[cfg(target_os = "macos")]
     #[clap(long, help_heading = "Traversal Options")]
     pub deduplicate_apfs_clones: bool,

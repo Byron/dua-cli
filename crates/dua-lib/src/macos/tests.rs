@@ -10,6 +10,71 @@ fn options(apfs_clone_metadata: bool) -> Options {
 }
 
 #[test]
+fn parallel_metadata_requires_repeated_waiting_regardless_of_clock_speed() {
+    let directory = tempfile::tempdir().unwrap();
+    for unit in [Duration::from_micros(1), Duration::from_millis(10)] {
+        let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
+        for (elapsed, cpu, message) in [
+            (unit * 2, Some(unit * 2), "Busy, however slow the CPU."),
+            (unit * 3, Some(unit), "One waiting refill is insufficient."),
+            (
+                unit * 2,
+                Some(unit),
+                "Waiting must exceed CPU time; reset the streak.",
+            ),
+            (unit * 3, Some(unit), "One waiting refill is insufficient."),
+            (unit * 3, None, "A missing CPU measurement also resets it."),
+            (unit * 3, Some(unit), "One waiting refill is insufficient."),
+            (
+                unit * 3,
+                Some(Duration::ZERO),
+                "Ignore measurements below clock resolution.",
+            ),
+            (unit * 3, Some(unit), "One waiting refill is insufficient."),
+        ] {
+            reader.record_metadata_time(elapsed, cpu);
+            assert!(!reader.metadata_is_io_bound(), "{message}");
+        }
+        reader.record_metadata_time(unit * 3, Some(unit));
+        assert!(
+            reader.metadata_is_io_bound(),
+            "repeated waiting should expose parallel work"
+        );
+    }
+}
+
+#[test]
+fn cpu_bound_probe_leaves_directory_stats_for_streaming() {
+    let directory = tempfile::tempdir().unwrap();
+    let child = directory.path().join("child");
+    fs::create_dir(&child).unwrap();
+    let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
+    // Force a CPU-bound sample without depending on filesystem latency or scheduling.
+    let mut cpu_times = [Some(Duration::ZERO), Some(Duration::MAX)].into_iter();
+    let prefix = reader.probe_metadata_with_cpu_time(|| {
+        cpu_times.next().expect("only one refill should be probed")
+    });
+    assert!(
+        prefix.is_empty(),
+        "CPU-bound probing must not parse entries"
+    );
+
+    fs::remove_dir(child).unwrap();
+    let entry = reader.next().unwrap().unwrap();
+    assert_eq!(entry.file_name, "child");
+    let error = entry
+        .metadata
+        .unwrap()
+        .err()
+        .expect("the directory stat must happen after the probe");
+    assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    assert!(
+        reader.next().is_none(),
+        "this would be Some if the entry was cached during the probe"
+    );
+}
+
+#[test]
 fn metadata_and_entries_keep_clone_tracking_compact() {
     assert_eq!(
         size_of::<Metadata>(),
@@ -47,6 +112,10 @@ fn fallback_reader_enumerates_entries_with_metadata() {
 
     let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
     reader.fallback = Some(fs::read_dir(fallback_directory.path()).unwrap());
+    assert!(
+        reader.probe_metadata().is_empty(),
+        "a bulk probe must not buffer the fallback iterator"
+    );
     let entry = reader.next().unwrap().unwrap();
 
     assert_eq!(
@@ -268,6 +337,9 @@ fn bulk_metadata_identifies_clones_and_hard_links() {
         "modifying one byte must diverge the partially cloned data fork"
     );
     fs::hard_link(&original, directory.path().join("hard-link")).unwrap();
+    fs::write(clone.join("..namedfork/rsrc"), [3; 8192]).unwrap();
+    std::os::unix::fs::symlink("original", directory.path().join("link")).unwrap();
+    std::os::unix::fs::symlink("missing", directory.path().join("broken")).unwrap();
 
     let ordinary = ReadDir::open(Arc::from(directory.path()), 1, options(false))
         .unwrap()
@@ -296,6 +368,26 @@ fn bulk_metadata_identifies_clones_and_hard_links() {
             (entry.file_name, entry.metadata.unwrap().unwrap())
         })
         .collect::<std::collections::HashMap<_, _>>();
+    let reader = crate::read_dir(directory.path(), options(true).skip_metadata()).unwrap();
+    for entry in reader {
+        let entry = entry.unwrap();
+        assert!(entry.metadata.is_none());
+        let expected = &entries[&entry.file_name];
+        let metadata = entry
+            .read_metadata(options(true))
+            .metadata
+            .unwrap()
+            .unwrap();
+        assert_eq!(metadata.ino(), expected.ino());
+        assert_eq!(metadata.nlink(), expected.nlink());
+        assert_eq!(metadata.len(), expected.len());
+        assert_eq!(metadata.allocated_size(), expected.allocated_size());
+        assert_eq!(
+            metadata.data_allocated_size(),
+            expected.data_allocated_size()
+        );
+        assert_eq!(metadata.clone_id(), expected.clone_id());
+    }
     let original = &entries[std::ffi::OsStr::new("original")];
     let cloned = &entries[std::ffi::OsStr::new("clone")];
     let partially_cloned = &entries[std::ffi::OsStr::new("partial-clone")];
@@ -367,12 +459,23 @@ fn bulk_directory_reader_refills_its_buffer() {
         .unwrap();
     }
 
-    let count = ReadDir::open(Arc::from(directory.path()), 1, options(false))
-        .unwrap()
-        .map(Result::unwrap)
-        .count();
-    assert_eq!(
-        count, 700,
-        "all entries must survive multiple bulk-buffer refills"
-    );
+    for include_apfs in [false, true] {
+        let mut reader =
+            ReadDir::open(Arc::from(directory.path()), 1, options(include_apfs)).unwrap();
+        let prefix = reader.probe_metadata();
+        assert!(
+            prefix.len() < 700,
+            "the initial probe must buffer only a bounded prefix"
+        );
+        let mut names = std::collections::HashSet::new();
+        for entry in prefix.into_iter().chain(reader) {
+            let entry = entry.unwrap();
+            assert!(entry.metadata.is_some(), "retain metadata from the probe");
+            assert!(
+                names.insert(entry.file_name),
+                "never repeat a buffered entry"
+            );
+        }
+        assert_eq!(names.len(), 700, "buffering must not skip entries");
+    }
 }

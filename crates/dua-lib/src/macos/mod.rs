@@ -13,7 +13,7 @@ use std::{
     },
     path::{Path, PathBuf},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, Instant, SystemTime},
 };
 
 mod attributes;
@@ -67,6 +67,22 @@ impl Entry {
             directory_id: None,
             parent_directory_id: None,
         })
+    }
+
+    pub(crate) fn read_metadata(mut self, options: crate::Options) -> Self {
+        let path = self.path();
+        self.metadata = Some(fs::symlink_metadata(&path).map(|metadata| {
+            self.file_type = FileType::from_std(metadata.file_type());
+            let data_fork =
+                if options.apfs_clone_metadata && metadata.is_file() && metadata.blocks() != 0 {
+                    clone_attributes_at(&path, &metadata)
+                } else {
+                    None
+                };
+            // Both stat and Apple FTS round the filesystem's total allocation to 512-byte blocks.
+            Metadata::from_std(&metadata, data_fork)
+        }));
+        self
     }
 
     /// Return the full path to this entry.
@@ -226,6 +242,8 @@ pub(crate) struct ReadDir {
     offset: usize,
     remaining: usize,
     exhausted: bool,
+    /// Consecutive metadata refills spending more time waiting than executing.
+    waiting_reads: u8,
     /// Whether bulk reads request APFS extended attributes; disabled when they cannot be served.
     /// Note that this makes the call more expensive.
     extended_attributes: bool,
@@ -235,6 +253,75 @@ pub(crate) struct ReadDir {
 }
 
 impl ReadDir {
+    fn record_metadata_time(&mut self, elapsed: Duration, cpu: Option<Duration>) {
+        self.waiting_reads = if cpu.is_some_and(|cpu| !cpu.is_zero() && cpu < elapsed / 2) {
+            self.waiting_reads.saturating_add(1)
+        } else {
+            0
+        };
+    }
+
+    /// Buffer at most two initial bulk refills before the caller chooses its metadata strategy.
+    /// Call before iteration; unparsed records stay in this reader for streaming.
+    pub(crate) fn probe_metadata(&mut self) -> Vec<io::Result<Entry>> {
+        self.probe_metadata_with_cpu_time(thread_cpu_time)
+    }
+
+    /// Probe at most two initial bulk refills using an injectable cumulative thread CPU clock.
+    /// Call before iteration. Returns consumed entries (excluding `.` and `..`) and any encountered
+    /// errors; unparsed records remain in the reader for streaming.
+    ///
+    /// Each refill compares CPU time with wall time: CPU time below half the elapsed time means
+    /// waiting exceeded execution. This ratio avoids an absolute latency threshold that would
+    /// classify a slow CPU as slow I/O. Two consecutive waiting samples enable parallel metadata;
+    /// a non-waiting sample or an unavailable, zero, or backwards CPU measurement stops the probe.
+    /// The classification remains sensitive to scheduling, since time off-CPU also counts as waiting.
+    fn probe_metadata_with_cpu_time(
+        &mut self,
+        mut cpu_time: impl FnMut() -> Option<Duration>,
+    ) -> Vec<io::Result<Entry>> {
+        let mut entries = Vec::new();
+        for _ in 0..2 {
+            if self.exhausted || self.fallback.is_some() {
+                break;
+            }
+            let cpu_start = cpu_time();
+            let start = Instant::now();
+            match self.refill() {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(error) => {
+                    entries.push(Err(error));
+                    break;
+                }
+            }
+            // A filesystem fallback or listing without metadata is not a bulk metadata sample.
+            if self.remaining == 0 || self.listing_error.is_some() {
+                break;
+            }
+            let elapsed = start.elapsed();
+            let cpu = cpu_start.and_then(|start| cpu_time()?.checked_sub(start));
+            self.record_metadata_time(elapsed, cpu);
+            // A CPU-bound refill rules out switching. Leave its path stats to the streaming iterator
+            // so child jobs can start before the whole buffer has been processed.
+            if self.waiting_reads == 0 {
+                break;
+            }
+            while self.remaining != 0 && !self.exhausted {
+                match self.next_record() {
+                    Ok(entry) if entry.file_name == "." || entry.file_name == ".." => {}
+                    entry => entries.push(entry),
+                }
+            }
+        }
+        entries
+    }
+
+    pub(crate) fn metadata_is_io_bound(&self) -> bool {
+        // Waiting must exceed execution on two initial refills, independent of clock speed.
+        self.waiting_reads >= 2
+    }
+
     pub(crate) fn open(path: Arc<Path>, depth: usize, options: crate::Options) -> io::Result<Self> {
         let directory: OwnedFd = fs::OpenOptions::new()
             .read(true)
@@ -248,6 +335,7 @@ impl ReadDir {
             offset: 0,
             remaining: 0,
             exhausted: false,
+            waiting_reads: 0,
             extended_attributes: options.apfs_clone_metadata,
             listing_error: None,
             parent_path: path,
@@ -422,6 +510,26 @@ impl ReadDir {
             parent_directory_id: None,
         })
     }
+}
+
+/// User and kernel CPU time for the calling worker; clock failures leave bulk reads enabled.
+///
+/// Differences between these readings count only time the worker spends executing on a CPU.
+/// Differences between [`std::time::Instant::now()`] readings also include time blocked on I/O
+/// or waiting to be scheduled. Comparing the two lets the probe distinguish execution from waiting.
+fn thread_cpu_time() -> Option<Duration> {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `time` is writable and CLOCK_THREAD_CPUTIME_ID accepts the calling thread.
+    if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut time) } != 0 {
+        return None;
+    }
+    Some(Duration::new(
+        time.tv_sec.try_into().ok()?,
+        time.tv_nsec.try_into().ok()?,
+    ))
 }
 
 impl Iterator for ReadDir {

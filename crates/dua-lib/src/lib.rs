@@ -1,7 +1,7 @@
 //! Parallel filesystem traversal backed by a work-stealing worker pool.
 //!
 //! [`walk`] yields the root first, then workers read directories and distribute newly discovered
-//! subdirectories among themselves. [`Order::ParentFirst`] publishes each directory's entries
+//! subdirectories among themselves. [`Order::ParentFirst`] publishes each entry's batch
 //! before scheduling its children, while [`Order::Completion`] allows descendant batches to arrive
 //! first when their reads finish sooner. Sibling order is unspecified in both modes.
 //!
@@ -14,8 +14,9 @@
 //!
 //! The root directory starts in a shared injector queue. On platforms where directory-entry
 //! metadata may require another syscall, directory reads enqueue small metadata batches, and
-//! metadata batches enqueue accepted child directories. Windows and macOS workers instead consume
-//! native metadata returned by directory enumeration and enqueue child directories immediately.
+//! metadata batches enqueue accepted child directories. Windows and macOS walks consume native
+//! metadata returned by directory enumeration instead. Multi-threaded macOS walks probe the
+//! initial bulk refills and distribute metadata lookups when those reads spend time waiting.
 //! Every worker can run available jobs from its local LIFO queue or steal from a peer. Each
 //! successful thief wakes another idle worker, ramping up only while work remains stealable. A
 //! worker parks when no queue has work and is unparked when new work arrives or the walk stops. The
@@ -131,6 +132,13 @@ type Batch = io::Result<Vec<io::Result<Entry>>>;
 /// Number of directory entries grouped into each metadata job or result batch.
 /// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
 const ENTRY_CHUNK_SIZE: usize = 4;
+/// Keep enough metadata jobs available for thieves without retaining an entire wide directory.
+#[cfg(not(windows))]
+const MAX_QUEUED_STAT_JOBS: usize = 64;
+#[cfg(target_os = "macos")]
+type StatEntry = Entry;
+#[cfg(not(any(windows, target_os = "macos")))]
+type StatEntry = fs::DirEntry;
 
 /// Controls when entries are yielded relative to their descendants.
 #[derive(Clone, Copy)]
@@ -216,15 +224,15 @@ enum Job {
         entry_depth: usize,
     },
     /// Fetch metadata for a chunk of entries from a completed directory read.
-    #[cfg(not(any(windows, target_os = "macos")))]
-    StatCompletion {
+    #[cfg(not(windows))]
+    Stat {
         root_idx: usize,
         path: Arc<Path>,
         /// Dense identifier of the directory containing these entries.
         directory_id: usize,
         /// Depth assigned to every entry in this chunk; always at least `1`, i.e. a file in a directory.
         entry_depth: usize,
-        entries: Vec<fs::DirEntry>,
+        entries: Vec<StatEntry>,
     },
 }
 
@@ -233,8 +241,8 @@ impl Job {
     fn root_idx(&self) -> usize {
         match self {
             Job::ReadDir { root_idx, .. } => *root_idx,
-            #[cfg(not(any(windows, target_os = "macos")))]
-            Job::StatCompletion { root_idx, .. } => *root_idx,
+            #[cfg(not(windows))]
+            Job::Stat { root_idx, .. } => *root_idx,
         }
     }
 }
@@ -773,8 +781,8 @@ fn start_jobs(pool: &Pool, root_jobs: Vec<Job>) {
     debug_assert!(
         root_jobs.iter().all(|j| match j {
             Job::ReadDir { entry_depth, .. } => *entry_depth,
-            #[cfg(not(any(windows, target_os = "macos")))]
-            Job::StatCompletion { entry_depth, .. } => *entry_depth,
+            #[cfg(not(windows))]
+            Job::Stat { entry_depth, .. } => *entry_depth,
         } == 1),
         "the first jobs should be root jobs, so active_root counts match"
     );
@@ -872,20 +880,23 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
             directory_id,
             entry_depth,
         } => {
+            #[cfg(any(windows, target_os = "macos"))]
+            read_dir_native(root, path, directory_id, entry_depth, worker, shared);
+            #[cfg(not(any(windows, target_os = "macos")))]
             if matches!(shared.order, Order::Completion) {
-                read_dir_completion(root, path, directory_id, entry_depth, worker, shared);
+                read_dir_parallel(root, path, directory_id, entry_depth, worker, shared);
             } else {
                 read_dir_parent_first(root, path, directory_id, entry_depth, worker, shared);
             }
         }
-        #[cfg(not(any(windows, target_os = "macos")))]
-        Job::StatCompletion {
+        #[cfg(not(windows))]
+        Job::Stat {
             root_idx: root,
             path,
             directory_id,
             entry_depth,
             entries,
-        } => stat_entries_completion(
+        } => stat_entries(
             root,
             path,
             directory_id,
@@ -897,14 +908,13 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
     }
 }
 
-/// Read a directory for completion-order traversal.
-/// Successful directory entries are split into stealable metadata jobs, while enumeration errors
-/// are emitted directly; the directory-read job completes after all chunks are queued.
-/// This adds parallelism within wide directories when metadata calls dominate. Both traversal
-/// orders already process separate directories concurrently, so typical trees may see no speedup.
+/// Read a directory and distribute its metadata lookups among workers.
+/// Successful entries are split into stealable metadata jobs; new chunks are processed inline
+/// once the local queue is full. Enumeration errors are emitted directly.
+/// This adds parallelism within wide directories when metadata calls dominate.
 /// Type-only walks convert entries inline instead, avoiding metadata-job overhead.
 #[cfg(not(any(windows, target_os = "macos")))]
-fn read_dir_completion(
+fn read_dir_parallel(
     root_idx: usize,
     path: Arc<Path>,
     directory_id: usize,
@@ -935,42 +945,39 @@ fn read_dir_completion(
     };
     let mut chunk = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut errors = Vec::new();
-    let mut has_jobs = false;
     for entry in dir_entries {
+        if shared.stop.load(AtomicOrdering::Relaxed) {
+            finish_pending(root_idx, shared);
+            return;
+        }
         match entry {
             Ok(entry) => {
                 chunk.push(entry);
                 if chunk.len() == ENTRY_CHUNK_SIZE {
-                    add_pending(root_idx, 1, shared);
-                    worker.push(Job::StatCompletion {
+                    schedule_stat_entries(
                         root_idx,
-                        path: Arc::clone(&path),
+                        &path,
                         directory_id,
                         entry_depth,
-                        entries: std::mem::replace(
-                            &mut chunk,
-                            Vec::with_capacity(ENTRY_CHUNK_SIZE),
-                        ),
-                    });
-                    has_jobs = true;
+                        std::mem::replace(&mut chunk, Vec::with_capacity(ENTRY_CHUNK_SIZE)),
+                        worker,
+                        shared,
+                    );
                 }
             }
             Err(err) => errors.push(Err(err)),
         }
     }
     if !chunk.is_empty() {
-        add_pending(root_idx, 1, shared);
-        worker.push(Job::StatCompletion {
+        schedule_stat_entries(
             root_idx,
-            path,
+            &path,
             directory_id,
             entry_depth,
-            entries: chunk,
-        });
-        has_jobs = true;
-    }
-    if has_jobs {
-        shared.wake_worker();
+            chunk,
+            worker,
+            shared,
+        );
     }
     if !errors.is_empty()
         && shared
@@ -986,13 +993,13 @@ fn read_dir_completion(
     finish_pending(root_idx, shared);
 }
 
-/// Read a directory for completion-order traversal.
+/// Read a directory in either traversal order.
 ///
-/// Unlike the generic implementation, native readers collect metadata while enumerating,
-/// so complete entries are published directly in chunks instead of being split into stealable
-/// metadata jobs. This streams wide directories but keeps their metadata work on one worker.
+/// Native metadata is published directly in chunks. An initial macOS bulk probe can choose
+/// ordinary directory enumeration with bounded parallel metadata jobs. Each parent-first batch
+/// is sent before its child jobs become stealable.
 #[cfg(any(windows, target_os = "macos"))]
-fn read_dir_completion(
+fn read_dir_native(
     root_idx: usize,
     path: Arc<Path>,
     directory_id: usize,
@@ -1000,26 +1007,60 @@ fn read_dir_completion(
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match ReadDir::open(path, depth, shared.options) {
+    let dir_entries = match ReadDir::open(Arc::clone(&path), depth, shared.options) {
         Ok(entries) => entries,
         Err(err) => {
-            if shared
-                .events
-                .send(Event::Batch {
-                    root_idx,
-                    batch: Err(err),
-                })
-                .is_err()
-            {
-                shared.stop.store(true, AtomicOrdering::Relaxed);
-            }
+            publish_directory(root_idx, Err(err), Vec::new(), worker, shared);
             finish_pending(root_idx, shared);
             return;
         }
     };
+    #[cfg(target_os = "macos")]
+    let dir_entries = {
+        let mut dir_entries = dir_entries;
+        let mut prefix = Vec::new();
+        if shared.stealers.len() > 1
+            && let ReadDir::Metadata(reader) = &mut dir_entries
+        {
+            prefix = reader.probe_metadata();
+            if reader.metadata_is_io_bound()
+                && let Ok(reopened) =
+                    ReadDir::open(Arc::clone(&path), depth, shared.options.skip_metadata())
+            {
+                // No entries or child jobs have been published, so restarting cannot duplicate them.
+                prefix.clear();
+                dir_entries = reopened;
+            }
+        }
+        prefix.into_iter().chain(dir_entries)
+    };
+    #[cfg(target_os = "macos")]
+    let mut deferred = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut entries = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut jobs = Vec::new();
     for mut entry in dir_entries {
+        if shared.stop.load(AtomicOrdering::Relaxed) {
+            finish_pending(root_idx, shared);
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        if !shared.options.skip_metadata
+            && entry.as_ref().is_ok_and(|entry| entry.metadata.is_none())
+        {
+            deferred.push(entry.expect("metadata-free entry was checked"));
+            if deferred.len() == ENTRY_CHUNK_SIZE {
+                schedule_stat_entries(
+                    root_idx,
+                    &path,
+                    directory_id,
+                    depth,
+                    std::mem::replace(&mut deferred, Vec::with_capacity(ENTRY_CHUNK_SIZE)),
+                    worker,
+                    shared,
+                );
+            }
+            continue;
+        }
         if let Ok(entry) = &mut entry {
             assign_directory_ids(entry, directory_id, shared);
         }
@@ -1039,65 +1080,85 @@ fn read_dir_completion(
         }
         entries.push(entry);
         if entries.len() == ENTRY_CHUNK_SIZE
-            && !publish_completion_batch(root_idx, &mut entries, &mut jobs, worker, shared)
+            && !publish_directory(
+                root_idx,
+                Ok(std::mem::replace(
+                    &mut entries,
+                    Vec::with_capacity(ENTRY_CHUNK_SIZE),
+                )),
+                std::mem::take(&mut jobs),
+                worker,
+                shared,
+            )
         {
             finish_pending(root_idx, shared);
             return;
         }
     }
     if !entries.is_empty() {
-        publish_completion_batch(root_idx, &mut entries, &mut jobs, worker, shared);
+        publish_directory(root_idx, Ok(entries), jobs, worker, shared);
+    }
+    #[cfg(target_os = "macos")]
+    if !deferred.is_empty() {
+        schedule_stat_entries(
+            root_idx,
+            &path,
+            directory_id,
+            depth,
+            deferred,
+            worker,
+            shared,
+        );
     }
     finish_pending(root_idx, shared);
 }
 
-#[cfg(any(windows, target_os = "macos"))]
-fn publish_completion_batch(
+#[cfg(not(windows))]
+fn schedule_stat_entries(
     root_idx: usize,
-    entries: &mut Vec<io::Result<Entry>>,
-    jobs: &mut Vec<Job>,
+    path: &Arc<Path>,
+    directory_id: usize,
+    entry_depth: usize,
+    entries: Vec<StatEntry>,
     worker: &Worker<Job>,
     shared: &PoolShared,
-) -> bool {
-    add_pending(root_idx, jobs.len(), shared);
-    schedule_jobs(std::mem::take(jobs), worker, shared);
-    if shared
-        .events
-        .send(Event::Batch {
-            root_idx,
-            batch: Ok(std::mem::replace(
-                entries,
-                Vec::with_capacity(ENTRY_CHUNK_SIZE),
-            )),
-        })
-        .is_err()
-    {
-        shared.stop.store(true, AtomicOrdering::Relaxed);
-        false
+) {
+    let job = Job::Stat {
+        root_idx,
+        path: Arc::clone(path),
+        directory_id,
+        entry_depth,
+        entries,
+    };
+    add_pending(root_idx, 1, shared);
+    if worker.len() >= MAX_QUEUED_STAT_JOBS {
+        run_job(job, worker, shared);
     } else {
-        true
+        worker.push(job);
+        shared.wake_worker();
     }
 }
 
-#[cfg(any(windows, target_os = "macos"))]
-fn read_dir_parent_first(
+#[cfg(not(windows))]
+fn stat_entries(
     root_idx: usize,
     path: Arc<Path>,
     directory_id: usize,
     depth: usize,
+    entries: Vec<StatEntry>,
     worker: &Worker<Job>,
     shared: &PoolShared,
 ) {
-    let dir_entries = match ReadDir::open(path, depth, shared.options) {
-        Ok(entries) => entries,
-        Err(err) => {
-            finish_directory(root_idx, Err(err), Vec::new(), worker, shared);
-            return;
-        }
-    };
+    #[cfg(target_os = "macos")]
+    let _ = (path, depth);
     let mut jobs = Vec::new();
-    let entries = dir_entries
+    let entries = entries
+        .into_iter()
         .map(|entry| {
+            #[cfg(target_os = "macos")]
+            let entry = Ok(entry.read_metadata(shared.options));
+            #[cfg(not(target_os = "macos"))]
+            let entry = Entry::from_dir_entry(depth, Arc::clone(&path), entry, shared.options);
             entry.map(|mut entry| {
                 assign_directory_ids(&mut entry, directory_id, shared);
                 if entry.file_type.is_dir() && (shared.descend)(root_idx, &entry) {
@@ -1108,67 +1169,20 @@ fn read_dir_parent_first(
                             .directory_id
                             .expect("directories receive an identifier")
                             .index(),
-                        entry_depth: depth + 1,
+                        entry_depth: entry.depth + 1,
                     });
                 }
                 entry
             })
         })
         .collect();
-    finish_directory(root_idx, Ok(entries), jobs, worker, shared);
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-fn stat_entries_completion(
-    root_idx: usize,
-    path: Arc<Path>,
-    directory_id: usize,
-    depth: usize,
-    entries: Vec<fs::DirEntry>,
-    worker: &Worker<Job>,
-    shared: &PoolShared,
-) {
-    let mut jobs = Vec::new();
-    let entries = entries
-        .into_iter()
-        .map(|entry| {
-            Entry::from_dir_entry(depth, Arc::clone(&path), entry, shared.options).map(
-                |mut entry| {
-                    assign_directory_ids(&mut entry, directory_id, shared);
-                    if entry.file_type.is_dir() && (shared.descend)(root_idx, &entry) {
-                        jobs.push(Job::ReadDir {
-                            root_idx,
-                            path: Arc::from(entry.path()),
-                            directory_id: entry
-                                .directory_id
-                                .expect("directories receive an identifier")
-                                .index(),
-                            entry_depth: entry.depth + 1,
-                        });
-                    }
-                    entry
-                },
-            )
-        })
-        .collect();
-    add_pending(root_idx, jobs.len(), shared);
-    schedule_jobs(jobs, worker, shared);
-    if shared
-        .events
-        .send(Event::Batch {
-            root_idx,
-            batch: Ok(entries),
-        })
-        .is_err()
-    {
-        shared.stop.store(true, AtomicOrdering::Relaxed);
-    }
+    publish_directory(root_idx, Ok(entries), jobs, worker, shared);
     finish_pending(root_idx, shared);
 }
 
 /// Read a directory for parent-first traversal.
-/// Entries are converted inline rather than scheduled as `StatCompletion` jobs, producing the
-/// complete parent batch and its child-directory jobs together. This lets `finish_directory` send
+/// Entries are converted inline rather than scheduled as `Stat` jobs, producing the
+/// complete parent batch and its child-directory jobs together. This lets `publish_directory` send
 /// the parent batch before making any child job available, preserving parent-before-descendant
 /// order. Metadata within one directory is serial, although separate directories still run in
 /// parallel; this often matches completion-order performance unless wide-directory metadata is the
@@ -1200,7 +1214,8 @@ fn read_dir_inline(
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
         Err(err) => {
-            finish_directory(root_idx, Err(err), Vec::new(), worker, shared);
+            publish_directory(root_idx, Err(err), Vec::new(), worker, shared);
+            finish_pending(root_idx, shared);
             return;
         }
     };
@@ -1228,7 +1243,8 @@ fn read_dir_inline(
                 })
         })
         .collect();
-    finish_directory(root_idx, Ok(entries), jobs, worker, shared);
+    publish_directory(root_idx, Ok(entries), jobs, worker, shared);
+    finish_pending(root_idx, shared);
 }
 
 fn assign_directory_ids(entry: &mut Entry, parent_directory_id: usize, shared: &PoolShared) {
@@ -1245,16 +1261,19 @@ fn assign_directory_ids(entry: &mut Entry, parent_directory_id: usize, shared: &
     });
 }
 
-/// Publish a completed directory read and schedule its accepted child-directory jobs.
+/// Publish a directory batch and schedule its accepted child-directory jobs.
 /// `ParentFirst` sends the batch before exposing child jobs; `Completion` exposes child jobs first.
-/// Child jobs are counted before either action, and the current job is marked complete afterward.
-fn finish_directory(
+/// Child jobs are counted before either action; the caller completes the current job after EOF.
+///
+/// Returns `true` if the batch was sent and child jobs were scheduled, or `false` if the event
+/// receiver disconnected, in which case traversal is marked to stop.
+fn publish_directory(
     root_idx: usize,
     batch: Batch,
     jobs: Vec<Job>,
     worker: &Worker<Job>,
     shared: &PoolShared,
-) {
+) -> bool {
     add_pending(root_idx, jobs.len(), shared);
 
     match shared.order {
@@ -1265,7 +1284,7 @@ fn finish_directory(
                 .is_err()
             {
                 shared.stop.store(true, AtomicOrdering::Relaxed);
-                return;
+                return false;
             }
             schedule_jobs(jobs, worker, shared);
         }
@@ -1277,12 +1296,12 @@ fn finish_directory(
                 .is_err()
             {
                 shared.stop.store(true, AtomicOrdering::Relaxed);
-                return;
+                return false;
             }
         }
     }
 
-    finish_pending(root_idx, shared);
+    true
 }
 
 fn add_pending(root: usize, count: usize, shared: &PoolShared) {
@@ -1742,54 +1761,128 @@ mod tests {
         );
     }
 
-    #[cfg(any(windows, target_os = "macos"))]
+    #[cfg(not(windows))]
     #[test]
-    fn native_completion_streams_metadata_before_enumeration_finishes() {
+    fn metadata_backlog_is_bounded() {
         let dir = tempfile::tempdir().unwrap();
-        for idx in 0..=ENTRY_CHUNK_SIZE {
-            fs::create_dir(dir.path().join(idx.to_string())).unwrap();
+        let count = ENTRY_CHUNK_SIZE * (MAX_QUEUED_STAT_JOBS + 1);
+        for idx in 0..count {
+            fs::write(dir.path().join(idx.to_string()), b"metadata").unwrap();
         }
 
-        let (continue_tx, continue_rx) = std::sync::mpsc::sync_channel(0);
-        let continue_rx = Arc::new(std::sync::Mutex::new(continue_rx));
-        let seen = Arc::new(AtomicUsize::new(0));
-        let seen_in_worker = Arc::clone(&seen);
-        let mut entries =
-            walk(
-                dir.path(),
-                2,
-                Order::Completion,
-                Options::default(),
-                move |entry| {
+        let pool = start_pool(
+            1,
+            HashMap::from([(0, AtomicUsize::new(0))]),
+            Order::ParentFirst,
+            Arc::new(|_, _| true),
+            Options::default(),
+            1,
+        );
+        // Leave this queue unconsumed to model workers stalled on metadata lookups.
+        let worker = Worker::new_lifo();
+        let path = Arc::from(dir.path());
+        #[cfg(target_os = "macos")]
+        let entries = read_dir(dir.path(), Options::default().skip_metadata()).unwrap();
+        #[cfg(not(target_os = "macos"))]
+        let entries = fs::read_dir(dir.path()).unwrap();
+        let mut entries = entries.map(Result::unwrap);
+        for _ in 0..=MAX_QUEUED_STAT_JOBS {
+            schedule_stat_entries(
+                0,
+                &path,
+                0,
+                1,
+                entries.by_ref().take(ENTRY_CHUNK_SIZE).collect(),
+                &worker,
+                &pool.shared,
+            );
+        }
+
+        assert_eq!(worker.len(), MAX_QUEUED_STAT_JOBS);
+        let Event::Batch { batch, .. } = pool.events.try_recv().unwrap() else {
+            panic!("a full queue must process the next metadata batch inline");
+        };
+        let entries = batch.unwrap();
+        assert_eq!(entries.len(), ENTRY_CHUNK_SIZE);
+        for entry in entries {
+            let entry = entry.unwrap();
+            assert_eq!(entry.metadata.unwrap().unwrap().len(), 8);
+            assert_eq!(entry.parent_directory_id, Some(DirectoryId::new(0)));
+        }
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn native_walks_stream_entries_and_child_jobs() {
+        let dir = tempfile::tempdir().unwrap();
+        for idx in 0..=ENTRY_CHUNK_SIZE {
+            fs::create_dir_all(dir.path().join(format!("{idx}/child"))).unwrap();
+        }
+
+        for order in [Order::Completion, Order::ParentFirst] {
+            for options in [Options::default(), Options::default().skip_metadata()] {
+                let (continue_tx, continue_rx) = std::sync::mpsc::channel();
+                let continue_rx = std::sync::Mutex::new(continue_rx);
+                let seen = AtomicUsize::new(0);
+                let mut entries = walk(dir.path(), 2, order, options, move |entry| {
                     if entry.depth == 1
-                        && seen_in_worker.fetch_add(1, AtomicOrdering::Relaxed) == ENTRY_CHUNK_SIZE
+                        && seen.fetch_add(1, AtomicOrdering::Relaxed) == ENTRY_CHUNK_SIZE
                     {
-                        continue_rx
-                    .lock()
-                    .unwrap()
-                    .recv_timeout(std::time::Duration::from_secs(2))
-                    .expect("the first metadata batch should arrive before enumeration finishes");
+                        continue_rx.lock().unwrap().recv().ok();
                     }
                     true
-                },
-            );
+                });
+                let root = entries.next().unwrap();
+                let mut batches = Vec::new();
+                let mut child_started = false;
+                while let Ok(Event::Batch { batch, .. }) = entries
+                    .pool
+                    .as_ref()
+                    .unwrap()
+                    .events
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                {
+                    child_started = batch.as_ref().is_ok_and(|entries| {
+                        entries
+                            .iter()
+                            .any(|entry| entry.as_ref().is_ok_and(|entry| entry.depth == 2))
+                    });
+                    batches.push(batch);
+                    if child_started {
+                        break;
+                    }
+                }
+                // Release the producer and drain its events before asserting, including on failure.
+                continue_tx.send(()).unwrap();
+                let remaining = entries.collect::<Vec<_>>();
+                assert!(
+                    child_started,
+                    "entries and child jobs must be published before all entries are processed \
+                     (parent first: {}, options: {options:?})",
+                    matches!(order, Order::ParentFirst)
+                );
 
-        assert_eq!(
-            entries.next().unwrap().unwrap().depth,
-            0,
-            "the root entry should be yielded first"
-        );
-        assert_eq!(
-            entries.next().unwrap().unwrap().depth,
-            1,
-            "the first metadata batch should be yielded before enumeration resumes"
-        );
-        continue_tx.send(()).unwrap();
-        entries.for_each(drop);
-        assert_eq!(
-            seen.load(AtomicOrdering::Relaxed),
-            ENTRY_CHUNK_SIZE + 1,
-            "all directory entries should be inspected"
-        );
+                let entries = std::iter::once(root)
+                    .chain(batches.into_iter().flat_map(Result::unwrap))
+                    .chain(remaining)
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
+                assert_eq!(entries.len(), 1 + 2 * (ENTRY_CHUNK_SIZE + 1));
+                assert_eq!(entries[0].depth, 0, "the root must be yielded first");
+                if matches!(order, Order::ParentFirst) {
+                    let positions = entries
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, entry)| (entry.directory_id.unwrap(), idx))
+                        .collect::<HashMap<_, _>>();
+                    for (idx, entry) in entries.iter().enumerate().skip(1) {
+                        assert!(
+                            positions[&entry.parent_directory_id.unwrap()] < idx,
+                            "a parent entry must precede every descendant"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
