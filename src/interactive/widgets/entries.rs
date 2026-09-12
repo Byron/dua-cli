@@ -6,13 +6,11 @@ use crate::interactive::widgets::tui_ext::{
 };
 use crate::interactive::{
     DisplayOptions, EntryDataBundle, SortMode,
-    widgets::{EntryMarkMap, Language, entry_color},
+    widgets::{Language, entry_color},
 };
 use chrono::DateTime;
-use dua::traverse::TreeIndex;
-use itertools::Itertools;
 use std::borrow::{Borrow, Cow};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 use tui::{
@@ -25,6 +23,15 @@ use tui::{
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+/// Borrowed entry data and its presentation in the current list.
+pub struct EntryRow<'a> {
+    pub entry: &'a EntryDataBundle,
+    pub marked: bool,
+    pub cleanup: bool,
+    pub gitignored: bool,
+    pub suffix: Option<String>,
+}
+
 /// Inputs used to render the entries pane.
 pub struct EntriesProps<'a> {
     /// Path shown in the entries pane title.
@@ -33,20 +40,14 @@ pub struct EntriesProps<'a> {
     pub display: DisplayOptions,
     /// Whether directories are shown as `dir/` instead of `/dir`.
     pub directory_suffix: bool,
-    /// Currently selected tree entry, if one is selected.
-    pub selected: Option<TreeIndex>,
-    /// Entries to display in the pane, already sorted for the current view.
-    pub entries: &'a [EntryDataBundle],
-    /// Entries currently marked for action, if marking is active.
-    pub marked: Option<&'a EntryMarkMap>,
-    /// Entry indices that match known cleanup-directory names, if enabled.
-    pub cleanup_candidates: Option<&'a BTreeSet<TreeIndex>>,
-    /// Entry indices ignored by the current git repository, if enabled.
-    pub gitignored_entries: Option<&'a BTreeSet<TreeIndex>>,
+    /// Position of the currently selected row, if one is selected.
+    pub selected: Option<usize>,
     /// Border style for the entries pane.
     pub border_style: Style,
     /// Whether this pane currently owns keyboard focus.
     pub is_focussed: bool,
+    /// Whether to advertise ordinary browser actions.
+    pub show_hints: bool,
     /// Active sort mode, used for column visibility and highlighting.
     pub sort_mode: SortMode,
     /// Columns explicitly enabled in addition to columns implied by sorting.
@@ -66,6 +67,7 @@ impl Entries {
     pub fn render<'a>(
         &mut self,
         props: impl Borrow<EntriesProps<'a>>,
+        entries: impl Clone + ExactSizeIterator<Item = EntryRow<'a>>,
         area: Rect,
         buf: &mut Buffer,
     ) {
@@ -73,13 +75,10 @@ impl Entries {
             current_path,
             display,
             directory_suffix,
-            entries,
             selected,
-            marked,
-            cleanup_candidates,
-            gitignored_entries,
             border_style,
             is_focussed,
+            show_hints,
             sort_mode,
             show_columns,
             keys,
@@ -87,10 +86,9 @@ impl Entries {
         } = props.borrow();
         let list = &mut self.list;
 
-        let total: u128 = entries.iter().map(|b| b.size).sum();
         let (recursive_item_count, item_size): (u64, u128) = entries
-            .iter()
-            .map(|f| (f.entry_count.unwrap_or(1), f.size))
+            .clone()
+            .map(|row| (row.entry.entry_count.unwrap_or(1), row.entry.size))
             .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
             .unwrap_or_default();
         let title_width_inside_borders = area.width.saturating_sub(2) as usize;
@@ -105,27 +103,18 @@ impl Entries {
         );
         let title_block = title_block(&title, *border_style);
         let inner_area = title_block.inner(area);
-        let entry_in_view = entry_in_view(*selected, entries);
-
         let props = ListProps {
             block: Some(title_block),
-            entry_in_view,
+            entry_in_view: *selected,
         };
-        let mut scroll_offset = None;
-        let lines = entries.iter().enumerate().map(|(idx, bundle)| {
-            let node_idx = &bundle.index;
+        let lines = entries.enumerate().map(|(idx, row)| {
+            let bundle = row.entry;
             let is_dir = &bundle.is_dir;
             let exists = &bundle.exists;
             let name = bundle.name.as_path();
 
-            let is_marked = marked.is_some_and(|m| m.contains_key(node_idx));
-            let is_cleanup_candidate = cleanup_candidates.is_some_and(|c| c.contains(node_idx));
-            let is_gitignored = gitignored_entries.is_some_and(|g| g.contains(node_idx));
-            let is_selected = selected == &Some(*node_idx);
-            if is_selected {
-                scroll_offset = Some(idx);
-            }
-            let fraction = bundle.size as f32 / total as f32;
+            let is_selected = *selected == Some(idx);
+            let fraction = bundle.size as f32 / item_size as f32;
             let text_style = style(is_selected, *is_focussed);
             let percentage_style = percentage_style(fraction, text_style);
 
@@ -156,14 +145,17 @@ impl Entries {
                     .sum(),
             ) as usize;
 
-            let name = shorten_input(
-                name_with_directory_marker(name.to_string_lossy(), *is_dir, *directory_suffix),
-                available_width,
-            );
+            let mut name =
+                name_with_directory_marker(name.to_string_lossy(), *is_dir, *directory_suffix);
+            if let Some(suffix) = &row.suffix {
+                name.to_mut().push(' ');
+                name.to_mut().push_str(suffix);
+            }
+            let name = shorten_input(name, available_width);
             let style = name_style(
-                is_marked,
-                is_cleanup_candidate,
-                is_gitignored,
+                row.marked,
+                row.cleanup,
+                row.gitignored,
                 *exists,
                 *is_dir,
                 text_style,
@@ -181,24 +173,15 @@ impl Entries {
             .begin_symbol(None)
             .end_symbol(None);
         let mut scrollbar_state =
-            ScrollbarState::new(line_count).position(scroll_offset.unwrap_or(list.offset));
+            ScrollbarState::new(line_count).position(selected.unwrap_or(list.offset));
 
         scrollbar.render(area.inner(Margin::new(0, 1)), buf, &mut scrollbar_state);
 
-        if *is_focussed {
+        if *is_focussed && *show_hints {
             let bound = draw_top_right_help(area, &title, buf, keys);
             draw_bottom_right_help(bound, buf, keys, *language);
         }
     }
-}
-
-fn entry_in_view(selected: Option<TreeIndex>, entries: &[EntryDataBundle]) -> Option<usize> {
-    selected.map(|selected| {
-        entries
-            .iter()
-            .find_position(|b| b.index == selected)
-            .map_or(0, |(idx, _)| idx)
-    })
 }
 
 fn title_block(title: &str, border_style: Style) -> Block<'_> {

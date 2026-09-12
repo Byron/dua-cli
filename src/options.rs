@@ -232,6 +232,22 @@ pub struct StackArgs {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
+    /// Find disposable directories and inspect them in the terminal user interface.
+    #[cfg(feature = "tui-crossplatform")]
+    #[clap(mut_arg("input", |arg| arg.help("Directories to search. Defaults to the current directory.")))]
+    Clean {
+        #[clap(flatten)]
+        traversal: TraversalArgs,
+        /// Limit discovery depth. Input directories have depth 0; found candidates are always sized completely.
+        #[clap(short = 'd', long, value_name = "DEPTH")]
+        depth: Option<usize>,
+        /// Do not check entries for presence when listing a directory on slow filesystems.
+        #[clap(long, short = 'e')]
+        no_entry_check: bool,
+        /// Exit after discovery and sizing, optionally replaying keys first.
+        #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "")]
+        once: Option<String>,
+    },
     /// Launch the terminal user interface
     #[cfg(feature = "tui-crossplatform")]
     #[clap(name = "interactive", visible_alias = "i")]
@@ -435,6 +451,38 @@ mod tests {
     fn traversal_options_are_accepted_by_aggregate() {
         Args::try_parse_from(["dua", "aggregate", "--format", "metric", "--threads", "1"])
             .expect("aggregate accepts traversal options");
+    }
+
+    #[cfg(feature = "tui-crossplatform")]
+    #[test]
+    fn clean_accepts_discovery_and_tui_options_without_snapshots() {
+        let args = Args::try_parse_from([
+            "dua",
+            "clean",
+            "--depth",
+            "0",
+            "--format",
+            "bytes",
+            "--threads",
+            "1",
+            "--no-entry-check",
+            "--once=R",
+            "project",
+        ])
+        .expect("clean accepts zero-depth discovery and interactive traversal options");
+        assert!(matches!(args.command, Some(super::Command::Clean {
+            depth: Some(0), no_entry_check: true, once: Some(keys), ..
+        }) if keys == "R"));
+        assert!(matches!(
+            Args::try_parse_from(["dua", "clean"]).unwrap().command,
+            Some(super::Command::Clean { depth: None, .. })
+        ));
+
+        for option in ["--export", "--import", "--compression"] {
+            let error = Args::try_parse_from(["dua", "clean", option, "file"])
+                .expect_err("clean does not expose snapshot options");
+            assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
+        }
     }
 
     #[test]

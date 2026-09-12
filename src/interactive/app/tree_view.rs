@@ -8,6 +8,8 @@ use std::{
 
 pub struct TreeView<'a> {
     pub traversal: &'a mut Traversal,
+    /// Detached browser root and its visible real nodes, independent of glob results.
+    pub scope: Option<(TreeIndex, Arc<[TreeIndex]>)>,
     pub glob_tree_root: Option<TreeIndex>,
     pub glob_matches: Option<Arc<[TreeIndex]>>,
 }
@@ -26,14 +28,68 @@ impl TreeView<'_> {
     }
 
     pub fn view_parent_of(&self, idx: TreeIndex) -> Option<TreeIndex> {
-        match self.glob_tree_root.zip(self.glob_matches.as_deref()) {
-            Some((glob_root, matches)) if matches.binary_search(&idx).is_ok() => Some(glob_root),
-            _ => self.traversal.tree.parent(idx),
+        if let Some((root, matches)) = self.glob_tree_root.zip(self.glob_matches.as_deref())
+            && matches.binary_search(&idx).is_ok()
+        {
+            return Some(root);
+        }
+        self.scope
+            .as_ref()
+            .filter(|(_, members)| members.binary_search(&idx).is_ok())
+            .map(|(root, _)| *root)
+            .or_else(|| self.fs_parent_of(idx))
+    }
+
+    pub fn children(&self, root: TreeIndex) -> Vec<TreeIndex> {
+        if self.glob_tree_root == Some(root) {
+            self.glob_matches.as_deref().unwrap_or_default().to_vec()
+        } else if let Some((scope, members)) = &self.scope
+            && *scope == root
+        {
+            members.to_vec()
+        } else {
+            self.tree().children(root).collect()
+        }
+    }
+
+    pub fn name_in(&self, root: TreeIndex, index: TreeIndex) -> Option<PathBuf> {
+        if self.glob_tree_root == Some(root) {
+            return self.exists(index).then(|| self.path_of(index));
+        }
+        let name = self.tree().name(index)?;
+        if self.scope.as_ref().is_some_and(|(scope, _)| *scope == root) {
+            Some(
+                self.path_of(index)
+                    .strip_prefix(self.tree().name(root)?)
+                    .ok()?
+                    .to_owned(),
+            )
+        } else {
+            Some(name.into_owned())
         }
     }
 
     pub fn path_of(&self, node_idx: TreeIndex) -> PathBuf {
         path_of(&self.traversal.tree, node_idx, self.glob_tree_root)
+    }
+
+    /// Find a filesystem directory after a refresh replaced its tree index.
+    pub fn index_at_path(&self, path: &Path) -> Option<TreeIndex> {
+        if let Some((root, _)) = &self.scope
+            && self.tree().name(*root).as_deref() == Some(path)
+        {
+            return Some(*root);
+        }
+        let mut index = self.traversal.root_index;
+        loop {
+            if self.path_of(index) == path {
+                return Some(index);
+            }
+            index = self.tree().children(index).find(|&child| {
+                self.tree().data(child).is_some_and(|entry| entry.is_dir)
+                    && path.starts_with(self.path_of(child))
+            })?;
+        }
     }
 
     pub fn sorted_entries(
@@ -42,29 +98,27 @@ impl TreeView<'_> {
         sorting: SortMode,
         check: EntryCheck,
     ) -> Vec<EntryDataBundle> {
-        sorted_entries(
-            &self.traversal.tree,
-            view_root,
-            sorting,
-            self.glob_tree_root,
-            self.glob_matches.as_deref(),
-            check,
-        )
+        let use_full_path = self.glob_tree_root == Some(view_root);
+        let scoped = self
+            .scope
+            .as_ref()
+            .is_some_and(|(root, _)| *root == view_root);
+        let indices = self
+            .children(view_root)
+            .into_iter()
+            .filter(|&index| !scoped || self.name_in(view_root, index).is_some());
+        let mut entries =
+            sorted_entries(&self.traversal.tree, indices, sorting, use_full_path, check);
+        if scoped {
+            for entry in &mut entries {
+                entry.name = self.name_in(view_root, entry.index).expect("scope member");
+            }
+        }
+        entries
     }
 
     pub fn current_path(&self, view_root: TreeIndex) -> PathBuf {
         current_path(&self.traversal.tree, view_root, self.glob_tree_root)
-    }
-
-    pub fn remove_entries(&mut self, root_index: TreeIndex, remove_root_node: bool) -> usize {
-        if remove_root_node {
-            return self.tree_mut().remove_subtree(root_index);
-        }
-        let children = self.tree().children(root_index).collect::<Vec<_>>();
-        children
-            .into_iter()
-            .map(|child| self.tree_mut().remove_subtree(child))
-            .sum()
     }
 
     pub fn exists(&self, idx: TreeIndex) -> bool {

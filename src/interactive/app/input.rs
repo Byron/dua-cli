@@ -56,8 +56,8 @@ fn forward_event(
 }
 
 pub fn input_channel(focus: TerminalFocus) -> Receiver<Event> {
-    // Keep reading while the event loop performs synchronous deletion or trash work so the
-    // shared focus state stays current, without allowing user input to grow without bound.
+    // Keep the shared focus state current even during a busy frame, without allowing user
+    // input to grow without bound.
     let (key_send, key_receive) = crossbeam::channel::bounded(32);
     std::thread::spawn(move || -> Result<(), std::io::Error> {
         loop {

@@ -7,7 +7,6 @@ use std::{
 #[cfg(unix)]
 use std::io;
 
-use crate::interactive::EntryCheck;
 use anyhow::{Context, Result};
 use crossbeam::channel::Receiver;
 use crossterm::event::Event;
@@ -28,7 +27,7 @@ use tui::{Terminal, backend::Backend};
 
 use crate::interactive::widgets::{Language, MainWindow};
 
-use super::{DisplayOptions, sorted_entries, state::AppState};
+use super::{DisplayOptions, state::AppState};
 
 /// Restores the user's terminal, suspends the process, and reinitializes the TUI after resume.
 ///
@@ -86,7 +85,7 @@ impl TerminalApp {
         input: Vec<PathBuf>,
         root_path: Option<PathBuf>,
         config: Config,
-        traversal: Traversal,
+        mut traversal: Traversal,
         snapshot_load_duration: Option<Duration>,
     ) -> Result<TerminalApp>
     where
@@ -141,16 +140,11 @@ impl TerminalApp {
         }
 
         state.navigation_mut().view_root = traversal.root_index;
-        state.entries = sorted_entries(
-            &traversal.tree,
-            state.navigation().view_root,
+        let tree_view = state.tree_view(&mut traversal);
+        state.entries = tree_view.sorted_entries(
+            tree_view.traversal.root_index,
             state.sorting,
-            state.glob_root(),
-            state
-                .glob_navigation
-                .as_ref()
-                .map(|navigation| navigation.matches.as_ref()),
-            EntryCheck::new(state.scan.is_some(), state.allow_entry_check),
+            state.entry_check(),
         );
         state.navigation_mut().selected = state.entries.first().map(|b| b.index);
 
@@ -176,6 +170,16 @@ impl TerminalApp {
         Ok(())
     }
 
+    pub fn traverse_clean(&mut self, depth: Option<usize>) -> Result<()> {
+        self.state.clean_hub = Some(super::clean_hub::CleanHub::new(
+            self.state.root_paths.clone(),
+            depth,
+        ));
+        self.state.entries.clear();
+        self.state.root_path = None;
+        self.traverse()
+    }
+
     pub fn traverse_and_export(
         &mut self,
         path: PathBuf,
@@ -194,14 +198,18 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        self.state.process_events(
+        let result = self.state.process_events(
             &mut self.window,
             &mut self.traversal,
             &mut self.display,
             terminal,
             events,
             &self.config,
-        )
+        );
+        if result.is_err() {
+            self.state.deletion = None;
+        }
+        result
     }
 
     pub fn process_events_once<B>(
@@ -212,14 +220,18 @@ impl TerminalApp {
     where
         B: Backend,
     {
-        self.state.process_events_once(
+        let result = self.state.process_events_once(
             &mut self.window,
             &mut self.traversal,
             &mut self.display,
             terminal,
             events,
             &self.config,
-        )
+        );
+        if result.is_err() {
+            self.state.deletion = None;
+        }
+        result
     }
 }
 

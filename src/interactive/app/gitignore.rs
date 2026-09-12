@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use dua::traverse::TreeIndex;
 use gix::ignore::Kind;
@@ -7,7 +8,7 @@ use super::{EntryDataBundle, tree_view::TreeView};
 
 pub fn gitignored_entries(
     tree_view: &TreeView<'_>,
-    view_root: TreeIndex,
+    current_path: &Path,
     entries: &[EntryDataBundle],
 ) -> BTreeSet<TreeIndex> {
     use std::path::{Path, PathBuf};
@@ -35,19 +36,12 @@ pub fn gitignored_entries(
             .config_overrides(["gitoxide.parsePrecious=true"])
     }
 
-    let current_path = tree_view.path_of(view_root);
-    let current_path = if current_path.as_os_str().is_empty() {
-        Path::new(".").to_owned()
-    } else {
-        current_path
-    };
-
     let trust_map = gix::sec::trust::Mapping {
         full: open_options(gix::sec::Trust::Full),
         reduced: open_options(gix::sec::Trust::Reduced),
     };
     let Ok(repo) = gix::ThreadSafeRepository::discover_opts(
-        &current_path,
+        current_path,
         gix::discover::upwards::Options::default(),
         trust_map,
     ) else {
@@ -61,6 +55,8 @@ pub fn gitignored_entries(
         return BTreeSet::new();
     };
     let workdir = absolute_path(workdir.to_owned(), &cwd);
+    // Discovery can simplify the Windows verbatim prefix retained by canonical entry paths.
+    let canonical_workdir = workdir.canonicalize().ok();
     let Ok(index) = repo.index_or_empty() else {
         return BTreeSet::new();
     };
@@ -76,7 +72,10 @@ pub fn gitignored_entries(
         .iter()
         .filter_map(|entry| {
             let path = absolute_path(tree_view.path_of(entry.index), &cwd);
-            let relative_path = path.strip_prefix(&workdir).ok()?;
+            let relative_path = path
+                .strip_prefix(&workdir)
+                .ok()
+                .or_else(|| path.strip_prefix(canonical_workdir.as_ref()?).ok())?;
             let platform = excludes.at_path(relative_path, Some(mode(entry))).ok()?;
             platform
                 .excluded_kind()

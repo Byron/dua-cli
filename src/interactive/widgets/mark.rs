@@ -29,6 +29,7 @@ use tui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+#[derive(Clone, Copy)]
 pub enum MarkMode {
     Delete,
     #[cfg(feature = "trash-move")]
@@ -64,6 +65,7 @@ pub struct MarkPaneProps<'a> {
     pub root_total_size: u128,
     pub keys: &'a KeysConfig,
     pub safety_notice: Option<&'static str>,
+    pub allow_changes: bool,
     pub language: Language,
 }
 
@@ -117,6 +119,46 @@ impl MarkPane {
     pub fn marked(&self) -> &EntryMarkMap {
         &self.marked
     }
+    pub fn is_empty(&self) -> bool {
+        self.marked.is_empty()
+    }
+    pub fn total_size(&self) -> u128 {
+        self.total_size
+    }
+    pub fn reconcile(&mut self, tree_view: &TreeView<'_>) {
+        let selected_index = self
+            .selected
+            .and_then(|position| self.tree_index_by_list_position(position));
+        self.marked.retain(|index, mark| {
+            let Some(entry) = tree_view.tree().entry(*index) else {
+                return false;
+            };
+            if tree_view.path_of(*index) != mark.path {
+                return false;
+            }
+            mark.size = entry.size;
+            mark.entry_count = entry.entry_count;
+            true
+        });
+        (self.total_size, self.item_count) = calculate_size_and_count(&self.marked);
+        self.selected = self.selected.and_then(|position| {
+            if self.marked.is_empty() {
+                return None;
+            }
+            Some(
+                self.marked_sorted_by_index()
+                    .iter()
+                    .position(|(index, _)| Some(**index) == selected_index)
+                    .unwrap_or_else(|| position.min(self.marked.len() - 1)),
+            )
+        });
+        self.list.offset = self.list.offset.min(self.marked.len().saturating_sub(1));
+    }
+    pub fn set_deletion_error(&mut self, index: TreeIndex, errors: usize) {
+        if let Some(mark) = self.marked.get_mut(&index) {
+            mark.num_errors_during_deletion = errors;
+        }
+    }
     pub fn into_paths(self) -> impl Iterator<Item = PathBuf> {
         self.marked.into_values().map(|v| v.path)
     }
@@ -124,19 +166,20 @@ impl MarkPane {
         mut self,
         key: KeyEvent,
         keys: &KeysConfig,
+        allow_changes: bool,
     ) -> Option<(Self, Option<MarkMode>)> {
         let action = None;
         if key.kind == KeyEventKind::Release {
             return Some((self, action));
         }
-        if keys.delete_marked.matches(key) {
+        if allow_changes && keys.delete_marked.matches(key) {
             return Some(self.prepare_deletion(MarkMode::Delete));
         }
         #[cfg(feature = "trash-move")]
-        if keys.trash_marked.matches(key) {
+        if allow_changes && keys.trash_marked.matches(key) {
             return Some(self.prepare_deletion(MarkMode::Trash));
         }
-        if keys.remove_all_marks.matches(key) {
+        if allow_changes && keys.remove_all_marks.matches(key) {
             return None;
         }
         if keys.move_to_top.matches(key) {
@@ -151,64 +194,12 @@ impl MarkPane {
             self.change_selection(CursorDirection::Up);
         } else if keys.move_down.matches(key) {
             self.change_selection(CursorDirection::Down);
-        } else if keys.remove_mark.matches(key) {
+        } else if allow_changes && keys.remove_mark.matches(key) {
             return self.remove_selected().map(|s| (s, action));
         }
         Some((self, action))
     }
 
-    pub fn iterate_deletable_items(
-        mut self,
-        mut delete_fn: impl FnMut(Self, TreeIndex) -> Result<Self, (Self, usize)>,
-    ) -> Option<Self> {
-        loop {
-            match self.next_entry_for_deletion() {
-                Some(entry_to_delete) => match delete_fn(self, entry_to_delete) {
-                    Ok(pane) => {
-                        self = pane;
-                        self = self.delete_entry()?;
-                    }
-                    Err((pane, num_errors)) => {
-                        self = pane;
-                        self.set_error_on_marked_item(num_errors);
-                    }
-                },
-                None => return Some(self),
-            }
-        }
-    }
-
-    fn next_entry_for_deletion(&mut self) -> Option<TreeIndex> {
-        match self.selected.and_then(|selected| {
-            self.tree_index_by_list_position(selected)
-                .and_then(|idx| self.marked.get(&idx).map(|d| (selected, idx, d)))
-        }) {
-            Some((position, selected_index, data)) => {
-                if data.num_errors_during_deletion == 0 {
-                    Some(selected_index)
-                } else {
-                    self.selected = match position + 1 {
-                        p if p < self.marked.len() => Some(p),
-                        _ => Some(self.marked.len().saturating_sub(1)),
-                    };
-                    self.tree_index_by_list_position(position + 1)
-                }
-            }
-            None => None,
-        }
-    }
-    fn delete_entry(self) -> Option<Self> {
-        self.remove_selected()
-    }
-    fn set_error_on_marked_item(&mut self, num_errors: usize) {
-        if let Some(d) = self
-            .selected
-            .and_then(|s| self.tree_index_by_list_position(s))
-            .and_then(|p| self.marked.get_mut(&p))
-        {
-            d.num_errors_during_deletion = num_errors;
-        }
-    }
     fn prepare_deletion(mut self, mark: MarkMode) -> (Self, Option<MarkMode>) {
         for entry in self.marked.values_mut() {
             entry.num_errors_during_deletion = 0;
@@ -222,6 +213,7 @@ impl MarkPane {
             let se_len = self.marked.len();
             if let Some(idx) = idx {
                 self.marked.remove(&idx);
+                (self.total_size, self.item_count) = calculate_size_and_count(&self.marked);
                 let new_len = se_len.saturating_sub(1);
                 if new_len == 0 {
                     return None;
@@ -235,7 +227,7 @@ impl MarkPane {
         Some(self)
     }
 
-    fn tree_index_by_list_position(&mut self, selected: usize) -> Option<TreeIndex> {
+    fn tree_index_by_list_position(&self, selected: usize) -> Option<TreeIndex> {
         self.marked_sorted_by_index()
             .get(selected)
             .map(|(k, _)| *k.to_owned())
@@ -268,6 +260,7 @@ impl MarkPane {
             root_total_size,
             keys,
             safety_notice,
+            allow_changes,
             language,
         } = props.borrow();
 
@@ -494,7 +487,7 @@ impl MarkPane {
                 t.mark_toggle, keys.remove_mark, t.mark_remove_all, keys.remove_all_marks
             );
             let help_text_block_width = block_width(&help_text);
-            if help_text_block_width <= bound.width {
+            if *allow_changes && help_text_block_width <= bound.width {
                 draw_text_nowrap_fn(
                     rect::snap_to_right(bound, help_text_block_width),
                     buf,
@@ -552,6 +545,7 @@ mod mark_pane_tests {
                 keys: &KeysConfig::default(),
                 root_total_size: 1_000_000_000,
                 safety_notice: None,
+                allow_changes: true,
                 language: Language::English,
             },
             area,
@@ -596,6 +590,7 @@ mod mark_pane_tests {
                 keys: &config.keys,
                 root_total_size: 0,
                 safety_notice: None,
+                allow_changes: true,
                 language: Language::English,
             },
             area,
@@ -666,6 +661,7 @@ mod mark_pane_tests {
                 keys: &KeysConfig::default(),
                 root_total_size: 0,
                 safety_notice: Some(" Snapshot is read-only; marked entries cannot be deleted "),
+                allow_changes: true,
                 language: Language::English,
             },
             area,
@@ -708,6 +704,7 @@ mod mark_pane_tests {
                 keys: &KeysConfig::default(),
                 root_total_size: 0,
                 safety_notice: None,
+                allow_changes: true,
                 language: Language::Korean,
             },
             area,
@@ -734,16 +731,154 @@ mod mark_pane_tests {
         .expect("valid config");
 
         assert!(matches!(
-            MarkPane::default().process_events(KeyCode::Char('z').into(), &config.keys),
+            MarkPane::default().process_events(KeyCode::Char('z').into(), &config.keys, true),
             Some((_, Some(MarkMode::Delete)))
         ));
         assert!(matches!(
             MarkPane::default().process_events(
                 KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL),
-                &config.keys
+                &config.keys,
+                true
             ),
             Some((_, None))
         ));
+    }
+
+    #[test]
+    fn busy_pane_preserves_marks_and_errors_but_allows_navigation() {
+        let keys = KeysConfig::default();
+        let mut pane = MarkPane {
+            selected: Some(0),
+            has_focus: true,
+            marked: [
+                (
+                    TreeIndex::new(1),
+                    EntryMark {
+                        index: 1,
+                        path: PathBuf::from("one"),
+                        num_errors_during_deletion: 3,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    TreeIndex::new(2),
+                    EntryMark {
+                        index: 2,
+                        path: PathBuf::from("two"),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        for key in [
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL),
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+            KeyCode::Char('a').into(),
+            KeyCode::Char('x').into(),
+            KeyCode::Char('d').into(),
+            KeyCode::Char(' ').into(),
+        ] {
+            let (next, action) = pane.process_events(key, &keys, false).expect("marks stay");
+            pane = next;
+            assert!(action.is_none());
+            assert_eq!(pane.marked.len(), 2);
+            assert_eq!(pane.selected, Some(0));
+            assert_eq!(
+                pane.marked[&TreeIndex::new(1)].num_errors_during_deletion,
+                3
+            );
+        }
+        let (mut pane, action) = pane
+            .process_events(KeyCode::Char('j').into(), &keys, false)
+            .expect("navigation keeps marks");
+        assert!(action.is_none());
+        assert_eq!(pane.selected, Some(1));
+
+        let area = Rect::new(0, 0, 120, 5);
+        let mut buffer = Buffer::empty(area);
+        pane.render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                keys: &keys,
+                root_total_size: 0,
+                safety_notice: Some(Language::English.ui_text().deletion_running),
+                allow_changes: false,
+                language: Language::English,
+            },
+            area,
+            &mut buffer,
+        );
+        let rendered: String = buffer.content.iter().map(Cell::symbol).collect();
+        assert!(rendered.contains("Deletion in progress; changes are disabled"));
+        assert!(!rendered.contains("mark-toggle"));
+        assert!(!rendered.contains("remove-all"));
+        assert!(!rendered.contains("to delete without prompt"));
+    }
+
+    #[test]
+    fn reconcile_updates_remaining_sizes_and_preserves_selection_identity() {
+        use dua::traverse::{EntryData, Traversal};
+
+        let mut traversal = Traversal::new();
+        let root = traversal.root_index;
+        let deleted = traversal
+            .tree
+            .add_child(root, "deleted", EntryData::default());
+        let survivor = traversal.tree.add_child(
+            root,
+            "survivor",
+            EntryData {
+                size: 40,
+                entry_count: Some(2),
+                is_dir: true,
+                ..Default::default()
+            },
+        );
+        let stale = traversal
+            .tree
+            .add_child(root, "stale", EntryData::default());
+        let view = TreeView {
+            traversal: &mut traversal,
+            scope: None,
+            glob_tree_root: None,
+            glob_matches: None,
+        };
+        let mut pane = MarkPane::default();
+        for index in [deleted, survivor, stale] {
+            pane = pane
+                .toggle_index(index, &view, index == survivor, true)
+                .unwrap();
+        }
+        pane.selected = Some(1);
+        pane.set_deletion_error(survivor, 2);
+        view.traversal.tree.remove_subtree(deleted);
+        view.traversal.tree.remove_subtree(stale);
+        let replacement = view
+            .traversal
+            .tree
+            .add_child(root, "replacement", EntryData::default());
+        assert_eq!(replacement, stale, "exercise a recycled tree index");
+        view.traversal.tree.update(survivor, |data| {
+            data.size = 28;
+            data.entry_count = Some(1);
+        });
+
+        pane.reconcile(&view);
+        assert_eq!(pane.marked.len(), 1);
+        assert_eq!(pane.selected, Some(0));
+        assert_eq!(pane.tree_index_by_list_position(0), Some(survivor));
+        assert_eq!(pane.total_size(), 28);
+        assert_eq!(pane.item_count, 1);
+        assert_eq!(pane.marked[&survivor].num_errors_during_deletion, 2);
+
+        view.traversal.tree.remove_subtree(survivor);
+        pane.reconcile(&view);
+        assert!(pane.is_empty());
+        assert_eq!(pane.selected, None);
+        assert_eq!((pane.total_size(), pane.item_count), (0, 0));
     }
 
     #[test]

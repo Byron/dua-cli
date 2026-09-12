@@ -30,6 +30,38 @@ fn marked_file_names(app: &TerminalApp, message: &str) -> BTreeSet<String> {
 }
 
 #[test]
+fn refresh_discards_marks_before_reusing_tree_indices() -> Result<()> {
+    let fixture = TempDir::new()?;
+    let root = fixture.path().canonicalize()?;
+    let removed = root.join("old");
+    fs::create_dir(&removed)?;
+    fs::write(removed.join("data"), b"old")?;
+    let (mut terminal, mut app) =
+        initialized_app_and_terminal_from_paths(std::slice::from_ref(&root))?;
+    app.process_events_once(&mut terminal, into_codes("ox"))?;
+    assert!(app.window.mark.is_some());
+
+    fs::remove_dir_all(removed)?;
+    let replacement = root.join("precious");
+    fs::create_dir(&replacement)?;
+    fs::write(replacement.join("data"), b"keep")?;
+    app.process_events_once(&mut terminal, into_codes("R"))?;
+    assert!(
+        app.window.mark.is_none(),
+        "stale marks must not follow recycled indices"
+    );
+    app.process_events_once(
+        &mut terminal,
+        into_events([
+            Event::Key(KeyCode::Tab.into()),
+            Event::Key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+        ]),
+    )?;
+    assert_eq!(fs::read(replacement.join("data"))?, b"keep");
+    Ok(())
+}
+
+#[test]
 fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
     use crate::interactive::app::{state::FilesystemScan, tree_view::TreeView};
     use dua::traverse::BackgroundTraversal;
@@ -61,6 +93,7 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
             false,
         )?,
         previous_selection: None,
+        previous_cleanup_view: None,
         snapshot_export: None,
     });
     let delete_key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
@@ -74,11 +107,11 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
             &mut app.window,
             &mut TreeView {
                 traversal: &mut app.traversal,
+                scope: None,
                 glob_tree_root: None,
                 glob_matches: None,
             },
             app.display,
-            &mut terminal,
             &app.config,
         );
         assert_eq!(

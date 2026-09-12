@@ -1,4 +1,3 @@
-use crate::interactive::path_of;
 use dua::traverse::{Tree, TreeIndex};
 use std::time::SystemTime;
 use std::{cmp::Ordering, path::PathBuf};
@@ -128,14 +127,12 @@ impl EntryCheck {
     }
 }
 
-/// Note that with `glob_root` present, we will not obtain metadata anymore as we might be seeing
-/// a lot of entries. That way, displaying 250k entries is no problem.
+/// Full-path views skip per-entry metadata queries to keep large glob views responsive.
 pub fn sorted_entries(
     tree: &Tree,
-    node_idx: TreeIndex,
+    indices: impl IntoIterator<Item = TreeIndex>,
     sorting: SortMode,
-    glob_root: Option<TreeIndex>,
-    glob_matches: Option<&[TreeIndex]>,
+    use_full_path: bool,
     check: EntryCheck,
 ) -> Vec<EntryDataBundle> {
     use SortMode::{
@@ -157,20 +154,14 @@ pub fn sorted_entries(
         }
     }
     let mtime_sort = sorting.mtime_sort().unwrap_or_default();
-    let use_glob_path = glob_root == Some(node_idx);
-    let indices = if use_glob_path {
-        glob_matches.unwrap_or_default().to_vec()
-    } else {
-        tree.children(node_idx).collect()
-    };
     let mut entries = indices
         .into_iter()
         .filter_map(|idx| {
             tree.entry(idx).map(|entry| {
                 let data = entry.data;
                 let (path, exists, is_dir) = {
-                    let path = path_of(tree, idx, glob_root);
-                    if matches!(check, EntryCheck::Disabled) || glob_root == Some(node_idx) {
+                    let path = tree.path_of(idx);
+                    if matches!(check, EntryCheck::Disabled) || use_full_path {
                         (path, true, data.is_dir)
                     } else {
                         let meta = path.symlink_metadata();
@@ -180,7 +171,7 @@ pub fn sorted_entries(
                 };
                 EntryDataBundle {
                     index: idx,
-                    name: if use_glob_path {
+                    name: if use_full_path {
                         path
                     } else {
                         entry.name.into_owned()

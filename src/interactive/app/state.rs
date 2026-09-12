@@ -7,6 +7,7 @@ use dua::traverse::{BackgroundTraversal, TraversalStats};
 use crate::interactive::widgets::{Column, Language};
 
 use super::{EntryDataBundle, SortMode, input::TerminalFocus, navigation::Navigation};
+use super::{clean_hub::CleanHub, deletion_progress::FilesystemDeletion};
 
 #[derive(Default, Copy, Clone, PartialEq)]
 pub enum FocussedPane {
@@ -28,6 +29,8 @@ pub struct FilesystemScan {
     pub active_traversal: BackgroundTraversal,
     /// The selected item prior to starting the traversal, if available, based on its name or index into [`AppState::entries`].
     pub previous_selection: Option<(PathBuf, usize)>,
+    /// Paths of the normal and active views before refreshing cleanup candidates.
+    pub previous_cleanup_view: Option<(PathBuf, PathBuf)>,
     /// Snapshot destination for the initial scan, if requested.
     pub snapshot_export: Option<(PathBuf, Option<i32>)>,
 }
@@ -63,12 +66,16 @@ pub struct AppState {
     pub received_events: bool,
     /// Active background filesystem traversal, if a scan or refresh is running.
     pub scan: Option<FilesystemScan>,
+    /// The frozen deletion batch, kept alive until all workers have stopped.
+    pub(super) deletion: Option<FilesystemDeletion>,
     /// Latest traversal progress and error counters.
     pub stats: TraversalStats,
     /// Options used when starting filesystem walks.
     pub walk_options: WalkOptions,
     /// The paths used in the initial traversal, at least 1.
     pub root_paths: Vec<PathBuf>,
+    /// Clean discovery hub and the currently open candidate scope.
+    pub clean_hub: Option<CleanHub>,
     /// Filesystem directory completely represented by the traversal root, if one exists.
     ///
     /// `Some(path)` means the root contains the complete, walk-option-filtered contents of
@@ -105,9 +112,11 @@ impl AppState {
             terminal_focus: TerminalFocus::default(),
             received_events: false,
             scan: None,
+            deletion: None,
             stats: TraversalStats::default(),
             walk_options,
             root_paths: input,
+            clean_hub: None,
             root_path,
             allow_entry_check: !read_only,
             read_only,

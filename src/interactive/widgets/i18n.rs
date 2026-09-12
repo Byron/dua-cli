@@ -542,9 +542,8 @@ pub struct UiText {
     pub scanning: &'static str,
     pub snapshots_read_only: &'static str,
     pub traversal_running: &'static str,
-    pub deleting_items: &'static str,
-    #[cfg(feature = "trash-move")]
-    pub trashing_items: &'static str,
+    pub deletion_running: &'static str,
+    pub cancelling_deletion: &'static str,
     pub no_cleanup_candidates: &'static str,
     pub cleanup_candidates_already_marked: &'static str,
     pub cleanup_detection_disabled: &'static str,
@@ -561,6 +560,16 @@ pub struct UiText {
 }
 
 impl Language {
+    pub fn cleanup_group_label(self, count: usize) -> String {
+        match self {
+            Language::English => format!("[{count} candidates]"),
+            Language::Japanese => format!("[候補 {count} 件]"),
+            Language::Korean => format!("[후보 {count}개]"),
+            Language::Chinese => format!("[{count} 个候选项]"),
+            Language::German => format!("[{count} Kandidaten]"),
+        }
+    }
+
     pub fn entries_statistics(self, visible: usize, total: &str, size: &str) -> String {
         match self {
             Language::English => format!("({visible} visible, {total} total, {size})"),
@@ -657,23 +666,33 @@ impl Language {
         }
     }
 
-    pub fn deletion_progress(self, count: usize, trash: bool) -> String {
+    pub fn deletion_progress(self, count: usize, remaining: &str, trash: bool) -> String {
         match (self, trash) {
-            (Language::English, false) => format!("Deleted {count} items..."),
-            (Language::English, true) => format!("Trashed {count} items..."),
-            (Language::Japanese, false) => format!("{count} 件を削除..."),
-            (Language::Japanese, true) => format!("{count} 件をゴミ箱へ移動..."),
-            (Language::Korean, false) => format!("{count}개 항목 삭제..."),
-            (Language::Korean, true) => format!("{count}개 항목을 휴지통으로 이동..."),
-            (Language::Chinese, false) => format!("已删除 {count} 个条目..."),
-            (Language::Chinese, true) => format!("已将 {count} 个条目移至回收站..."),
+            (Language::English, false) => {
+                format!("Deleted {count} items; {remaining} remaining...")
+            }
+            (Language::English, true) => {
+                format!("Trashed {count} items; {remaining} remaining...")
+            }
+            (Language::Japanese, false) => format!("{count} 件を削除、残り {remaining}..."),
+            (Language::Japanese, true) => {
+                format!("{count} 件をゴミ箱へ移動、残り {remaining}...")
+            }
+            (Language::Korean, false) => format!("{count}개 항목 삭제, 남은 용량 {remaining}..."),
+            (Language::Korean, true) => {
+                format!("{count}개 항목을 휴지통으로 이동, 남은 용량 {remaining}...")
+            }
+            (Language::Chinese, false) => format!("已删除 {count} 个条目，剩余 {remaining}..."),
+            (Language::Chinese, true) => {
+                format!("已将 {count} 个条目移至回收站，剩余 {remaining}...")
+            }
             (Language::German, false) => format!(
-                "{count} {} gelöscht...",
+                "{count} {} gelöscht; {remaining} verbleibend...",
                 if count == 1 { "Eintrag" } else { "Einträge" }
             ),
             (Language::German, true) => {
                 let label = if count == 1 { "Eintrag" } else { "Einträge" };
-                format!("{count} {label} in den Papierkorb verschoben...")
+                format!("{count} {label} in den Papierkorb verschoben; {remaining} verbleibend...")
             }
         }
     }
@@ -844,9 +863,8 @@ const EN_UI: UiText = UiText {
     scanning: "-> scanning <-",
     snapshots_read_only: "Snapshots are read-only",
     traversal_running: "Traversal already running",
-    deleting_items: "Deleting items...",
-    #[cfg(feature = "trash-move")]
-    trashing_items: "Trashing items...",
+    deletion_running: "Deletion in progress; changes are disabled",
+    cancelling_deletion: "Cancelling deletion...",
     no_cleanup_candidates: "No cleanup candidates in view",
     cleanup_candidates_already_marked: "Cleanup candidates are already marked",
     cleanup_detection_disabled: "Cleanup candidate detection is disabled",
@@ -908,9 +926,8 @@ const JA_UI: UiText = UiText {
     scanning: "-> スキャン中 <-",
     snapshots_read_only: "スナップショットは読み取り専用です",
     traversal_running: "スキャンはすでに実行中です",
-    deleting_items: "項目を削除中...",
-    #[cfg(feature = "trash-move")]
-    trashing_items: "項目をゴミ箱へ移動中...",
+    deletion_running: "削除中のため変更できません",
+    cancelling_deletion: "削除を中止しています...",
     no_cleanup_candidates: "現在の表示にクリーンアップ候補はありません",
     cleanup_candidates_already_marked: "クリーンアップ候補はすでにマーク済みです",
     cleanup_detection_disabled: "クリーンアップ候補の検出は無効です",
@@ -972,9 +989,8 @@ const KO_UI: UiText = UiText {
     scanning: "-> 스캔 중 <-",
     snapshots_read_only: "스냅샷은 읽기 전용입니다",
     traversal_running: "스캔이 이미 실행 중입니다",
-    deleting_items: "항목 삭제 중...",
-    #[cfg(feature = "trash-move")]
-    trashing_items: "항목을 휴지통으로 이동 중...",
+    deletion_running: "삭제 중에는 변경할 수 없습니다",
+    cancelling_deletion: "삭제 취소 중...",
     no_cleanup_candidates: "현재 보기에 정리 후보가 없습니다",
     cleanup_candidates_already_marked: "정리 후보가 이미 표시되어 있습니다",
     cleanup_detection_disabled: "정리 후보 감지가 비활성화되어 있습니다",
@@ -1036,9 +1052,8 @@ const ZH_UI: UiText = UiText {
     scanning: "-> 正在扫描 <-",
     snapshots_read_only: "快照为只读",
     traversal_running: "扫描已在进行",
-    deleting_items: "正在删除条目...",
-    #[cfg(feature = "trash-move")]
-    trashing_items: "正在将条目移至回收站...",
+    deletion_running: "正在删除，暂时无法更改",
+    cancelling_deletion: "正在取消删除...",
     no_cleanup_candidates: "当前视图中没有清理候选项",
     cleanup_candidates_already_marked: "清理候选项已标记",
     cleanup_detection_disabled: "清理候选项检测已禁用",
@@ -1100,9 +1115,8 @@ const DE_UI: UiText = UiText {
     scanning: "-> Scan läuft <-",
     snapshots_read_only: "Snapshots sind schreibgeschützt",
     traversal_running: "Scan läuft bereits",
-    deleting_items: "Einträge werden gelöscht...",
-    #[cfg(feature = "trash-move")]
-    trashing_items: "Einträge werden in den Papierkorb verschoben...",
+    deletion_running: "Löschung läuft; Änderungen sind gesperrt",
+    cancelling_deletion: "Löschung wird abgebrochen...",
     no_cleanup_candidates: "Keine Bereinigungskandidaten in der Ansicht",
     cleanup_candidates_already_marked: "Bereinigungskandidaten sind bereits markiert",
     cleanup_detection_disabled: "Erkennung von Bereinigungskandidaten ist deaktiviert",
@@ -1213,6 +1227,25 @@ mod tests {
         assert_eq!(Language::Korean.ui_text().footer_sort_mode, "정렬");
         assert_eq!(Language::Chinese.ui_text().footer_sort_mode, "排序");
         assert_eq!(Language::German.ui_text().footer_sort_mode, "Sortierung");
+    }
+
+    #[test]
+    fn deletion_progress_includes_remaining_bytes_in_every_language() {
+        for language in [
+            Language::English,
+            Language::Japanese,
+            Language::Korean,
+            Language::Chinese,
+            Language::German,
+        ] {
+            for trash in [false, true] {
+                let progress = language.deletion_progress(42, "123 MB", trash);
+                assert!(progress.contains("42"));
+                assert!(progress.contains("123 MB"));
+            }
+            assert!(!language.ui_text().deletion_running.is_empty());
+            assert!(!language.ui_text().cancelling_deletion.is_empty());
+        }
     }
 
     #[test]

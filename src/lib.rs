@@ -8,6 +8,8 @@ pub(crate) use dua_core as walk;
 pub use dua_core::Options as TraversalOptions;
 
 mod aggregate;
+/// Discovery of directories suitable for interactive cleanup.
+pub mod clean;
 mod common;
 mod config;
 pub use config::{Config, KeyBinding, KeyBindings, KeysConfig};
