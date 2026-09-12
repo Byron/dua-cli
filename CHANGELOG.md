@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.45.0 (2026-09-12)
 
 This release packs an incredibly useful new sub-command called `dua clean [--depth N]`,
 to automatically and efficiently find typical build products that you may want to delete,
@@ -35,46 +35,46 @@ a 2.5x speedup.
    ## Discovery and safety
    
    - Search directory entries and types before collecting size metadata. Recognize
-     Node dependencies, Python caches and virtual environments, Cargo build output,
-     and Zig caches and output. Require project markers for ambiguous names.
+   Node dependencies, Python caches and virtual environments, Cargo build output,
+   and Zig caches and output. Require project markers for ambiguous names.
    - In Git repositories, require expendable ignore matches and reject tracked
-     contents, conflict stages, gitlinks, and sparse ancestors. Consult HEAD when
-     the index is absent and reject candidates when validation fails.
+   contents, conflict stages, gitlinks, and sparse ancestors. Consult HEAD when
+   the index is absent and reject candidates when validation fails.
    - Reject nested repositories, case variants of Git markers, unreadable contents,
-     excluded descendants, and disallowed filesystem boundaries.
+   excluded descendants, and disallowed filesystem boundaries.
    - Feed discovered roots into dua-core's running walker within the configured
-     thread budget. Bound active candidates and publish each independently after
-     sizing and validation; commit hardlink/APFS accounting only on acceptance.
+   thread budget. Bound active candidates and publish each independently after
+   sizing and validation; commit hardlink/APFS accounting only on acceptance.
    - Search without a depth limit by default; `--depth` bounds discovery. Support
-     traversal filters and `--once`, with no snapshot import/export or parent
-     scanning in clean mode.
+   traversal filters and `--once`, with no snapshot import/export or parent
+   scanning in clean mode.
    
    ## Cleanup hub and browsing
    
    - Title the hub with its input directories, group siblings and contained
-     candidates, and keep rows in largest-first order as scan results arrive.
+   candidates, and keep rows in largest-first order as scan results arrive.
    - Open groups as scoped views of existing candidate nodes. Reuse ordinary
-     sorting, glob search, annotations, navigation, and marking within the group;
-     keep group membership and controls local to the hub.
+   sorting, glob search, annotations, navigation, and marking within the group;
+   keep group membership and controls local to the hub.
    - Group marks target actual candidates. Complete partial marks and toggle fully
-     marked groups off, preserving the real parent and unrelated contents.
+   marked groups off, preserving the real parent and unrelated contents.
    - Refresh recorded candidates without widening their deletion scope. Revalidate
-     whole candidates with their original discovery roots, restore browser/search
-     positions, and clear stale marks before tree indices are reused.
+   whole candidates with their original discovery roots, restore browser/search
+   positions, and clear stale marks before tree indices are reused.
    
    ## Background deletion
    
    - Run deletion and trash work off the main thread, updating remaining bytes in
-     the tree, mark pane, and progress message about once per second.
+   the tree, mark pane, and progress message about once per second.
    - Allow navigation, search, sorting, pane controls, and suspend/resume while
-     freezing marks and blocking further filesystem actions until the batch ends.
+   freezing marks and blocking further filesystem actions until the batch ends.
    - Preserve bounded filesystem concurrency, parallel file removal, and removal
-     of child directories before parents. Batch tree updates using scanned sizes
-     without double-counting overlapping marks or completed subtrees.
+   of child directories before parents. Batch tree updates using scanned sizes
+   without double-counting overlapping marks or completed subtrees.
    - Keep failed entries with their remaining sizes and errors. On quit, cancel
-     pending work, apply in-flight results, and join workers. On event-loop failure,
-     cancel and disconnect events before joining. Trash progress advances when
-     each native trash call returns.
+   pending work, apply in-flight results, and join workers. On event-loop failure,
+   cancel and disconnect events before joining. Trash progress advances when
+   each native trash call returns.
  - <csr-id-b15735b4aa512ce2183316100ecfe89467fdaaad/> minimize right-hand panels with ]
    A very quick review, but one that showed that the GUI probably shouldn't get more complicated.
    Or else it would be batter with more of a layout system than what it has now - manual layout.
@@ -89,17 +89,17 @@ a 2.5x speedup.
    
    - Keep Help and Marked stacked when both exist, preserving their contents.
    - Return focus to the main list on collapse and skip minimized panes with
-     Tab. Restoring with `]` keeps focus in the main list; `?` restores and
-     focuses Help without resetting its scroll position.
+   Tab. Restoring with `]` keeps focus in the main list; `?` restores and
+   focuses Help without resetting its scroll position.
    - Keep marks and quit protection intact. Do not dispatch deletion actions
-     to a minimized Mark pane, and preserve literal brackets in search input.
+   to a minimized Mark pane, and preserve literal brackets in search input.
    - Retain the minimized preference for the session, including while marking
-     more entries or temporarily having no right-hand panes. With no panes,
-     `]` is a no-op and the sidebar consumes no space.
+   more entries or temporarily having no right-hand panes. With no panes,
+   `]` is a no-op and the sidebar consumes no space.
    - Advertise `toggle-collapse = ]` on the bottom border of each unfocused,
-     expanded Help or Mark pane, using the configured key and translated label.
-     Hide the hint during search input, when disabled, or when it cannot fit
-     between the border corners.
+   expanded Help or Mark pane, using the configured key and translated label.
+   Hide the hint during search input, when disabled, or when it cannot fit
+   between the border corners.
  - <csr-id-38d30dbfbfc40eefdc684a3ef9ba0abefb25bd0b/> add directory_suffix option for directory markers
    <!-- agent -->
    Keep the ncdu-style leading slash by default and render a trailing slash when
@@ -234,7 +234,7 @@ a 2.5x speedup.
 
 <csr-read-only-do-not-edit/>
 
- - 26 commits contributed to the release over the course of 12 calendar days.
+ - 26 commits contributed to the release over the course of 13 calendar days.
  - 13 days passed between releases.
  - 15 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#392](https://github.com/Byron/dua-cli/issues/392)

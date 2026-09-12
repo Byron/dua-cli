@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 4.1.0 (2026-09-12)
 
 ### New Features
 
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - Disconnect bounded output before joining workers during teardown.
    - Preserve native enumeration and bounded parallel metadata processing.
    - Cover independent completion, submission priority, input closure,
-     full-channel shutdown, and cancellation.
+   full-channel shutdown, and cancellation.
 
 ### Performance
 
@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 4 commits contributed to the release.
+ - 5 commits contributed to the release over the course of 1 calendar day.
  - 5 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog prior to release ([`19929e8`](https://github.com/Byron/dua-cli/commit/19929e811061d5678f5d196884e125236e16ea3c))
     - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/Byron/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
     - Stream roots and support cancellable walks ([`c2c6f67`](https://github.com/Byron/dua-cli/commit/c2c6f67d5bfc535e7d67ce695cf96697c74f1545))
     - Merge pull request #401 from Byron/faster-bulk-traversal ([`46b8556`](https://github.com/Byron/dua-cli/commit/46b8556d1c17770ebfa443144376441609fc9b71))
