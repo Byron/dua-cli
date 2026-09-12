@@ -3,7 +3,6 @@ members = ["crates/dua-lib"]
 resolver = "3"
 
 [workspace.package]
-version = "2.42.0"
 authors = ["Sebastian Thiel <sebastian.thiel@icloud.com"]
 edition = "2024"
 repository = "https://github.com/Byron/dua-cli"
@@ -30,7 +29,7 @@ fn_params_excessive_bools = "allow"
 
 [package]
 name = "dua-cli"
-version = "3.0.0"
+version = "2.45.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true

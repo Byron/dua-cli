@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "dua-cli"
-version = "3.0.0"
+version = "2.45.0"
 dependencies = [
  "anyhow",
  "bstr",

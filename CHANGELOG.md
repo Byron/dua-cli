@@ -5,6 +5,276 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+This release packs an incredibly useful new sub-command called `dua clean [--depth N]`,
+to automatically and efficiently find typical build products that you may want to delete,
+for Rust and Zig and Node for now.
+
+Also, when deleting entries, the TUI does not block anymore, but shows the decreasing number
+of bytes as files are deleted, until the marked entry finally disappers. The TUI can still be
+used then, albeit in read-only mode.
+
+Oh, and it also got faster on macOS when there are folders with a lot of files, when it will
+switch aways from bulk-reads to multi-threaded stat calls instead, which in my case led to
+a 2.5x speedup.
+
+### New Features
+
+ - <csr-id-0661576c0271e493608d5875031614cda0aa9092/> add Git-aware dua clean and background deletion
+   This commit was mostly rubber-stamped, but tested for a week or so before that.
+   By now it's fair to accept that `dua` is in "tool that needs to work, without
+   needing to be very familiar with how it works" territory, while I still look
+   at the code at least but without the requirement to understand it all.
+   
+   <!-- agent -->
+   Add `dua clean [--depth N] [DIRECTORY]...` to discover disposable build
+   artifacts and caches, size accepted candidates, and offer them in a dedicated
+   cleanup hub. Keep the TUI responsive during scanning, deletion, and trashing.
+   
+   ## Discovery and safety
+   
+   - Search directory entries and types before collecting size metadata. Recognize
+     Node dependencies, Python caches and virtual environments, Cargo build output,
+     and Zig caches and output. Require project markers for ambiguous names.
+   - In Git repositories, require expendable ignore matches and reject tracked
+     contents, conflict stages, gitlinks, and sparse ancestors. Consult HEAD when
+     the index is absent and reject candidates when validation fails.
+   - Reject nested repositories, case variants of Git markers, unreadable contents,
+     excluded descendants, and disallowed filesystem boundaries.
+   - Feed discovered roots into dua-core's running walker within the configured
+     thread budget. Bound active candidates and publish each independently after
+     sizing and validation; commit hardlink/APFS accounting only on acceptance.
+   - Search without a depth limit by default; `--depth` bounds discovery. Support
+     traversal filters and `--once`, with no snapshot import/export or parent
+     scanning in clean mode.
+   
+   ## Cleanup hub and browsing
+   
+   - Title the hub with its input directories, group siblings and contained
+     candidates, and keep rows in largest-first order as scan results arrive.
+   - Open groups as scoped views of existing candidate nodes. Reuse ordinary
+     sorting, glob search, annotations, navigation, and marking within the group;
+     keep group membership and controls local to the hub.
+   - Group marks target actual candidates. Complete partial marks and toggle fully
+     marked groups off, preserving the real parent and unrelated contents.
+   - Refresh recorded candidates without widening their deletion scope. Revalidate
+     whole candidates with their original discovery roots, restore browser/search
+     positions, and clear stale marks before tree indices are reused.
+   
+   ## Background deletion
+   
+   - Run deletion and trash work off the main thread, updating remaining bytes in
+     the tree, mark pane, and progress message about once per second.
+   - Allow navigation, search, sorting, pane controls, and suspend/resume while
+     freezing marks and blocking further filesystem actions until the batch ends.
+   - Preserve bounded filesystem concurrency, parallel file removal, and removal
+     of child directories before parents. Batch tree updates using scanned sizes
+     without double-counting overlapping marks or completed subtrees.
+   - Keep failed entries with their remaining sizes and errors. On quit, cancel
+     pending work, apply in-flight results, and join workers. On event-loop failure,
+     cancel and disconnect events before joining. Trash progress advances when
+     each native trash call returns.
+ - <csr-id-b15735b4aa512ce2183316100ecfe89467fdaaad/> minimize right-hand panels with ]
+   A very quick review, but one that showed that the GUI probably shouldn't get more complicated.
+   Or else it would be batter with more of a layout system than what it has now - manual layout.
+   <!-- agent -->
+   ## Behavior
+   
+   Add a configurable `toggle_right_panes` action, defaulting to `]`, that
+   minimizes or restores the shared Help and Marked sidebar. Minimized panes
+   display their translated names vertically with a blank column on each side:
+   three columns for single-width labels and four for double-width labels.
+   The main list uses the remaining terminal width.
+   
+   - Keep Help and Marked stacked when both exist, preserving their contents.
+   - Return focus to the main list on collapse and skip minimized panes with
+     Tab. Restoring with `]` keeps focus in the main list; `?` restores and
+     focuses Help without resetting its scroll position.
+   - Keep marks and quit protection intact. Do not dispatch deletion actions
+     to a minimized Mark pane, and preserve literal brackets in search input.
+   - Retain the minimized preference for the session, including while marking
+     more entries or temporarily having no right-hand panes. With no panes,
+     `]` is a no-op and the sidebar consumes no space.
+   - Advertise `toggle-collapse = ]` on the bottom border of each unfocused,
+     expanded Help or Mark pane, using the configured key and translated label.
+     Hide the hint during search input, when disabled, or when it cannot fit
+     between the border corners.
+ - <csr-id-38d30dbfbfc40eefdc684a3ef9ba0abefb25bd0b/> add directory_suffix option for directory markers
+   <!-- agent -->
+   Keep the ncdu-style leading slash by default and render a trailing slash when
+   `directory_suffix = true` in the configuration.
+ - <csr-id-c1f5dda106964c04f4cdb132a26deafeb974727c/> localize the interactive interface
+   <!-- agent -->
+   Translate the remaining interactive panes, status messages, progress text,
+   prompts, errors, and notifications for every supported locale. Detect the
+   session language once and keep application, command, key, path, unit, Git-Glob,
+   and mtime names unchanged, while using compact locale-specific action labels
+   where they fit better.
+ - <csr-id-5b5e83f038ede02d8db71011a5168defb44aefac/> add German help translation
+   Add de locale detection and a complete German translation for the interactive
+   help pane, with documentation.
+   
+   Regression coverage verifies de_DE.UTF-8 and de selection plus English fallback for de_DE.ISO-8859-1.
+ - <csr-id-7b5e8e48d62dba73c2c66c6b5876f696c684926f/> add Simplified Chinese help translation
+   Add zh locale detection and a complete Simplified Chinese translation for the interactive help pane, with documentation.
+   
+   Regression coverage verifies zh_CN.UTF-8 and zh selection plus English fallback for zh_CN.GB18030.
+   
+   Validated with: cargo test interactive::widgets::i18n::tests
+ - <csr-id-793ab720f63fc486e594b6fb4d1d60396328b67e/> add Korean help translation
+   Add Korean locale detection and a complete Korean translation for the interactive help pane. Generalize the existing UTF-8 locale parser so supported language codes share one path, while preserving English fallback for non-UTF-8 locales.\n\nRegression: ko_KR.UTF-8 and ko now select Korean; ko_KR.EUC-KR falls back to English.\n\nValidated with: cargo test interactive::widgets::i18n::tests
+ - <csr-id-8a656e862b438ee39024254601ac3aaac0d63924/> repaint screen with Ctrl-L
+   Interactive sessions had no way to recover when terminal contents were corrupted
+   because unchanged frames produce no backend writes.
+   
+   Add a configurable Ctrl-L repaint action. It clears the backend directly
+   to avoid Terminal::clear's cursor-position query racing the input thread,
+   invalidates Ratatui's cached frame, and redraws through the normal event path.
+ - <csr-id-387636795f66a108926a0b7cd5921514e0bb7ee1/> configure flamegraph SVG rendering
+   <!-- agent -->
+   - Add palette, width, minimum-frame-width, title, and inverted-layout flags.
+   - Label generated graphs in disk-usage terms with byte counts and paths.
+   - Validate rendering arguments and exercise them in parser and end-to-end tests.
+ - <csr-id-6f797d6810793c5f57b3cee3132f96d1d32f9fce/> add `stacks` and `flamegraph` commands
+   <!-- agent -->
+   ## Summary
+   
+   - Promote folded output previously at `dua aggregate --stacks` to the first-class `dua stacks` command
+   - Add `dua flamegraph`, backed by Inferno, with temporary opening by default and `--output` for file-only output.
+   - Keep `aggregate --stack` as a hidden compatibility path and limit the new commands to relevant traversal flags.
+
+### Bug Fixes
+
+ - <csr-id-73f27e8c313bbe4e029924771d8b3b62e8c4ba15/> prevent deletion during scans
+   <!-- agent -->
+   Deleting a directory while a scan was active could leave queued traversal
+   events referring to removed nodes, aborting dua i with InvalidIndex.
+   
+   Reject delete and trash actions while a scan is active, retaining marked
+   entries and showing "Traversal already running" so the user can retry
+   afterward. Deletion already blocks the event loop, preventing new scans
+   until it finishes.
+ - <csr-id-49792768817d3af6b93755430f52a80b0cfb8611/> keep Traditional Chinese locales in English
+   Restrict the Simplified Chinese help table to bare zh, zh_CN, zh_SG, and zh_Hans while retaining English fallback for zh_TW, zh_HK, zh_MO, and zh_Hant.
+   
+   This addresses the post-commit review finding for 7b5e8e48.
+   
+   Validated with: cargo test interactive::widgets::i18n::tests
+
+### Performance
+
+ - <csr-id-249bdf3beab910d0d233815a7717676f1a0f1739/> parallelize I/O-bound macOS directory scans
+   This was an issue I encountered on APFS, a directory created by rustc with
+   more than 1m files in it. In that case, bulk reading is slow (while efficient),
+   and it turned out to be better to detect this and switch over to stat-based traversal.
+   
+   While looking at the filesystem probing code more closely (and how it's not dependent
+   on CPU performance by differntiating wall time from kernel time), I basically
+   rubber-stamped all the other code. Too much to look at, too foreign by now.
+   But it did look cleaned up, so 👍.
+   
+   <!-- agent -->
+   The reported target-directory scan left one worker waiting inside
+   `getattrlistbulk` at about 15% of a CPU core. Native directory collection also
+   held an entire parent directory before publishing entries and child jobs.
+   
+   Probe at most two initial bulk buffers before publishing them. Compare
+   calling-thread user and kernel CPU time with elapsed time, and select the
+   existing parallel stat queue when both refills spend more time waiting than
+   executing. Reopen through ordinary enumeration only after that decision,
+   discarding the unpublished probe to avoid mixed cursors or duplicate entries.
+   Keep bulk reads when the probe is CPU-bound. The initial probe deliberately
+   does not adapt to later cache changes.
+   
+   Share streaming native traversal between ordering modes, preserve parent
+   ordering and APFS metadata, and bound queued metadata jobs by processing
+   new batches inline when the queue fills.
+   
+   Regression coverage checks scale-independent timing decisions, bounded
+   probing and metadata backlogs, streamed child jobs, parent ordering, and
+   stat/native parity for clones, resource forks, hard links and symlinks.
+   The timing test failed against the provisional fixed latency policy; the
+   queue-bound test failed without backpressure.
+ - <csr-id-de6c3c3bc7f2f397386912b4c135c50c8b05e5d3/> preallocate snapshot v2 imports
+   <!-- agent -->
+   Snapshot V2 prefixes the record stream with the total node count and native
+   path-name bytes. Interactive imports use them for exact reservations while V1
+   remains readable and declared requirements are validated.
+   
+   ## `~/dev` benchmark
+   
+   `dua i --import SNAPSHOT --once`, release builds; one frozen V1 traversal converted to V2 for identical contents.
+   
+   | Metric | V1 | V2 | Change |
+   | --- | ---: | ---: | ---: |
+   | Median peak RSS (5 runs) | 369,868,800 B | 230,473,728 B | -37.7% |
+   | Mean wall time (20 runs) | 430.5 ± 1.8 ms | 438.1 ± 2.8 ms | +1.8% |
+   | Compressed snapshot size | 38,215,358 B | 38,215,404 B | +46 B |
+
+### Performance (BREAKING)
+
+ - <csr-id-f643c7493c6ce48658983543d954fe4912f8e7fc/> avoid unnecessary metadata during deletion
+   <!-- agent -->
+   Deletion needs entry types, but every walk collected full sizes, timestamps,
+   allocation information, and file identities. Add `Options::skip_metadata` and
+   use directory-entry types without extra metadata lookups when available.
+   macOS and Windows use standard enumeration for this mode; Windows roots
+   query only attribute/tag information. Keep the native metadata readers for
+   ordinary scans and preserve Windows verbatim-path handling.
+   
+   Drop per-entry deletion byte accounting. Successful removals use the existing
+   scanned total; partial failures retain entry/error counts and display unknown
+   bytes instead of collecting metadata solely for that notification.
+   
+   Local macOS/APFS release medians showed 0-11.5% lower deletion time, with
+   wide-directory traversal up to 40% shorter; gains vary with tree shape.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 26 commits contributed to the release over the course of 12 calendar days.
+ - 13 days passed between releases.
+ - 15 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#392](https://github.com/Byron/dua-cli/issues/392)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#392](https://github.com/Byron/dua-cli/issues/392)**
+    - Repaint screen with Ctrl-L ([`8a656e8`](https://github.com/Byron/dua-cli/commit/8a656e862b438ee39024254601ac3aaac0d63924))
+ * **Uncategorized**
+    - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/Byron/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
+    - Add Git-aware dua clean and background deletion ([`0661576`](https://github.com/Byron/dua-cli/commit/0661576c0271e493608d5875031614cda0aa9092))
+    - Merge pull request #401 from Byron/faster-bulk-traversal ([`46b8556`](https://github.com/Byron/dua-cli/commit/46b8556d1c17770ebfa443144376441609fc9b71))
+    - Parallelize I/O-bound macOS directory scans ([`249bdf3`](https://github.com/Byron/dua-cli/commit/249bdf3beab910d0d233815a7717676f1a0f1739))
+    - Merge pull request #400 from Byron/hide-panels ([`93c0ca3`](https://github.com/Byron/dua-cli/commit/93c0ca3b47fbc1cdbadfc2010551d405a7d2728d))
+    - Minimize right-hand panels with ] ([`b15735b`](https://github.com/Byron/dua-cli/commit/b15735b4aa512ce2183316100ecfe89467fdaaad))
+    - Merge pull request #398 from Byron/fix-panic ([`6e81dcf`](https://github.com/Byron/dua-cli/commit/6e81dcf0a3f355fe94bd926144140be714bce28a))
+    - Prevent deletion during scans ([`73f27e8`](https://github.com/Byron/dua-cli/commit/73f27e8c313bbe4e029924771d8b3b62e8c4ba15))
+    - Merge pull request #397 from Byron/speed-up-deletions ([`97211e6`](https://github.com/Byron/dua-cli/commit/97211e69ec4e252760143b525ca4688a1309b544))
+    - Avoid unnecessary metadata during deletion ([`f643c74`](https://github.com/Byron/dua-cli/commit/f643c7493c6ce48658983543d954fe4912f8e7fc))
+    - Merge pull request #396 from Byron/fix-directory-display ([`115f7bb`](https://github.com/Byron/dua-cli/commit/115f7bb58f50c3b42bfa70112b188e589b177a86))
+    - Add directory_suffix option for directory markers ([`38d30db`](https://github.com/Byron/dua-cli/commit/38d30dbfbfc40eefdc684a3ef9ba0abefb25bd0b))
+    - Merge pull request #394 from Byron/languages ([`74f88f0`](https://github.com/Byron/dua-cli/commit/74f88f0a801658f689fc7b6af1aee6c35bda7165))
+    - Localize the interactive interface ([`c1f5dda`](https://github.com/Byron/dua-cli/commit/c1f5dda106964c04f4cdb132a26deafeb974727c))
+    - Add German help translation ([`5b5e83f`](https://github.com/Byron/dua-cli/commit/5b5e83f038ede02d8db71011a5168defb44aefac))
+    - Keep Traditional Chinese locales in English ([`4979276`](https://github.com/Byron/dua-cli/commit/49792768817d3af6b93755430f52a80b0cfb8611))
+    - Add Simplified Chinese help translation ([`7b5e8e4`](https://github.com/Byron/dua-cli/commit/7b5e8e48d62dba73c2c66c6b5876f696c684926f))
+    - Add Korean help translation ([`793ab72`](https://github.com/Byron/dua-cli/commit/793ab720f63fc486e594b6fb4d1d60396328b67e))
+    - Merge pull request #393 from Byron/repaint ([`8a7dfb8`](https://github.com/Byron/dua-cli/commit/8a7dfb84de39e5cb26fc1b78371c6177dc767d23))
+    - Merge pull request #391 from Byron/flamegraph ([`48109fe`](https://github.com/Byron/dua-cli/commit/48109fe7af6c855dd80435473fdd841717bd16b3))
+    - Configure flamegraph SVG rendering ([`3876367`](https://github.com/Byron/dua-cli/commit/387636795f66a108926a0b7cd5921514e0bb7ee1))
+    - Add `stacks` and `flamegraph` commands ([`6f797d6`](https://github.com/Byron/dua-cli/commit/6f797d6810793c5f57b3cee3132f96d1d32f9fce))
+    - Merge pull request #390 from Byron/snapshot-v2 ([`ebf4cff`](https://github.com/Byron/dua-cli/commit/ebf4cffd611953725ac7819a8f02d0bf7afd1e75))
+    - Preallocate snapshot v2 imports ([`de6c3c3`](https://github.com/Byron/dua-cli/commit/de6c3c3bc7f2f397386912b4c135c50c8b05e5d3))
+    - Merge pull request #385 from Byron/io-format ([`3343158`](https://github.com/Byron/dua-cli/commit/3343158b234f9b45e2a0de4fe0ebe9dc56abbb28))
+</details>
+
 ## 2.44.0 (2026-08-30)
 
 This is a massive release that cost my weekend and was motivated by the chance to 

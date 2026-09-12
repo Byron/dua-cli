@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### New Features
+
+ - <csr-id-c2c6f67d5bfc535e7d67ce695cf96697c74f1545/> stream roots and support cancellable walks
+   Accept newly discovered roots in a running fixed-size worker pool. Keep
+   per-root predicates and completion accounting, and prioritize submitted
+   roots so existing directory trees cannot starve them.
+   
+   - Add `RootSender`, `stream_roots()`, and `Walk::next_cancellable()`.
+   - Disconnect bounded output before joining workers during teardown.
+   - Preserve native enumeration and bounded parallel metadata processing.
+   - Cover independent completion, submission priority, input closure,
+     full-channel shutdown, and cancellation.
+
+### Performance
+
+ - <csr-id-249bdf3beab910d0d233815a7717676f1a0f1739/> parallelize I/O-bound macOS directory scans
+   This was an issue I encountered on APFS, a directory created by rustc with
+   more than 1m files in it. In that case, bulk reading is slow (while efficient),
+   and it turned out to be better to detect this and switch over to stat-based traversal.
+   
+   While looking at the filesystem probing code more closely (and how it's not dependent
+   on CPU performance by differntiating wall time from kernel time), I basically
+   rubber-stamped all the other code. Too much to look at, too foreign by now.
+   But it did look cleaned up, so 👍.
+   
+   <!-- agent -->
+   The reported target-directory scan left one worker waiting inside
+   `getattrlistbulk` at about 15% of a CPU core. Native directory collection also
+   held an entire parent directory before publishing entries and child jobs.
+   
+   Probe at most two initial bulk buffers before publishing them. Compare
+   calling-thread user and kernel CPU time with elapsed time, and select the
+   existing parallel stat queue when both refills spend more time waiting than
+   executing. Reopen through ordinary enumeration only after that decision,
+   discarding the unpublished probe to avoid mixed cursors or duplicate entries.
+   Keep bulk reads when the probe is CPU-bound. The initial probe deliberately
+   does not adapt to later cache changes.
+   
+   Share streaming native traversal between ordering modes, preserve parent
+   ordering and APFS metadata, and bound queued metadata jobs by processing
+   new batches inline when the queue fills.
+   
+   Regression coverage checks scale-independent timing decisions, bounded
+   probing and metadata backlogs, streamed child jobs, parent ordering, and
+   stat/native parity for clones, resource forks, hard links and symlinks.
+   The timing test failed against the provisional fixed latency policy; the
+   queue-bound test failed without backpressure.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 4 commits contributed to the release.
+ - 5 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/Byron/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
+    - Stream roots and support cancellable walks ([`c2c6f67`](https://github.com/Byron/dua-cli/commit/c2c6f67d5bfc535e7d67ce695cf96697c74f1545))
+    - Merge pull request #401 from Byron/faster-bulk-traversal ([`46b8556`](https://github.com/Byron/dua-cli/commit/46b8556d1c17770ebfa443144376441609fc9b71))
+    - Parallelize I/O-bound macOS directory scans ([`249bdf3`](https://github.com/Byron/dua-cli/commit/249bdf3beab910d0d233815a7717676f1a0f1739))
+</details>
+
 ## 4.0.0 (2026-09-07)
 
 ### Performance (BREAKING)
@@ -29,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release over the course of 7 calendar days.
+ - 4 commits contributed to the release over the course of 7 calendar days.
  - 8 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -41,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v4.0.0, safety bump dua-cli v3.0.0 ([`0e99238`](https://github.com/Byron/dua-cli/commit/0e992386d15275d08b4e1ef40196edb2a30dd799))
     - Merge pull request #397 from Byron/speed-up-deletions ([`97211e6`](https://github.com/Byron/dua-cli/commit/97211e69ec4e252760143b525ca4688a1309b544))
     - Avoid unnecessary metadata during deletion ([`f643c74`](https://github.com/Byron/dua-cli/commit/f643c7493c6ce48658983543d954fe4912f8e7fc))
     - Merge pull request #385 from Byron/io-format ([`3343158`](https://github.com/Byron/dua-cli/commit/3343158b234f9b45e2a0de4fe0ebe9dc56abbb28))
