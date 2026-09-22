@@ -125,8 +125,8 @@ pub struct TraversalArgs {
     )
 )]
 pub struct ScanArgs {
-    /// The amount of threads to use. Defaults to 0, indicating the amount of logical processors.
-    /// Set to 1 to use only a single thread.
+    /// The number of threads to use. Defaults to 8 on macOS and 0 elsewhere.
+    /// Set to 0 to use the number of logical processors, or 1 to use a single thread.
     #[clap(
         short = 't',
         long = "threads",
