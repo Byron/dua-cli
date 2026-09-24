@@ -666,33 +666,33 @@ impl Language {
         }
     }
 
-    pub fn deletion_progress(self, count: usize, remaining: &str, trash: bool) -> String {
+    pub fn deletion_progress(self, count: usize, removed: &str, trash: bool) -> String {
         match (self, trash) {
             (Language::English, false) => {
-                format!("Deleted {count} items; {remaining} remaining...")
+                format!("Deleted {count} items ({removed})...")
             }
             (Language::English, true) => {
-                format!("Trashed {count} items; {remaining} remaining...")
+                format!("Trashed {count} items ({removed})...")
             }
-            (Language::Japanese, false) => format!("{count} 件を削除、残り {remaining}..."),
+            (Language::Japanese, false) => format!("{count} 件を削除 ({removed})..."),
             (Language::Japanese, true) => {
-                format!("{count} 件をゴミ箱へ移動、残り {remaining}...")
+                format!("{count} 件をゴミ箱へ移動 ({removed})...")
             }
-            (Language::Korean, false) => format!("{count}개 항목 삭제, 남은 용량 {remaining}..."),
+            (Language::Korean, false) => format!("{count}개 항목 삭제 ({removed})..."),
             (Language::Korean, true) => {
-                format!("{count}개 항목을 휴지통으로 이동, 남은 용량 {remaining}...")
+                format!("{count}개 항목을 휴지통으로 이동 ({removed})...")
             }
-            (Language::Chinese, false) => format!("已删除 {count} 个条目，剩余 {remaining}..."),
+            (Language::Chinese, false) => format!("已删除 {count} 个条目（{removed}）..."),
             (Language::Chinese, true) => {
-                format!("已将 {count} 个条目移至回收站，剩余 {remaining}...")
+                format!("已将 {count} 个条目移至回收站（{removed}）...")
             }
             (Language::German, false) => format!(
-                "{count} {} gelöscht; {remaining} verbleibend...",
+                "{count} {} gelöscht ({removed})...",
                 if count == 1 { "Eintrag" } else { "Einträge" }
             ),
             (Language::German, true) => {
                 let label = if count == 1 { "Eintrag" } else { "Einträge" };
-                format!("{count} {label} in den Papierkorb verschoben; {remaining} verbleibend...")
+                format!("{count} {label} in den Papierkorb verschoben ({removed})...")
             }
         }
     }
@@ -1230,7 +1230,7 @@ mod tests {
     }
 
     #[test]
-    fn deletion_progress_includes_remaining_bytes_in_every_language() {
+    fn deletion_progress_includes_removed_bytes_in_every_language() {
         for language in [
             Language::English,
             Language::Japanese,
