@@ -122,6 +122,7 @@ impl MarkPane {
     pub fn is_empty(&self) -> bool {
         self.marked.is_empty()
     }
+    #[cfg(test)]
     pub fn total_size(&self) -> u128 {
         self.total_size
     }

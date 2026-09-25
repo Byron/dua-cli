@@ -40,7 +40,6 @@ pub(super) struct FilesystemDeletion {
     targets: Vec<Target>,
     children: HashMap<TreeIndex, HashMap<OsString, TreeIndex>>,
     format: ByteFormat,
-    remaining: u128,
     bytes_removed: u128,
     entries_removed: usize,
 }
@@ -52,7 +51,7 @@ impl FilesystemDeletion {
         } else {
             language.deletion_progress(
                 self.entries_removed,
-                &self.format.display(self.remaining).to_string(),
+                &self.format.display(self.bytes_removed).to_string(),
                 self.is_trash(),
             )
         }
@@ -162,7 +161,6 @@ impl AppState {
             targets: roots,
             children: HashMap::new(),
             format: display.byte_format,
-            remaining: pane.total_size(),
             bytes_removed: 0,
             entries_removed: 0,
         });
@@ -305,7 +303,6 @@ impl AppState {
                     pane.set_deletion_error(index, errors);
                 }
             }
-            deletion.remaining = pane.total_size();
             if pane.is_empty() {
                 window.mark = None;
                 if self.focussed == FocussedPane::Mark {
@@ -414,10 +411,6 @@ impl FilesystemDeletion {
         targets: Vec<TreeIndex>,
         events: Receiver<DeletionEvent>,
     ) -> Self {
-        let remaining = targets
-            .iter()
-            .filter_map(|&index| tree.tree().data(index).map(|entry| entry.size))
-            .sum();
         Self {
             task: DeletionTask::from_events(events),
             tick: crossbeam::channel::tick(Duration::from_secs(1)),
@@ -432,7 +425,6 @@ impl FilesystemDeletion {
                 .collect(),
             children: HashMap::new(),
             format: ByteFormat::Metric,
-            remaining,
             bytes_removed: 0,
             entries_removed: 0,
         }

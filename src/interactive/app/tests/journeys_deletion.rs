@@ -71,7 +71,7 @@ fn key(app: &mut TerminalApp, terminal: &mut Terminal<TestBackend>, key: KeyEven
 }
 
 #[test]
-fn deletion_ticks_update_remaining_bytes_without_input_and_keep_failed_marks() -> Result<()> {
+fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> Result<()> {
     let (fixture, mut terminal, mut app) = prepared()?;
     let target = index_by_name(&app, "delete");
     let file = index_by_name(&app, "remove.bin");
@@ -92,6 +92,10 @@ fn deletion_ticks_update_remaining_bytes_without_input_and_keep_failed_marks() -
     let total = tree.total_size();
     let count = tree.tree().data(target).unwrap().entry_count.unwrap();
     let (send, tick) = inject(&mut app, target);
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Deleted 0 items (0  B)...")
+    );
     let no_input = never();
     let before = terminal.backend().buffer().clone();
 
@@ -111,7 +115,10 @@ fn deletion_ticks_update_remaining_bytes_without_input_and_keep_failed_marks() -
     assert_eq!(app.traversal.tree.data(target).unwrap().size, 17);
     assert_eq!(app.window.mark.as_ref().unwrap().total_size(), 17);
     assert_eq!(app.state.stats.total_bytes, Some(total - 64));
-    assert!(app.state.message.as_ref().unwrap().contains("remaining"));
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Deleted 1 items (64  B)...")
+    );
     assert_ne!(terminal.backend().buffer(), &before);
     assert!(app.state.is_deleting());
 
@@ -128,6 +135,10 @@ fn deletion_ticks_update_remaining_bytes_without_input_and_keep_failed_marks() -
     assert_eq!(
         app.traversal.tree.data(target).unwrap().entry_count,
         Some(count - 2)
+    );
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Deleted 2 items (64  B)...")
     );
 
     send.send(DeletionEvent::TargetFinished {
