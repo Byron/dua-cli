@@ -321,6 +321,7 @@ mod tests {
             ignore_dirs: BTreeSet::new(),
             ignore_patterns: None,
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         }
     }
 

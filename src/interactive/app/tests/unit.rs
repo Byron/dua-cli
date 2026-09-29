@@ -208,6 +208,7 @@ fn it_can_sort_directory_mtimes_by_recursive_entries() {
             ignore_dirs: BTreeSet::default(),
             ignore_patterns: None,
             metadata_options: dua::TraversalOptions::default(),
+            base_dir: None,
         },
         Vec::new(),
         None,
