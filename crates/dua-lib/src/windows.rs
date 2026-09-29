@@ -427,40 +427,59 @@ impl OwnedHandle {
     }
 }
 
-fn absolute_verbatim_path(path: &Path) -> io::Result<Vec<u16>> {
-    const SEP: u16 = b'\\' as u16;
-    const ALT_SEP: u16 = b'/' as u16;
-    const VERBATIM_PREFIX: &[u16] = &[SEP, SEP, b'?' as u16, SEP];
-    const NT_PREFIX: &[u16] = &[SEP, b'?' as u16, b'?' as u16, SEP];
-    const DEVICE_PREFIX: &[u16] = &[SEP, SEP, b'.' as u16, SEP];
+const SEP: u16 = b'\\' as u16;
+const ALT_SEP: u16 = b'/' as u16;
+const VERBATIM_PREFIX: &[u16] = &[SEP, SEP, b'?' as u16, SEP];
+const NT_PREFIX: &[u16] = &[SEP, b'?' as u16, b'?' as u16, SEP];
+const DEVICE_PREFIX: &[u16] = &[SEP, SEP, b'.' as u16, SEP];
 
+fn is_verbatim_or_nt_prefixed(encoded: &[u16]) -> bool {
+    encoded.starts_with(VERBATIM_PREFIX) || encoded.starts_with(NT_PREFIX)
+}
+
+fn absolute_verbatim_path(path: &Path) -> io::Result<Vec<u16>> {
     let encoded = path.as_os_str().encode_wide().collect::<Vec<_>>();
-    let mut verbatim = if encoded.starts_with(VERBATIM_PREFIX) || encoded.starts_with(NT_PREFIX) {
+    let mut verbatim = if is_verbatim_or_nt_prefixed(&encoded) {
         encoded
     } else {
         let absolute = absolute_without_name_normalization(path)?;
-        let mut encoded = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
-        for unit in &mut encoded {
-            if *unit == ALT_SEP {
-                *unit = SEP;
-            }
-        }
-        if encoded.starts_with(DEVICE_PREFIX) {
-            r"\\?\"
-                .encode_utf16()
-                .chain(encoded.into_iter().skip(4))
-                .collect()
-        } else if encoded.starts_with(&[SEP, SEP]) {
-            r"\\?\UNC\"
-                .encode_utf16()
-                .chain(encoded.into_iter().skip(2))
-                .collect()
-        } else {
-            r"\\?\".encode_utf16().chain(encoded).collect()
-        }
+        verbatim_path_units(&absolute)
     };
     verbatim.push(0);
     Ok(verbatim)
+}
+
+/// Turn the absolute `path` into its verbatim form as a sequence of UTF-16 units,
+/// without a trailing NUL.
+///
+/// `\\.\` device paths are rewritten to `\\?\`, UNC paths to `\\?\UNC\`, and ordinary
+/// local paths gain a `\\?\` prefix. Paths that already carry a `\\?\` or `\??\` prefix
+/// are passed through untouched — `absolute_without_name_normalization()` produces them
+/// when a relative path is resolved against a verbatim current directory, and treating
+/// them as generic `\\` paths would corrupt them into `\\?\UNC\?\…`.
+fn verbatim_path_units(absolute: &Path) -> Vec<u16> {
+    let mut encoded = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+    if is_verbatim_or_nt_prefixed(&encoded) {
+        return encoded;
+    }
+    for unit in &mut encoded {
+        if *unit == ALT_SEP {
+            *unit = SEP;
+        }
+    }
+    if encoded.starts_with(DEVICE_PREFIX) {
+        r"\\?\"
+            .encode_utf16()
+            .chain(encoded.into_iter().skip(4))
+            .collect()
+    } else if encoded.starts_with(&[SEP, SEP]) {
+        r"\\?\UNC\"
+            .encode_utf16()
+            .chain(encoded.into_iter().skip(2))
+            .collect()
+    } else {
+        r"\\?\".encode_utf16().chain(encoded).collect()
+    }
 }
 
 fn absolute_without_name_normalization(path: &Path) -> io::Result<PathBuf> {
@@ -725,5 +744,29 @@ mod tests {
             .collect::<Vec<_>>();
             assert_eq!(entries, [OsString::from("file")]);
         }
+    }
+
+    #[test]
+    fn verbatim_path_units_pass_verbatim_and_nt_paths_through() {
+        // Resolving a relative path against a verbatim or NT-prefixed current directory
+        // yields an absolute path that already carries the prefix. Passing it through
+        // the generic `\\` branch would re-prefix it as UNC (`\\?\UNC\?\…`), which then
+        // fails with `ERROR_BAD_NETPATH`.
+        fn units(path: &str) -> OsString {
+            OsString::from_wide(&verbatim_path_units(Path::new(path)))
+        }
+        assert_eq!(units(r"\\?\D:\dir"), OsString::from(r"\\?\D:\dir"));
+        assert_eq!(
+            units(r"\\?\UNC\server\share"),
+            OsString::from(r"\\?\UNC\server\share")
+        );
+        assert_eq!(units(r"\??\D:\dir"), OsString::from(r"\??\D:\dir"));
+        assert_eq!(units(r"D:\dir"), OsString::from(r"\\?\D:\dir"));
+        assert_eq!(units(r"D:/dir"), OsString::from(r"\\?\D:\dir"));
+        assert_eq!(units(r"\\.\D:\dir"), OsString::from(r"\\?\D:\dir"));
+        assert_eq!(
+            units(r"\\server\share\dir"),
+            OsString::from(r"\\?\UNC\server\share\dir")
+        );
     }
 }
