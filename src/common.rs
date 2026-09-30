@@ -213,8 +213,13 @@ impl IgnorePatterns {
         if relative_path.as_os_str().is_empty() {
             return false;
         }
-        let relative_path =
-            gix::path::to_unix_separators_on_windows(gix::path::into_bstr(relative_path));
+        // Match on the OS string's encoded bytes (WTF-8 on Windows, the raw bytes on
+        // Unix), which can represent lone surrogates without panicking. That way,
+        // wildcard or suffix patterns that don't spell out an invalid code unit still
+        // match filenames that are not valid UTF-8, which NTFS permits on Windows.
+        let relative_path = gix::path::to_unix_separators_on_windows(bstr::BStr::new(
+            relative_path.as_os_str().as_encoded_bytes(),
+        ));
         self.search
             .pattern_matching_relative_path(
                 relative_path.as_ref(),
@@ -587,6 +592,29 @@ mod tests {
                 "expected is_excluded({path:?}, is_dir={is_dir}) to be {expected}"
             );
         }
+    }
+
+    /// NTFS allows filenames that are not valid UTF-16, e.g. with unpaired surrogates.
+    /// Matching happens on the name's encoded bytes, so patterns that don't spell out
+    /// the invalid code unit still match, and none of this can panic.
+    #[cfg(windows)]
+    #[test]
+    fn ignore_patterns_tolerate_non_utf8_names() {
+        use std::os::windows::ffi::OsStringExt as _;
+
+        let mut name: Vec<u16> = "lone".encode_utf16().collect();
+        name.push(0xD800);
+        name.extend(".txt".encode_utf16());
+        let name = std::ffi::OsString::from_wide(&name);
+
+        assert!(
+            patterns_from("*.txt\n").is_excluded(Path::new(&name), false),
+            "a wildcard pattern matches the encoded bytes of a name that is not valid UTF-8"
+        );
+        assert!(
+            !patterns_from("*.zzz\n").is_excluded(Path::new(&name), false),
+            "a pattern that doesn't match still doesn't exclude it"
+        );
     }
 
     #[test]
