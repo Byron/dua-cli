@@ -739,18 +739,34 @@ fn walk_options_from(traversal: &options::ScanArgs) -> Result<dua::WalkOptions> 
     Ok(walk_options)
 }
 
+/// Change the working directory to `path`, returning `None` on success.
+///
+/// On Windows, `ERROR_FILENAME_EXCED_RANGE` (os error 206) can prevent entering a
+/// directory that is still traversable. In that case, leave the working directory
+/// unchanged and return the absolute path for callers to expand into inputs instead.
+/// All other errors are propagated.
+fn set_current_dir(path: &Path) -> io::Result<Option<PathBuf>> {
+    #[cfg(windows)]
+    const ERROR_FILENAME_EXCED_RANGE: i32 = 206;
+
+    match std::env::set_current_dir(path) {
+        Ok(()) => Ok(None),
+        #[cfg(windows)]
+        Err(err) if err.raw_os_error() == Some(ERROR_FILENAME_EXCED_RANGE) => {
+            std::path::absolute(path).map(Some)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 fn extract_aggregate_inputs_maybe_set_cwd(
     paths: Vec<PathBuf>,
     walk_options: &mut dua::WalkOptions,
 ) -> Result<AggregateInputs, io::Error> {
     #[cfg(any(windows, target_os = "macos"))]
     if paths.is_empty() || paths.len() == 1 && paths[0].is_dir() {
-        // `set_current_dir` enforces `MAX_PATH` on Windows (os error 206) even though
-        // the directory can still be traversed through verbatim paths. When it fails,
-        // expand the directory into absolute input paths instead of giving up.
-        if paths
-            .first()
-            .is_some_and(|path| std::env::set_current_dir(path).is_err())
+        if let Some(path) = paths.first()
+            && set_current_dir(path)?.is_some()
         {
             return extract_paths_maybe_set_cwd(paths, walk_options)
                 .map(|(paths, _root)| AggregateInputs::Paths(paths));
@@ -819,20 +835,11 @@ fn extract_paths_maybe_set_cwd(
     // documented behavior, these are never subject to `-i`/`--ignore-dirs` filtering, only
     // paths that we ourselves expand into roots below are.
     let paths_were_expanded = paths.is_empty() || (paths.len() == 1 && paths[0].is_dir());
-    // Changing into a sole directory input keeps the reported paths short. It can fail
-    // for directories that are otherwise perfectly traversable though - on Windows
-    // `set_current_dir` enforces `MAX_PATH` (os error 206) - in which case the directory
-    // is expanded into absolute input paths directly. The expanded root is returned so
-    // callers still know which directory the input paths belong to.
+    // Changing into a sole directory input keeps the reported paths short.
     let expanded_root = if paths.len() == 1 && paths[0].is_dir() {
-        if std::env::set_current_dir(&paths[0]).is_ok() {
-            paths.clear();
-            None
-        } else {
-            let root = std::path::absolute(&paths[0])?;
-            paths.clear();
-            Some(root)
-        }
+        let root = set_current_dir(&paths[0])?;
+        paths.clear();
+        root
     } else {
         None
     };
@@ -910,28 +917,15 @@ fn device_id(_path: &Path) -> io::Result<u64> {
 }
 
 fn cwd_dirlist() -> Result<Vec<PathBuf>, io::Error> {
-    let mut entries: Vec<_> = fs::read_dir(".")?
-        .filter_map(|e| {
-            e.ok()
-                .and_then(|e| e.path().strip_prefix(".").ok().map(ToOwned::to_owned))
-        })
-        .filter(|p| {
-            if let Ok(meta) = p.symlink_metadata()
-                && meta.file_type().is_symlink()
-            {
-                return false;
-            }
-            true
-        })
-        .collect();
-
-    entries.sort();
-    Ok(entries)
+    Ok(dirlist(Path::new("."))?
+        .into_iter()
+        .filter_map(|path| path.strip_prefix(".").ok().map(ToOwned::to_owned))
+        .collect())
 }
 
-/// List the contents of `dir` the way [`cwd_dirlist`] does, keeping `dir` as the
-/// prefix of each returned path so the entries remain usable without changing the
-/// working directory. The directory's path is added to errors for context.
+/// List sorted, non-symlink entries of `dir`, keeping `dir` as the prefix of each
+/// returned path so the entries remain usable without changing the working directory.
+/// The directory's path is added to errors for context.
 fn dirlist(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
     let mut entries: Vec<_> = fs::read_dir(dir)
         .map_err(|err| io::Error::new(err.kind(), format!("{}: {err}", dir.display())))?
@@ -1306,6 +1300,40 @@ mod tests {
         assert_eq!(merged.scan.ignore_dirs, subcommand.scan.ignore_dirs);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn directory_change_errors_are_propagated_on_unix() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path();
+        let file = root.join("file.txt");
+        fs::write(&file, b"data").unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let mut options = super::walk_options_from(&scan_args()).unwrap();
+        fs::set_permissions(root, fs::Permissions::from_mode(0o400)).unwrap();
+        if file.metadata().is_ok() {
+            // Privileged users can bypass the missing search permission.
+            fs::set_permissions(root, fs::Permissions::from_mode(0o700)).unwrap();
+            return;
+        }
+
+        let results = [
+            super::extract_paths_maybe_set_cwd(vec![root.to_owned()], &mut options).map(|_| ()),
+            super::extract_aggregate_inputs_maybe_set_cwd(vec![root.to_owned()], &mut options)
+                .map(|_| ()),
+        ];
+        fs::set_permissions(root, fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert_eq!(std::env::current_dir().unwrap(), cwd);
+        for result in results {
+            assert_eq!(
+                result.expect_err("directory change must fail").kind(),
+                std::io::ErrorKind::PermissionDenied
+            );
+        }
+    }
+
     /// `set_current_dir` enforces `MAX_PATH` on Windows (os error 206) even for
     /// directories that can still be traversed through verbatim paths. A sole directory
     /// input like this must be expanded into absolute input paths, without changing
@@ -1313,9 +1341,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn sole_directory_beyond_max_path_expands_into_absolute_inputs() {
+        use std::os::windows::ffi::OsStrExt as _;
+
         let fixture = tempfile::tempdir().unwrap();
-        let mut deep = fixture.path().to_owned();
-        while deep.as_os_str().len() < 270 {
+        let mut deep = fixture.path().join("用户目录".repeat(20));
+        while deep.as_os_str().encode_wide().count() < 270 {
             deep = deep.join("a-long-directory-name-to-exceed-max-path");
         }
         let deep = PathBuf::from(format!(r"\\?\{}", deep.display()));
@@ -1333,6 +1363,31 @@ mod tests {
         assert_eq!(paths, vec![deep.join("file.txt")]);
         // Traversals resolve ignore patterns against the expanded directory.
         assert_eq!(options.base_dir.as_deref(), Some(deep.as_path()));
+
+        let mut aggregate_options = super::walk_options_from(&scan_args()).unwrap();
+        let super::AggregateInputs::Paths(aggregate_paths) =
+            super::extract_aggregate_inputs_maybe_set_cwd(
+                vec![deep.clone()],
+                &mut aggregate_options,
+            )
+            .unwrap()
+        else {
+            panic!("aggregation must fall back to paths when the directory exceeds MAX_PATH");
+        };
+        assert_eq!(
+            aggregate_paths, paths,
+            "aggregation must use the same absolute inputs after error 206"
+        );
+        assert_eq!(
+            std::env::current_dir().unwrap(),
+            cwd,
+            "aggregation's fallback must leave the working directory unchanged"
+        );
+        assert_eq!(
+            aggregate_options.base_dir.as_deref(),
+            Some(deep.as_path()),
+            "aggregation must anchor ignore matching to the expanded root"
+        );
 
         // Removing the deep tree only works through its verbatim path.
         fs::remove_dir_all(&deep).ok();
