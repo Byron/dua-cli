@@ -205,6 +205,7 @@ pub fn untraversed_app_and_terminal_with_closure(
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
         metadata_options: dua::TraversalOptions::default(),
+        base_dir: None,
     };
 
     let input_paths = fixture_paths.iter().map(|c| convert(c.as_ref())).collect();

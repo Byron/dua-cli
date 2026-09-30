@@ -297,6 +297,7 @@ mod tests {
             ignore_dirs: std::collections::BTreeSet::default(),
             ignore_patterns: None,
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         }
     }
 

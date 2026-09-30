@@ -30,6 +30,93 @@ fn marked_file_names(app: &TerminalApp, message: &str) -> BTreeSet<String> {
 }
 
 #[test]
+fn expanded_root_anchors_refresh_title_and_gitignore() -> Result<()> {
+    for initial_name in [None, Some("existing.ignored")] {
+        let fixture = TempDir::new()?;
+        let repo = fixture.path().canonicalize()?;
+        gix::init(&repo)?;
+        fs::write(repo.join(".gitignore"), b"*.ignored\n")?;
+        let root = repo.join("expanded");
+        fs::create_dir(&root)?;
+        let input_paths = initial_name
+            .into_iter()
+            .map(|name| root.join(name))
+            .collect::<Vec<_>>();
+        for path in &input_paths {
+            fs::write(path, b"existing")?;
+        }
+        let mut expected_paths = input_paths.iter().cloned().collect::<BTreeSet<_>>();
+        let mut terminal = new_test_terminal()?;
+        let mut app = TerminalApp::initialize(
+            &mut terminal,
+            WalkOptions {
+                base_dir: Some(root.clone()),
+                ..crate::snapshot_walk_options()
+            },
+            ByteFormat::Metric,
+            true,
+            input_paths,
+            Some(root.clone()),
+            Config::default(),
+            dua::traverse::Traversal::new(),
+            None,
+        )?;
+
+        let tree = app.state.tree_view(&mut app.traversal);
+        assert_eq!(
+            app.state.display_path(&tree),
+            root,
+            "initial_name={initial_name:?}: the initial title must show the expanded root, even without entries"
+        );
+        app.traverse()?;
+        app.process_events_once(&mut terminal, into_events([]))?;
+        assert_eq!(
+            app.state.entries.len(),
+            expected_paths.len(),
+            "initial_name={initial_name:?}: the initial scan must contain only the supplied expanded input paths"
+        );
+        assert_eq!(
+            app.state
+                .gitignored_entries
+                .as_ref()
+                .map(|entries| entries.len()),
+            Some(expected_paths.len()),
+            "initial_name={initial_name:?}: gitignore detection must be enabled and match all initial entries using the parent repository's .gitignore"
+        );
+
+        let added = root.join("new.ignored");
+        fs::write(&added, b"new")?;
+        expected_paths.insert(added);
+        app.process_events_once(&mut terminal, into_codes("R"))?;
+
+        let tree = app.state.tree_view(&mut app.traversal);
+        assert_eq!(
+            app.state.display_path(&tree),
+            root,
+            "initial_name={initial_name:?}: refresh must keep the title anchored to the expanded root"
+        );
+        assert_eq!(
+            app.state
+                .entries
+                .iter()
+                .map(|entry| tree.path_of(entry.index))
+                .collect::<BTreeSet<_>>(),
+            expected_paths,
+            "initial_name={initial_name:?}: refresh must rescan the expanded root, preserving existing entries and discovering the new file"
+        );
+        assert_eq!(
+            app.state
+                .gitignored_entries
+                .as_ref()
+                .map(|entries| entries.len()),
+            Some(expected_paths.len()),
+            "initial_name={initial_name:?}: gitignore detection must remain enabled and match all refreshed entries using the parent repository's .gitignore"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn refresh_discards_marks_before_reusing_tree_indices() -> Result<()> {
     let fixture = TempDir::new()?;
     let root = fixture.path().canonicalize()?;
@@ -235,6 +322,7 @@ $precious.tmp
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
         metadata_options: dua::TraversalOptions::default(),
+        base_dir: None,
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(
@@ -377,6 +465,7 @@ fn cleanup_candidates_are_marked_with_one_key_after_entering_project_dir() -> Re
         ignore_dirs: BTreeSet::default(),
         ignore_patterns: None,
         metadata_options: dua::TraversalOptions::default(),
+        base_dir: None,
     };
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     let mut app = TerminalApp::initialize(

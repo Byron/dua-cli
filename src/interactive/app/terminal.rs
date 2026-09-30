@@ -101,6 +101,11 @@ impl TerminalApp {
         let display = DisplayOptions::new(byte_format);
         let window = MainWindow::default();
 
+        // Resolve paths from the expanded directory when changing into it failed.
+        if let Some(base_dir) = &walk_options.base_dir {
+            traversal.tree.rename(traversal.root_index, base_dir)?;
+        }
+
         let read_only = snapshot_load_duration.is_some();
         let mut state = AppState::new(walk_options, input, root_path, read_only);
         if config.gitignore == Some(false) {

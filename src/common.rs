@@ -257,6 +257,12 @@ pub struct WalkOptions {
     /// Gitignore-style patterns whose matches are left out of the traversal entirely.
     /// `None` if no pattern was configured.
     pub ignore_patterns: Option<IgnorePatterns>,
+    /// The directory the traversal logically runs in, replacing the process working
+    /// directory as the base that ignore patterns and relative paths are matched
+    /// against. Set when a sole input directory was expanded into its entries instead
+    /// of being entered with `set_current_dir` - e.g. beyond `MAX_PATH` on Windows.
+    /// `None` uses the process working directory.
+    pub base_dir: Option<PathBuf>,
     /// Platform-specific metadata requested during traversal.
     pub metadata_options: crate::TraversalOptions,
 }
@@ -327,7 +333,15 @@ impl WalkOptions {
             },
         );
         let ignore_dirs = self.ignore_dirs.clone();
-        let cwd = std::env::current_dir().unwrap_or_default();
+        // `base_dir` stands in for the working directory when the input directory
+        // was expanded into its entries instead of being entered, so that ignore
+        // patterns see the same relative paths they would have seen after a
+        // successful `set_current_dir`.
+        let cwd = self
+            .base_dir
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_default();
         let cross_filesystems = self.cross_filesystems;
 
         // Excluding an entry means pruning it from the walk *and* from the emitted events, so the
@@ -475,6 +489,7 @@ mod tests {
             ignore_dirs: BTreeSet::new(),
             ignore_patterns: None,
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         };
         #[cfg(unix)]
         let mut parameters = vec![
@@ -537,6 +552,7 @@ mod tests {
             ignore_dirs: canonicalize_ignore_dirs(&[root.path().to_owned()]),
             ignore_patterns: None,
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         };
 
         let paths = options
@@ -741,6 +757,7 @@ mod tests {
             ignore_dirs: BTreeSet::default(),
             ignore_patterns: Some(patterns_from("nested/secret\n")),
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         };
 
         let paths = options
@@ -764,6 +781,54 @@ mod tests {
 
         assert!(!paths.iter().any(|path| path == "secret"));
         assert!(paths.iter().any(|path| path == "visible"));
+    }
+
+    /// A directory that cannot be entered is expanded into absolute inputs, with
+    /// `base_dir` recording where those inputs came from. Entries found under them
+    /// must still match ignore patterns relative to that directory, exactly as they
+    /// would had changing into it succeeded - otherwise patterns like `sub/ignored`
+    /// stop excluding anything below the expanded roots.
+    #[test]
+    fn base_dir_anchors_ignore_patterns_of_expanded_roots() {
+        let root = tempfile::tempdir().unwrap();
+        let sub = root.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("ignored.txt"), []).unwrap();
+        std::fs::write(sub.join("kept.txt"), []).unwrap();
+        let options = WalkOptions {
+            threads: 1,
+            count_hard_links: false,
+            apparent_size: false,
+            cross_filesystems: true,
+            ignore_dirs: BTreeSet::default(),
+            ignore_patterns: Some(patterns_from("sub/ignored.txt\n")),
+            base_dir: Some(root.path().to_owned()),
+            metadata_options: crate::TraversalOptions::default(),
+        };
+
+        let names = options
+            .iter_from_paths(
+                vec![WalkRoot {
+                    index: 0,
+                    // Walkers derive the pattern root from the input path itself, but
+                    // `base_dir` takes precedence in matching.
+                    pattern_root: Some(sub.clone()),
+                    path: sub,
+                    #[cfg(any(windows, target_os = "macos"))]
+                    entry: None,
+                    device_id: 0,
+                }],
+                false,
+                walk::Order::Completion,
+            )
+            .filter_map(|(_, event)| match event {
+                walk::RootEvent::Entry(entry) => Some(entry.unwrap().file_name),
+                walk::RootEvent::Finished => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(!names.iter().any(|name| name == "ignored.txt"));
+        assert!(names.iter().any(|name| name == "kept.txt"));
     }
 
     #[test]
@@ -797,6 +862,7 @@ mod tests {
             ignore_dirs: BTreeSet::default(),
             ignore_patterns: Some(patterns_from(contents)),
             metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
         };
 
         let mut paths = options
