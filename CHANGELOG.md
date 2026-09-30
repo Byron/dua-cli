@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.45.1 (2026-09-30)
+
+### Documentation
+
+ - <csr-id-d6acb509fe77af72f7cf41015e4f4a12f592d913/> correct platform defaults in threads help
+
+### Bug Fixes
+
+ - <csr-id-2fbb8f5711fd503126bcaf652d3627f64eb78c1a/> don't fail on sole directory inputs beyond `MAX_PATH` on Windows
+   A sole directory input is changed into so its entries can be listed and
+   reported relative to it, but `set_current_dir` enforces `MAX_PATH` on
+   Windows (os error 206) even though the directory itself can still be
+   traversed through verbatim paths.
+   
+   When the change fails, expand the directory into absolute input paths
+   directly instead of aborting, which makes a single long directory input
+   work in list, aggregate, stacks and interactive modes alike. Reported
+   paths are absolute then, consistent with how multiple inputs are already
+   displayed.
+   
+   The expanded root is returned to callers so the interactive mode still
+   knows which directory the inputs belong to, and recorded in the new
+   `WalkOptions::base_dir`, which every traversal uses as the working
+   directory stand-in for ignore-pattern matching. That keeps `--ignore-from`
+   patterns matching descendants relative to the expanded root - identical to
+   what a successful `chdir` would have produced.
+   
+   Fixes https://github.com/Byron/dua-cli/issues/410
+ - <csr-id-22d5588a63021599e6cb5c03e26d889f345d5a81/> don't panic on non-UTF-8 filenames when matching ignore patterns
+   On Windows, NTFS filenames may contain unpaired surrogates that cannot be
+   represented in UTF-8. `IgnorePatterns::is_excluded` converted each entry's
+   relative path with the panicking `gix::path::into_bstr`, so a single such
+   name anywhere in a scanned tree aborted the whole process when
+   `--ignore-from` was used - in list, aggregate and stacks modes alike, as
+   well as in `clean`'s entry filtering.
+   
+   Match on the OS string's encoded bytes instead - `OsStr::as_encoded_bytes`
+   yields a self-synchronizing UTF-8 superset (WTF-8 on Windows, the raw bytes
+   on Unix) which represents lone surrogates losslessly. The glob matcher then
+   compares bytes, so wildcard patterns that don't spell out the invalid code
+   unit, like `*` or `*.txt`, still match such names instead of silently
+   letting them through.
+   
+   Fixes https://github.com/Byron/dua-cli/issues/408
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release.
+ - 18 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #411 from Mathjk/fix/long-path-single-dir ([`9a854d2`](https://github.com/Byron/dua-cli/commit/9a854d21f6a5d715f3e18e02b94414dedb802a3a))
+    - Review ([`1d68918`](https://github.com/Byron/dua-cli/commit/1d6891802e5d9e1945a07562feabe00db1da1910))
+    - Merge pull request #409 from Mathjk/fix/ignore-from-nonutf8 ([`37e6aa8`](https://github.com/Byron/dua-cli/commit/37e6aa892263e3e9e88219e0e68de55e957d62df))
+    - Don't fail on sole directory inputs beyond `MAX_PATH` on Windows ([`2fbb8f5`](https://github.com/Byron/dua-cli/commit/2fbb8f5711fd503126bcaf652d3627f64eb78c1a))
+    - Don't panic on non-UTF-8 filenames when matching ignore patterns ([`22d5588`](https://github.com/Byron/dua-cli/commit/22d5588a63021599e6cb5c03e26d889f345d5a81))
+    - Merge pull request #405 from Byron/del-remaining ([`d190513`](https://github.com/Byron/dua-cli/commit/d190513ba19a684e1921ec4f5a8b086c3e19e81c))
+    - Show deleted bytes in the deletion status line ([`9a3bfa1`](https://github.com/Byron/dua-cli/commit/9a3bfa1487ac65861a6f7d425aba4be8e2e9f3b6))
+    - Merge pull request #404 from Likio3000/docs/dua-cli-behavior-20260923 ([`cf59618`](https://github.com/Byron/dua-cli/commit/cf596189fddfb001d773a60cfd43edf016e35539))
+    - Correct platform defaults in threads help ([`d6acb50`](https://github.com/Byron/dua-cli/commit/d6acb509fe77af72f7cf41015e4f4a12f592d913))
+</details>
+
 ## 2.45.0 (2026-09-12)
 
 This release packs an incredibly useful new sub-command called `dua clean [--depth N]`,
