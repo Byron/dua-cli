@@ -567,10 +567,25 @@ fn write_flamegraph(
 ) -> Result<PathBuf> {
     let stacks = String::from_utf8(stacks).expect("folded stacks are valid UTF-8");
     if let Some(path) = output {
-        let file = fs::File::create(&path)
-            .with_context(|| format!("Could not create flame graph {}", path.display()))?;
-        inferno::flamegraph::from_lines(options, stacks.lines(), file)
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let mut temporary = tempfile::NamedTempFile::new_in(parent).with_context(|| {
+            format!(
+                "Could not create temporary flame graph for {}",
+                path.display()
+            )
+        })?;
+        inferno::flamegraph::from_lines(options, stacks.lines(), &mut temporary)
             .with_context(|| format!("Could not write flame graph {}", path.display()))?;
+        temporary.as_file_mut().flush()?;
+        temporary.as_file().sync_all()?;
+        temporary
+            .into_temp_path()
+            .persist(&path)
+            .map_err(|err| err.error)
+            .with_context(|| format!("Could not install flame graph {}", path.display()))?;
         Ok(path)
     } else {
         let mut file = tempfile::Builder::new()
