@@ -565,27 +565,16 @@ fn write_flamegraph(
     output: Option<PathBuf>,
     options: &mut inferno::flamegraph::Options<'_>,
 ) -> Result<PathBuf> {
+    // Zero-sized entries are omitted from folded stacks, and inferno writes an error SVG for empty input.
+    if stacks.is_empty() {
+        bail!("No disk usage to render as a flame graph");
+    }
     let stacks = String::from_utf8(stacks).expect("folded stacks are valid UTF-8");
     if let Some(path) = output {
-        let parent = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
-        let mut temporary = tempfile::NamedTempFile::new_in(parent).with_context(|| {
-            format!(
-                "Could not create temporary flame graph for {}",
-                path.display()
-            )
-        })?;
-        inferno::flamegraph::from_lines(options, stacks.lines(), &mut temporary)
+        let file = fs::File::create(&path)
+            .with_context(|| format!("Could not create flame graph {}", path.display()))?;
+        inferno::flamegraph::from_lines(options, stacks.lines(), file)
             .with_context(|| format!("Could not write flame graph {}", path.display()))?;
-        temporary.as_file_mut().flush()?;
-        temporary.as_file().sync_all()?;
-        temporary
-            .into_temp_path()
-            .persist(&path)
-            .map_err(|err| err.error)
-            .with_context(|| format!("Could not install flame graph {}", path.display()))?;
         Ok(path)
     } else {
         let mut file = tempfile::Builder::new()
@@ -1174,6 +1163,24 @@ mod tests {
             fs::read_to_string(&path).expect("default config"),
             dua::Config::default_file_content()
         );
+    }
+
+    #[test]
+    fn empty_flamegraphs_are_rejected_with_and_without_explicit_output() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        for output in [None, Some(dir.path().join("usage.svg"))] {
+            let error = write_flamegraph(
+                Vec::new(),
+                output,
+                &mut inferno::flamegraph::Options::default(),
+            )
+            .expect_err("empty stacks cannot be rendered");
+            assert_eq!(
+                error.to_string(),
+                "No disk usage to render as a flame graph"
+            );
+        }
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 
     #[test]
