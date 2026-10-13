@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.2.0 (2026-10-13)
+
+### New Features
+
+ - <csr-id-2989d30d43c035c9c9ff9eb8eff8584b6244cf12/> make walk result buffering configurable per worker
+   <!-- agent -->
+   Replace the fixed QUEUED_BATCHES_PER_WORKER constant with
+   Options::queued_batches_per_worker and a chainable builder method. Use
+   two queued batches per worker by default in both production and tests,
+   preserving the original bounded buffering behavior.
+   
+   Consumers that pause to process entries can opt into a larger queue to
+   keep traversal workers busy, trading memory for less idle time. A value
+   of zero selects an unbuffered channel. Check the worker-count
+   multiplication so excessive capacities cannot silently overflow.
+   
+   Update existing Options literals to inherit the new default. Verify the
+   actual queue capacity with one and two workers, and exercise larger and
+   unbuffered queues through the public single-root and multi-root walkers.
+
+### Bug Fixes
+
+ - <csr-id-afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6/> pass strict workspace Clippy on Rust 1.99
+   <!-- agent -->
+   Replace empty-container assertions with equality comparisons and empty
+   string checks with inequality comparisons. This satisfies Clippy's
+   assert_is_empty lint while showing actual values when assertions fail.
+   
+   Locally allow the deprecated fetch_update alias in directory identifier
+   allocation. Its replacement, try_update, requires Rust 1.95, while
+   dua-core supports Rust 1.88. Preserve the existing atomic update and
+   overflow handling without raising the minimum supported Rust version.
+ - <csr-id-1ec599fea8dd9512164899fd9000802516d3409d/> keep verbatim paths verbatim when resolving relative paths on Windows
+   When the current directory is verbatim (e.g. after `dua "\\?\D:\dir"`
+   chdirs into a verbatim input path, or when dua runs from a verbatim cwd),
+   `absolute_verbatim_path` resolved relative paths like "." into an
+   already-verbatim absolute path, then fed it into the generic `\\` (UNC)
+   branch and produced `\\?\UNC\?\D:\dir`. `CreateFileW` on that path fails
+   with `ERROR_BAD_NETPATH` (os error 53), so `dua`/`dua aggregate` could not
+   enumerate `\\?\` directories at all.
+   
+   An absolute path that already carries a `\\?\` or `\??\` prefix is now
+   passed through untouched, matching Win32 verbatim semantics; `\\.\`,
+   UNC and ordinary local paths are unchanged.
+   
+   Fixes https://github.com/Byron/dua-cli/issues/406
+
+### Performance
+
+ - <csr-id-4ca76e103123d4f8f7516d8bad85af91cdb9f1d6/> let walk workers queue more batches ahead of the iterator
+   The result channel held `threads * 2` batches. When the iterator's
+   consumer pauses, each worker that finishes a batch then blocks until
+   the consumer drains the channel, so the walk stops whenever the
+   consumer is busy. A consumer that does real work per entry, such as
+   parsing some of the files it's handed, spends much of its time waiting
+   on workers that sat idle while it worked.
+   
+   Allow 128 batches per worker instead. The channel stays bounded, and
+   `dua aggregate` is no slower. The unit tests that block a worker on a
+   full channel fill two batches to do it, so they keep that bound.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release.
+ - 31 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #413 from dduugg/buffer-batches-ahead-of-consumer ([`4179fe2`](https://github.com/Byron/dua-cli/commit/4179fe275833edcfcb89ecf27112e1efe27b4076))
+    - Pass strict workspace Clippy on Rust 1.99 ([`afbe487`](https://github.com/Byron/dua-cli/commit/afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6))
+    - Make walk result buffering configurable per worker ([`2989d30`](https://github.com/Byron/dua-cli/commit/2989d30d43c035c9c9ff9eb8eff8584b6244cf12))
+    - Let walk workers queue more batches ahead of the iterator ([`4ca76e1`](https://github.com/Byron/dua-cli/commit/4ca76e103123d4f8f7516d8bad85af91cdb9f1d6))
+    - Merge pull request #407 from Mathjk/fix/verbatim-path ([`8f8d25b`](https://github.com/Byron/dua-cli/commit/8f8d25b95963523be973243f9a23dfdbf15f8bb1))
+    - Keep verbatim paths verbatim when resolving relative paths on Windows ([`1ec599f`](https://github.com/Byron/dua-cli/commit/1ec599fea8dd9512164899fd9000802516d3409d))
+</details>
+
 ## 4.1.0 (2026-09-12)
 
 ### New Features
@@ -59,7 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 5 commits contributed to the release over the course of 1 calendar day.
+ - 6 commits contributed to the release over the course of 1 calendar day.
  - 5 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -71,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v4.1.0, dua-cli v2.45.0 ([`65c197d`](https://github.com/Byron/dua-cli/commit/65c197d8a04430d8decc51fc4d5dff4405d14288))
     - Prepare changelog prior to release ([`19929e8`](https://github.com/Byron/dua-cli/commit/19929e811061d5678f5d196884e125236e16ea3c))
     - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/Byron/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
     - Stream roots and support cancellable walks ([`c2c6f67`](https://github.com/Byron/dua-cli/commit/c2c6f67d5bfc535e7d67ce695cf96697c74f1545))
