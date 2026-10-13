@@ -6,6 +6,7 @@ fn options(apfs_clone_metadata: bool) -> Options {
     Options {
         apfs_clone_metadata,
         skip_metadata: false,
+        ..Options::default()
     }
 }
 

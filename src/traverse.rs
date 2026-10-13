@@ -2464,6 +2464,7 @@ mod tests {
                     metadata_options: crate::TraversalOptions {
                         skip_metadata: false,
                         apfs_clone_metadata: deduplicate,
+                        ..crate::TraversalOptions::default()
                     },
                     base_dir: None,
                 },
