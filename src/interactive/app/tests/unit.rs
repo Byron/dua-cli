@@ -98,7 +98,7 @@ fn it_can_do_a_case_sensitive_glob_search() {
         Language::English,
     )
     .unwrap();
-    assert!(result_sensitive.is_empty());
+    assert_eq!(result_sensitive, Vec::<TreeIndex>::new());
 }
 
 #[test]

@@ -1407,6 +1407,7 @@ fn assign_directory_ids(entry: &mut Entry, parent_directory_id: usize, shared: &
         .then(|| allocate_directory_id(shared));
 }
 
+#[allow(deprecated)] // `try_update` requires Rust 1.95; keep the Rust 1.88-compatible alias.
 fn allocate_directory_id(shared: &PoolShared) -> DirectoryId {
     DirectoryId::new(
         shared
