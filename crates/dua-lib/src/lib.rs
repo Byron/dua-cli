@@ -138,6 +138,14 @@ const ENTRY_CHUNK_SIZE: usize = 4;
 /// Keep enough metadata jobs available for thieves without retaining an entire wide directory.
 #[cfg(not(windows))]
 const MAX_QUEUED_STAT_JOBS: usize = 64;
+/// Completed batches each worker may have waiting for the iterator. Workers block once this
+/// many are queued, so a consumer that pauses, say to parse a file, stalls the walk unless
+/// there is room to absorb the pause.
+#[cfg(not(test))]
+const QUEUED_BATCHES_PER_WORKER: usize = 128;
+/// Unit tests fill the output with two batches to block a worker on it.
+#[cfg(test)]
+const QUEUED_BATCHES_PER_WORKER: usize = 2;
 #[cfg(target_os = "macos")]
 type StatEntry = Entry;
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -784,7 +792,7 @@ impl Entry {
 fn start_pool(threads: usize, order: Order, options: Options, next_directory_id: usize) -> Pool {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
-    let (event_tx, event_rx) = sync_channel(threads * 2);
+    let (event_tx, event_rx) = sync_channel(threads * QUEUED_BATCHES_PER_WORKER);
     let shared = Arc::new(PoolShared {
         injector: Injector::new(),
         stealers: workers.iter().map(Worker::stealer).collect(),
