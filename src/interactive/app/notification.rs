@@ -107,7 +107,7 @@ mod tests {
         let mut output = Vec::new();
         emit_if_unfocused_to(&mut output, true, true, "focused").expect("no-op succeeds");
         emit_if_unfocused_to(&mut output, false, false, "disabled").expect("no-op succeeds");
-        assert!(output.is_empty());
+        assert_eq!(output, b"");
 
         emit_if_unfocused_to(&mut output, true, false, "ready").expect("notification written");
         assert_eq!(

@@ -429,7 +429,10 @@ mod tests {
         let root = tmp.path().canonicalize().unwrap();
         let direct = directory(&root, "node_modules");
         let nested = directory(&root, "project/__pycache__");
-        assert!(scan(vec![root.clone()], options(), Some(0)).0.is_empty());
+        assert_eq!(
+            scan(vec![root.clone()], options(), Some(0)).0,
+            Vec::<PathBuf>::new()
+        );
         assert_eq!(
             scan(vec![root.clone()], options(), Some(1)).0,
             vec![direct.clone()]
@@ -530,7 +533,7 @@ mod tests {
             directory(&root, &format!("{marker}/objects/node_modules"));
             let (paths, entries, errors) =
                 scan(vec![root.join(marker).join("objects")], options(), None);
-            assert!(paths.is_empty());
+            assert_eq!(paths, Vec::<PathBuf>::new());
             assert_eq!(entries, 1);
             assert_eq!(errors, 0);
         }
@@ -550,10 +553,9 @@ mod tests {
         let venv = directory(&root, "python/venv");
         symlink(root.join("manifest"), venv.join("pyvenv.cfg")).unwrap();
         assert_eq!(scan(vec![root.clone()], options(), None).0, vec![real]);
-        assert!(
-            scan(vec![root.join("node_modules")], options(), None)
-                .0
-                .is_empty()
+        assert_eq!(
+            scan(vec![root.join("node_modules")], options(), None).0,
+            Vec::<PathBuf>::new()
         );
     }
 
@@ -564,7 +566,7 @@ mod tests {
         fs::write(root.join("ordinary-file"), "").unwrap();
         let (paths, entries, errors) =
             scan(vec![root.clone(), root.join("missing")], options(), None);
-        assert!(paths.is_empty());
+        assert_eq!(paths, Vec::<PathBuf>::new());
         assert!(entries > 0);
         assert_eq!(errors, 1);
         directory(&root, "node_modules");

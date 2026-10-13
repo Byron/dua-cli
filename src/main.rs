@@ -732,6 +732,7 @@ fn walk_options_from(traversal: &options::ScanArgs) -> Result<dua::WalkOptions> 
             skip_metadata: false,
             #[cfg(target_os = "macos")]
             apfs_clone_metadata: traversal.deduplicate_apfs_clones && !traversal.apparent_size,
+            ..dua::TraversalOptions::default()
         },
         base_dir: None,
     };

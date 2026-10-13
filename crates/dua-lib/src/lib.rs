@@ -152,8 +152,8 @@ pub enum Order {
     ParentFirst,
 }
 
-/// Filesystem metadata requested during traversal.
-#[derive(Clone, Copy, Debug, Default)]
+/// Filesystem metadata and result buffering requested during traversal.
+#[derive(Clone, Copy, Debug)]
 pub struct Options {
     /// Collect only entry types, leaving [`Entry::metadata`] as `None`.
     ///
@@ -164,6 +164,23 @@ pub struct Options {
     /// Collect APFS clone identity and data-fork allocation metadata.
     #[cfg(target_os = "macos")]
     pub apfs_clone_metadata: bool,
+    /// Result queue capacity per worker, defaulting to `2`.
+    ///
+    /// Workers share a queue with this capacity multiplied by the worker count and block when
+    /// it is full. Increase this to keep workers busy while the consumer pauses to process entries,
+    /// at the cost of buffering more batches in memory. `0` disables buffering.
+    pub queued_batches_per_worker: usize,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            skip_metadata: false,
+            #[cfg(target_os = "macos")]
+            apfs_clone_metadata: false,
+            queued_batches_per_worker: 2,
+        }
+    }
 }
 
 impl Options {
@@ -171,6 +188,13 @@ impl Options {
     #[must_use]
     pub fn skip_metadata(mut self) -> Self {
         self.skip_metadata = true;
+        self
+    }
+
+    /// Set the result queue capacity per worker; see [`Self::queued_batches_per_worker`].
+    #[must_use]
+    pub fn queued_batches_per_worker(mut self, batches: usize) -> Self {
+        self.queued_batches_per_worker = batches;
         self
     }
 }
@@ -784,7 +808,11 @@ impl Entry {
 fn start_pool(threads: usize, order: Order, options: Options, next_directory_id: usize) -> Pool {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
-    let (event_tx, event_rx) = sync_channel(threads * 2);
+    let (event_tx, event_rx) = sync_channel(
+        threads
+            .checked_mul(options.queued_batches_per_worker)
+            .expect("result queue capacity overflow"),
+    );
     let shared = Arc::new(PoolShared {
         injector: Injector::new(),
         stealers: workers.iter().map(Worker::stealer).collect(),
@@ -1379,6 +1407,7 @@ fn assign_directory_ids(entry: &mut Entry, parent_directory_id: usize, shared: &
         .then(|| allocate_directory_id(shared));
 }
 
+#[allow(deprecated)] // `try_update` requires Rust 1.95; keep the Rust 1.88-compatible alias.
 fn allocate_directory_id(shared: &PoolShared) -> DirectoryId {
     DirectoryId::new(
         shared
@@ -1472,6 +1501,27 @@ fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn result_queue_capacity_is_configurable_per_worker() {
+        for threads in [1, 2] {
+            for (options, batches) in [
+                (Options::default(), 2),
+                (Options::default().queued_batches_per_worker(0), 0),
+                (Options::default().queued_batches_per_worker(1), 1),
+                (Options::default().queued_batches_per_worker(128), 128),
+            ] {
+                let pool = start_pool(threads, Order::ParentFirst, options, 0);
+                for _ in 0..threads * batches {
+                    pool.shared.events.try_send(Event::Finished).unwrap();
+                }
+                assert!(matches!(
+                    pool.shared.events.try_send(Event::Finished),
+                    Err(std::sync::mpsc::TrySendError::Full(_))
+                ));
+            }
+        }
+    }
 
     #[test]
     fn roots_added_during_a_blocked_walk_finish_independently() {

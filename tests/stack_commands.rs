@@ -39,7 +39,7 @@ fn stacks_and_flamegraph_commands_use_the_folded_output() {
         .output()
         .unwrap();
     assert!(flamegraph.status.success());
-    assert!(flamegraph.stdout.is_empty());
+    assert_eq!(flamegraph.stdout, b"");
     let svg = fs::read_to_string(fixture.path().join("usage.svg")).unwrap();
     assert!(svg.contains("<svg"));
     assert!(svg.contains("width=\"640\""));

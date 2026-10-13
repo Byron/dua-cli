@@ -106,7 +106,7 @@ fn empty_snapshot_round_trips() {
     let traversal = Traversal::new();
     let bytes = encoded(&traversal, &[]);
     let snapshot = read(Cursor::new(&bytes)).unwrap();
-    assert!(snapshot.roots.is_empty());
+    assert_eq!(snapshot.roots, Vec::<TreeIndex>::new());
     assert_eq!(snapshot.traversal.tree.len(), 1);
     assert_eq!(
         snapshot

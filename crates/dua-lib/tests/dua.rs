@@ -14,7 +14,7 @@ fn walkers_are_available_to_consumers() {
         &roots[0],
         2,
         Order::ParentFirst,
-        dua_core::Options::default(),
+        dua_core::Options::default().queued_batches_per_worker(128),
         |_| true,
     )
     .map(|entry| {
@@ -32,7 +32,7 @@ fn walkers_are_available_to_consumers() {
         roots.iter().cloned().enumerate(),
         2,
         Order::Completion,
-        dua_core::Options::default(),
+        dua_core::Options::default().queued_batches_per_worker(0),
         |_, _| true,
     )
     .collect::<Vec<_>>();

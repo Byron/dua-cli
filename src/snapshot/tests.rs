@@ -75,7 +75,7 @@ fn decoder_lends_record_names_and_reuses_depth_buffers() {
     decoder.next_entry(None).unwrap().unwrap();
     assert_eq!(decoder.sibling_names[1].as_ptr(), depth_buffer);
     assert_eq!(decoder.sibling_names[1].capacity(), depth_capacity);
-    assert!(decoder.sibling_names[1].is_empty());
+    assert_eq!(decoder.sibling_names[1], b"");
 
     decoder.next_entry(None).unwrap().unwrap();
     assert_eq!(decoder.sibling_names[1].as_ptr(), depth_buffer);

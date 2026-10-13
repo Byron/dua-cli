@@ -1243,8 +1243,8 @@ mod tests {
                 assert!(progress.contains("42"));
                 assert!(progress.contains("123 MB"));
             }
-            assert!(!language.ui_text().deletion_running.is_empty());
-            assert!(!language.ui_text().cancelling_deletion.is_empty());
+            assert_ne!(language.ui_text().deletion_running, "");
+            assert_ne!(language.ui_text().cancelling_deletion, "");
         }
     }
 
