@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 5.0.0 (2026-10-15)
+
+### Bug Fixes
+
+ - <csr-id-90279fb2211655abbfb423535ed50e4ebad419bc/> prepare Options to remain stable by making them non-exhaustive
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 2 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Prepare Options to remain stable by making them non-exhaustive ([`90279fb`](https://github.com/Byron/dua-cli/commit/90279fb2211655abbfb423535ed50e4ebad419bc))
+</details>
+
 ## 4.2.0 (2026-10-13)
 
 ### New Features
@@ -70,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release.
+ - 7 commits contributed to the release.
  - 31 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -82,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v4.2.0 ([`2eeb1e8`](https://github.com/Byron/dua-cli/commit/2eeb1e88e7fbc2423b1b1d363be926731c94f82e))
     - Merge pull request #413 from dduugg/buffer-batches-ahead-of-consumer ([`4179fe2`](https://github.com/Byron/dua-cli/commit/4179fe275833edcfcb89ecf27112e1efe27b4076))
     - Pass strict workspace Clippy on Rust 1.99 ([`afbe487`](https://github.com/Byron/dua-cli/commit/afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6))
     - Make walk result buffering configurable per worker ([`2989d30`](https://github.com/Byron/dua-cli/commit/2989d30d43c035c9c9ff9eb8eff8584b6244cf12))
