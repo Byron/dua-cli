@@ -1,6 +1,6 @@
 [package]
 name = "dua-core"
-version = "4.2.0"
+version = "5.0.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true

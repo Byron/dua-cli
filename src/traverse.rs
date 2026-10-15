@@ -2451,6 +2451,8 @@ mod tests {
         use std::os::unix::fs::MetadataExt as _;
 
         fn total(path: &Path, deduplicate: bool) -> u128 {
+            let mut metadata_options = crate::TraversalOptions::default();
+            metadata_options.apfs_clone_metadata = deduplicate;
             let mut traversal = Traversal::new();
             let mut background = BackgroundTraversal::start(
                 traversal.root_index,
@@ -2461,11 +2463,7 @@ mod tests {
                     cross_filesystems: true,
                     ignore_dirs: std::collections::BTreeSet::default(),
                     ignore_patterns: None,
-                    metadata_options: crate::TraversalOptions {
-                        skip_metadata: false,
-                        apfs_clone_metadata: deduplicate,
-                        ..crate::TraversalOptions::default()
-                    },
+                    metadata_options,
                     base_dir: None,
                 },
                 vec![path.to_owned()],

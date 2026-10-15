@@ -728,14 +728,14 @@ fn walk_options_from(traversal: &options::ScanArgs) -> Result<dua::WalkOptions> 
         cross_filesystems: !traversal.stay_on_filesystem,
         ignore_dirs: canonicalize_ignore_dirs(&traversal.ignore_dirs),
         ignore_patterns: dua::IgnorePatterns::from_files(&traversal.ignore_from)?,
-        metadata_options: dua::TraversalOptions {
-            skip_metadata: false,
-            #[cfg(target_os = "macos")]
-            apfs_clone_metadata: traversal.deduplicate_apfs_clones && !traversal.apparent_size,
-            ..dua::TraversalOptions::default()
-        },
+        metadata_options: dua::TraversalOptions::default(),
         base_dir: None,
     };
+    #[cfg(target_os = "macos")]
+    {
+        walk_options.metadata_options.apfs_clone_metadata =
+            traversal.deduplicate_apfs_clones && !traversal.apparent_size;
+    }
 
     if walk_options.threads == 0 {
         walk_options.threads = num_cpus::get();

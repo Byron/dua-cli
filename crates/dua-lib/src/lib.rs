@@ -154,6 +154,7 @@ pub enum Order {
 
 /// Filesystem metadata and result buffering requested during traversal.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct Options {
     /// Collect only entry types, leaving [`Entry::metadata`] as `None`.
     ///
