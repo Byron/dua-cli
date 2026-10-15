@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A bugfix release, and one that should also restore cargo installations, making them function.
+
+### New Features
+
+ - <csr-id-2989d30d43c035c9c9ff9eb8eff8584b6244cf12/> make walk result buffering configurable per worker
+   <!-- agent -->
+   Replace the fixed QUEUED_BATCHES_PER_WORKER constant with
+   Options::queued_batches_per_worker and a chainable builder method. Use
+   two queued batches per worker by default in both production and tests,
+   preserving the original bounded buffering behavior.
+   
+   Consumers that pause to process entries can opt into a larger queue to
+   keep traversal workers busy, trading memory for less idle time. A value
+   of zero selects an unbuffered channel. Check the worker-count
+   multiplication so excessive capacities cannot silently overflow.
+   
+   Update existing Options literals to inherit the new default. Verify the
+   actual queue capacity with one and two workers, and exercise larger and
+   unbuffered queues through the public single-root and multi-root walkers.
+
+### Bug Fixes
+
+ - <csr-id-afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6/> pass strict workspace Clippy on Rust 1.99
+   <!-- agent -->
+   Replace empty-container assertions with equality comparisons and empty
+   string checks with inequality comparisons. This satisfies Clippy's
+   assert_is_empty lint while showing actual values when assertions fail.
+   
+   Locally allow the deprecated fetch_update alias in directory identifier
+   allocation. Its replacement, try_update, requires Rust 1.95, while
+   dua-core supports Rust 1.88. Preserve the existing atomic update and
+   overflow handling without raising the minimum supported Rust version.
+ - <csr-id-92260297b8d7add5b9402deeedf715becc788816/> preserve flame graphs when export fails
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release.
+ - 15 days passed between releases.
+ - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #413 from dduugg/buffer-batches-ahead-of-consumer ([`4179fe2`](https://github.com/Byron/dua-cli/commit/4179fe275833edcfcb89ecf27112e1efe27b4076))
+    - Pass strict workspace Clippy on Rust 1.99 ([`afbe487`](https://github.com/Byron/dua-cli/commit/afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6))
+    - Make walk result buffering configurable per worker ([`2989d30`](https://github.com/Byron/dua-cli/commit/2989d30d43c035c9c9ff9eb8eff8584b6244cf12))
+    - Merge pull request #412 from Likio3000/fix/atomic-flamegraph-export ([`d11cb9c`](https://github.com/Byron/dua-cli/commit/d11cb9c771a91d702cd556fb1405f8b79064472b))
+    - Review ([`c0c749a`](https://github.com/Byron/dua-cli/commit/c0c749a483d30a67a09f406e5d5b0088639121f6))
+    - Preserve flame graphs when export fails ([`9226029`](https://github.com/Byron/dua-cli/commit/92260297b8d7add5b9402deeedf715becc788816))
+</details>
+
 ## 2.45.1 (2026-09-30)
 
 ### Documentation
