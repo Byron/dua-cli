@@ -27,7 +27,7 @@ use tui::{
         Widget,
     },
 };
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Copy)]
 pub enum MarkMode {
@@ -304,18 +304,13 @@ impl MarkPane {
                             String::new()
                         }
                     );
-                    let num_path_graphemes = path.graphemes(true).count();
-                    match num_path_graphemes + format.total_width() {
-                        n if n > area.width as usize => {
-                            let desired_size =
-                                num_path_graphemes.saturating_sub(n - area.width as usize);
-                            fit_string_graphemes_with_ellipsis(
-                                path,
-                                num_path_graphemes,
-                                desired_size,
-                            )
-                        }
-                        _ => (path, num_path_graphemes),
+                    let path_width = path.width();
+                    let available_width =
+                        (area.width as usize).saturating_sub(format.total_width());
+                    if path_width > available_width {
+                        fit_string_graphemes_with_ellipsis(path, available_width)
+                    } else {
+                        (path, path_width)
                     }
                 };
                 let fg_path = entry_color(None, !v.is_dir, true);
@@ -529,6 +524,54 @@ mod mark_pane_tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyModifiers};
     use tui::buffer::Cell;
+
+    #[test]
+    fn unicode_paths_keep_the_size_column_aligned() {
+        let long_path = "資料/".repeat(30);
+        let paths = ["report.txt", "資料.txt", "📁.txt", long_path.as_str()];
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buffer = Buffer::empty(area);
+        let mut pane = MarkPane::default();
+        for (index, path) in paths.iter().enumerate() {
+            pane.marked.insert(
+                TreeIndex::new(index),
+                EntryMark {
+                    index,
+                    path: PathBuf::from(path),
+                    size: 1_000_000,
+                    ..Default::default()
+                },
+            );
+        }
+        pane.render(
+            MarkPaneProps {
+                border_style: Style::default(),
+                format: ByteFormat::Metric,
+                keys: &KeysConfig::default(),
+                root_total_size: 4_000_000,
+                safety_notice: None,
+                allow_changes: true,
+                language: Language::English,
+            },
+            area,
+            &mut buffer,
+        );
+
+        let mut size_columns = Vec::new();
+        for y in 1..=4 {
+            let row: String = (0..area.width).map(|x| buffer[(x, y)].symbol()).collect();
+            assert!(row.contains("1.00 MB"), "size must remain visible: {row}");
+            size_columns.push(
+                (0..area.width)
+                    .find(|&x| buffer[(x, y)].fg == Color::Green)
+                    .expect("size column"),
+            );
+        }
+        assert!(
+            size_columns.iter().all(|x| *x == size_columns[0]),
+            "{size_columns:?}"
+        );
+    }
 
     #[test]
     fn title_shows_percentage_of_root_size() {
