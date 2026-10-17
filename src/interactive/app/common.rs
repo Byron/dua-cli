@@ -257,17 +257,19 @@ pub fn fit_string_graphemes_with_ellipsis(
         return (String::new(), 0);
     }
 
-    let mut suffix_start = s.len();
-    let mut width = 1; // ellipsis
-    for (index, grapheme) in s.grapheme_indices(true).rev() {
-        let grapheme_width = grapheme.width();
-        if width + grapheme_width > desired_width {
-            break;
-        }
-        suffix_start = index;
-        width += grapheme_width;
-    }
-    (format!("…{}", &s[suffix_start..]), width)
+    let suffix_start = if s.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+        // Printable ASCII has one cell per byte and no multi-byte graphemes.
+        s.len() - (desired_width - 1)
+    } else {
+        // Ligatures can span grapheme boundaries, so measure complete suffixes in O(n2)
+        s.grapheme_indices(true)
+            .map(|(index, _)| index)
+            .find(|&index| s[index..].width() < desired_width)
+            .unwrap_or(s.len())
+    };
+    let fitted = format!("…{}", &s[suffix_start..]);
+    let width = fitted.width();
+    (fitted, width)
 }
 
 #[cfg(test)]
@@ -298,8 +300,28 @@ mod tests {
     }
 
     #[test]
+    fn fit_long_ascii_string_in_narrow_widths() {
+        let input = "path/to/report.txt ".repeat(1_000);
+        for budget in [0, 1, 2, 5, 20, input.len(), input.len() + 1] {
+            let expected = if input.len() <= budget {
+                input.clone()
+            } else if budget == 0 {
+                String::new()
+            } else {
+                format!("…{}", &input[input.len() - (budget - 1)..])
+            };
+            let expected_width = expected.width();
+            assert_eq!(
+                fit_string_graphemes_with_ellipsis(input.as_str(), budget),
+                (expected, expected_width),
+                "ASCII path at width {budget}"
+            );
+        }
+    }
+
+    #[test]
     fn fit_string_respects_display_width_and_grapheme_boundaries() {
-        for (input, budget, expected, width) in [
+        for (input, budget, expected_str, expected_width) in [
             ("資料abc", 6, "…料abc", 6),
             ("資料abc", 5, "…abc", 4),
             ("👩‍💻abc", 4, "…abc", 4),
@@ -307,10 +329,21 @@ mod tests {
             ("資料", 1, "…", 1),
             ("資料", 0, "", 0),
             ("資料", 4, "資料", 4),
+            ("xxxx\r\nab", 4, "…\r\nab", 4),
+            ("xxxلا📁", 5, "…xلا📁", 5),
+            ("xxxلا📁", 4, "…لا📁", 4),
+            ("xxxلا📁", 3, "…📁", 3),
+            ("xxxⵏ⵿ⴾ📁", 4, "…ⵏ⵿ⴾ📁", 4),
         ] {
+            let (fitted, actual_width) = fit_string_graphemes_with_ellipsis(input, budget);
             assert_eq!(
-                fit_string_graphemes_with_ellipsis(input, budget),
-                (expected.to_string(), width),
+                actual_width,
+                fitted.width(),
+                "reported width must match the whole string: {input:?} at width {budget}"
+            );
+            assert_eq!(
+                (fitted, actual_width),
+                (expected_str.to_string(), expected_width),
                 "{input:?} at width {budget}"
             );
         }

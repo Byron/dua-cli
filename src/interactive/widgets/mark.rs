@@ -527,6 +527,14 @@ mod mark_pane_tests {
 
     #[test]
     fn unicode_paths_keep_the_size_column_aligned() {
+        fn buffer_debug_without_styles(buffer: &Buffer) -> String {
+            let debug = format!("{buffer:?}");
+            let (content, _) = debug
+                .split_once("\n    styles: [")
+                .expect("buffer debug output includes styles");
+            content.to_owned()
+        }
+
         let long_path = "資料/".repeat(30);
         let paths = ["report.txt", "資料.txt", "📁.txt", long_path.as_str()];
         let area = Rect::new(0, 0, 80, 6);
@@ -571,6 +579,22 @@ mod mark_pane_tests {
             size_columns.iter().all(|x| *x == size_columns[0]),
             "{size_columns:?}"
         );
+
+        insta::assert_snapshot!(
+            buffer_debug_without_styles(&buffer),
+            "marked item count, size and percentage of root size",
+            @r#"
+        Buffer {
+            area: Rect { x: 0, y: 0, width: 80, height: 6 },
+            content: [
+                "┌Marked 0 items (0  B, 0.00% of 4.00 MB) ──────────────────────────────────────┐",
+                "│ report.txt                                                           1.00 MB █",
+                "│ 資料.txt                                                             1.00 MB █", // hidden by multi-width symbols: [(3, " "), (5, " ")]
+                "│ 📁.txt                                                               1.00 MB ║", // hidden by multi-width symbols: [(3, " ")]
+                "│…料/資料/資料/資料/資料/資料/資料/資料/資料/資料/資料/資料/資料/      1.00 MB ║", // hidden by multi-width symbols: [(3, " "), (6, " "), (8, " "), (11, " "), (13, " "), (16, " "), (18, " "), (21, " "), (23, " "), (26, " "), (28, " "), (31, " "), (33, " "), (36, " "), (38, " "), (41, " "), (43, " "), (46, " "), (48, " "), (51, " "), (53, " "), (56, " "), (58, " "), (61, " "), (63, " ")]
+                "└──────────────────────────────────────────────────────────────────────────────┘",
+            ],
+        "#);
     }
 
     #[test]
