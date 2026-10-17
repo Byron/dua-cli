@@ -2,6 +2,7 @@ use dua::traverse::{Tree, TreeIndex};
 use std::time::SystemTime;
 use std::{cmp::Ordering, path::PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// Controls which modification time is used for mtime sorting.
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
@@ -242,36 +243,33 @@ fn mtime_of_descendants_with_ordering(
     selected_mtime
 }
 
+/// Keep a grapheme-aligned suffix within a terminal-cell budget, adding an ellipsis if shortened.
 pub fn fit_string_graphemes_with_ellipsis(
     s: impl Into<String>,
-    path_graphemes_count: usize,
-    mut desired_graphemes: usize,
+    desired_width: usize,
 ) -> (String, usize) {
-    const ELLIPSIS: usize = 1;
-    const MIN_GRAPHEMES_ON_SIDE: usize = 1;
-    const MIN_LEN: usize = ELLIPSIS + MIN_GRAPHEMES_ON_SIDE;
-    const USE_EXTENDED: bool = true;
-
     let s = s.into();
-    desired_graphemes = desired_graphemes.max(MIN_LEN);
-
-    debug_assert!(
-        path_graphemes_count == s.graphemes(USE_EXTENDED).count(),
-        "input grapheme count is actually correct"
-    );
-
-    let gc = path_graphemes_count;
-    if gc <= desired_graphemes {
-        return (s, gc);
+    let width = s.width();
+    if width <= desired_width {
+        return (s, width);
+    }
+    if desired_width == 0 {
+        return (String::new(), 0);
     }
 
-    let mut n = String::with_capacity(desired_graphemes);
-    let to_be_removed = gc - desired_graphemes + ELLIPSIS;
-    let gmi = s.graphemes(USE_EXTENDED);
-
-    n.push('…');
-    n.extend(gmi.skip(to_be_removed));
-    (n, desired_graphemes)
+    let suffix_start = if s.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+        // Printable ASCII has one cell per byte and no multi-byte graphemes.
+        s.len() - (desired_width - 1)
+    } else {
+        // Ligatures can span grapheme boundaries, so measure complete suffixes in O(n2)
+        s.grapheme_indices(true)
+            .map(|(index, _)| index)
+            .find(|&index| s[index..].width() < desired_width)
+            .unwrap_or(s.len())
+    };
+    let fitted = format!("…{}", &s[suffix_start..]);
+    let width = fitted.width();
+    (fitted, width)
 }
 
 #[cfg(test)]
@@ -282,22 +280,72 @@ mod tests {
     fn fit_string_inputs() {
         assert_eq!(
             ("aaa".into(), 3),
-            fit_string_graphemes_with_ellipsis("aaa", 3, 4)
+            fit_string_graphemes_with_ellipsis("aaa", 4)
         );
         assert_eq!(
-            ("…a".to_string(), 2),
-            fit_string_graphemes_with_ellipsis("abbbba", 6, 1),
+            ("…".to_string(), 1),
+            fit_string_graphemes_with_ellipsis("abbbba", 1),
             "even amount of chars, desired too small"
         );
         assert_eq!(
             ("…ca".to_string(), 3),
-            fit_string_graphemes_with_ellipsis("abbbbca", 7, 3),
+            fit_string_graphemes_with_ellipsis("abbbbca", 3),
             "uneven amount of chars, desired too small"
         );
         assert_eq!(
             ("… a".to_string(), 3),
-            fit_string_graphemes_with_ellipsis("a    a", 6, 3),
+            fit_string_graphemes_with_ellipsis("a    a", 3),
             "spaces are counted as graphemes, too"
         );
+    }
+
+    #[test]
+    fn fit_long_ascii_string_in_narrow_widths() {
+        let input = "path/to/report.txt ".repeat(1_000);
+        for budget in [0, 1, 2, 5, 20, input.len(), input.len() + 1] {
+            let expected = if input.len() <= budget {
+                input.clone()
+            } else if budget == 0 {
+                String::new()
+            } else {
+                format!("…{}", &input[input.len() - (budget - 1)..])
+            };
+            let expected_width = expected.width();
+            assert_eq!(
+                fit_string_graphemes_with_ellipsis(input.as_str(), budget),
+                (expected, expected_width),
+                "ASCII path at width {budget}"
+            );
+        }
+    }
+
+    #[test]
+    fn fit_string_respects_display_width_and_grapheme_boundaries() {
+        for (input, budget, expected_str, expected_width) in [
+            ("資料abc", 6, "…料abc", 6),
+            ("資料abc", 5, "…abc", 4),
+            ("👩‍💻abc", 4, "…abc", 4),
+            ("cafe\u{301}", 3, "…fe\u{301}", 3),
+            ("資料", 1, "…", 1),
+            ("資料", 0, "", 0),
+            ("資料", 4, "資料", 4),
+            ("xxxx\r\nab", 4, "…\r\nab", 4),
+            ("xxxلا📁", 5, "…xلا📁", 5),
+            ("xxxلا📁", 4, "…لا📁", 4),
+            ("xxxلا📁", 3, "…📁", 3),
+            ("xxxⵏ⵿ⴾ📁", 4, "…ⵏ⵿ⴾ📁", 4),
+        ] {
+            let (fitted, actual_width) = fit_string_graphemes_with_ellipsis(input, budget);
+            assert_eq!(
+                actual_width,
+                fitted.width(),
+                "reported width must match the whole string: {input:?} at width {budget}"
+            );
+            assert_eq!(
+                (fitted, actual_width),
+                (expected_str.to_string(), expected_width),
+                "{input:?} at width {budget}"
+            );
+        }
     }
 }
