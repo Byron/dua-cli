@@ -266,22 +266,26 @@ impl ReadDir {
     fn entry_at(&self, offset: usize) -> io::Result<(Entry, Option<usize>)> {
         const HEADER_SIZE: usize = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
         let buffer_len = self.buffer.len() * size_of::<u64>();
-        if offset > buffer_len.saturating_sub(HEADER_SIZE) {
+        if offset
+            .checked_add(HEADER_SIZE)
+            .is_none_or(|end| end > buffer_len)
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Windows directory record header exceeds its buffer",
             ));
         }
-        // SAFETY: validation above proves the record header lies within the aligned backing
-        // allocation. Individual fields are read unaligned because record offsets need not be.
-        let info_ptr = unsafe {
-            self.buffer
-                .as_ptr()
-                .byte_add(offset)
-                .cast::<FILE_ID_BOTH_DIR_INFO>()
-        };
-        // SAFETY: `info_ptr` addresses a complete in-bounds header validated above.
-        let info = unsafe { info_ptr.read_unaligned() };
+        let mut info = FILE_ID_BOTH_DIR_INFO::default();
+        // SAFETY: `offset + HEADER_SIZE <= buffer_len` was validated above, and `HEADER_SIZE`
+        // is the byte offset of `FileName` within `FILE_ID_BOTH_DIR_INFO`. Copying `HEADER_SIZE`
+        // bytes as `u8` requires no alignment and stays in-bounds of both `self.buffer` and `info`.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.buffer.as_ptr().cast::<u8>().add(offset),
+                (&raw mut info).cast::<u8>(),
+                HEADER_SIZE,
+            );
+        }
         if info.FileNameLength % 2 != 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -304,7 +308,12 @@ impl ReadDir {
         }
         // SAFETY: the filename range was validated against the buffer above. It may be unaligned,
         // so each UTF-16 code unit is copied with `read_unaligned` below.
-        let name_ptr = unsafe { (&raw const (*info_ptr).FileName).cast::<u16>() };
+        let name_ptr = unsafe {
+            self.buffer
+                .as_ptr()
+                .byte_add(offset + HEADER_SIZE)
+                .cast::<u16>()
+        };
         let name = (0..name_len)
             // SAFETY: `idx` stays within the validated filename range.
             .map(|idx| unsafe { name_ptr.add(idx).read_unaligned() })
@@ -315,7 +324,10 @@ impl ReadDir {
         } else {
             let next = offset
                 .checked_add(info.NextEntryOffset as usize)
-                .filter(|next| *next <= buffer_len.saturating_sub(HEADER_SIZE))
+                .filter(|next| {
+                    next.checked_add(HEADER_SIZE)
+                        .is_some_and(|end| end <= buffer_len)
+                })
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -779,6 +791,51 @@ mod tests {
         assert_eq!(
             units(r"\\server\share\dir"),
             OsString::from(r"\\?\UNC\server\share\dir")
+        );
+    }
+
+    #[test]
+    fn entry_at_reads_short_filename_at_end_of_buffer_without_overreading_padding() {
+        const HEADER_SIZE: usize = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
+        let dir = tempfile::tempdir().unwrap();
+        let mut read_dir =
+            ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default()).unwrap();
+
+        // 14 u64 words = 112 bytes. Place a 106-byte record (104-byte header + 1 UTF-16 code unit)
+        // at offset 6 so only 106 bytes remain in the buffer (< size_of::<FILE_ID_BOTH_DIR_INFO>() == 112).
+        read_dir.buffer = vec![0; 14];
+        let offset = 112 - (HEADER_SIZE + size_of::<u16>());
+        let header = FILE_ID_BOTH_DIR_INFO {
+            FileNameLength: 2,
+            EndOfFile: 42,
+            AllocationSize: 64,
+            FileId: 7,
+            ..FILE_ID_BOTH_DIR_INFO::default()
+        };
+        let name_unit = u16::from(b'a');
+        // SAFETY: `offset + HEADER_SIZE + size_of::<u16>() == 112`, matching the 112-byte buffer.
+        unsafe {
+            let dst = read_dir.buffer.as_mut_ptr().cast::<u8>().add(offset);
+            std::ptr::copy_nonoverlapping((&raw const header).cast::<u8>(), dst, HEADER_SIZE);
+            std::ptr::copy_nonoverlapping(
+                (&raw const name_unit).cast::<u8>(),
+                dst.add(HEADER_SIZE),
+                size_of::<u16>(),
+            );
+        }
+
+        let (entry, next_offset) = read_dir.entry_at(offset).unwrap();
+        assert_eq!(entry.file_name, OsString::from("a"));
+        assert_eq!(next_offset, None);
+        let metadata = entry.metadata.unwrap().unwrap();
+        assert_eq!(metadata.len(), 42);
+        assert_eq!(metadata.allocated_size(), 64);
+
+        // A buffer smaller than HEADER_SIZE must fail cleanly rather than saturating to 0.
+        read_dir.buffer = vec![0; 1];
+        assert_eq!(
+            read_dir.entry_at(0).err().unwrap().kind(),
+            io::ErrorKind::InvalidData
         );
     }
 }
