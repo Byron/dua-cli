@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 5.0.1 (2026-10-25)
+
+### Bug Fixes
+
+ - <csr-id-67c857688e626f1016e8522fc3e4e4535cc23198/> fall back when macOS bulk directory reads are unavailable
+   The new implementation can have a performance impact if the bulk reads are turned
+   off, but this can be controlled with configuration so shouldn't be a problem.
+   Also, it's for old systems.
+   
+   <!-- agent -->
+   PowerPC and macOS before 10.10 do not provide getattrlistbulk, so
+   unconditional native directory enumeration leaves dua-core consumers
+   with an undefined symbol at link time.
+   
+   Select bulk reads from the target architecture and deployment version in
+   build.rs. Respect MACOSX_DEPLOYMENT_TARGET, otherwise query the target
+   compiler's default; unknown versions and architectures use ordinary
+   directory reads. Keep the existing macOS entry/metadata API and preserve
+   requested APFS clone metadata in the fallback.
+   
+   Review identified an unused 64 KiB allocation per directory in fallback
+   builds. Make that buffer zero-sized, avoiding the heap allocation while
+   keeping the shared reader layout and fallback behavior.
+   
+   Also omit clock_gettime before macOS 10.12, leaving the metadata probe's
+   existing missing-clock behavior in place.
+ - <csr-id-b5ef2871a9db5936a6ba3b8b2a3124f8039ce6ad/> avoid reading past HEADER_SIZE in Windows ReadDir::entry_at
+   `FILE_ID_BOTH_DIR_INFO` has a 104-byte fixed header (`HEADER_SIZE`) followed by `FileName: [u16; 1]` (2 bytes) and 6 bytes of trailing alignment padding (`size_of::<FILE_ID_BOTH_DIR_INFO>() == 112`).
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 4 commits contributed to the release.
+ - 10 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#417](https://github.com/Byron/dua-cli/issues/417)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#417](https://github.com/Byron/dua-cli/issues/417)**
+    - Fall back when macOS bulk directory reads are unavailable ([`67c8576`](https://github.com/Byron/dua-cli/commit/67c857688e626f1016e8522fc3e4e4535cc23198))
+ * **Uncategorized**
+    - Merge pull request #418 from Byron/conditional-bulk-macos ([`fb5d863`](https://github.com/Byron/dua-cli/commit/fb5d863a93cf2a41357e8048bb546cb4f869c2ed))
+    - Merge pull request #416 from kiranani/fix-windows-entry-at-oob-read ([`48c91c7`](https://github.com/Byron/dua-cli/commit/48c91c71fc82919ff0c993a2779da24920325a7a))
+    - Avoid reading past HEADER_SIZE in Windows ReadDir::entry_at ([`b5ef287`](https://github.com/Byron/dua-cli/commit/b5ef2871a9db5936a6ba3b8b2a3124f8039ce6ad))
+</details>
+
 ## 5.0.0 (2026-10-15)
 
 ### Bug Fixes
@@ -15,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 2 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -27,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v5.0.0 ([`605564f`](https://github.com/Byron/dua-cli/commit/605564f0b3e99632c27a472d0505a40d58fa52d4))
     - Prepare Options to remain stable by making them non-exhaustive ([`90279fb`](https://github.com/Byron/dua-cli/commit/90279fb2211655abbfb423535ed50e4ebad419bc))
 </details>
 
