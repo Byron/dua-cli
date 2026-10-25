@@ -41,6 +41,7 @@ const FTS_COMMON_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
     | libc::ATTR_CMN_FILEID;
 // XNU's `vfs_attrlist.c` `LIST_DIR_ATTRS` authorizes this subset with LIST_DIRECTORY alone.
 // Metadata attributes additionally require SEARCH, which a readable directory need not grant.
+#[cfg(any(dua_macos_bulk, test))]
 const LIST_ONLY_ATTRIBUTES: libc::attrgroup_t = libc::ATTR_CMN_RETURNED_ATTRS
     | libc::ATTR_CMN_NAME
     | libc::ATTR_CMN_OBJTYPE
@@ -97,6 +98,7 @@ pub(super) struct DataFork {
     pub(super) clone_id: Option<NonZeroU64>,
 }
 
+#[cfg(any(dua_macos_bulk, test))]
 pub(super) fn requested_attributes(list_only: bool, include_apfs: bool) -> libc::attrlist {
     let mut attributes = libc::attrlist {
         bitmapcount: libc::ATTR_BIT_MAP_COUNT,

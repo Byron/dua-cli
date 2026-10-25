@@ -46,6 +46,20 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  build-and-test-macos-fallback:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add x86_64-apple-darwin
+      - name: Test fallback for macOS before 10.10
+        run: sh ci/check-macos-fallback.sh
+      - name: Lint fallback
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '10.9'
+          CARGO_TARGET_DIR: target/macos-fallback
+        run: cargo clippy --workspace --all-targets --all-features --target x86_64-apple-darwin -- -D warnings
+
   build-and-test-on-windows:
     name: Windows (nightly)
     runs-on: windows-latest
