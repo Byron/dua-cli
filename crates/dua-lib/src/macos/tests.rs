@@ -45,6 +45,7 @@ fn parallel_metadata_requires_repeated_waiting_regardless_of_clock_speed() {
 }
 
 #[test]
+#[cfg(dua_macos_bulk)]
 fn cpu_bound_probe_leaves_directory_stats_for_streaming() {
     let directory = tempfile::tempdir().unwrap();
     let child = directory.path().join("child");
@@ -73,6 +74,21 @@ fn cpu_bound_probe_leaves_directory_stats_for_streaming() {
         reader.next().is_none(),
         "this would be Some if the entry was cached during the probe"
     );
+}
+
+#[test]
+#[cfg(not(dua_macos_bulk))]
+fn unsupported_targets_start_with_ordinary_directory_reads() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("file"), b"content").unwrap();
+    let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
+    assert!(reader.fallback.is_some());
+    assert!(reader.buffer.as_bytes().is_empty());
+    assert!(reader.probe_metadata().is_empty());
+    let entry = reader.next().unwrap().unwrap();
+    assert_eq!(entry.file_name, "file");
+    assert_eq!(entry.metadata.unwrap().unwrap().len(), 7);
+    assert!(reader.next().is_none());
 }
 
 #[test]

@@ -4,16 +4,16 @@ use std::{
     ffi::{CString, OsString},
     fs, io,
     num::NonZeroU64,
-    os::{
-        fd::{AsRawFd, OwnedFd},
-        unix::{
-            ffi::OsStrExt,
-            fs::{MetadataExt, OpenOptionsExt},
-        },
-    },
+    os::unix::{ffi::OsStrExt, fs::MetadataExt},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant, SystemTime},
+};
+
+#[cfg(dua_macos_bulk)]
+use std::os::{
+    fd::{AsRawFd, OwnedFd},
+    unix::fs::OpenOptionsExt,
 };
 
 mod attributes;
@@ -21,10 +21,14 @@ mod attributes;
 use attributes::{
     AlignedBuffer, DataFork, ParsedRecord, RecordHeader, RootCloneResponse, SF_FIRMLINK,
     STAT_BLOCK_BYTES, VDIR, VLNK, VNON, VREG, invalid_data, parse_record, read_record_length,
-    requested_attributes, root_clone_attributes,
+    root_clone_attributes,
 };
 
-const DIRECTORY_BUFFER_BYTES: usize = 64 * 1024;
+#[cfg(dua_macos_bulk)]
+use attributes::requested_attributes;
+
+// A zero-sized buffer avoids heap allocation when every read uses the fallback.
+const DIRECTORY_BUFFER_BYTES: usize = if cfg!(dua_macos_bulk) { 64 * 1024 } else { 0 };
 
 /// A macOS filesystem entry produced from native directory metadata.
 pub struct Entry {
@@ -236,6 +240,7 @@ impl Metadata {
 }
 
 pub(crate) struct ReadDir {
+    #[cfg(dua_macos_bulk)]
     directory: OwnedFd,
     fallback: Option<fs::ReadDir>,
     buffer: Box<AlignedBuffer<DIRECTORY_BUFFER_BYTES>>,
@@ -323,14 +328,19 @@ impl ReadDir {
     }
 
     pub(crate) fn open(path: Arc<Path>, depth: usize, options: crate::Options) -> io::Result<Self> {
+        #[cfg(dua_macos_bulk)]
         let directory: OwnedFd = fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_DIRECTORY)
             .open(&path)?
             .into();
         Ok(Self {
+            #[cfg(dua_macos_bulk)]
             directory,
+            #[cfg(dua_macos_bulk)]
             fallback: None,
+            #[cfg(not(dua_macos_bulk))]
+            fallback: Some(fs::read_dir(&path)?),
             buffer: Box::new(AlignedBuffer::new()),
             offset: 0,
             remaining: 0,
@@ -348,6 +358,7 @@ impl ReadDir {
     ///
     /// Returns `true` when iteration can continue, either because bulk records are available or
     /// because `self.fallback` was initialized. Returns `false` when the directory is exhausted.
+    #[cfg(dua_macos_bulk)]
     fn refill(&mut self) -> io::Result<bool> {
         loop {
             let list_only = self.listing_error.is_some();
@@ -421,10 +432,24 @@ impl ReadDir {
         }
     }
 
+    #[cfg(not(dua_macos_bulk))]
+    fn refill(&mut self) -> io::Result<bool> {
+        self.fallback = Some(fs::read_dir(&self.parent_path)?);
+        Ok(true)
+    }
+
     fn fallback_entry(&self, entry: fs::DirEntry) -> Entry {
         let file_name = entry.file_name();
-        let metadata =
-            fs::symlink_metadata(entry.path()).map(|metadata| Metadata::from_std(&metadata, None));
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map(|metadata| {
+            let data_fork =
+                if self.extended_attributes && metadata.is_file() && metadata.blocks() != 0 {
+                    clone_attributes_at(&path, &metadata)
+                } else {
+                    None
+                };
+            Metadata::from_std(&metadata, data_fork)
+        });
         let file_type = metadata.as_ref().map_or_else(
             |_| {
                 entry
@@ -517,6 +542,7 @@ impl ReadDir {
 /// Differences between these readings count only time the worker spends executing on a CPU.
 /// Differences between [`std::time::Instant::now()`] readings also include time blocked on I/O
 /// or waiting to be scheduled. Comparing the two lets the probe distinguish execution from waiting.
+#[cfg(dua_macos_clock_gettime)]
 fn thread_cpu_time() -> Option<Duration> {
     let mut time = libc::timespec {
         tv_sec: 0,
@@ -530,6 +556,11 @@ fn thread_cpu_time() -> Option<Duration> {
         time.tv_sec.try_into().ok()?,
         time.tv_nsec.try_into().ok()?,
     ))
+}
+
+#[cfg(not(dua_macos_clock_gettime))]
+fn thread_cpu_time() -> Option<Duration> {
+    None
 }
 
 impl Iterator for ReadDir {
