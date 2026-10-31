@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 5.0.2 (2026-10-31)
 
 Add license files to the release package.
 
@@ -17,7 +17,7 @@ Add license files to the release package.
 
 <csr-read-only-do-not-edit/>
 
- - 3 commits contributed to the release.
+ - 4 commits contributed to the release.
  - 6 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -35,6 +35,7 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Prepare changelog prior to dua-core release ([`3f954df`](https://github.com/Byron/dua-cli/commit/3f954dfd86f240dc079ab51eac73b6ef1d29ab4a))
     - Merge pull request #420 from blinxen/main ([`cca6d29`](https://github.com/Byron/dua-cli/commit/cca6d29f7ecfcf4181e296ddd384ec5f428299bf))
     - Thanks clippy ([`996041e`](https://github.com/Byron/dua-cli/commit/996041e739ed8d8e8f84da30efd49438ea4b4aad))
     - Add license link to dua-core so it gets published to crates.io too ([`55d0c54`](https://github.com/Byron/dua-cli/commit/55d0c5468f1a5e7631d955983a7eea88d2c336ca))
