@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+Add license files to the release package.
+
+### Chore
+
+ - <csr-id-996041e739ed8d8e8f84da30efd49438ea4b4aad/> thanks clippy
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 6 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Thanks Clippy
+
+<csr-read-only-do-not-edit/>
+
+[Clippy](https://github.com/rust-lang/rust-clippy) helped 1 time to make code idiomatic. 
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #420 from blinxen/main ([`cca6d29`](https://github.com/Byron/dua-cli/commit/cca6d29f7ecfcf4181e296ddd384ec5f428299bf))
+    - Thanks clippy ([`996041e`](https://github.com/Byron/dua-cli/commit/996041e739ed8d8e8f84da30efd49438ea4b4aad))
+    - Add license link to dua-core so it gets published to crates.io too ([`55d0c54`](https://github.com/Byron/dua-cli/commit/55d0c5468f1a5e7631d955983a7eea88d2c336ca))
+</details>
+
 ## 5.0.1 (2026-10-25)
 
 ### Bug Fixes
@@ -38,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 4 commits contributed to the release.
+ - 5 commits contributed to the release.
  - 10 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#417](https://github.com/Byron/dua-cli/issues/417)
@@ -52,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **[#417](https://github.com/Byron/dua-cli/issues/417)**
     - Fall back when macOS bulk directory reads are unavailable ([`67c8576`](https://github.com/Byron/dua-cli/commit/67c857688e626f1016e8522fc3e4e4535cc23198))
  * **Uncategorized**
+    - Release dua-core v5.0.1 ([`467f3ec`](https://github.com/Byron/dua-cli/commit/467f3ec158a8bdc3fd4f79d7d885841beacf6ea3))
     - Merge pull request #418 from Byron/conditional-bulk-macos ([`fb5d863`](https://github.com/Byron/dua-cli/commit/fb5d863a93cf2a41357e8048bb546cb4f869c2ed))
     - Merge pull request #416 from kiranani/fix-windows-entry-at-oob-read ([`48c91c7`](https://github.com/Byron/dua-cli/commit/48c91c71fc82919ff0c993a2779da24920325a7a))
     - Avoid reading past HEADER_SIZE in Windows ReadDir::entry_at ([`b5ef287`](https://github.com/Byron/dua-cli/commit/b5ef2871a9db5936a6ba3b8b2a3124f8039ce6ad))
