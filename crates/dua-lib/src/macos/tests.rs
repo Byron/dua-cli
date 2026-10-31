@@ -83,7 +83,7 @@ fn unsupported_targets_start_with_ordinary_directory_reads() {
     fs::write(directory.path().join("file"), b"content").unwrap();
     let mut reader = ReadDir::open(Arc::from(directory.path()), 1, options(false)).unwrap();
     assert!(reader.fallback.is_some());
-    assert!(reader.buffer.as_bytes().is_empty());
+    assert_eq!(reader.buffer.as_bytes(), []);
     assert!(reader.probe_metadata().is_empty());
     let entry = reader.next().unwrap().unwrap();
     assert_eq!(entry.file_name, "file");
