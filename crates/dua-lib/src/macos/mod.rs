@@ -98,7 +98,7 @@ impl Entry {
 }
 
 /// macOS filesystem entry type obtained without following symbolic links.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FileType {
     kind: u32,
 }

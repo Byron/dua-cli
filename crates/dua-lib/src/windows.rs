@@ -119,7 +119,7 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 /// Windows filesystem entry type derived from directory attributes and reparse tags.
 pub struct FileType {
     is_dir: bool,
