@@ -27,6 +27,9 @@
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
+mod error;
+pub use error::Error;
+
 use crossbeam::{
     deque::{Injector, Steal, Stealer, Worker},
     sync::{Parker, Unparker},
@@ -75,7 +78,10 @@ use windows::{ReadDir as NativeReadDir, read_dir_types};
 
 #[cfg(any(windows, target_os = "macos"))]
 enum ReadDir {
-    Metadata(NativeReadDir),
+    Metadata {
+        reader: NativeReadDir,
+        path: Arc<Path>,
+    },
     FileTypes {
         entries: fs::ReadDir,
         parent_path: Arc<Path>,
@@ -85,36 +91,48 @@ enum ReadDir {
 
 #[cfg(any(windows, target_os = "macos"))]
 impl ReadDir {
-    fn open(path: Arc<Path>, depth: usize, options: Options) -> io::Result<Self> {
+    fn open(path: Arc<Path>, depth: usize, options: Options) -> Result<Self, Error> {
         if options.skip_metadata {
             Ok(Self::FileTypes {
-                entries: read_dir_types(&path)?,
+                entries: read_dir_types(&path)
+                    .map_err(|err| Error::at_path(err, Arc::clone(&path)))?,
                 parent_path: path,
                 depth,
             })
         } else {
-            NativeReadDir::open(path, depth, options).map(Self::Metadata)
+            NativeReadDir::open(Arc::clone(&path), depth, options)
+                .map(|reader| Self::Metadata {
+                    reader,
+                    path: Arc::clone(&path),
+                })
+                .map_err(|err| Error::at_path(err, path))
         }
     }
 }
 
 #[cfg(any(windows, target_os = "macos"))]
 impl Iterator for ReadDir {
-    type Item = io::Result<Entry>;
+    type Item = Result<Entry, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Metadata(reader) => reader.next(),
+            Self::Metadata { reader, path } => reader
+                .next()
+                .map(|entry| entry.map_err(|err| Error::at_path(err, Arc::clone(path)))),
             Self::FileTypes {
                 entries,
                 parent_path,
                 depth,
             } => entries.next().map(|entry| {
-                let entry = entry?;
+                let entry = entry.map_err(|err| Error::at_path(err, Arc::clone(parent_path)))?;
                 Ok(Entry {
                     depth: *depth,
                     file_name: entry.file_name(),
-                    file_type: FileType::from_std(entry.file_type()?),
+                    file_type: FileType::from_std(
+                        entry
+                            .file_type()
+                            .map_err(|err| Error::at_path(err, entry.path()))?,
+                    ),
                     metadata: None,
                     parent_path: Arc::clone(parent_path),
                     directory_id: None,
@@ -131,7 +149,7 @@ type Descend = dyn Fn(usize, &Entry) -> bool + Send + Sync;
 /// Entries obtained from one directory read.
 /// An outer error means the directory could not be opened; inner errors come from reading or
 /// converting individual directory entries.
-type Batch = io::Result<Vec<io::Result<Entry>>>;
+type Batch = Result<Vec<Result<Entry, Error>>, Error>;
 /// Number of directory entries grouped into each metadata job or result batch.
 /// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
 const ENTRY_CHUNK_SIZE: usize = 4;
@@ -300,7 +318,7 @@ enum Event {
 /// cannot do this uniformly because its `Finished` variant is pool-wide and has no root index.
 pub enum RootEvent {
     /// An entry or filesystem error produced while walking the root.
-    Entry(io::Result<Entry>),
+    Entry(Result<Entry, Error>),
     /// All entries for the root have been emitted.
     Finished,
 }
@@ -428,7 +446,7 @@ pub struct Walk {
     /// in reverse so popping preserves their original order.
     ///
     /// If consumption isn't as fast as its production, threads will block.
-    next: Vec<io::Result<Entry>>,
+    next: Vec<Result<Entry, Error>>,
     /// Owns the worker threads for as long as traversal is active.
     ///
     /// Clearing or dropping it requests shutdown, unparks every worker, and joins their threads.
@@ -450,7 +468,7 @@ pub struct Walk {
 pub fn read_dir(
     path: &Path,
     options: Options,
-) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
+) -> Result<impl Iterator<Item = Result<Entry, Error>>, Error> {
     ReadDir::open(Arc::from(path), 0, options)
 }
 
@@ -548,14 +566,14 @@ impl Walk {
     /// Once cancelled, discard buffered entries and stop and join the worker pool before
     /// returning `None`. In-progress filesystem calls are allowed to finish, and the cancelled
     /// walk cannot be restarted.
-    pub fn next_cancellable(&mut self, cancelled: &AtomicBool) -> Option<io::Result<Entry>> {
+    pub fn next_cancellable(&mut self, cancelled: &AtomicBool) -> Option<Result<Entry, Error>> {
         self.next_with_cancellation(Some(cancelled))
     }
 
     fn next_with_cancellation(
         &mut self,
         cancelled: Option<&AtomicBool>,
-    ) -> Option<io::Result<Entry>> {
+    ) -> Option<Result<Entry, Error>> {
         loop {
             if cancelled.is_some_and(|cancelled| cancelled.load(AtomicOrdering::Relaxed)) {
                 self.next.clear();
@@ -579,13 +597,15 @@ impl Walk {
                     Ok(event) => event,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                        return Some(Err(io::Error::other("directory worker stopped")));
+                        return Some(Err(io::Error::other("directory worker stopped").into()));
                     }
                 }
             } else {
                 match pool.events.recv() {
                     Ok(event) => event,
-                    Err(_) => return Some(Err(io::Error::other("directory worker stopped"))),
+                    Err(_) => {
+                        return Some(Err(io::Error::other("directory worker stopped").into()));
+                    }
                 }
             };
             match event {
@@ -608,7 +628,7 @@ impl Walk {
 }
 
 impl Iterator for Walk {
-    type Item = io::Result<Entry>;
+    type Item = Result<Entry, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_with_cancellation(None)
@@ -653,7 +673,7 @@ pub fn walk_roots(
 ///
 /// Panics if two roots have the same index.
 pub fn walk_root_entries(
-    roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
+    roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
     threads: usize,
     order: Order,
     options: Options,
@@ -674,7 +694,7 @@ fn start_root_walk<Root>(
     threads: usize,
     order: Order,
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
-    prepare: impl Fn(Root) -> io::Result<Entry>,
+    prepare: impl Fn(Root) -> Result<Entry, Error>,
     options: Options,
 ) -> RootWalk {
     let indices = roots
@@ -731,7 +751,7 @@ impl Iterator for RootWalk {
                 Err(_) => {
                     return Some((
                         0,
-                        RootEvent::Entry(Err(io::Error::other("directory worker stopped"))),
+                        RootEvent::Entry(Err(io::Error::other("directory worker stopped").into())),
                     ));
                 }
             }
@@ -775,8 +795,8 @@ impl Entry {
     }
 
     /// Create an entry from a filesystem path.
-    pub fn from_path(path: &Path, options: Options) -> io::Result<Self> {
-        let metadata = fs::symlink_metadata(path)?;
+    pub fn from_path(path: &Path, options: Options) -> Result<Self, Error> {
+        let metadata = fs::symlink_metadata(path).map_err(|err| Error::at_path(err, path))?;
         Ok(Self {
             depth: 0,
             file_name: path.file_name().unwrap_or(path.as_os_str()).to_owned(),
@@ -793,11 +813,13 @@ impl Entry {
         parent_path: Arc<Path>,
         entry: fs::DirEntry,
         options: Options,
-    ) -> io::Result<Self> {
+    ) -> Result<Self, Error> {
         Ok(Self {
             depth,
             file_name: entry.file_name(),
-            file_type: entry.file_type()?,
+            file_type: entry
+                .file_type()
+                .map_err(|err| Error::at_path(err, entry.path()))?,
             metadata: (!options.skip_metadata).then(|| entry.metadata()),
             parent_path,
             directory_id: None,
@@ -853,7 +875,7 @@ fn start_pool(threads: usize, order: Order, options: Options, next_directory_id:
 /// Prepare initial root events and directory jobs.
 /// Returns events in stack order for [`RootWalk::next`] to pop, plus jobs requiring a worker pool.
 fn begin_walks(
-    roots: impl IntoIterator<Item = (usize, io::Result<Entry>)>,
+    roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
     descend: &Arc<Descend>,
 ) -> (Vec<(usize, RootEvent)>, Vec<Job>, usize) {
     let mut next = Vec::new();
@@ -1094,7 +1116,7 @@ fn read_dir_parallel(
                 .events
                 .send(Event::Batch {
                     root_idx: root.index,
-                    batch: Err(err),
+                    batch: Err(Error::at_path(err, Arc::clone(&path))),
                 })
                 .is_err()
             {
@@ -1126,7 +1148,7 @@ fn read_dir_parallel(
                     );
                 }
             }
-            Err(err) => errors.push(Err(err)),
+            Err(err) => errors.push(Err(Error::at_path(err, Arc::clone(&path)))),
         }
     }
     if !chunk.is_empty() {
@@ -1181,9 +1203,13 @@ fn read_dir_native(
         let mut dir_entries = dir_entries;
         let mut prefix = Vec::new();
         if shared.stealers.len() > 1
-            && let ReadDir::Metadata(reader) = &mut dir_entries
+            && let ReadDir::Metadata { reader, .. } = &mut dir_entries
         {
-            prefix = reader.probe_metadata();
+            prefix = reader
+                .probe_metadata()
+                .into_iter()
+                .map(|entry| entry.map_err(|err| Error::at_path(err, Arc::clone(&path))))
+                .collect();
             if reader.metadata_is_io_bound()
                 && let Ok(reopened) =
                     ReadDir::open(Arc::clone(&path), depth, shared.options.skip_metadata())
@@ -1367,7 +1393,13 @@ fn read_dir_inline(
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
         Err(err) => {
-            publish_directory(root, Err(err), Vec::new(), worker, shared);
+            publish_directory(
+                root,
+                Err(Error::at_path(err, Arc::clone(&path))),
+                Vec::new(),
+                worker,
+                shared,
+            );
             finish_pending(root, shared);
             return;
         }
@@ -1376,6 +1408,7 @@ fn read_dir_inline(
     let entries = dir_entries
         .map(|entry| {
             entry
+                .map_err(|err| Error::at_path(err, Arc::clone(&path)))
                 .and_then(|entry| {
                     Entry::from_dir_entry(depth, Arc::clone(&path), entry, shared.options)
                 })

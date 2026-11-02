@@ -46,7 +46,11 @@ pub struct Entry {
 
 impl Entry {
     /// Create an entry from a filesystem path.
-    pub fn from_path(path: &Path, options: crate::Options) -> io::Result<Self> {
+    pub fn from_path(path: &Path, options: crate::Options) -> Result<Self, crate::Error> {
+        Self::from_path_inner(path, options).map_err(|err| crate::Error::at_path(err, path))
+    }
+
+    fn from_path_inner(path: &Path, options: crate::Options) -> io::Result<Self> {
         let handle = OwnedHandle::open(
             path,
             FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -115,7 +119,7 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 /// Windows filesystem entry type derived from directory attributes and reparse tags.
 pub struct FileType {
     is_dir: bool,

@@ -50,8 +50,9 @@ pub struct Entry {
 
 impl Entry {
     /// Create an entry for an explicitly requested root without following symbolic links.
-    pub fn from_path(path: &Path, options: crate::Options) -> io::Result<Self> {
-        let metadata = fs::symlink_metadata(path)?;
+    pub fn from_path(path: &Path, options: crate::Options) -> Result<Self, crate::Error> {
+        let metadata =
+            fs::symlink_metadata(path).map_err(|err| crate::Error::at_path(err, path))?;
         let file_type = FileType::from_std(metadata.file_type());
         let metadata = (!options.skip_metadata).then(|| {
             let data_fork =
@@ -97,7 +98,7 @@ impl Entry {
 }
 
 /// macOS filesystem entry type obtained without following symbolic links.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FileType {
     kind: u32,
 }
