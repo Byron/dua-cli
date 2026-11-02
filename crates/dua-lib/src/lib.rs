@@ -312,9 +312,9 @@ enum Event {
 }
 
 /// Per-root events exposed by [`RootWalk`].
-/// Unlike [`Event`], batches are flattened into entries and pool-wide completion ends the iterator
+/// Unlike internal events, batches are flattened into entries and pool-wide completion ends the iterator
 /// instead of being yielded; `Finished` therefore means only that the associated root completed.
-/// [`RootWalk`] yields `(root_idx, event)`, separating root routing from event meaning. [`Event`]
+/// [`RootWalk`] yields `(root_idx, event)`, separating root routing from event meaning. The internal event type
 /// cannot do this uniformly because its `Finished` variant is pool-wide and has no root index.
 pub enum RootEvent {
     /// An entry or filesystem error produced while walking the root.
