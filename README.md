@@ -341,6 +341,11 @@ make tests
 
 #### Check release compatibility
 
+Starting with `dua-cli` 3.0.0, the `dua` Rust library is experimental and its API
+may change in minor releases. Library consumers should use a tilde requirement,
+such as `~3.0.0`, to receive compatible patch updates. The `dua` command-line
+interface follows semantic versioning, and `dua-core` retains its stable Rust API.
+
 Both workspace crates configure Rust API checks in their `Cargo.toml` metadata.
 Use a `cargo-smart-release` build that includes `cargo api-check`, Rust 1.99
 (rustdoc JSON format 61), and `cargo-semver-checks` 0.51.0 or newer.
