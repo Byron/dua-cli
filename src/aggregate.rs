@@ -939,7 +939,7 @@ mod tests {
 
         let entries = dua_core::read_dir(directory.path(), metadata_options)
             .unwrap()
-            .collect::<std::io::Result<Vec<_>>>()
+            .collect::<Result<Vec<_>, dua_core::Error>>()
             .unwrap();
         let mut output = Vec::new();
         let (result, _) = aggregate_entries(

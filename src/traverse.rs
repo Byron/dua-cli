@@ -801,7 +801,12 @@ pub enum TraversalEvent {
     /// 2. The input root's device ID.
     /// 3. The input root's index in the original input list, used to place its tree node in the
     ///    per-root side table so callers can recover input order, including failed roots.
-    Entry(io::Result<TraversalEntry>, Arc<PathBuf>, u64, usize),
+    Entry(
+        Result<TraversalEntry, crate::walk::Error>,
+        Arc<PathBuf>,
+        u64,
+        usize,
+    ),
     /// A root that could not be initialized, with its input index.
     RootError(Arc<PathBuf>, usize),
     /// Traversal completed.
@@ -1561,7 +1566,7 @@ impl CleanCandidate {
         options: &WalkOptions,
         cwd: &Path,
         index: usize,
-        entry: io::Result<crate::walk::Entry>,
+        entry: Result<crate::walk::Entry, crate::walk::Error>,
         tx: &crossbeam::channel::Sender<TraversalEvent>,
     ) -> bool {
         if self.accepted.load(Ordering::Relaxed) {
@@ -2430,7 +2435,7 @@ mod tests {
         background.integrate_traversal_event(
             &mut traversal,
             TraversalEvent::Entry(
-                Err(io::Error::other("unreadable descendant")),
+                Err(io::Error::other("unreadable descendant").into()),
                 Arc::new(root_path),
                 0,
                 0,

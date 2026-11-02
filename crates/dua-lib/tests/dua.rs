@@ -3,6 +3,107 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 use dua_core::{Order, RootEvent, walk, walk_roots};
 
 #[test]
+fn traversal_errors_retain_the_failing_path() {
+    let dir = tempfile::tempdir().unwrap();
+    for order in [Order::Completion, Order::ParentFirst] {
+        for options in [
+            dua_core::Options::default(),
+            dua_core::Options::default().skip_metadata(),
+        ] {
+            let missing = dir.path().join("missing");
+            let error = walk(&missing, 2, order, options, |_| true)
+                .next()
+                .unwrap()
+                .err()
+                .unwrap();
+            assert_eq!(error.path(), Some(missing.as_path()));
+            assert_eq!(error.io_error().kind(), std::io::ErrorKind::NotFound);
+            assert!(error.to_string().contains(&missing.display().to_string()));
+
+            let children = [dir.path().join("child-a"), dir.path().join("child-b")];
+            for child in &children {
+                fs::create_dir(child).unwrap();
+            }
+            let removed_children = children.clone();
+            let events = walk_roots(
+                [(7, dir.path().to_owned())],
+                2,
+                order,
+                options,
+                move |_, entry| {
+                    if removed_children.contains(&entry.path()) {
+                        fs::remove_dir(entry.path()).unwrap();
+                    }
+                    true
+                },
+            )
+            .collect::<Vec<_>>();
+            let errors = events
+                .iter()
+                .filter_map(|(index, event)| match event {
+                    RootEvent::Entry(Err(error)) => {
+                        assert_eq!(*index, 7);
+                        Some(error)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(errors.len(), 2);
+            let paths = errors
+                .iter()
+                .map(|error| {
+                    assert_eq!(error.io_error().kind(), std::io::ErrorKind::NotFound);
+                    error.path().unwrap().to_owned()
+                })
+                .collect::<BTreeSet<_>>();
+            assert_eq!(paths, children.into());
+            assert!(matches!(events.last(), Some((7, RootEvent::Finished))));
+        }
+    }
+}
+
+#[test]
+fn streamed_roots_and_io_conversions_retain_error_context() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing");
+    let (mut sender, walk) =
+        dua_core::stream_roots(2, Order::Completion, dua_core::Options::default());
+    sender.add_root(7, missing.clone(), |_| true).unwrap();
+    drop(sender);
+    let mut events = walk.collect::<Vec<_>>().into_iter();
+    let Some((7, RootEvent::Entry(Err(error)))) = events.next() else {
+        panic!("the missing root must fail");
+    };
+    assert_eq!(error.path(), Some(missing.as_path()));
+    let code = error.io_error().raw_os_error().unwrap();
+    assert_eq!(
+        std::error::Error::source(&error)
+            .unwrap()
+            .downcast_ref::<std::io::Error>()
+            .unwrap()
+            .raw_os_error(),
+        Some(code)
+    );
+    let converted = std::io::Error::from(error);
+    assert_eq!(converted.kind(), std::io::ErrorKind::NotFound);
+    assert_eq!(
+        converted
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<dua_core::Error>()
+            .unwrap()
+            .path(),
+        Some(missing.as_path())
+    );
+    assert!(matches!(events.next(), Some((7, RootEvent::Finished))));
+    assert!(events.next().is_none());
+
+    let supplied = dua_core::Error::from(std::io::Error::other("supplied error"));
+    assert_eq!(supplied.path(), None);
+    assert_eq!(supplied.to_string(), "supplied error");
+}
+
+#[test]
 fn walkers_are_available_to_consumers() {
     let dir = tempfile::tempdir().unwrap();
     let roots = [dir.path().join("a"), dir.path().join("b")];
