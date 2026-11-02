@@ -350,14 +350,16 @@ Both workspace crates configure Rust API checks in their `Cargo.toml` metadata.
 Use a `cargo-smart-release` build that includes `cargo api-check`, Rust 1.99
 (rustdoc JSON format 61), and `cargo-semver-checks` 0.51.0 or newer.
 
-Preview the release, including stable workspace dependencies:
+Preview the release, including stable workspace dependencies, with [just](https://just.systems):
 
 ```bash
-RUSTDOCFLAGS="-A rustdoc::private_intra_doc_links" \
-    cargo smart-release --auto-publish-of-stable-crates
+just smart-release
 ```
 
-This is a dry run. The rustdoc allowance is needed for public links to private
+Run `just` without arguments to list available recipes. Additional arguments to
+`just smart-release` are forwarded to `cargo smart-release`.
+
+This is a dry run. The recipe's rustdoc allowance is needed for public links to private
 items in older release tags; it does not disable API checks. It can be removed
 once both release baselines contain the corrected documentation.
 
