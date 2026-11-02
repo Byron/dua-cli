@@ -45,6 +45,18 @@ include = [
     "!**/tests/*",
 ]
 
+[package.metadata.smart-release]
+api-check = ["cargo", "api-check", "release"]
+
+[package.metadata.api-check]
+profiles = [
+    { default-features = false, features = [] },
+    { default-features = false, features = ["tui-crossplatform"] },
+    { default-features = false, features = ["trash-move"] },
+    { default-features = true, features = [] },
+]
+recursive = true
+
 [features]
 default = ["tui-crossplatform", "trash-move"]
 tui-crossplatform = [

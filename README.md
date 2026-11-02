@@ -339,6 +339,23 @@ Please note that all the following assumes a unix system. On Windows, the linux 
 make tests
 ```
 
+#### Check release compatibility
+
+Both workspace crates configure Rust API checks in their `Cargo.toml` metadata.
+Use a `cargo-smart-release` build that includes `cargo api-check`, Rust 1.99
+(rustdoc JSON format 61), and `cargo-semver-checks` 0.51.0 or newer.
+
+Preview the release, including stable workspace dependencies:
+
+```bash
+RUSTDOCFLAGS="-A rustdoc::private_intra_doc_links" \
+    cargo smart-release --auto-publish-of-stable-crates
+```
+
+This is a dry run. The rustdoc allowance is needed for public links to private
+items in older release tags; it does not disable API checks. It can be removed
+once both release baselines contain the corrected documentation.
+
 #### Learn about other targets
 
 ```
