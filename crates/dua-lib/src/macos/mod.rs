@@ -2,7 +2,7 @@
 
 use std::{
     ffi::{CString, OsString},
-    fs, io,
+    fmt, fs, io,
     num::NonZeroU64,
     os::unix::{ffi::OsStrExt, fs::MetadataExt},
     path::{Path, PathBuf},
@@ -32,7 +32,7 @@ const DIRECTORY_BUFFER_BYTES: usize = if cfg!(dua_macos_bulk) { 64 * 1024 } else
 
 /// A macOS filesystem entry produced from native directory metadata.
 pub struct Entry {
-    /// Distance from the walk root: `0` for the root, `1` and highger for its children.
+    /// Distance from the walk root: `0` for the root, `1` and higher for its children.
     pub depth: usize,
     /// File name relative to `parent_path`.
     pub file_name: OsString,
@@ -98,7 +98,7 @@ impl Entry {
 }
 
 /// macOS filesystem entry type obtained without following symbolic links.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct FileType {
     kind: u32,
 }
@@ -133,6 +133,16 @@ impl FileType {
     #[must_use]
     pub fn is_symlink(self) -> bool {
         self.kind == VLNK
+    }
+}
+
+impl fmt::Debug for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileType")
+            .field("is_file", &self.is_file())
+            .field("is_dir", &self.is_dir())
+            .field("is_symlink", &self.is_symlink())
+            .finish_non_exhaustive()
     }
 }
 

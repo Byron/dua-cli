@@ -2,7 +2,7 @@
 
 use std::{
     ffi::OsString,
-    fs, io,
+    fmt, fs, io,
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::{Component, Path, PathBuf},
     sync::Arc,
@@ -100,6 +100,7 @@ impl Entry {
             ),
             volume_serial: u64::from(info.dwVolumeSerialNumber),
             file_id: (file_id != 0).then_some(file_id),
+            file_attributes: info.dwFileAttributes,
         };
         Ok(Self {
             depth: 0,
@@ -119,7 +120,7 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 /// Windows filesystem entry type derived from directory attributes and reparse tags.
 pub struct FileType {
     is_dir: bool,
@@ -162,6 +163,16 @@ impl FileType {
     }
 }
 
+impl fmt::Debug for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileType")
+            .field("is_file", &self.is_file())
+            .field("is_dir", &self.is_dir())
+            .field("is_symlink", &self.is_symlink())
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, Copy)]
 /// Metadata supplied by Windows directory enumeration.
 pub struct Metadata {
@@ -170,6 +181,7 @@ pub struct Metadata {
     modified: SystemTime,
     volume_serial: u64,
     file_id: Option<u64>,
+    file_attributes: u32,
 }
 
 impl Metadata {
@@ -196,6 +208,24 @@ impl Metadata {
     #[must_use]
     pub fn hard_link_id(&self) -> Option<(u64, u64)> {
         self.file_id.map(|file_id| (self.volume_serial, file_id))
+    }
+
+    /// Returns the value of the `dwFileAttributes` or `FILE_ID_BOTH_DIR_INFO.FileAttributes` field of this metadata.
+    ///
+    /// As `FILE_ID_BOTH_DIR_INFO.FileAttributes` is a subset of `dwFileAttributes` only the fields present
+    /// in both are reliable.
+    ///
+    /// This field contains the file system attribute information for a file
+    /// or directory. For possible values and their descriptions, see
+    /// [File Attribute Constants] and [File ID Both Dir Info] in the Windows Dev Center.
+    ///
+    /// [File Attribute Constants]:
+    ///     https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants
+    /// [File ID Both Dir Info]
+    ///     https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info
+    #[must_use]
+    pub fn file_attributes(&self) -> u32 {
+        self.file_attributes
     }
 }
 
@@ -354,6 +384,7 @@ impl ReadDir {
                     modified: filetime_to_system_time(info.LastWriteTime.max(0).cast_unsigned()),
                     volume_serial: self.volume_serial,
                     file_id,
+                    file_attributes: info.FileAttributes,
                 })),
                 parent_path: Arc::clone(&self.parent_path),
                 directory_id: None,
