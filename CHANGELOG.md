@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.0.0 (2026-11-02)
+
+### Documentation (BREAKING)
+
+ - <csr-id-c45461d32daf5ac7ffd0db682726d112be6c9870/> declare the Rust library API experimental
+   Mark the crate root so all Rust library exports participate in experimental
+   compatibility checks. Future API breaks require minor releases while patch
+   compatibility remains checked. Document tilde requirements for library
+   consumers and retain the stable CLI and dua-core compatibility policies.
+   
+   The transition removes the previous stable Rust library API promise and
+   requires dua-cli 3.0.0. Let smart-release apply versions during release.
+
+### Bug Fixes (BREAKING)
+
+ - <csr-id-d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4/> retain filesystem paths in traversal errors
+   Just looked at the production code and rubber-stamped the tests.
+   All that really happens is a new error type that retains more information
+   
+   <!-- agent -->
+   RootEvent and Walk previously yielded plain I/O errors, leaving consumers
+   unable to identify a failing descendant. Return a typed dua_core::Error
+   with the entry path, or the directory path when enumeration cannot identify
+   an entry, and retain the original I/O error for kind and OS-code inspection.
+   
+   Keep sibling failures as separate iterator items. Update native and ordinary
+   reads, streamed roots, prepared roots, cancellation, and CLI forwarding.
+   Metadata errors remain attached to their Entry. Document the breaking API
+   change and conversion back to io::Error.
+   
+   Regression coverage removes two sibling directories before descent in both
+   orders and metadata modes; it also checks missing and streamed roots,
+   original OS errors, source access, and conversion without losing context.
+   The regression initially failed because io::Error has no path accessor.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release.
+ - 18 days passed between releases.
+ - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#421](https://github.com/Byron/dua-cli/issues/421)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#421](https://github.com/Byron/dua-cli/issues/421)**
+    - Retain filesystem paths in traversal errors ([`d5114df`](https://github.com/Byron/dua-cli/commit/d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4))
+ * **Uncategorized**
+    - Declare the Rust library API experimental ([`c45461d`](https://github.com/Byron/dua-cli/commit/c45461d32daf5ac7ffd0db682726d112be6c9870))
+    - Merge pull request #424 from Byron/better-error-handling ([`c392945`](https://github.com/Byron/dua-cli/commit/c392945c36444122f34fc5636985a4de1e0b300e))
+    - Merge pull request #415 from Rajvira10/fix/marked-path-display-width ([`9ccf20f`](https://github.com/Byron/dua-cli/commit/9ccf20fa900710ded07e502f31a7deb8d9d52dc5))
+    - Review ([`3ab91b4`](https://github.com/Byron/dua-cli/commit/3ab91b4cdd791c76c2d85e7956ab9eabe968a241))
+    - Fix marked-pane alignment for wide Unicode paths ([`d8a9376`](https://github.com/Byron/dua-cli/commit/d8a9376a98e2f5510a8eca7df0c8ea3310978595))
+</details>
+
 ## 2.46.0 (2026-10-15)
 
 A bugfix release, and one that should also restore cargo installations, making them function.

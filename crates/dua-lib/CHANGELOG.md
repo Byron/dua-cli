@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 6.0.0 (2026-11-02)
+
+### Chore
+
+ - <csr-id-5eb55e711beec3874546af527334cbc6adb63834/> check Rust APIs during release planning
+   Enable cargo api-check for both workspace packages. Cover all four CLI
+   feature combinations and recursively inspect exposed dua-core APIs.
+   
+   Document the tool requirements and dry-run command, including the targeted
+   rustdoc allowance needed when building historical release baselines.
+
+### Documentation
+
+ - <csr-id-e6ab2a927c2933ea38f32793f2b01f8cc1ee1731/> fix links in public traversal documentation
+   Replace links to the private Event type with prose so public rustdoc builds
+   pass with warnings denied, as required by the API checker.
+
+### Bug Fixes
+
+ - <csr-id-904203f8fcae7d5dd2b4b2983db2224f9526011c/> provide standard FileType traits on native platforms
+   <!-- agent -->
+   Consumers could format std::fs::FileType on Linux but the same code failed
+   to compile for macOS and Windows. Derive Debug, PartialEq, Eq, and Hash on
+   both native FileType types, retaining their existing Copy and Clone traits.
+   No wrapper or platform API change is needed.
+
+### Bug Fixes (BREAKING)
+
+ - <csr-id-d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4/> retain filesystem paths in traversal errors
+   Just looked at the production code and rubber-stamped the tests.
+   All that really happens is a new error type that retains more information
+   
+   <!-- agent -->
+   RootEvent and Walk previously yielded plain I/O errors, leaving consumers
+   unable to identify a failing descendant. Return a typed dua_core::Error
+   with the entry path, or the directory path when enumeration cannot identify
+   an entry, and retain the original I/O error for kind and OS-code inspection.
+   
+   Keep sibling failures as separate iterator items. Update native and ordinary
+   reads, streamed roots, prepared roots, cancellation, and CLI forwarding.
+   Metadata errors remain attached to their Entry. Document the breaking API
+   change and conversion back to io::Error.
+   
+   Regression coverage removes two sibling directories before descent in both
+   orders and metadata modes; it also checks missing and streamed roots,
+   original OS errors, source access, and conversion without losing context.
+   The regression initially failed because io::Error has no path accessor.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 2 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 2 unique issues were worked on: [#421](https://github.com/Byron/dua-cli/issues/421), [#422](https://github.com/Byron/dua-cli/issues/422)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#421](https://github.com/Byron/dua-cli/issues/421)**
+    - Retain filesystem paths in traversal errors ([`d5114df`](https://github.com/Byron/dua-cli/commit/d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4))
+ * **[#422](https://github.com/Byron/dua-cli/issues/422)**
+    - Provide standard FileType traits on native platforms ([`904203f`](https://github.com/Byron/dua-cli/commit/904203f8fcae7d5dd2b4b2983db2224f9526011c))
+ * **Uncategorized**
+    - Check Rust APIs during release planning ([`5eb55e7`](https://github.com/Byron/dua-cli/commit/5eb55e711beec3874546af527334cbc6adb63834))
+    - Fix links in public traversal documentation ([`e6ab2a9`](https://github.com/Byron/dua-cli/commit/e6ab2a927c2933ea38f32793f2b01f8cc1ee1731))
+    - Merge pull request #424 from Byron/better-error-handling ([`c392945`](https://github.com/Byron/dua-cli/commit/c392945c36444122f34fc5636985a4de1e0b300e))
+</details>
+
 ## 5.0.2 (2026-10-31)
 
 Add license files to the release package.
@@ -17,7 +90,7 @@ Add license files to the release package.
 
 <csr-read-only-do-not-edit/>
 
- - 4 commits contributed to the release.
+ - 5 commits contributed to the release.
  - 6 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -35,6 +108,7 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dua-core v5.0.2 ([`bc03fed`](https://github.com/Byron/dua-cli/commit/bc03feddbdd946c16dd234a28b377d43c0688597))
     - Prepare changelog prior to dua-core release ([`3f954df`](https://github.com/Byron/dua-cli/commit/3f954dfd86f240dc079ab51eac73b6ef1d29ab4a))
     - Merge pull request #420 from blinxen/main ([`cca6d29`](https://github.com/Byron/dua-cli/commit/cca6d29f7ecfcf4181e296ddd384ec5f428299bf))
     - Thanks clippy ([`996041e`](https://github.com/Byron/dua-cli/commit/996041e739ed8d8e8f84da30efd49438ea4b4aad))
