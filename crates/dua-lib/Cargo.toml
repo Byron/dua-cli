@@ -1,12 +1,18 @@
 [package]
 name = "dua-core"
-version = "5.0.2"
+version = "6.0.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
 description = "Fast parallel filesystem traversal iterators"
 license.workspace = true
 rust-version = "1.88"
+
+[package.metadata.smart-release]
+api-check = ["cargo", "api-check", "release"]
+
+[package.metadata.api-check]
+profiles = [{ default-features = true, features = [] }]
 
 [dependencies]
 crossbeam.workspace = true

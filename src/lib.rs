@@ -1,6 +1,9 @@
-//! Public library API for `dua` core traversal and aggregation functionality.
+//! Core traversal and aggregation functionality used by the `dua` binary.
 //!
-//! This crate powers the `dua` binary and can also be used as a library.
+//! **Unstable:** The entire Rust library API may change in minor releases.
+//!
+//! Library consumers should use a tilde requirement, such as `~3.0.0`, to receive
+//! compatible patch updates. The `dua` command-line interface follows semantic versioning.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
