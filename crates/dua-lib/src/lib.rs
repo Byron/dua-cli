@@ -70,6 +70,9 @@ use macos::ReadDir as NativeReadDir;
 #[cfg(target_os = "macos")]
 use std::fs::read_dir as read_dir_types;
 
+#[cfg(all(windows, any(test, feature = "unstable")))]
+pub use windows::FileAttributes;
+
 #[cfg(windows)]
 pub use windows::{Entry, FileType, Metadata};
 

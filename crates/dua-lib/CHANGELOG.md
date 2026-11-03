@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 6.1.0 (2026-11-03)
+
+### New Features
+
+ - <csr-id-7cfb8c0009585a34424cf58660fa88be9bad2338/> add typed Windows attributes behind unstable
+   <!-- agent -->
+   ### Added
+   
+   - Introduce `FileAttributes` with named, combinable flags and readable debug output.
+   - Add an opt-in `unstable` feature for the Windows attribute API, keeping it available automatically to unit tests.
+   
+   ### Changed
+   
+   - Use concise tuple-style `FileType` debug output on macOS and Windows, such as `FileType(Directory)`.
+   - Document query-specific attribute semantics without assuming directory enumeration returns a strict subset of flags.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 1 day passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Add typed Windows attributes behind unstable ([`7cfb8c0`](https://github.com/raldone01/dua-cli/commit/7cfb8c0009585a34424cf58660fa88be9bad2338))
+    - Expose windows file attributes. Mirror std `FileType` `Debug` impl. ([`d41814e`](https://github.com/raldone01/dua-cli/commit/d41814eec7b2809cb6e6d80497741a31cc5c6c39))
+    - Merge pull request #426 from Byron/api-check ([`12fa207`](https://github.com/raldone01/dua-cli/commit/12fa207e8c23bf16cceff27c064d68c4a6feb3fc))
+</details>
+
 ## 6.0.0 (2026-11-02)
 
 ### Chore
@@ -57,10 +94,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 5 commits contributed to the release.
+ - 6 commits contributed to the release.
  - 2 days passed between releases.
  - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 2 unique issues were worked on: [#421](https://github.com/Byron/dua-cli/issues/421), [#422](https://github.com/Byron/dua-cli/issues/422)
+ - 2 unique issues were worked on: [#421](https://github.com/raldone01/dua-cli/issues/421), [#422](https://github.com/raldone01/dua-cli/issues/422)
 
 ### Commit Details
 
@@ -68,14 +105,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <details><summary>view details</summary>
 
- * **[#421](https://github.com/Byron/dua-cli/issues/421)**
-    - Retain filesystem paths in traversal errors ([`d5114df`](https://github.com/Byron/dua-cli/commit/d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4))
- * **[#422](https://github.com/Byron/dua-cli/issues/422)**
-    - Provide standard FileType traits on native platforms ([`904203f`](https://github.com/Byron/dua-cli/commit/904203f8fcae7d5dd2b4b2983db2224f9526011c))
+ * **[#421](https://github.com/raldone01/dua-cli/issues/421)**
+    - Retain filesystem paths in traversal errors ([`d5114df`](https://github.com/raldone01/dua-cli/commit/d5114df1baad7f63c008fe725a6f4d4d0c4ce0e4))
+ * **[#422](https://github.com/raldone01/dua-cli/issues/422)**
+    - Provide standard FileType traits on native platforms ([`904203f`](https://github.com/raldone01/dua-cli/commit/904203f8fcae7d5dd2b4b2983db2224f9526011c))
  * **Uncategorized**
-    - Check Rust APIs during release planning ([`5eb55e7`](https://github.com/Byron/dua-cli/commit/5eb55e711beec3874546af527334cbc6adb63834))
-    - Fix links in public traversal documentation ([`e6ab2a9`](https://github.com/Byron/dua-cli/commit/e6ab2a927c2933ea38f32793f2b01f8cc1ee1731))
-    - Merge pull request #424 from Byron/better-error-handling ([`c392945`](https://github.com/Byron/dua-cli/commit/c392945c36444122f34fc5636985a4de1e0b300e))
+    - Release dua-core v6.0.0, dua-cli v3.0.0, safety bump 2 crates ([`c74ed61`](https://github.com/raldone01/dua-cli/commit/c74ed619a0e2f9ab9830cd5b863dc139e8f340eb))
+    - Check Rust APIs during release planning ([`5eb55e7`](https://github.com/raldone01/dua-cli/commit/5eb55e711beec3874546af527334cbc6adb63834))
+    - Fix links in public traversal documentation ([`e6ab2a9`](https://github.com/raldone01/dua-cli/commit/e6ab2a927c2933ea38f32793f2b01f8cc1ee1731))
+    - Merge pull request #424 from Byron/better-error-handling ([`c392945`](https://github.com/raldone01/dua-cli/commit/c392945c36444122f34fc5636985a4de1e0b300e))
 </details>
 
 ## 5.0.2 (2026-10-31)
@@ -108,11 +146,11 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v5.0.2 ([`bc03fed`](https://github.com/Byron/dua-cli/commit/bc03feddbdd946c16dd234a28b377d43c0688597))
-    - Prepare changelog prior to dua-core release ([`3f954df`](https://github.com/Byron/dua-cli/commit/3f954dfd86f240dc079ab51eac73b6ef1d29ab4a))
-    - Merge pull request #420 from blinxen/main ([`cca6d29`](https://github.com/Byron/dua-cli/commit/cca6d29f7ecfcf4181e296ddd384ec5f428299bf))
-    - Thanks clippy ([`996041e`](https://github.com/Byron/dua-cli/commit/996041e739ed8d8e8f84da30efd49438ea4b4aad))
-    - Add license link to dua-core so it gets published to crates.io too ([`55d0c54`](https://github.com/Byron/dua-cli/commit/55d0c5468f1a5e7631d955983a7eea88d2c336ca))
+    - Release dua-core v5.0.2 ([`bc03fed`](https://github.com/raldone01/dua-cli/commit/bc03feddbdd946c16dd234a28b377d43c0688597))
+    - Prepare changelog prior to dua-core release ([`3f954df`](https://github.com/raldone01/dua-cli/commit/3f954dfd86f240dc079ab51eac73b6ef1d29ab4a))
+    - Merge pull request #420 from blinxen/main ([`cca6d29`](https://github.com/raldone01/dua-cli/commit/cca6d29f7ecfcf4181e296ddd384ec5f428299bf))
+    - Thanks clippy ([`996041e`](https://github.com/raldone01/dua-cli/commit/996041e739ed8d8e8f84da30efd49438ea4b4aad))
+    - Add license link to dua-core so it gets published to crates.io too ([`55d0c54`](https://github.com/raldone01/dua-cli/commit/55d0c5468f1a5e7631d955983a7eea88d2c336ca))
 </details>
 
 ## 5.0.1 (2026-10-25)
@@ -151,7 +189,7 @@ Add license files to the release package.
  - 5 commits contributed to the release.
  - 10 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
- - 1 unique issue was worked on: [#417](https://github.com/Byron/dua-cli/issues/417)
+ - 1 unique issue was worked on: [#417](https://github.com/raldone01/dua-cli/issues/417)
 
 ### Commit Details
 
@@ -159,13 +197,13 @@ Add license files to the release package.
 
 <details><summary>view details</summary>
 
- * **[#417](https://github.com/Byron/dua-cli/issues/417)**
-    - Fall back when macOS bulk directory reads are unavailable ([`67c8576`](https://github.com/Byron/dua-cli/commit/67c857688e626f1016e8522fc3e4e4535cc23198))
+ * **[#417](https://github.com/raldone01/dua-cli/issues/417)**
+    - Fall back when macOS bulk directory reads are unavailable ([`67c8576`](https://github.com/raldone01/dua-cli/commit/67c857688e626f1016e8522fc3e4e4535cc23198))
  * **Uncategorized**
-    - Release dua-core v5.0.1 ([`467f3ec`](https://github.com/Byron/dua-cli/commit/467f3ec158a8bdc3fd4f79d7d885841beacf6ea3))
-    - Merge pull request #418 from Byron/conditional-bulk-macos ([`fb5d863`](https://github.com/Byron/dua-cli/commit/fb5d863a93cf2a41357e8048bb546cb4f869c2ed))
-    - Merge pull request #416 from kiranani/fix-windows-entry-at-oob-read ([`48c91c7`](https://github.com/Byron/dua-cli/commit/48c91c71fc82919ff0c993a2779da24920325a7a))
-    - Avoid reading past HEADER_SIZE in Windows ReadDir::entry_at ([`b5ef287`](https://github.com/Byron/dua-cli/commit/b5ef2871a9db5936a6ba3b8b2a3124f8039ce6ad))
+    - Release dua-core v5.0.1 ([`467f3ec`](https://github.com/raldone01/dua-cli/commit/467f3ec158a8bdc3fd4f79d7d885841beacf6ea3))
+    - Merge pull request #418 from Byron/conditional-bulk-macos ([`fb5d863`](https://github.com/raldone01/dua-cli/commit/fb5d863a93cf2a41357e8048bb546cb4f869c2ed))
+    - Merge pull request #416 from kiranani/fix-windows-entry-at-oob-read ([`48c91c7`](https://github.com/raldone01/dua-cli/commit/48c91c71fc82919ff0c993a2779da24920325a7a))
+    - Avoid reading past HEADER_SIZE in Windows ReadDir::entry_at ([`b5ef287`](https://github.com/raldone01/dua-cli/commit/b5ef2871a9db5936a6ba3b8b2a3124f8039ce6ad))
 </details>
 
 ## 5.0.0 (2026-10-15)
@@ -190,8 +228,8 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v5.0.0 ([`605564f`](https://github.com/Byron/dua-cli/commit/605564f0b3e99632c27a472d0505a40d58fa52d4))
-    - Prepare Options to remain stable by making them non-exhaustive ([`90279fb`](https://github.com/Byron/dua-cli/commit/90279fb2211655abbfb423535ed50e4ebad419bc))
+    - Release dua-core v5.0.0 ([`605564f`](https://github.com/raldone01/dua-cli/commit/605564f0b3e99632c27a472d0505a40d58fa52d4))
+    - Prepare Options to remain stable by making them non-exhaustive ([`90279fb`](https://github.com/raldone01/dua-cli/commit/90279fb2211655abbfb423535ed50e4ebad419bc))
 </details>
 
 ## 4.2.0 (2026-10-13)
@@ -271,13 +309,13 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v4.2.0 ([`2eeb1e8`](https://github.com/Byron/dua-cli/commit/2eeb1e88e7fbc2423b1b1d363be926731c94f82e))
-    - Merge pull request #413 from dduugg/buffer-batches-ahead-of-consumer ([`4179fe2`](https://github.com/Byron/dua-cli/commit/4179fe275833edcfcb89ecf27112e1efe27b4076))
-    - Pass strict workspace Clippy on Rust 1.99 ([`afbe487`](https://github.com/Byron/dua-cli/commit/afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6))
-    - Make walk result buffering configurable per worker ([`2989d30`](https://github.com/Byron/dua-cli/commit/2989d30d43c035c9c9ff9eb8eff8584b6244cf12))
-    - Let walk workers queue more batches ahead of the iterator ([`4ca76e1`](https://github.com/Byron/dua-cli/commit/4ca76e103123d4f8f7516d8bad85af91cdb9f1d6))
-    - Merge pull request #407 from Mathjk/fix/verbatim-path ([`8f8d25b`](https://github.com/Byron/dua-cli/commit/8f8d25b95963523be973243f9a23dfdbf15f8bb1))
-    - Keep verbatim paths verbatim when resolving relative paths on Windows ([`1ec599f`](https://github.com/Byron/dua-cli/commit/1ec599fea8dd9512164899fd9000802516d3409d))
+    - Release dua-core v4.2.0 ([`2eeb1e8`](https://github.com/raldone01/dua-cli/commit/2eeb1e88e7fbc2423b1b1d363be926731c94f82e))
+    - Merge pull request #413 from dduugg/buffer-batches-ahead-of-consumer ([`4179fe2`](https://github.com/raldone01/dua-cli/commit/4179fe275833edcfcb89ecf27112e1efe27b4076))
+    - Pass strict workspace Clippy on Rust 1.99 ([`afbe487`](https://github.com/raldone01/dua-cli/commit/afbe487bd0d7b158b6b4ef9e80b4e0113f55eee6))
+    - Make walk result buffering configurable per worker ([`2989d30`](https://github.com/raldone01/dua-cli/commit/2989d30d43c035c9c9ff9eb8eff8584b6244cf12))
+    - Let walk workers queue more batches ahead of the iterator ([`4ca76e1`](https://github.com/raldone01/dua-cli/commit/4ca76e103123d4f8f7516d8bad85af91cdb9f1d6))
+    - Merge pull request #407 from Mathjk/fix/verbatim-path ([`8f8d25b`](https://github.com/raldone01/dua-cli/commit/8f8d25b95963523be973243f9a23dfdbf15f8bb1))
+    - Keep verbatim paths verbatim when resolving relative paths on Windows ([`1ec599f`](https://github.com/raldone01/dua-cli/commit/1ec599fea8dd9512164899fd9000802516d3409d))
 </details>
 
 ## 4.1.0 (2026-09-12)
@@ -346,12 +384,12 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v4.1.0, dua-cli v2.45.0 ([`65c197d`](https://github.com/Byron/dua-cli/commit/65c197d8a04430d8decc51fc4d5dff4405d14288))
-    - Prepare changelog prior to release ([`19929e8`](https://github.com/Byron/dua-cli/commit/19929e811061d5678f5d196884e125236e16ea3c))
-    - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/Byron/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
-    - Stream roots and support cancellable walks ([`c2c6f67`](https://github.com/Byron/dua-cli/commit/c2c6f67d5bfc535e7d67ce695cf96697c74f1545))
-    - Merge pull request #401 from Byron/faster-bulk-traversal ([`46b8556`](https://github.com/Byron/dua-cli/commit/46b8556d1c17770ebfa443144376441609fc9b71))
-    - Parallelize I/O-bound macOS directory scans ([`249bdf3`](https://github.com/Byron/dua-cli/commit/249bdf3beab910d0d233815a7717676f1a0f1739))
+    - Release dua-core v4.1.0, dua-cli v2.45.0 ([`65c197d`](https://github.com/raldone01/dua-cli/commit/65c197d8a04430d8decc51fc4d5dff4405d14288))
+    - Prepare changelog prior to release ([`19929e8`](https://github.com/raldone01/dua-cli/commit/19929e811061d5678f5d196884e125236e16ea3c))
+    - Merge pull request #399 from Byron/dua-clean ([`ed276c2`](https://github.com/raldone01/dua-cli/commit/ed276c230b838b94ea5af7daff10ae5996f7b455))
+    - Stream roots and support cancellable walks ([`c2c6f67`](https://github.com/raldone01/dua-cli/commit/c2c6f67d5bfc535e7d67ce695cf96697c74f1545))
+    - Merge pull request #401 from Byron/faster-bulk-traversal ([`46b8556`](https://github.com/raldone01/dua-cli/commit/46b8556d1c17770ebfa443144376441609fc9b71))
+    - Parallelize I/O-bound macOS directory scans ([`249bdf3`](https://github.com/raldone01/dua-cli/commit/249bdf3beab910d0d233815a7717676f1a0f1739))
 </details>
 
 ## 4.0.0 (2026-09-07)
@@ -390,10 +428,10 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v4.0.0, safety bump dua-cli v3.0.0 ([`0e99238`](https://github.com/Byron/dua-cli/commit/0e992386d15275d08b4e1ef40196edb2a30dd799))
-    - Merge pull request #397 from Byron/speed-up-deletions ([`97211e6`](https://github.com/Byron/dua-cli/commit/97211e69ec4e252760143b525ca4688a1309b544))
-    - Avoid unnecessary metadata during deletion ([`f643c74`](https://github.com/Byron/dua-cli/commit/f643c7493c6ce48658983543d954fe4912f8e7fc))
-    - Merge pull request #385 from Byron/io-format ([`3343158`](https://github.com/Byron/dua-cli/commit/3343158b234f9b45e2a0de4fe0ebe9dc56abbb28))
+    - Release dua-core v4.0.0, safety bump dua-cli v3.0.0 ([`0e99238`](https://github.com/raldone01/dua-cli/commit/0e992386d15275d08b4e1ef40196edb2a30dd799))
+    - Merge pull request #397 from Byron/speed-up-deletions ([`97211e6`](https://github.com/raldone01/dua-cli/commit/97211e69ec4e252760143b525ca4688a1309b544))
+    - Avoid unnecessary metadata during deletion ([`f643c74`](https://github.com/raldone01/dua-cli/commit/f643c7493c6ce48658983543d954fe4912f8e7fc))
+    - Merge pull request #385 from Byron/io-format ([`3343158`](https://github.com/raldone01/dua-cli/commit/3343158b234f9b45e2a0de4fe0ebe9dc56abbb28))
 </details>
 
 ## 3.3.1 (2026-08-30)
@@ -437,8 +475,8 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v3.3.1, dua-cli v2.44.0 ([`9553f5d`](https://github.com/Byron/dua-cli/commit/9553f5d9e6c5aef939df00c945fddb51f25da349))
-    - Compact traversal storage and snapshot replay ([`9513699`](https://github.com/Byron/dua-cli/commit/95136995ea39b35e6575f9ae1c5df9618ff5c0a9))
+    - Release dua-core v3.3.1, dua-cli v2.44.0 ([`9553f5d`](https://github.com/raldone01/dua-cli/commit/9553f5d9e6c5aef939df00c945fddb51f25da349))
+    - Compact traversal storage and snapshot replay ([`9513699`](https://github.com/raldone01/dua-cli/commit/95136995ea39b35e6575f9ae1c5df9618ff5c0a9))
 </details>
 
 ## 3.3.0 (2026-08-28)
@@ -468,9 +506,9 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v3.3.0 ([`6fed577`](https://github.com/Byron/dua-cli/commit/6fed577b904a12d548692978b34d187a0c74a86d))
-    - Merge pull request #381 from Byron/reuse-walk-pool ([`28a7279`](https://github.com/Byron/dua-cli/commit/28a727921f55a5bb10449dfe2afa89a8eaffed39))
-    - Reuse workers when restarting a walk ([`c0005aa`](https://github.com/Byron/dua-cli/commit/c0005aa9f8f1f225f609eb89c7d09a98ebbcb163))
+    - Release dua-core v3.3.0 ([`6fed577`](https://github.com/raldone01/dua-cli/commit/6fed577b904a12d548692978b34d187a0c74a86d))
+    - Merge pull request #381 from Byron/reuse-walk-pool ([`28a7279`](https://github.com/raldone01/dua-cli/commit/28a727921f55a5bb10449dfe2afa89a8eaffed39))
+    - Reuse workers when restarting a walk ([`c0005aa`](https://github.com/raldone01/dua-cli/commit/c0005aa9f8f1f225f609eb89c7d09a98ebbcb163))
 </details>
 
 ## 3.2.0 (2026-08-25)
@@ -504,19 +542,19 @@ Add license files to the release package.
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v3.2.0, dua-cli v2.43.0 ([`7baa926`](https://github.com/Byron/dua-cli/commit/7baa9266a593fd6b7f7568c741798d76660eb3ab))
-    - Prepare changelog priot to release ([`c042449`](https://github.com/Byron/dua-cli/commit/c0424490a47477dd516c3f52bbb6d130b210c317))
-    - Merge pull request #379 from nshcr/codex/macos-du-allocation-accounting ([`2262295`](https://github.com/Byron/dua-cli/commit/226229565fc978e22a14ff2531044c688c87e1ed))
-    - Review ([`df12088`](https://github.com/Byron/dua-cli/commit/df12088f444aa934ed922ab360279fabdf7a5ea0))
-    - Match macOS `du` allocation accounting ([`ddee9e4`](https://github.com/Byron/dua-cli/commit/ddee9e48fdd90575c91006ee52c4088ddf028b68))
-    - Don't output colors when stdout isn't a terminal. ([`b1e16a0`](https://github.com/Byron/dua-cli/commit/b1e16a0cc5ea3792b477f5b38a2d98e88b4f53c3))
-    - Merge pull request #377 from tamird/perf-compact-apfs-metadata ([`8b1d8da`](https://github.com/Byron/dua-cli/commit/8b1d8da2316834b034449138a746779ffa78419f))
-    - Review ([`d812272`](https://github.com/Byron/dua-cli/commit/d8122729a9f41b69f80cc7e794ecb56e7f9d174e))
-    - Shrink native macOS traversal metadata ([`6156641`](https://github.com/Byron/dua-cli/commit/61566414896f380c82c647fa39b4809c01a857ed))
-    - A relative root ending in .. is mis-resolved ([`a6b6f68`](https://github.com/Byron/dua-cli/commit/a6b6f6899910ca4960a972f6299640dc5ae66eb7))
-    - Merge pull request #371 from tamird/macos-apfs-clone-accounting ([`7231d83`](https://github.com/Byron/dua-cli/commit/7231d838d6dad0f4a2ac649959788ba6ec844853))
-    - Review ([`0acd5fa`](https://github.com/Byron/dua-cli/commit/0acd5fa421d287a1a8ef8c6d6efc8244e0622940))
-    - Count fully shared APFS clones once ([`6b3a231`](https://github.com/Byron/dua-cli/commit/6b3a23176f69f5f18b3eb87529d585dfb2f5b9cf))
+    - Release dua-core v3.2.0, dua-cli v2.43.0 ([`7baa926`](https://github.com/raldone01/dua-cli/commit/7baa9266a593fd6b7f7568c741798d76660eb3ab))
+    - Prepare changelog priot to release ([`c042449`](https://github.com/raldone01/dua-cli/commit/c0424490a47477dd516c3f52bbb6d130b210c317))
+    - Merge pull request #379 from nshcr/codex/macos-du-allocation-accounting ([`2262295`](https://github.com/raldone01/dua-cli/commit/226229565fc978e22a14ff2531044c688c87e1ed))
+    - Review ([`df12088`](https://github.com/raldone01/dua-cli/commit/df12088f444aa934ed922ab360279fabdf7a5ea0))
+    - Match macOS `du` allocation accounting ([`ddee9e4`](https://github.com/raldone01/dua-cli/commit/ddee9e48fdd90575c91006ee52c4088ddf028b68))
+    - Don't output colors when stdout isn't a terminal. ([`b1e16a0`](https://github.com/raldone01/dua-cli/commit/b1e16a0cc5ea3792b477f5b38a2d98e88b4f53c3))
+    - Merge pull request #377 from tamird/perf-compact-apfs-metadata ([`8b1d8da`](https://github.com/raldone01/dua-cli/commit/8b1d8da2316834b034449138a746779ffa78419f))
+    - Review ([`d812272`](https://github.com/raldone01/dua-cli/commit/d8122729a9f41b69f80cc7e794ecb56e7f9d174e))
+    - Shrink native macOS traversal metadata ([`6156641`](https://github.com/raldone01/dua-cli/commit/61566414896f380c82c647fa39b4809c01a857ed))
+    - A relative root ending in .. is mis-resolved ([`a6b6f68`](https://github.com/raldone01/dua-cli/commit/a6b6f6899910ca4960a972f6299640dc5ae66eb7))
+    - Merge pull request #371 from tamird/macos-apfs-clone-accounting ([`7231d83`](https://github.com/raldone01/dua-cli/commit/7231d838d6dad0f4a2ac649959788ba6ec844853))
+    - Review ([`0acd5fa`](https://github.com/raldone01/dua-cli/commit/0acd5fa421d287a1a8ef8c6d6efc8244e0622940))
+    - Count fully shared APFS clones once ([`6b3a231`](https://github.com/raldone01/dua-cli/commit/6b3a23176f69f5f18b3eb87529d585dfb2f5b9cf))
 </details>
 
 ## 3.1.0 (2026-08-15)
@@ -539,11 +577,11 @@ Support providing walk roots with their metadata already set due to bulk-reading
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v3.1.0, dua-cli v2.42.1 ([`9560df3`](https://github.com/Byron/dua-cli/commit/9560df3113868662a5c1922299371e5b1f75ed25))
-    - Prepare changelog prior to release ([`b32d912`](https://github.com/Byron/dua-cli/commit/b32d91204c72dedb77d4ce7987b711944b05ad2a))
-    - Merge pull request #369 from tamird/macos-prepared-roots ([`3b1659e`](https://github.com/Byron/dua-cli/commit/3b1659e47ae28b3facd1d7d261132023b2509d1a))
-    - Review ([`ffb2a2e`](https://github.com/Byron/dua-cli/commit/ffb2a2ef0fc3b95c4d2e0ef07f228699aa750a44))
-    - Reuse bulk metadata for macOS aggregation roots ([`d45a2f8`](https://github.com/Byron/dua-cli/commit/d45a2f85451d900b19770f1e64bddd201e9d7429))
+    - Release dua-core v3.1.0, dua-cli v2.42.1 ([`9560df3`](https://github.com/raldone01/dua-cli/commit/9560df3113868662a5c1922299371e5b1f75ed25))
+    - Prepare changelog prior to release ([`b32d912`](https://github.com/raldone01/dua-cli/commit/b32d91204c72dedb77d4ce7987b711944b05ad2a))
+    - Merge pull request #369 from tamird/macos-prepared-roots ([`3b1659e`](https://github.com/raldone01/dua-cli/commit/3b1659e47ae28b3facd1d7d261132023b2509d1a))
+    - Review ([`ffb2a2e`](https://github.com/raldone01/dua-cli/commit/ffb2a2ef0fc3b95c4d2e0ef07f228699aa750a44))
+    - Reuse bulk metadata for macOS aggregation roots ([`d45a2f8`](https://github.com/raldone01/dua-cli/commit/d45a2f85451d900b19770f1e64bddd201e9d7429))
 </details>
 
 ## 3.0.0 (2026-08-14)
@@ -566,12 +604,12 @@ macOS specificy bulk-readtree implementation for 30% performance boost on suppor
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v3.0.0 ([`ac9766c`](https://github.com/Byron/dua-cli/commit/ac9766cdd01b6ea7ff81e76a8fd9e9332d12cbcc))
-    - Prepare changelog prior to release ([`40c2816`](https://github.com/Byron/dua-cli/commit/40c28166a4beb903e87df85e23916f27e15ef26b))
-    - Merge pull request #367 from tamird/macos-native-traversal ([`e68868c`](https://github.com/Byron/dua-cli/commit/e68868c1fd28d089baa91126998dc25fb5216e23))
-    - Review ([`872b6be`](https://github.com/Byron/dua-cli/commit/872b6beffaf3f354dee3e1f670d4fe45615b76a8))
-    - Avoid per-entry macOS metadata queries ([`7d115c0`](https://github.com/Byron/dua-cli/commit/7d115c014eff2f85ab60e82266f4f1beb4782598))
-    - Merge pull request #362 from Byron/dua-lib ([`b6e7caf`](https://github.com/Byron/dua-cli/commit/b6e7cafd305c150834eb887e1de99bcdd3fca85d))
+    - Release dua-core v3.0.0 ([`ac9766c`](https://github.com/raldone01/dua-cli/commit/ac9766cdd01b6ea7ff81e76a8fd9e9332d12cbcc))
+    - Prepare changelog prior to release ([`40c2816`](https://github.com/raldone01/dua-cli/commit/40c28166a4beb903e87df85e23916f27e15ef26b))
+    - Merge pull request #367 from tamird/macos-native-traversal ([`e68868c`](https://github.com/raldone01/dua-cli/commit/e68868c1fd28d089baa91126998dc25fb5216e23))
+    - Review ([`872b6be`](https://github.com/raldone01/dua-cli/commit/872b6beffaf3f354dee3e1f670d4fe45615b76a8))
+    - Avoid per-entry macOS metadata queries ([`7d115c0`](https://github.com/raldone01/dua-cli/commit/7d115c014eff2f85ab60e82266f4f1beb4782598))
+    - Merge pull request #362 from Byron/dua-lib ([`b6e7caf`](https://github.com/raldone01/dua-cli/commit/b6e7cafd305c150834eb887e1de99bcdd3fca85d))
 </details>
 
 ## 2.41.1 (2026-08-05)
@@ -593,8 +631,8 @@ The first release of the directory walk implementation of the `dua-cli`, to allo
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dua-core v2.41.1 ([`9fe4ce0`](https://github.com/Byron/dua-cli/commit/9fe4ce0f644b823cfec79db1eda9b02ff55a1c37))
-    - Prepare changelog prior to `dua-core` release ([`965ce7c`](https://github.com/Byron/dua-cli/commit/965ce7cdbca6f4d8954e2f45d1967f4df786ddb1))
-    - Extract filesystem walker into dua-lib ([`3b1c8cf`](https://github.com/Byron/dua-cli/commit/3b1c8cfbf206d92f60a33049dd741251024a027f))
+    - Release dua-core v2.41.1 ([`9fe4ce0`](https://github.com/raldone01/dua-cli/commit/9fe4ce0f644b823cfec79db1eda9b02ff55a1c37))
+    - Prepare changelog prior to `dua-core` release ([`965ce7c`](https://github.com/raldone01/dua-cli/commit/965ce7cdbca6f4d8954e2f45d1967f4df786ddb1))
+    - Extract filesystem walker into dua-lib ([`3b1c8cf`](https://github.com/raldone01/dua-cli/commit/3b1c8cfbf206d92f60a33049dd741251024a027f))
 </details>
 

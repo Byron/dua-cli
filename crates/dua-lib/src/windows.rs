@@ -2,7 +2,7 @@
 
 use std::{
     ffi::OsString,
-    fs, io,
+    fmt, fs, io,
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::{Component, Path, PathBuf},
     sync::Arc,
@@ -22,6 +22,9 @@ use windows_sys::Win32::{
         GetFileInformationByHandle, GetFileInformationByHandleEx, OPEN_EXISTING, SYNCHRONIZE,
     },
 };
+
+#[cfg(any(test, feature = "unstable"))]
+use windows_sys::Win32::Storage::FileSystem;
 
 const DIRECTORY_BUFFER_WORDS: usize = 8 * 1024;
 const NAME_SURROGATE_BIT: u32 = 0x2000_0000;
@@ -100,6 +103,8 @@ impl Entry {
             ),
             volume_serial: u64::from(info.dwVolumeSerialNumber),
             file_id: (file_id != 0).then_some(file_id),
+            #[cfg(any(test, feature = "unstable"))]
+            file_attributes: FileAttributes::from_bits_retain(info.dwFileAttributes),
         };
         Ok(Self {
             depth: 0,
@@ -119,7 +124,7 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 /// Windows filesystem entry type derived from directory attributes and reparse tags.
 pub struct FileType {
     is_dir: bool,
@@ -162,6 +167,85 @@ impl FileType {
     }
 }
 
+impl fmt::Debug for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = if self.is_symlink() {
+            "Symlink"
+        } else if self.is_dir() {
+            "Directory"
+        } else {
+            "File"
+        };
+        f.debug_tuple("FileType")
+            .field(&format_args!("{kind}"))
+            .finish()
+    }
+}
+
+#[cfg(any(test, feature = "unstable"))]
+bitflags::bitflags! {
+    /// Combinable Windows filesystem attributes returned by [`Metadata::file_attributes`].
+    ///
+    /// Available with the `unstable` feature.
+    ///
+    /// Test flags with [`Self::contains`], for example
+    /// `attributes.contains(FileAttributes::READONLY | FileAttributes::HIDDEN)`.
+    /// Unknown bits are retained for compatibility with future Windows versions.
+    ///
+    /// See [File Attribute Constants] for platform-specific semantics and availability.
+    ///
+    /// [File Attribute Constants]: https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct FileAttributes: u32 {
+        /// The file is read-only; Windows does not honor this flag on directories.
+        const READONLY = FileSystem::FILE_ATTRIBUTE_READONLY;
+        /// The file or directory is hidden.
+        const HIDDEN = FileSystem::FILE_ATTRIBUTE_HIDDEN;
+        /// The file or directory is used by the operating system.
+        const SYSTEM = FileSystem::FILE_ATTRIBUTE_SYSTEM;
+        /// The entry is a directory, possibly a directory reparse point.
+        const DIRECTORY = FileSystem::FILE_ATTRIBUTE_DIRECTORY;
+        /// The file or directory is marked for archiving.
+        const ARCHIVE = FileSystem::FILE_ATTRIBUTE_ARCHIVE;
+        /// Reserved for system use.
+        const DEVICE = FileSystem::FILE_ATTRIBUTE_DEVICE;
+        /// No other attributes are set; this flag is only valid alone.
+        const NORMAL = FileSystem::FILE_ATTRIBUTE_NORMAL;
+        /// The file is used for temporary storage.
+        const TEMPORARY = FileSystem::FILE_ATTRIBUTE_TEMPORARY;
+        /// The file is sparse.
+        const SPARSE_FILE = FileSystem::FILE_ATTRIBUTE_SPARSE_FILE;
+        /// The entry has a reparse point; this does not necessarily mean it is a symlink.
+        const REPARSE_POINT = FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+        /// The file is compressed, or new children inherit compression from this directory.
+        const COMPRESSED = FileSystem::FILE_ATTRIBUTE_COMPRESSED;
+        /// The file's data is not immediately available locally.
+        const OFFLINE = FileSystem::FILE_ATTRIBUTE_OFFLINE;
+        /// The file or directory is excluded from content indexing.
+        const NOT_CONTENT_INDEXED = FileSystem::FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
+        /// The file is encrypted, or new children inherit encryption from this directory.
+        const ENCRYPTED = FileSystem::FILE_ATTRIBUTE_ENCRYPTED;
+        /// Integrity checking is enabled on a supported filesystem.
+        const INTEGRITY_STREAM = FileSystem::FILE_ATTRIBUTE_INTEGRITY_STREAM;
+        /// Reserved for system use.
+        const VIRTUAL = FileSystem::FILE_ATTRIBUTE_VIRTUAL;
+        /// The data is excluded from background integrity scanning.
+        const NO_SCRUB_DATA = FileSystem::FILE_ATTRIBUTE_NO_SCRUB_DATA;
+        /// Enumeration reports a virtual entry whose opening may fetch remote data.
+        /// This bit aliases the internal `FILE_ATTRIBUTE_EA` flag in other contexts.
+        const RECALL_ON_OPEN = FileSystem::FILE_ATTRIBUTE_RECALL_ON_OPEN;
+        /// The user intends to keep the file or directory fully available locally.
+        const PINNED = FileSystem::FILE_ATTRIBUTE_PINNED;
+        /// The user intends not to retain the file or directory locally when inactive.
+        const UNPINNED = FileSystem::FILE_ATTRIBUTE_UNPINNED;
+        /// Accessing file data or enumerating the directory may fetch remote content.
+        const RECALL_ON_DATA_ACCESS = FileSystem::FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+
+        // Windows may introduce additional flags; retain them in bitwise operations too.
+        const _ = !0;
+    }
+}
+
 #[derive(Clone, Copy)]
 /// Metadata supplied by Windows directory enumeration.
 pub struct Metadata {
@@ -170,6 +254,8 @@ pub struct Metadata {
     modified: SystemTime,
     volume_serial: u64,
     file_id: Option<u64>,
+    #[cfg(any(test, feature = "unstable"))]
+    file_attributes: FileAttributes,
 }
 
 impl Metadata {
@@ -196,6 +282,23 @@ impl Metadata {
     #[must_use]
     pub fn hard_link_id(&self) -> Option<(u64, u64)> {
         self.file_id.map(|file_id| (self.volume_serial, file_id))
+    }
+
+    /// Return the file or directory's attributes as a typed flag set.
+    ///
+    /// Available with the `unstable` feature.
+    ///
+    /// Use [`FileAttributes::contains`] to test individual flags or combinations.
+    /// Attributes come from `BY_HANDLE_FILE_INFORMATION.dwFileAttributes` for explicit
+    /// paths and [`FILE_ID_BOTH_DIR_INFO.FileAttributes`] for directory entries.
+    /// Availability and meaning of individual flags depend on the filesystem and query;
+    /// the native bits, including unknown flags, are preserved without additional queries.
+    ///
+    /// [`FILE_ID_BOTH_DIR_INFO.FileAttributes`]: https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info
+    #[cfg(any(test, feature = "unstable"))]
+    #[must_use]
+    pub fn file_attributes(&self) -> FileAttributes {
+        self.file_attributes
     }
 }
 
@@ -354,6 +457,8 @@ impl ReadDir {
                     modified: filetime_to_system_time(info.LastWriteTime.max(0).cast_unsigned()),
                     volume_serial: self.volume_serial,
                     file_id,
+                    #[cfg(any(test, feature = "unstable"))]
+                    file_attributes: FileAttributes::from_bits_retain(info.FileAttributes),
                 })),
                 parent_path: Arc::clone(&self.parent_path),
                 directory_id: None,
@@ -548,6 +653,7 @@ fn duration_from_ticks(ticks: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::windows::fs::MetadataExt;
 
     #[test]
     fn type_flags_match_windows_symlink_metadata_semantics() {
@@ -560,10 +666,12 @@ mod tests {
         assert!(!file.is_dir());
         assert!(file.is_file());
         assert!(!file.is_symlink());
+        assert_eq!(format!("{file:?}"), "FileType(File)");
         let dir = FileType::from_attributes(FILE_ATTRIBUTE_DIRECTORY, 0);
         assert!(dir.is_dir());
         assert!(!dir.is_file());
         assert!(!dir.is_symlink());
+        assert_eq!(format!("{dir:?}"), "FileType(Directory)");
         for tag in [IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POINT] {
             let link = FileType::from_attributes(
                 FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT,
@@ -572,6 +680,7 @@ mod tests {
             assert!(!link.is_dir());
             assert!(!link.is_file());
             assert!(link.is_symlink());
+            assert_eq!(format!("{link:?}"), "FileType(Symlink)");
         }
         let cloud = FileType::from_attributes(
             FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT,
@@ -579,6 +688,59 @@ mod tests {
         );
         assert!(cloud.is_dir());
         assert!(!cloud.is_symlink());
+    }
+
+    #[test]
+    fn file_attributes_support_typed_combinations() {
+        let attributes: crate::FileAttributes = FileAttributes::from_bits_retain(
+            FileSystem::FILE_ATTRIBUTE_READONLY | FileSystem::FILE_ATTRIBUTE_HIDDEN,
+        );
+        assert!(attributes.contains(FileAttributes::READONLY));
+        assert!(attributes.contains(FileAttributes::HIDDEN));
+        assert!(attributes.contains(FileAttributes::READONLY | FileAttributes::HIDDEN));
+        assert!(!attributes.contains(FileAttributes::DIRECTORY));
+        assert!(!attributes.contains(FileAttributes::READONLY | FileAttributes::DIRECTORY));
+        assert_eq!(
+            format!("{attributes:?}"),
+            "FileAttributes(READONLY | HIDDEN)"
+        );
+        assert!(FileAttributes::from_bits_retain(0).is_empty());
+        assert_eq!(
+            FileAttributes::from_bits_retain(FileSystem::FILE_ATTRIBUTE_NORMAL),
+            FileAttributes::NORMAL
+        );
+    }
+
+    #[test]
+    fn file_attributes_match_std_for_paths_and_directory_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        fs::write(&path, b"content").unwrap();
+        let original_permissions = fs::symlink_metadata(&path).unwrap().permissions();
+
+        for readonly in [false, true] {
+            let mut permissions = original_permissions.clone();
+            permissions.set_readonly(readonly);
+            fs::set_permissions(&path, permissions).unwrap();
+
+            let expected = fs::symlink_metadata(&path);
+            let direct = Entry::from_path(&path, crate::Options::default());
+            let entries = crate::ReadDir::open(Arc::from(dir.path()), 1, crate::Options::default())
+                .and_then(|entries| entries.collect::<Result<Vec<_>, _>>());
+
+            // Restore permissions before unwrapping results so failures cannot leave a read-only file.
+            fs::set_permissions(&path, original_permissions.clone()).unwrap();
+
+            let expected = expected.unwrap().file_attributes();
+            let mut entries = entries.unwrap();
+            assert_eq!(entries.len(), 1);
+            for entry in [direct.unwrap(), entries.pop().unwrap()] {
+                let attributes = entry.metadata.unwrap().unwrap().file_attributes();
+                assert_eq!(attributes.contains(FileAttributes::READONLY), readonly);
+                assert!(!attributes.contains(FileAttributes::DIRECTORY));
+                assert_eq!(attributes.bits(), expected);
+            }
+        }
     }
 
     #[test]
@@ -623,6 +785,18 @@ mod tests {
         assert_eq!(metadata.len(), direct.len());
         assert_eq!(metadata.allocated_size(), direct.allocated_size());
         assert_eq!(metadata.hard_link_id(), direct.hard_link_id());
+        for metadata in [metadata, direct] {
+            assert!(
+                metadata
+                    .file_attributes()
+                    .contains(FileAttributes::DIRECTORY)
+            );
+            assert!(
+                !metadata
+                    .file_attributes()
+                    .contains(FileAttributes::REPARSE_POINT)
+            );
+        }
     }
 
     #[test]
@@ -814,6 +988,9 @@ mod tests {
             EndOfFile: 42,
             AllocationSize: 64,
             FileId: 7,
+            FileAttributes: FileSystem::FILE_ATTRIBUTE_READONLY
+                | FileSystem::FILE_ATTRIBUTE_HIDDEN
+                | 0x8000_0000,
             ..FILE_ID_BOTH_DIR_INFO::default()
         };
         let name_unit = u16::from(b'a');
@@ -834,6 +1011,13 @@ mod tests {
         let metadata = entry.metadata.unwrap().unwrap();
         assert_eq!(metadata.len(), 42);
         assert_eq!(metadata.allocated_size(), 64);
+        let attributes = metadata.file_attributes();
+        assert!(attributes.contains(FileAttributes::READONLY | FileAttributes::HIDDEN));
+        assert_eq!(attributes.bits(), header.FileAttributes);
+        assert_eq!(
+            (attributes & FileAttributes::all()).bits(),
+            header.FileAttributes
+        );
 
         // A buffer smaller than HEADER_SIZE must fail cleanly rather than saturating to 0.
         read_dir.buffer = vec![0; 1];
