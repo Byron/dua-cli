@@ -729,6 +729,7 @@ dependencies = [
 name = "dua-core"
 version = "6.0.0"
 dependencies = [
+ "bitflags",
  "crossbeam",
  "libc",
  "tempfile",

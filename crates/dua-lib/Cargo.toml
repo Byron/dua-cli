@@ -14,6 +14,10 @@ api-check = ["cargo", "api-check", "release"]
 [package.metadata.api-check]
 profiles = [{ default-features = true, features = [] }]
 
+[features]
+# Experimental APIs that may change without notice.
+unstable = ["dep:bitflags"]
+
 [dependencies]
 crossbeam.workspace = true
 
@@ -21,6 +25,7 @@ crossbeam.workspace = true
 libc = "0.2.186"
 
 [target.'cfg(windows)'.dependencies]
+bitflags = { version = "2", optional = true }
 windows-sys = { version = "0.61.1", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -29,6 +34,9 @@ windows-sys = { version = "0.61.1", features = [
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+bitflags = "2"
 
 [lints]
 workspace = true
