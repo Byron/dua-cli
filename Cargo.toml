@@ -29,7 +29,7 @@ fn_params_excessive_bools = "allow"
 
 [package]
 name = "dua-cli"
-version = "3.0.0"
+version = "3.0.1"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
