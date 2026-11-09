@@ -77,7 +77,7 @@ itertools = "0.15.0"
 num_cpus = "1.10.0"
 anyhow = "1.0.31"
 inferno = { version = "0.12.8", default-features = false }
-trash = { version = "5.2.0", optional = true, default-features = false, features = [
+trash = { version = "5.3.0", optional = true, default-features = false, features = [
     "coinit_apartmentthreaded", "chrono"
 ] }
 chrono = { version = "0.4.31", default-features = false, features = ["std"] }
@@ -112,6 +112,9 @@ shlex = "2.0.1"
 
 [target.'cfg(not(any(windows, target_os = "macos")))'.dependencies]
 filesize = "0.2.0"
+
+[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+trash = { version = "5.3.0", optional = true, default-features = false, features = ["freedesktop"] }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.3.18", optional = true }
