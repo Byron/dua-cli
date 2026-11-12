@@ -99,11 +99,11 @@ jobs:
             rust: stable
             target: riscv64gc-unknown-linux-gnu
           - build: macos
-            os: macos-14
+            os: macos-15-intel
             rust: stable
             target: x86_64-apple-darwin
           - build: macos-arm64
-            os: macos-14
+            os: macos-15
             rust: stable
             target: aarch64-apple-darwin
           - build: win-msvc
@@ -240,7 +240,7 @@ jobs:
   validate-release-install:
     name: validate release installation
     needs: ["build-release"]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - run: sh ci/validate-release-install.sh "$GITHUB_REF_NAME"
