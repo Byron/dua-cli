@@ -13,6 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Test Ubuntu release package installation
+      run: ci/ubuntu-install-packages
     - uses: Swatinem/rust-cache@v1
     - name: Test compilation
       run: make check
