@@ -5,9 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 3.0.3 (2026-11-12)
 
 Merely a re-release of 3.0.1 to get macOS builds - for real this time.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+- 2 commits contributed to the release.
+- 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+- 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+- **Uncategorized**
+  - Prepare yet another release ([`68cc0c4`](https://github.com/Byron/dua-cli/commit/68cc0c41d671ad10c8c2e966a2f7b8aa1fbd9146))
+  - Merge pull request #431 from Byron/fix-macrunners ([`89532ea`](https://github.com/Byron/dua-cli/commit/89532ea8cc32f98021afac22c4b4379c5e8368d9))
+
+</details>
 
 ## 3.0.2 (2026-11-12)
 
