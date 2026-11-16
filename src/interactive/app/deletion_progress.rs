@@ -113,7 +113,13 @@ impl AppState {
         if self.read_only {
             anyhow::bail!(self.language.ui_text().snapshots_read_only);
         }
-        if self.scan.is_some() {
+        // Cleanup discovery stages candidates outside the visible tree and snapshots must
+        // match the scan, so only ordinary scans tolerate entries disappearing mid-way.
+        if self
+            .scan
+            .as_ref()
+            .is_some_and(|scan| self.clean_hub.is_some() || scan.snapshot_export.is_some())
+        {
             anyhow::bail!(self.language.ui_text().traversal_running);
         }
         let Some(pane) = &window.mark else {
@@ -243,6 +249,7 @@ impl AppState {
 
         let mut deltas = HashMap::<TreeIndex, (u128, u64)>::new();
         let mut parents = HashMap::<TreeIndex, HashSet<TreeIndex>>::new();
+        let mut removed_nodes = HashSet::new();
         for &index in &roots {
             let Some(data) = tree.tree().data(index) else {
                 continue;
@@ -268,8 +275,21 @@ impl AppState {
             let mut pending = vec![index];
             while let Some(index) = pending.pop() {
                 deletion.children.remove(&index);
+                if self.scan.is_some() {
+                    removed_nodes.insert(index);
+                }
                 pending.extend(tree.tree().children(index));
             }
+        }
+        // A scan that is still running must not integrate queued entries into removed nodes,
+        // whose tree slots are about to become reusable.
+        if self
+            .scan
+            .as_mut()
+            .is_some_and(|scan| !scan.active_traversal.forget_removed_nodes(&removed_nodes))
+        {
+            self.scan = None;
+            tree.traversal.cost = Some(tree.traversal.start_time.elapsed());
         }
         for target in &mut deletion.targets {
             if target.index.is_some_and(|index| roots.contains(&index)) {

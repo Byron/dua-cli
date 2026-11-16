@@ -830,10 +830,29 @@ pub struct BackgroundTraversal {
     use_root_path: bool,
     retained_depth: Option<usize>,
     preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
+    /// Entries whose nodes were removed from the tree while this traversal was still running.
+    removed: RemovedNodes,
     /// Receiver used to obtain traversal events from the worker thread.
     pub event_rx: Receiver<TraversalEvent>,
     clean_stages: HashMap<usize, CleanStage>,
     _cancelled: Option<CancelOnDrop>,
+}
+
+/// Walker-side identities of nodes that disappeared from the tree mid-traversal.
+///
+/// The walker keeps emitting descendants of such nodes, and vacant tree slots are reused, so
+/// these must be dropped by identity instead of by probing the tree for a stale index.
+#[derive(Default)]
+struct RemovedNodes {
+    directories: HashSet<usize>,
+    roots: HashSet<usize>,
+    preexisting: HashSet<PathBuf>,
+}
+
+impl RemovedNodes {
+    fn is_empty(&self) -> bool {
+        self.directories.is_empty() && self.roots.is_empty() && self.preexisting.is_empty()
+    }
 }
 
 struct CleanStage {
@@ -982,6 +1001,7 @@ impl BackgroundTraversal {
             use_root_path: true,
             retained_depth: None,
             preexisting_nodes: HashMap::new(),
+            removed: RemovedNodes::default(),
             event_rx,
             clean_stages: HashMap::new(),
             _cancelled: Some(CancelOnDrop(cancelled)),
@@ -1145,6 +1165,7 @@ impl BackgroundTraversal {
             use_root_path,
             retained_depth: None,
             preexisting_nodes,
+            removed: RemovedNodes::default(),
             event_rx: entry_rx,
             clean_stages: HashMap::new(),
             _cancelled: None,
@@ -1165,13 +1186,47 @@ impl BackgroundTraversal {
         self
     }
 
+    /// Stop integrating entries below `removed` nodes, which the caller is about to remove from
+    /// the tree, typically after deleting them from disk. `removed` must contain every removed
+    /// node, including descendants, and this must be called before any tree slot is reused.
+    ///
+    /// Returns `false` if the node this traversal integrates into is itself removed, in which
+    /// case the traversal has nothing left to update and should be dropped.
+    #[must_use]
+    pub fn forget_removed_nodes(&mut self, removed: &HashSet<TreeIndex>) -> bool {
+        if removed.contains(&self.root_idx) {
+            return false;
+        }
+        for (directory_id, node) in self.nodes_by_directory.iter_mut().enumerate() {
+            if node.is_some_and(|node| removed.contains(&node)) {
+                *node = None;
+                self.removed.directories.insert(directory_id);
+            }
+        }
+        for (root_idx, node) in self.root_nodes.iter_mut().enumerate() {
+            if node.is_some_and(|node| removed.contains(&node)) {
+                *node = None;
+                self.removed.roots.insert(root_idx);
+            }
+        }
+        let removed_paths = &mut self.removed.preexisting;
+        self.preexisting_nodes.retain(|path, (node, _)| {
+            let keep = !removed.contains(node);
+            if !keep {
+                removed_paths.insert(path.clone());
+            }
+            keep
+        });
+        true
+    }
+
     fn record_error_on_root(
         &mut self,
         traversal: &mut Traversal,
         root_idx: usize,
         root_path: &Path,
     ) {
-        if self.skip_root {
+        if self.skip_root || self.removed.roots.contains(&root_idx) {
             return;
         }
         // Entry errors carry no descendant path, so report them on the corresponding root.
@@ -1360,6 +1415,22 @@ impl BackgroundTraversal {
                         .is_some_and(|t| t.can_update())
                         .then_some(false);
                 };
+                if !self.removed.is_empty()
+                    && (entry
+                        .parent_directory_id
+                        .is_some_and(|id| self.removed.directories.contains(&id.index()))
+                        || self.removed.preexisting.contains(&entry.path()))
+                {
+                    // The parent was removed while its entries were still queued.
+                    if let Some(directory_id) = entry.directory_id {
+                        self.removed.directories.insert(directory_id.index());
+                    }
+                    return self
+                        .throttle
+                        .as_ref()
+                        .is_some_and(|t| t.can_update())
+                        .then_some(false);
+                }
                 let walk_depth = entry.depth;
                 let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
                     root_path.as_path()
@@ -2256,6 +2327,80 @@ mod tests {
         {}
         assert_eq!(traversal.tree.len(), 1);
         assert_eq!(background.stats.io_errors, 0);
+    }
+
+    #[test]
+    fn entries_below_nodes_removed_during_traversal_are_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("victim/nested")).unwrap();
+        std::fs::write(dir.path().join("victim/file"), b"content").unwrap();
+        std::fs::write(dir.path().join("victim/nested/file"), b"content").unwrap();
+        std::fs::create_dir(dir.path().join("keep")).unwrap();
+        std::fs::write(dir.path().join("keep/file"), b"content").unwrap();
+
+        let mut traversal = Traversal::new();
+        let root = traversal.root_index;
+        let mut background = BackgroundTraversal::start(
+            root,
+            &WalkOptions {
+                threads: 2,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
+                metadata_options: crate::TraversalOptions::default(),
+                base_dir: None,
+            },
+            vec![dir.path().to_owned()],
+            None,
+            true,
+            false,
+        )
+        .unwrap();
+        let child = |traversal: &Traversal, parent, name: &str| {
+            traversal
+                .tree
+                .children(parent)
+                .find(|&child| traversal.tree.name(child).unwrap() == Path::new(name))
+        };
+
+        // Entries are emitted parent-first, so those below `victim` are still queued.
+        let victim = loop {
+            let event = background.event_rx.recv().unwrap();
+            assert_ne!(
+                background.integrate_traversal_event(&mut traversal, event),
+                Some(true)
+            );
+            if let Some(victim) = child(&traversal, root, "victim") {
+                break victim;
+            }
+        };
+        let mut removed = HashSet::new();
+        let mut pending = vec![victim];
+        while let Some(index) = pending.pop() {
+            removed.insert(index);
+            pending.extend(traversal.tree.children(index));
+        }
+        assert!(background.forget_removed_nodes(&removed));
+        traversal.tree.remove_subtree(victim);
+
+        while background
+            .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            != Some(true)
+        {}
+        assert!(child(&traversal, root, "victim").is_none());
+        let keep = child(&traversal, root, "keep").expect("unrelated entries are retained");
+        assert!(child(&traversal, keep, "file").is_some());
+        assert_eq!(
+            traversal.tree.len(),
+            3,
+            "queued entries must not land in removed or reused nodes"
+        );
+        assert!(
+            !background.forget_removed_nodes(&HashSet::from([root])),
+            "a traversal cannot outlive the node it integrates into"
+        );
     }
 
     #[test]

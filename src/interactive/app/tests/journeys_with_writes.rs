@@ -149,14 +149,14 @@ fn refresh_discards_marks_before_reusing_tree_indices() -> Result<()> {
 }
 
 #[test]
-fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
+fn deletion_works_during_scans_unless_a_snapshot_is_pending() -> Result<()> {
     use crate::interactive::app::{state::FilesystemScan, tree_view::TreeView};
     use dua::traverse::BackgroundTraversal;
 
     let dir = TempDir::new()?;
     let root = dir.path().join("to-delete");
     fs::create_dir(&root)?;
-    fs::write(root.join("file"), b"keep until the scan finishes")?;
+    fs::write(root.join("file"), b"content")?;
     let (mut terminal, mut app) =
         initialized_app_and_terminal_from_paths(std::slice::from_ref(&root))?;
     app.process_events(
@@ -181,7 +181,7 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
         )?,
         previous_selection: None,
         previous_cleanup_view: None,
-        snapshot_export: None,
+        snapshot_export: Some((dir.path().join("snapshot"), None)),
     });
     let delete_key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
     for key in [
@@ -203,7 +203,8 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
         );
         assert_eq!(
             app.state.message.as_deref(),
-            Some("Traversal already running")
+            Some("Traversal already running"),
+            "a snapshot must match what was scanned"
         );
         assert!(root.join("file").exists());
         assert_eq!(app.traversal.tree.len(), node_count);
@@ -214,13 +215,33 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
         assert!(app.state.scan.is_some());
     }
 
+    app.state
+        .scan
+        .as_mut()
+        .expect("active scan")
+        .snapshot_export = None;
+    app.state.dispatch_to_mark_pane(
+        delete_key,
+        &mut app.window,
+        &mut TreeView {
+            traversal: &mut app.traversal,
+            scope: None,
+            glob_tree_root: None,
+            glob_matches: None,
+        },
+        app.display,
+        &app.config,
+    );
+    assert!(app.state.is_deleting(), "the scan does not block deletion");
+    assert!(app.state.scan.is_some(), "deletion does not end the scan");
+
     let (_key_send, key_receive) = crossbeam::channel::bounded(0);
     app.run_until_traversed(&mut terminal, key_receive)?;
-    app.process_events(&mut terminal, into_events([Event::Key(delete_key)]))?;
     assert!(
-        !root.exists(),
-        "deletion succeeds when retried after the scan"
+        !app.state.is_deleting(),
+        "deletion finishes before the scan"
     );
+    assert!(!root.exists());
     assert!(app.window.mark.is_none());
     assert_eq!(app.traversal.tree.len(), 1);
     Ok(())
