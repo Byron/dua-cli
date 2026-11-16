@@ -10,6 +10,14 @@
 //! Symbolic links are reported but never followed, and filesystem errors are
 //! returned as iterator items. Dropping the iterator stops and joins its workers.
 //!
+//! # Pausing
+//!
+//! Pass a shared [`Control`] to [`walk_with_control`], [`walk_roots_with_control`], or
+//! [`stream_roots_with_control`]. [`Control::pause`] stops new jobs while active jobs finish;
+//! keep draining their output until [`Control::status`] reports [`Status::Paused`]. Use
+//! [`Control::exclude_path`] for paths removed during the pause, then [`Control::resume`] to
+//! continue queued work. [`Walk::status`] and [`RootWalk::status`] also report iterator completion.
+//!
 //! # Scheduling
 //!
 //! The root directory starts in a shared injector queue. On platforms where directory-entry
@@ -29,6 +37,8 @@
 
 mod error;
 pub use error::Error;
+mod control;
+pub use control::{Activity, Control, Status};
 
 use crossbeam::{
     deque::{Injector, Steal, Stealer, Worker},
@@ -345,6 +355,7 @@ struct PoolShared {
     next_wake: AtomicUsize,
     /// Allocates dense identifiers to directories as they are discovered.
     next_directory_id: AtomicUsize,
+    control: Option<Control>,
 }
 
 struct Pool {
@@ -360,6 +371,7 @@ pub struct RootWalk {
     next: Vec<(usize, RootEvent)>,
     /// See [`Walk::pool`].
     pool: Option<Pool>,
+    control: Option<Control>,
 }
 
 /// Submits roots to a running [`RootWalk`] without starting additional workers.
@@ -425,7 +437,27 @@ impl Drop for RootSender {
 /// allowing callers to retain discovery context without shared mutable lookup tables.
 #[must_use]
 pub fn stream_roots(threads: usize, order: Order, options: Options) -> (RootSender, RootWalk) {
-    let pool = start_pool(threads.max(1), order, options, 0);
+    stream_roots_inner(threads, order, options, None)
+}
+
+/// Like [`stream_roots`], sharing pause and removed-path control with related walks.
+#[must_use]
+pub fn stream_roots_with_control(
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Control,
+) -> (RootSender, RootWalk) {
+    stream_roots_inner(threads, order, options, Some(control))
+}
+
+fn stream_roots_inner(
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Option<Control>,
+) -> (RootSender, RootWalk) {
+    let pool = start_pool_with_control(threads.max(1), order, options, 0, control);
     pool.shared.active_roots.store(1, AtomicOrdering::Relaxed);
     let sender = RootSender {
         shared: Arc::clone(&pool.shared),
@@ -435,6 +467,7 @@ pub fn stream_roots(threads: usize, order: Order, options: Options) -> (RootSend
         sender,
         RootWalk {
             next: Vec::new(),
+            control: pool.shared.control.clone(),
             pool: Some(pool),
         },
     )
@@ -459,6 +492,7 @@ pub struct Walk {
     options: Options,
     /// Whether the worker pool has finished the current traversal.
     finished: bool,
+    control: Option<Control>,
 }
 
 /// Read a directory using native enumeration, collecting metadata unless
@@ -485,12 +519,52 @@ pub fn walk(
     options: Options,
     descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
 ) -> Walk {
+    walk_inner(root, threads, order, options, None, descend)
+}
+
+/// Like [`walk`], sharing pause and removed-path control with related walks.
+pub fn walk_with_control(
+    root: &Path,
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Control,
+    descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
+) -> Walk {
+    walk_inner(root, threads, order, options, Some(control), descend)
+}
+
+fn walk_inner(
+    root: &Path,
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Option<Control>,
+    descend: impl Fn(&Entry) -> bool + Send + Sync + 'static,
+) -> Walk {
     let root_path = root.to_owned();
     let root_state = Arc::new(Root {
         index: 0,
         pending: AtomicUsize::new(0),
         descend: Arc::new(move |_, entry| descend(entry)),
     });
+    let _activity = if let Some(control) = &control {
+        let activity = control.activity();
+        if activity.is_none() || control.is_excluded(&root_path) {
+            return Walk {
+                next: Vec::new(),
+                pool: None,
+                root: root_path,
+                root_state,
+                options,
+                finished: true,
+                control: Some(control.clone()),
+            };
+        }
+        activity
+    } else {
+        None
+    };
     let mut root = Entry::from_path(root, options);
     if let Ok(entry) = &mut root
         && entry.file_type.is_dir()
@@ -500,7 +574,7 @@ pub fn walk(
     let pool = match &root {
         Ok(entry) if entry.file_type.is_dir() && (root_state.descend)(0, entry) => {
             let path = Arc::from(entry.path());
-            let pool = start_pool(threads.max(1), order, options, 1);
+            let pool = start_pool_with_control(threads.max(1), order, options, 1, control.clone());
             start_jobs(
                 &pool,
                 vec![Job::ReadDir {
@@ -521,10 +595,28 @@ pub fn walk(
         root_state,
         options,
         finished: false,
+        control: control.clone(),
     }
 }
 
 impl Walk {
+    /// Report traversal completion or the shared pause state.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        if self.finished || (self.pool.is_none() && self.next.is_empty()) {
+            Status::Finished
+        } else {
+            self.control
+                .as_ref()
+                .map_or(Status::Running, Control::status)
+        }
+    }
+
+    /// The shared control, if this iterator was constructed with one.
+    #[must_use]
+    pub fn control(&self) -> Option<Control> {
+        self.control.clone()
+    }
     /// Restart an exhausted directory walk while retaining its worker threads.
     ///
     /// Returns `false` if the walk is still active or did not start a worker pool.
@@ -535,6 +627,18 @@ impl Walk {
         }
         let Some(pool) = self.pool.as_ref() else {
             return false;
+        };
+        let control = pool.shared.control.clone();
+        let _activity = if let Some(control) = &control {
+            if control.is_excluded(&self.root) {
+                return false;
+            }
+            let Some(activity) = control.activity() else {
+                return false;
+            };
+            Some(activity)
+        } else {
+            None
         };
         let mut root = Entry::from_path(&self.root, self.options);
         if let Ok(entry) = &mut root
@@ -578,13 +682,21 @@ impl Walk {
         cancelled: Option<&AtomicBool>,
     ) -> Option<Result<Entry, Error>> {
         loop {
-            if cancelled.is_some_and(|cancelled| cancelled.load(AtomicOrdering::Relaxed)) {
+            let control = self.control.as_ref();
+            if cancelled.is_some_and(|cancelled| cancelled.load(AtomicOrdering::Relaxed))
+                || control.is_some_and(|control| control.status() == Status::Finished)
+            {
                 self.next.clear();
                 self.finished = true;
                 self.pool = None;
                 return None;
             }
             if let Some(entry) = self.next.pop() {
+                if control.is_some_and(|control| {
+                    entry_path(&entry).is_some_and(|path| control.is_excluded(&path))
+                }) {
+                    continue;
+                }
                 return Some(entry);
             }
             if self.finished {
@@ -592,7 +704,7 @@ impl Walk {
             }
 
             let pool = self.pool.as_ref()?;
-            let event = if cancelled.is_some() {
+            let event = if cancelled.is_some() || control.is_some() {
                 match pool
                     .events
                     .recv_timeout(std::time::Duration::from_millis(100))
@@ -619,7 +731,7 @@ impl Walk {
                 }
                 Event::Batch {
                     batch: Err(err), ..
-                } => return Some(Err(err)),
+                } => self.next.push(Err(err)),
                 Event::RootFinished { .. } => {}
                 Event::Finished => {
                     self.finished = true;
@@ -661,6 +773,37 @@ pub fn walk_roots(
         descend,
         |path: PathBuf| Entry::from_path(&path, options),
         options,
+        None,
+    )
+}
+
+/// Like [`walk_roots`], sharing pause and removed-path control with related walks.
+pub fn walk_roots_with_control(
+    roots: impl IntoIterator<Item = (usize, PathBuf)>,
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Control,
+    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+) -> RootWalk {
+    let preparing = control.clone();
+    start_root_walk(
+        roots.into_iter().collect(),
+        threads,
+        order,
+        descend,
+        |path: PathBuf| {
+            if preparing.is_excluded(&path) {
+                Err(Error::at_path(
+                    io::Error::from(io::ErrorKind::Interrupted),
+                    path,
+                ))
+            } else {
+                Entry::from_path(&path, options)
+            }
+        },
+        options,
+        Some(control),
     )
 }
 
@@ -689,6 +832,27 @@ pub fn walk_root_entries(
         descend,
         std::convert::identity,
         options,
+        None,
+    )
+}
+
+/// Like [`walk_root_entries`], sharing pause and removed-path control with related walks.
+pub fn walk_root_entries_with_control(
+    roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
+    threads: usize,
+    order: Order,
+    options: Options,
+    control: Control,
+    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+) -> RootWalk {
+    start_root_walk(
+        roots.into_iter().collect(),
+        threads,
+        order,
+        descend,
+        |entry| entry,
+        options,
+        Some(control),
     )
 }
 
@@ -699,7 +863,20 @@ fn start_root_walk<Root>(
     descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
     prepare: impl Fn(Root) -> Result<Entry, Error>,
     options: Options,
+    control: Option<Control>,
 ) -> RootWalk {
+    let _activity = if let Some(control) = &control {
+        let Some(activity) = control.activity() else {
+            return RootWalk {
+                next: Vec::new(),
+                pool: None,
+                control: Some(control.clone()),
+            };
+        };
+        Some(activity)
+    } else {
+        None
+    };
     let indices = roots
         .iter()
         .map(|(index, _)| *index)
@@ -709,17 +886,32 @@ fn start_root_walk<Root>(
     let (next, root_jobs, next_directory_id) = begin_walks(
         roots
             .into_iter()
-            .map(|(root_idx, root)| (root_idx, prepare(root))),
+            .map(|(root_idx, root)| (root_idx, prepare(root)))
+            .filter(|(_, entry)| {
+                control.as_ref().is_none_or(|control| {
+                    entry_path(entry).is_none_or(|path| !control.is_excluded(&path))
+                })
+            }),
         &descend,
     );
     let pool = if root_jobs.is_empty() {
         None
     } else {
-        let pool = start_pool(threads.max(1), order, options, next_directory_id);
+        let pool = start_pool_with_control(
+            threads.max(1),
+            order,
+            options,
+            next_directory_id,
+            control.clone(),
+        );
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
-    RootWalk { next, pool }
+    RootWalk {
+        next,
+        pool,
+        control: control.clone(),
+    }
 }
 
 impl Iterator for RootWalk {
@@ -727,10 +919,39 @@ impl Iterator for RootWalk {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if self
+                .control
+                .as_ref()
+                .is_some_and(|control| control.status() == Status::Finished)
+            {
+                self.next.clear();
+                self.pool = None;
+                return None;
+            }
             if let Some(entry) = self.next.pop() {
+                if let RootEvent::Entry(result) = &entry.1
+                    && self.control.as_ref().is_some_and(|control| {
+                        entry_path(result).is_some_and(|path| control.is_excluded(&path))
+                    })
+                {
+                    continue;
+                }
                 return Some(entry);
             }
-            match self.pool.as_ref()?.events.recv() {
+            let pool = self.pool.as_ref()?;
+            let event = if pool.shared.control.is_some() {
+                match pool
+                    .events
+                    .recv_timeout(std::time::Duration::from_millis(100))
+                {
+                    Ok(event) => Ok(event),
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(()),
+                }
+            } else {
+                pool.events.recv().map_err(|_| ())
+            };
+            match event {
                 Ok(Event::Batch {
                     root_idx,
                     batch: Ok(entries),
@@ -743,7 +964,7 @@ impl Iterator for RootWalk {
                 Ok(Event::Batch {
                     root_idx,
                     batch: Err(err),
-                }) => return Some((root_idx, RootEvent::Entry(Err(err)))),
+                }) => self.next.push((root_idx, RootEvent::Entry(Err(err)))),
                 Ok(Event::RootFinished { root_idx }) => {
                     return Some((root_idx, RootEvent::Finished));
                 }
@@ -751,7 +972,7 @@ impl Iterator for RootWalk {
                     self.pool = None;
                     return None;
                 }
-                Err(_) => {
+                Err(()) => {
                     return Some((
                         0,
                         RootEvent::Entry(Err(io::Error::other("directory worker stopped").into())),
@@ -759,6 +980,33 @@ impl Iterator for RootWalk {
                 }
             }
         }
+    }
+}
+
+impl RootWalk {
+    /// Report traversal completion or the shared pause state.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        if self.pool.is_none() && self.next.is_empty() {
+            Status::Finished
+        } else {
+            self.control
+                .as_ref()
+                .map_or(Status::Running, Control::status)
+        }
+    }
+
+    /// The shared control, if this iterator was constructed with one.
+    #[must_use]
+    pub fn control(&self) -> Option<Control> {
+        self.control.clone()
+    }
+}
+
+fn entry_path(entry: &Result<Entry, Error>) -> Option<PathBuf> {
+    match entry {
+        Ok(entry) => Some(entry.path()),
+        Err(error) => error.path().map(Path::to_path_buf),
     }
 }
 
@@ -831,7 +1079,18 @@ impl Entry {
     }
 }
 
+#[cfg(test)]
 fn start_pool(threads: usize, order: Order, options: Options, next_directory_id: usize) -> Pool {
+    start_pool_with_control(threads, order, options, next_directory_id, None)
+}
+
+fn start_pool_with_control(
+    threads: usize,
+    order: Order,
+    options: Options,
+    next_directory_id: usize,
+    control: Option<Control>,
+) -> Pool {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
     let (event_tx, event_rx) = sync_channel(
@@ -854,6 +1113,7 @@ fn start_pool(threads: usize, order: Order, options: Options, next_directory_id:
         idle: (0..threads).map(|_| AtomicBool::new(false)).collect(),
         next_wake: AtomicUsize::new(0),
         next_directory_id: AtomicUsize::new(next_directory_id),
+        control,
     });
     let handles: Vec<_> = workers
         .into_iter()
@@ -969,6 +1229,14 @@ fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<Pool
             found
         };
         let (job, stolen) = found;
+        let _activity = if let Some(control) = &shared.control {
+            let Some(activity) = control.enter(Some(&shared.stop)) else {
+                break;
+            };
+            Some(activity)
+        } else {
+            None
+        };
         if stolen {
             // A successful steal proves peer work is available; wake one more worker so
             // concurrency ramps up only while work remains stealable.
@@ -981,6 +1249,9 @@ fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<Pool
 impl Drop for Pool {
     fn drop(&mut self) {
         self.shared.stop.store(true, AtomicOrdering::Relaxed);
+        if let Some(control) = &self.shared.control {
+            control.wake();
+        }
         self.shared.wake_workers();
         // Workers blocked on the bounded output channel must be released before joining them.
         let (_, disconnected) = sync_channel(0);
@@ -1024,6 +1295,26 @@ fn find_job(worker: &Worker<Job>, shared: &PoolShared) -> Option<(Job, bool)> {
 }
 
 fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
+    if let Some(control) = &shared.control {
+        let path = match &job {
+            Job::StartRoot { path, .. } => Some(path.as_path()),
+            Job::ReadDir { path, .. } => Some(path.as_ref()),
+            #[cfg(not(windows))]
+            Job::Stat { path, .. } => Some(path.as_ref()),
+            Job::CloseInput => None,
+        };
+        if path.is_some_and(|path| control.is_excluded(path)) {
+            match job {
+                Job::StartRoot { root, .. } | Job::ReadDir { root, .. } => {
+                    finish_pending(&root, shared);
+                }
+                #[cfg(not(windows))]
+                Job::Stat { root, .. } => finish_pending(&root, shared),
+                Job::CloseInput => unreachable!(),
+            }
+            return;
+        }
+    }
     match job {
         Job::StartRoot { root, path } => {
             let mut entry = Entry::from_path(&path, shared.options);
@@ -1336,6 +1627,12 @@ fn stat_entries(
     let mut jobs = Vec::new();
     let entries = entries
         .into_iter()
+        .filter(|entry| {
+            shared
+                .control
+                .as_ref()
+                .is_none_or(|control| !control.is_excluded(&entry.path()))
+        })
         .map(|entry| {
             #[cfg(target_os = "macos")]
             let entry = Ok(entry.read_metadata(shared.options));
