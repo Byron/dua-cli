@@ -88,12 +88,20 @@ impl FilesystemDeletion {
 
 impl AppState {
     pub fn is_deleting(&self) -> bool {
-        self.deletion.is_some()
+        self.deletion.is_some() || self.queued_deletion.is_some()
     }
 
     pub(super) fn block_deletion_changes(&mut self) -> bool {
         if self.is_deleting() {
-            self.message = Some(self.language.ui_text().deletion_running.into());
+            let text = self.language.ui_text();
+            self.message = Some(
+                if self.queued_deletion.is_some() {
+                    text.deletion_queued
+                } else {
+                    text.deletion_running
+                }
+                .into(),
+            );
             true
         } else {
             false
@@ -113,12 +121,18 @@ impl AppState {
         if self.read_only {
             anyhow::bail!(self.language.ui_text().snapshots_read_only);
         }
-        if self.scan.is_some() {
-            anyhow::bail!(self.language.ui_text().traversal_running);
-        }
         let Some(pane) = &window.mark else {
             return Ok(());
         };
+        if pane.is_empty() {
+            return Ok(());
+        }
+        if self.scan.is_some() {
+            self.queued_deletion = Some(mode);
+            self.pending_exit = false;
+            self.reset_message();
+            return Ok(());
+        }
         let mut targets: Vec<_> = pane
             .marked()
             .keys()
@@ -171,6 +185,7 @@ impl AppState {
 
     /// Turn an actual exit request into cancellation followed by draining the worker.
     pub(super) fn exit_after_deletion(&mut self) -> Option<WalkResult> {
+        self.queued_deletion = None;
         if let Some(deletion) = &self.deletion {
             deletion.task.cancel.store(true, Ordering::Relaxed);
             self.pending_exit = false;

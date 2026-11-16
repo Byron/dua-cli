@@ -149,7 +149,7 @@ fn refresh_discards_marks_before_reusing_tree_indices() -> Result<()> {
 }
 
 #[test]
-fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
+fn deletion_is_queued_and_runs_automatically_after_the_scan() -> Result<()> {
     use crate::interactive::app::{state::FilesystemScan, tree_view::TreeView};
     use dua::traverse::BackgroundTraversal;
 
@@ -186,6 +186,7 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
     let delete_key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
     for key in [
         delete_key,
+        KeyCode::Char('x').into(),
         #[cfg(feature = "trash-move")]
         KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
     ] {
@@ -203,24 +204,33 @@ fn deletion_and_trash_are_blocked_until_scan_finishes() -> Result<()> {
         );
         assert_eq!(
             app.state.message.as_deref(),
-            Some("Traversal already running")
+            Some("Deletion queued; waiting for the scan to finish")
         );
+        assert!(
+            app.state.deletion.is_none(),
+            "no worker starts during the scan"
+        );
+        assert!(matches!(
+            app.state.queued_deletion,
+            Some(crate::interactive::widgets::MarkMode::Delete)
+        ));
         assert!(root.join("file").exists());
         assert_eq!(app.traversal.tree.len(), node_count);
         assert_eq!(
-            marked_file_names(&app, "marks survive the blocked action"),
+            marked_file_names(&app, "queued marks cannot be changed"),
             marked
         );
         assert!(app.state.scan.is_some());
     }
 
-    let (_key_send, key_receive) = crossbeam::channel::bounded(0);
-    app.run_until_traversed(&mut terminal, key_receive)?;
-    app.process_events(&mut terminal, into_events([Event::Key(delete_key)]))?;
+    let result = app.process_events_once(&mut terminal, into_events([]))?;
+    assert_eq!(result.num_errors, 0);
     assert!(
         !root.exists(),
-        "deletion succeeds when retried after the scan"
+        "the queued deletion runs without another confirmation"
     );
+    assert!(app.state.scan.is_none());
+    assert!(!app.state.is_deleting());
     assert!(app.window.mark.is_none());
     assert_eq!(app.traversal.tree.len(), 1);
     Ok(())
