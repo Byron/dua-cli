@@ -1,4 +1,9 @@
-use std::{fs, sync::atomic::Ordering, time::Instant};
+use std::{
+    fs,
+    path::Path,
+    sync::atomic::Ordering,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use crossbeam::channel::{Receiver, Sender, never, unbounded};
@@ -9,11 +14,13 @@ use tui::{Terminal, backend::TestBackend};
 
 use super::utils::{
     index_by_name, initialized_app_and_terminal_from_paths, into_codes, into_events,
+    untraversed_app_and_terminal_with_closure,
 };
 use crate::interactive::app::{
     deletion::DeletionEvent, deletion_progress::FilesystemDeletion, state::FocussedPane,
     terminal::TerminalApp,
 };
+use crate::interactive::widgets::{MarkMode, MarkPane};
 
 fn prepared() -> Result<(TempDir, Terminal<TestBackend>, TerminalApp)> {
     let fixture = TempDir::new()?;
@@ -43,7 +50,8 @@ fn inject(app: &mut TerminalApp, target: TreeIndex) -> (Sender<DeletionEvent>, S
     let (send, events) = unbounded();
     let (tick, ticks) = unbounded();
     let tree = app.state.tree_view(&mut app.traversal);
-    let mut deletion = FilesystemDeletion::for_test(&tree, vec![target], events);
+    let mut deletion =
+        FilesystemDeletion::for_test(&tree, vec![target], events, app.state.scan.is_none());
     deletion.tick = ticks;
     app.state.deletion = Some(deletion);
     app.state.reset_message();
@@ -67,6 +75,332 @@ fn step(
 
 fn key(app: &mut TerminalApp, terminal: &mut Terminal<TestBackend>, key: KeyEvent) -> Result<()> {
     assert!(step(app, terminal, &into_events([Event::Key(key)]))?.is_none());
+    Ok(())
+}
+
+fn drive_until(
+    app: &mut TerminalApp,
+    terminal: &mut Terminal<TestBackend>,
+    done: impl Fn(&TerminalApp) -> bool,
+) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done(app) {
+        assert!(
+            Instant::now() < deadline,
+            "scan/deletion stopped making progress"
+        );
+        assert!(step(app, terminal, &never())?.is_none());
+    }
+    Ok(())
+}
+
+fn request_deletion(app: &mut TerminalApp, target: TreeIndex, mode: MarkMode) {
+    let mut tree = app.state.tree_view(&mut app.traversal);
+    app.window.mark = MarkPane::default().toggle_index(target, &tree, true, false);
+    let key = match mode {
+        MarkMode::Delete => 'r',
+        #[cfg(feature = "trash-move")]
+        MarkMode::Trash => 't',
+    };
+    app.state.dispatch_to_mark_pane(
+        KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL),
+        &mut app.window,
+        &mut tree,
+        app.display,
+        &app.config,
+    );
+    assert!(app.state.is_deleting());
+}
+
+#[test]
+fn repeated_deletion_pauses_a_scan_and_resumes_its_remaining_entries() -> Result<()> {
+    for threads in [1, 4] {
+        let fixture = TempDir::new()?;
+        let root = fixture.path().canonicalize()?;
+        let victims = [root.join("delete"), root.join("delete-next")];
+        let keep = root.join("keep");
+        for index in 0..256 {
+            let path = keep.join(format!("branch-{index}/nested"));
+            fs::create_dir_all(&path)?;
+            fs::write(path.join("payload"), b"keep")?;
+        }
+        for victim in &victims {
+            for index in 0..8 {
+                let path = victim.join(format!("branch-{index}"));
+                fs::create_dir_all(&path)?;
+                fs::write(path.join("payload"), b"remove")?;
+            }
+        }
+        let kept_entries = dua_core::walk(
+            &keep,
+            1,
+            dua_core::Order::ParentFirst,
+            dua_core::Options::default(),
+            |_| true,
+        )
+        .collect::<Result<Vec<_>, _>>()?;
+        let expected_size: u128 = kept_entries
+            .iter()
+            .map(|entry| u128::from(entry.metadata.as_ref().unwrap().as_ref().unwrap().len()))
+            .sum();
+        let (mut terminal, mut app) = untraversed_app_and_terminal_with_closure(
+            &[victims[0].clone(), victims[1].clone(), keep.clone()],
+            Path::to_path_buf,
+        )?;
+        app.state.walk_options.threads = threads;
+        app.traverse()?;
+        drive_until(&mut app, &mut terminal, |app| {
+            victims.iter().all(|victim| {
+                app.traversal
+                    .tree
+                    .children(app.traversal.root_index)
+                    .any(|index| {
+                        app.traversal.tree.name(index).as_deref() == Some(victim.as_path())
+                    })
+            })
+        })?;
+        for victim in &victims {
+            let target = index_by_name(&app, victim);
+            request_deletion(&mut app, target, MarkMode::Delete);
+            assert!(app.state.pending_deletion.is_some());
+            assert!(victim.exists(), "deletion waits for the pause");
+            drive_until(&mut app, &mut terminal, |app| app.state.deletion.is_some())?;
+            assert!(app.state.scan.is_some());
+            assert_eq!(
+                app.state.message.as_deref(),
+                Some("Deleted 0 items (0  B scanned)...")
+            );
+            drive_until(&mut app, &mut terminal, |app| !app.state.is_deleting())?;
+            assert!(!victim.exists());
+            assert!(app.state.scan.is_some());
+            let entries = app.traversal.tree.len();
+            drive_until(&mut app, &mut terminal, |app| {
+                app.traversal.tree.len() > entries
+            })?;
+        }
+        drive_until(&mut app, &mut terminal, |app| app.state.scan.is_none())?;
+        assert_eq!(app.state.stats.io_errors, 0);
+        assert_eq!(app.traversal.tree.len(), kept_entries.len() + 1);
+        assert_eq!(app.state.stats.total_bytes, Some(expected_size));
+        assert!(app.window.mark.is_none());
+        assert!(app.traversal.tree.indices().all(|index| {
+            let path = app.traversal.tree.path_of(index);
+            victims.iter().all(|victim| !path.starts_with(victim))
+        }));
+    }
+    Ok(())
+}
+
+#[test]
+fn clean_deletion_resumes_discovery_and_sizing() -> Result<()> {
+    for threads in [1, 4] {
+        let fixture = TempDir::new()?;
+        let root = fixture.path().canonicalize()?;
+        for index in 0..80 {
+            let path = root.join(format!("project-{index}/node_modules/nested"));
+            fs::create_dir_all(&path)?;
+            fs::write(path.join("payload"), b"cache")?;
+        }
+        let (mut terminal, mut app) = untraversed_app_and_terminal_with_closure(
+            std::slice::from_ref(&root),
+            Path::to_path_buf,
+        )?;
+        app.state.walk_options.threads = threads;
+        app.traverse_clean(None)?;
+        drive_until(&mut app, &mut terminal, |app| {
+            app.traversal
+                .tree
+                .children(app.traversal.root_index)
+                .next()
+                .is_some()
+        })?;
+        let target = app
+            .traversal
+            .tree
+            .children(app.traversal.root_index)
+            .next()
+            .unwrap();
+        let victim = app.traversal.tree.path_of(target);
+        request_deletion(&mut app, target, MarkMode::Delete);
+        drive_until(&mut app, &mut terminal, |app| app.state.deletion.is_some())?;
+        assert!(app.state.scan.is_some());
+        assert_eq!(
+            app.state.message.as_deref(),
+            Some("Deleted 0 items (0  B)...")
+        );
+        drive_until(&mut app, &mut terminal, |app| !app.state.is_deleting())?;
+        assert!(!victim.exists());
+        assert!(
+            app.state.scan.is_some(),
+            "cleanup continues beyond the deleted candidate"
+        );
+        drive_until(&mut app, &mut terminal, |app| app.state.scan.is_none())?;
+        assert_eq!(app.state.stats.io_errors, 0);
+        let candidates: Vec<_> = app
+            .traversal
+            .tree
+            .children(app.traversal.root_index)
+            .collect();
+        assert_eq!(candidates.len(), 79);
+        for index in candidates {
+            let path = app.traversal.tree.path_of(index);
+            assert_ne!(path, victim);
+            assert_eq!(fs::read(path.join("nested/payload"))?, b"cache");
+        }
+        assert!(app.window.mark.is_none());
+        assert_eq!(app.state.clean_hub.as_ref().unwrap().rows.len(), 79);
+    }
+    Ok(())
+}
+
+#[test]
+fn cancelling_before_the_scan_pauses_preserves_marks_and_files() -> Result<()> {
+    use crate::interactive::app::state::FilesystemScan;
+    use dua::traverse::BackgroundTraversal;
+
+    let (fixture, mut terminal, mut app) = prepared()?;
+    let target = index_by_name(&app, "delete");
+    // Keep the Finished event buffered so a pause handoff is needed even after workers finish.
+    app.state.scan = Some(FilesystemScan {
+        active_traversal: BackgroundTraversal::start(
+            app.traversal.root_index,
+            &app.state.walk_options,
+            Vec::new(),
+            None,
+            false,
+            false,
+        )?,
+        previous_selection: None,
+        previous_cleanup_view: None,
+        snapshot_export: None,
+    });
+    for mode in [
+        MarkMode::Delete,
+        #[cfg(feature = "trash-move")]
+        MarkMode::Trash,
+    ] {
+        request_deletion(&mut app, target, mode);
+        assert_eq!(
+            app.state.message.as_deref(),
+            Some("Pausing the scan before deletion...")
+        );
+        assert!(app.state.pending_deletion.is_some());
+        assert!(app.state.deletion.is_none());
+        assert!(app.state.exit_after_deletion().is_some());
+        assert!(!app.state.is_deleting());
+        assert!(fixture.path().join("delete/remove.bin").exists());
+        assert!(
+            app.window
+                .mark
+                .as_ref()
+                .unwrap()
+                .marked()
+                .contains_key(&target)
+        );
+    }
+    drive_until(&mut app, &mut terminal, |app| app.state.scan.is_none())?;
+    Ok(())
+}
+
+#[test]
+fn partial_deletion_excludes_a_child_not_yet_in_the_tree() -> Result<()> {
+    use crate::interactive::app::state::FilesystemScan;
+    use dua::traverse::{BackgroundTraversal, TraversalEvent};
+    use std::sync::Arc;
+
+    let (fixture, mut terminal, mut app) = prepared()?;
+    let root = fixture.path().canonicalize()?;
+    let path = root.join("delete/late.bin");
+    fs::write(&path, b"not integrated yet")?;
+    let late = BackgroundTraversal::start(
+        app.traversal.root_index,
+        &app.state.walk_options,
+        vec![path.clone()],
+        None,
+        false,
+        true,
+    )?;
+    let queued = late.event_rx.recv_timeout(Duration::from_secs(5))?;
+    assert!(matches!(queued, TraversalEvent::Entry(Ok(_), _, _, _)));
+    drop(late);
+    let scan = BackgroundTraversal::start(
+        app.traversal.root_index,
+        &app.state.walk_options,
+        vec![root.clone()],
+        None,
+        false,
+        true,
+    )?;
+    scan.pause();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !scan.pause_for_deletion() {
+        assert!(Instant::now() < deadline, "scan did not pause");
+        // Leave this child's discovered metadata outside the UI tree.
+        let _ = scan.event_rx.recv_timeout(Duration::from_millis(10));
+    }
+    app.state.scan = Some(FilesystemScan {
+        active_traversal: scan,
+        previous_selection: None,
+        previous_cleanup_view: None,
+        snapshot_export: None,
+    });
+    let target = index_by_name(&app, "delete");
+    let node_count = app.traversal.tree.len();
+    let (send, tick) = inject(&mut app, target);
+    fs::remove_file(&path)?;
+    send.send(DeletionEvent::Removed {
+        target: 0,
+        path: path.clone(),
+        succeeded: true,
+    })?;
+    send.send(DeletionEvent::Removed {
+        target: 0,
+        path: root.join("delete/already-gone.bin"),
+        succeeded: false,
+    })?;
+    assert!(step(&mut app, &mut terminal, &never())?.is_none());
+    tick.send(Instant::now())?;
+    assert!(step(&mut app, &mut terminal, &never())?.is_none());
+    assert_eq!(
+        app.state.message.as_deref(),
+        Some("Deleted 1 item (0  B scanned)...")
+    );
+    send.send(DeletionEvent::TargetFinished {
+        target: 0,
+        errors: 1,
+    })?;
+    send.send(DeletionEvent::Finished {
+        entries: 1,
+        errors: 1,
+        cancelled: false,
+    })?;
+    step(&mut app, &mut terminal, &never())?;
+    assert!(!app.state.is_deleting());
+    assert!(app.traversal.tree.contains(target));
+    assert_eq!(
+        app.window.mark.as_ref().unwrap().marked()[&target].num_errors_during_deletion,
+        1
+    );
+
+    let scan = &mut app.state.scan.as_mut().unwrap().active_traversal;
+    let error = dua_core::Entry::from_path(&path, dua_core::Options::default())
+        .err()
+        .expect("file was removed");
+    for event in [
+        queued,
+        TraversalEvent::Entry(Err(error), Arc::new(root), 0, 0),
+    ] {
+        assert_eq!(
+            scan.integrate_traversal_event(&mut app.traversal, event),
+            None
+        );
+    }
+    assert_eq!(
+        scan.stats.io_errors, 0,
+        "late errors under the removed child are ignored"
+    );
+    assert_eq!(scan.stats.entries_traversed, 0);
+    assert_eq!(app.traversal.tree.len(), node_count);
     Ok(())
 }
 
@@ -103,6 +437,7 @@ fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> 
     send.send(DeletionEvent::Removed {
         target: 0,
         path: fixture.path().canonicalize()?.join("delete/remove.bin"),
+        succeeded: true,
     })?;
     assert!(step(&mut app, &mut terminal, &no_input)?.is_none());
     assert!(
@@ -117,7 +452,7 @@ fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> 
     assert_eq!(app.state.stats.total_bytes, Some(total - 64));
     assert_eq!(
         app.state.message.as_deref(),
-        Some("Deleted 1 items (64  B)...")
+        Some("Deleted 1 item (64  B)...")
     );
     assert_ne!(terminal.backend().buffer(), &before);
     assert!(app.state.is_deleting());
@@ -126,6 +461,7 @@ fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> 
     send.send(DeletionEvent::Removed {
         target: 0,
         path: fixture.path().canonicalize()?.join("delete/zero.bin"),
+        succeeded: true,
     })?;
     step(&mut app, &mut terminal, &no_input)?;
     tick.send(Instant::now())?;
@@ -250,8 +586,13 @@ fn deleting_the_view_repairs_normal_and_glob_navigation_without_double_counting(
         send.send(DeletionEvent::Removed {
             target: 0,
             path: path.join("remove.bin"),
+            succeeded: true,
         })?;
-        send.send(DeletionEvent::Removed { target: 0, path })?;
+        send.send(DeletionEvent::Removed {
+            target: 0,
+            path,
+            succeeded: true,
+        })?;
         step(&mut app, &mut terminal, &never())?;
         tick.send(Instant::now())?;
         step(&mut app, &mut terminal, &never())?;
@@ -317,6 +658,7 @@ fn quit_cancels_pending_deletion_and_waits_for_inflight_results() -> Result<()> 
     send.send(DeletionEvent::Removed {
         target: 0,
         path: fixture.path().canonicalize()?.join("delete/remove.bin"),
+        succeeded: true,
     })?;
     step(&mut app, &mut terminal, &never())?;
     key(&mut app, &mut terminal, quit)?;
@@ -354,6 +696,7 @@ fn exhausted_input_drains_deletion_without_cancelling() -> Result<()> {
     send.send(DeletionEvent::Removed {
         target: 0,
         path: fixture.path().canonicalize()?.join("delete/remove.bin"),
+        succeeded: true,
     })?;
     send.send(DeletionEvent::Finished {
         entries: 1,

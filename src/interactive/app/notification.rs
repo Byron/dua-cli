@@ -14,7 +14,7 @@ pub fn scan_finished(
 ) -> String {
     language.notification_summary(
         language.ui_text().notification_scan,
-        entries,
+        Some(entries),
         &format.display(bytes).to_string(),
         &duration(elapsed),
         errors,
@@ -24,16 +24,15 @@ pub fn scan_finished(
 pub fn deletion_finished(
     language: Language,
     action: &str,
-    entries: usize,
-    bytes: Option<u128>,
+    entries: Option<usize>,
+    bytes: &str,
     elapsed: Duration,
     errors: usize,
-    format: ByteFormat,
 ) -> String {
     language.notification_summary(
         action,
-        u64::try_from(entries).unwrap_or(u64::MAX),
-        &bytes.map_or_else(|| "?".into(), |bytes| format.display(bytes).to_string()),
+        entries.map(|entries| u64::try_from(entries).unwrap_or(u64::MAX)),
+        bytes,
         &duration(elapsed),
         u64::try_from(errors).unwrap_or(u64::MAX),
     )
@@ -84,13 +83,23 @@ mod tests {
             deletion_finished(
                 Language::English,
                 "Deletion",
-                2,
-                None,
+                Some(2),
+                "?",
                 Duration::from_secs(1),
                 1,
-                ByteFormat::Metric
             ),
             "Deletion finished: 2 entries, ? in 1.0s, 1 errors"
+        );
+        assert_eq!(
+            deletion_finished(
+                Language::English,
+                "Trash",
+                None,
+                "?",
+                Duration::from_secs(1),
+                0,
+            ),
+            "Trash finished: ? entries, ? in 1.0s"
         );
     }
 

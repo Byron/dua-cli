@@ -304,6 +304,16 @@ impl WalkOptions {
         skip_root: bool,
         order: walk::Order,
     ) -> impl Iterator<Item = (usize, walk::RootEvent)> + use<> {
+        self.iter_from_paths_with_control(roots, skip_root, order, None)
+    }
+
+    pub(crate) fn iter_from_paths_with_control(
+        &self,
+        roots: Vec<WalkRoot>,
+        skip_root: bool,
+        order: walk::Order,
+        control: Option<walk::Control>,
+    ) -> impl Iterator<Item = (usize, walk::RootEvent)> + use<> {
         let num_roots = roots
             .iter()
             .map(|root| root.index)
@@ -323,7 +333,15 @@ impl WalkOptions {
                 indexed_roots.push((
                     root.index,
                     root.entry.map_or_else(
-                        || walk::Entry::from_path(&root.path, self.metadata_options),
+                        || {
+                            let activity = control.as_ref().and_then(walk::Control::activity);
+                            if control.is_some() && activity.is_none() {
+                                return Err(
+                                    std::io::Error::from(std::io::ErrorKind::Interrupted).into()
+                                );
+                            }
+                            walk::Entry::from_path(&root.path, self.metadata_options)
+                        },
                         Ok,
                     ),
                 ));
@@ -376,13 +394,28 @@ impl WalkOptions {
                 && !is_excluded_while_walking(root_idx, entry)
         };
 
-        let walk = walk_roots(
-            indexed_roots,
-            self.threads,
-            order,
-            self.metadata_options,
-            descend,
-        );
+        let walk = if let Some(control) = control {
+            #[cfg(any(windows, target_os = "macos"))]
+            use walk::walk_root_entries_with_control as controlled;
+            #[cfg(not(any(windows, target_os = "macos")))]
+            use walk::walk_roots_with_control as controlled;
+            controlled(
+                indexed_roots,
+                self.threads,
+                order,
+                self.metadata_options,
+                control,
+                descend,
+            )
+        } else {
+            walk_roots(
+                indexed_roots,
+                self.threads,
+                order,
+                self.metadata_options,
+                descend,
+            )
+        };
 
         walk.filter(move |(root_idx, event)| match event {
             walk::RootEvent::Entry(Ok(entry)) => {
