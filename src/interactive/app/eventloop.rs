@@ -504,7 +504,6 @@ impl AppState {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
-                        self.queued_deletion = None;
                         return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
                     };
                     let res = self.process_terminal_event(
@@ -566,10 +565,6 @@ impl AppState {
                             if let Some(view) = tree.index_at_path(view_path) {
                                 self.navigation_mut().view_root = view;
                             }
-                        }
-                        if is_finished && let Some(mode) = self.queued_deletion.take() {
-                            let tree = self.tree_view(traversal);
-                            self.start_deletion(window, &tree, *display, mode)?;
                         }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal, config)?;

@@ -73,11 +73,8 @@ impl MainWindow {
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
-        let safety_notice = if state.queued_deletion.is_some() {
-            Some(language.ui_text().deletion_queued)
-        } else {
-            mark_safety_notice(state.read_only, state.is_deleting(), &config.keys, language)
-        };
+        let safety_notice =
+            mark_safety_notice(state.read_only, state.is_deleting(), &config.keys, language);
 
         let header_bg_color =
             header_background_color(self.has_marks() && safety_notice.is_none(), state.focussed);
