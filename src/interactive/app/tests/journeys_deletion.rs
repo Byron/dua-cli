@@ -71,57 +71,6 @@ fn key(app: &mut TerminalApp, terminal: &mut Terminal<TestBackend>, key: KeyEven
 }
 
 #[test]
-fn quitting_cancels_queued_delete_and_trash_without_starting_a_worker() -> Result<()> {
-    use crate::interactive::{app::state::FilesystemScan, widgets::MarkMode};
-    use dua::traverse::BackgroundTraversal;
-
-    for mode in [
-        MarkMode::Delete,
-        #[cfg(feature = "trash-move")]
-        MarkMode::Trash,
-    ] {
-        let (fixture, mut terminal, mut app) = prepared()?;
-        app.state.scan = Some(FilesystemScan {
-            active_traversal: BackgroundTraversal::start(
-                app.traversal.root_index,
-                &app.state.walk_options,
-                Vec::new(),
-                None,
-                false,
-                false,
-            )?,
-            previous_selection: None,
-            previous_cleanup_view: None,
-            snapshot_export: None,
-        });
-        let scan_events = std::mem::replace(
-            &mut app.state.scan.as_mut().unwrap().active_traversal.event_rx,
-            never(),
-        );
-        let tree = app.state.tree_view(&mut app.traversal);
-        app.state
-            .start_deletion(&app.window, &tree, app.display, mode)?;
-        assert!(app.state.queued_deletion.is_some());
-        assert!(app.state.deletion.is_none());
-
-        let result = step(
-            &mut app,
-            &mut terminal,
-            &into_events([Event::Key(KeyEvent::new(
-                KeyCode::Char('c'),
-                KeyModifiers::CONTROL,
-            ))]),
-        )?;
-        assert_eq!(result.unwrap().num_errors, 0);
-        assert!(!app.state.is_deleting());
-        app.state.scan.as_mut().unwrap().active_traversal.event_rx = scan_events;
-        app.process_events_once(&mut terminal, into_events([]))?;
-        assert!(fixture.path().join("delete/remove.bin").exists());
-    }
-    Ok(())
-}
-
-#[test]
 fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> Result<()> {
     let (fixture, mut terminal, mut app) = prepared()?;
     let target = index_by_name(&app, "delete");

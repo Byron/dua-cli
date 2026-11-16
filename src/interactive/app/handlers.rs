@@ -221,8 +221,6 @@ impl AppState {
     pub fn reset_message(&mut self) {
         if let Some(deletion) = &self.deletion {
             self.message = Some(deletion.message(self.language));
-        } else if self.queued_deletion.is_some() {
-            self.message = Some(self.language.ui_text().deletion_queued.into());
         } else if self.scan.is_some() {
             self.message = Some(self.language.ui_text().scanning.into());
         } else if let Some(hub) = self.clean_hub.as_ref().filter(|hub| hub.root.is_none()) {
