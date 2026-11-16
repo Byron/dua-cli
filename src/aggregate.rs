@@ -584,6 +584,7 @@ fn aggregate_inner(
         roots,
         false,
         crate::walk::Order::Completion,
+        None,
         move |worker_idx, root_idx, entries| {
             worker_accumulators.add_batch(
                 worker_idx,

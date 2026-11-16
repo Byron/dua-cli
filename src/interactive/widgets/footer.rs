@@ -87,7 +87,7 @@ impl Footer {
                     Style {
                         fg: Color::Yellow.into(),
                         bg: Color::Reset.into(),
-                        add_modifier: Modifier::BOLD | Modifier::RAPID_BLINK,
+                        add_modifier: Modifier::BOLD,
                         ..Style::default()
                     },
                 )

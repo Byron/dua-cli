@@ -88,7 +88,9 @@ impl Control {
         !state.excluded.is_empty() && path.ancestors().any(|path| state.excluded.contains(path))
     }
 
-    pub(crate) fn has_exclusions(&self) -> bool {
+    /// Whether any paths have been excluded from this walk.
+    #[must_use]
+    pub fn has_exclusions(&self) -> bool {
         !self.state.0.lock().unwrap().excluded.is_empty()
     }
 

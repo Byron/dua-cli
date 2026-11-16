@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use dua::WalkOptions;
 use dua::traverse::{BackgroundTraversal, TraversalStats};
 
-use crate::interactive::widgets::{Column, Language};
+use crate::interactive::widgets::{Column, Language, MarkMode};
 
 use super::{EntryDataBundle, SortMode, input::TerminalFocus, navigation::Navigation};
 use super::{clean_hub::CleanHub, deletion_progress::FilesystemDeletion};
@@ -68,6 +68,8 @@ pub struct AppState {
     pub scan: Option<FilesystemScan>,
     /// The frozen deletion batch, kept alive until all workers have stopped.
     pub(super) deletion: Option<FilesystemDeletion>,
+    /// Confirmed action waiting for active scan work and publication to stop.
+    pub pending_deletion: Option<MarkMode>,
     /// Latest traversal progress and error counters.
     pub stats: TraversalStats,
     /// Options used when starting filesystem walks.
@@ -113,6 +115,7 @@ impl AppState {
             received_events: false,
             scan: None,
             deletion: None,
+            pending_deletion: None,
             stats: TraversalStats::default(),
             walk_options,
             root_paths: input,
