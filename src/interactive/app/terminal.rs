@@ -213,7 +213,8 @@ impl TerminalApp {
         );
         if result.is_err() {
             self.state.deletion = None;
-            self.state.queued_deletion = None;
+            self.state.pending_deletion = None;
+            self.state.scan = None;
         }
         result
     }
@@ -236,7 +237,8 @@ impl TerminalApp {
         );
         if result.is_err() {
             self.state.deletion = None;
-            self.state.queued_deletion = None;
+            self.state.pending_deletion = None;
+            self.state.scan = None;
         }
         result
     }

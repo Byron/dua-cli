@@ -41,7 +41,9 @@ pub(super) struct FilesystemDeletion {
     children: HashMap<TreeIndex, HashMap<OsString, TreeIndex>>,
     format: ByteFormat,
     bytes_removed: u128,
-    entries_removed: usize,
+    tree_entries_removed: usize,
+    paths_removed: usize,
+    totals_complete: bool,
 }
 
 impl FilesystemDeletion {
@@ -50,10 +52,27 @@ impl FilesystemDeletion {
             language.ui_text().cancelling_deletion.into()
         } else {
             language.deletion_progress(
-                self.entries_removed,
-                &self.format.display(self.bytes_removed).to_string(),
+                self.progress_count(),
+                &self.progress_size(language),
                 self.is_trash(),
             )
+        }
+    }
+
+    fn progress_count(&self) -> Option<usize> {
+        if self.is_trash() {
+            self.totals_complete.then_some(self.tree_entries_removed)
+        } else {
+            Some(self.paths_removed)
+        }
+    }
+
+    fn progress_size(&self, language: Language) -> String {
+        let size = self.format.display(self.bytes_removed).to_string();
+        if self.totals_complete {
+            size
+        } else {
+            language.scanned_removal_size(&size)
         }
     }
 
@@ -88,17 +107,16 @@ impl FilesystemDeletion {
 
 impl AppState {
     pub fn is_deleting(&self) -> bool {
-        self.deletion.is_some() || self.queued_deletion.is_some()
+        self.deletion.is_some() || self.pending_deletion.is_some()
     }
 
     pub(super) fn block_deletion_changes(&mut self) -> bool {
         if self.is_deleting() {
-            let text = self.language.ui_text();
             self.message = Some(
-                if self.queued_deletion.is_some() {
-                    text.deletion_queued
+                if self.pending_deletion.is_some() {
+                    self.language.ui_text().pausing_scan
                 } else {
-                    text.deletion_running
+                    self.language.ui_text().deletion_running
                 }
                 .into(),
             );
@@ -121,21 +139,38 @@ impl AppState {
         if self.read_only {
             anyhow::bail!(self.language.ui_text().snapshots_read_only);
         }
-        let Some(pane) = &window.mark else {
-            return Ok(());
-        };
-        if pane.is_empty() {
-            return Ok(());
+        if self
+            .scan
+            .as_ref()
+            .is_some_and(|scan| scan.snapshot_export.is_some())
+        {
+            anyhow::bail!(self.language.ui_text().traversal_running);
         }
-        if self.scan.is_some() {
-            self.queued_deletion = Some(mode);
+        if let Some(scan) = &self.scan {
+            if window.mark.as_ref().is_none_or(|pane| pane.is_empty()) {
+                return Ok(());
+            }
+            scan.active_traversal.pause();
+            log::debug!("Requested scan pause before removal");
+            self.pending_deletion = Some(mode);
             self.pending_exit = false;
             self.reset_message();
             return Ok(());
         }
-        let mut targets: Vec<_> = pane
-            .marked()
-            .keys()
+        self.delete_marked(window, tree, display, mode)
+    }
+
+    pub(super) fn delete_marked(
+        &mut self,
+        window: &MainWindow,
+        tree: &TreeView<'_>,
+        display: DisplayOptions,
+        mode: MarkMode,
+    ) -> Result<()> {
+        let mut targets: Vec<_> = window
+            .mark
+            .iter()
+            .flat_map(|pane| pane.marked().keys())
             .filter_map(|&index| {
                 let data = tree.tree().data(index)?;
                 (index != tree.traversal.root_index)
@@ -160,13 +195,26 @@ impl AppState {
             });
         }
         if roots.is_empty() {
+            if let Some(scan) = &self.scan {
+                scan.active_traversal.resume();
+            }
+            self.reset_message();
             return Ok(());
         }
-        let task = DeletionTask::start(
+        log::debug!("Starting removal of {} marked paths", roots.len());
+        let task = match DeletionTask::start(
             roots.iter().map(|target| target.path.clone()).collect(),
             self.walk_options.threads,
             mode,
-        )?;
+        ) {
+            Ok(task) => task,
+            Err(error) => {
+                if let Some(scan) = &self.scan {
+                    scan.active_traversal.resume();
+                }
+                return Err(error.into());
+            }
+        };
         self.deletion = Some(FilesystemDeletion {
             task,
             tick: crossbeam::channel::tick(Duration::from_secs(1)),
@@ -176,7 +224,9 @@ impl AppState {
             children: HashMap::new(),
             format: display.byte_format,
             bytes_removed: 0,
-            entries_removed: 0,
+            tree_entries_removed: 0,
+            paths_removed: 0,
+            totals_complete: self.scan.is_none() || self.clean_hub.is_some(),
         });
         self.pending_exit = false;
         self.reset_message();
@@ -185,7 +235,11 @@ impl AppState {
 
     /// Turn an actual exit request into cancellation followed by draining the worker.
     pub(super) fn exit_after_deletion(&mut self) -> Option<WalkResult> {
-        self.queued_deletion = None;
+        if self.pending_deletion.take().is_some()
+            && let Some(scan) = &self.scan
+        {
+            scan.active_traversal.resume();
+        }
         if let Some(deletion) = &self.deletion {
             deletion.task.cancel.store(true, Ordering::Relaxed);
             self.pending_exit = false;
@@ -218,9 +272,17 @@ impl AppState {
         let mut finished = None;
         for event in std::mem::take(&mut deletion.pending) {
             match event {
-                DeletionEvent::Removed { target, path } => {
+                DeletionEvent::Removed {
+                    target,
+                    path,
+                    succeeded,
+                } => {
+                    deletion.paths_removed += usize::from(succeeded);
                     if let Some(index) = deletion.lookup(target, &path, &tree) {
                         removed.insert(index);
+                    }
+                    if let Some(scan) = &self.scan {
+                        scan.active_traversal.forget_removed_path(path);
                     }
                 }
                 DeletionEvent::TargetFinished { target, errors } => {
@@ -258,6 +320,7 @@ impl AppState {
 
         let mut deltas = HashMap::<TreeIndex, (u128, u64)>::new();
         let mut parents = HashMap::<TreeIndex, HashSet<TreeIndex>>::new();
+        let mut removed_nodes = HashSet::new();
         for &index in &roots {
             let Some(data) = tree.tree().data(index) else {
                 continue;
@@ -283,8 +346,19 @@ impl AppState {
             let mut pending = vec![index];
             while let Some(index) = pending.pop() {
                 deletion.children.remove(&index);
+                if self.scan.is_some() {
+                    removed_nodes.insert(index);
+                }
                 pending.extend(tree.tree().children(index));
             }
+        }
+        if self
+            .scan
+            .as_mut()
+            .is_some_and(|scan| !scan.active_traversal.forget_removed_nodes(&removed_nodes))
+        {
+            self.scan = None;
+            tree.traversal.cost = Some(tree.traversal.start_time.elapsed());
         }
         for target in &mut deletion.targets {
             if target.index.is_some_and(|index| roots.contains(&index)) {
@@ -292,7 +366,7 @@ impl AppState {
             }
         }
         for (parent, children) in parents {
-            deletion.entries_removed += tree.traversal.remove_children(parent, &children);
+            deletion.tree_entries_removed += tree.traversal.remove_children(parent, &children);
         }
         for (index, (bytes, count)) in deltas {
             tree.tree_mut().update(index, |entry| {
@@ -347,14 +421,17 @@ impl AppState {
                     self.language,
                     action,
                     if deletion.is_trash() {
-                        deletion.entries_removed
+                        deletion.progress_count()
                     } else {
-                        entries
+                        Some(entries)
                     },
-                    (errors == 0).then_some(deletion.bytes_removed),
+                    &if errors == 0 {
+                        deletion.progress_size(self.language)
+                    } else {
+                        "?".into()
+                    },
                     deletion.task.started.elapsed(),
                     errors,
-                    deletion.format,
                 );
                 if let Err(err) = notification::emit_if_unfocused(
                     config.notifications.delete_finished,
@@ -363,6 +440,9 @@ impl AppState {
                 ) {
                     log::debug!("Could not emit terminal notification: {err}");
                 }
+            }
+            if let Some(scan) = &self.scan {
+                scan.active_traversal.resume();
             }
             if should_exit {
                 self.reset_message();
@@ -425,6 +505,7 @@ impl FilesystemDeletion {
         tree: &TreeView<'_>,
         targets: Vec<TreeIndex>,
         events: Receiver<DeletionEvent>,
+        totals_complete: bool,
     ) -> Self {
         Self {
             task: DeletionTask::from_events(events),
@@ -441,7 +522,9 @@ impl FilesystemDeletion {
             children: HashMap::new(),
             format: ByteFormat::Metric,
             bytes_removed: 0,
-            entries_removed: 0,
+            tree_entries_removed: 0,
+            paths_removed: 0,
+            totals_complete,
         }
     }
 }

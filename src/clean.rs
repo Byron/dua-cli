@@ -39,13 +39,29 @@ pub(crate) enum DiscoveryEvent {
     Progress { entries: u64, io_errors: u64 },
 }
 
+#[cfg(test)]
 pub(crate) fn discover(
     input: Vec<PathBuf>,
     walk_options: crate::WalkOptions,
     depth: Option<usize>,
     pattern_root: Option<PathBuf>,
+    send: impl FnMut(DiscoveryEvent) -> bool,
+) {
+    discover_with_control(input, walk_options, depth, pattern_root, None, send);
+}
+
+pub(crate) fn discover_with_control(
+    input: Vec<PathBuf>,
+    walk_options: crate::WalkOptions,
+    depth: Option<usize>,
+    pattern_root: Option<PathBuf>,
+    control: Option<&crate::walk::Control>,
     mut send: impl FnMut(DiscoveryEvent) -> bool,
 ) {
+    let activity = control.and_then(crate::walk::Control::activity);
+    if control.is_some() && activity.is_none() {
+        return;
+    }
     let mut progress = Progress::default();
     if !progress.send(&mut send, true) {
         return;
@@ -71,6 +87,9 @@ pub(crate) fn discover(
     });
     let mut roots = Vec::new();
     for path in input {
+        if control.is_some_and(|control| control.is_excluded(&path)) {
+            continue;
+        }
         progress.entries += 1;
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.is_dir() => match path.canonicalize() {
@@ -94,8 +113,16 @@ pub(crate) fn discover(
     let mut searched = Vec::<PathBuf>::new();
     let mut candidates = BTreeSet::<PathBuf>::new();
     let mut git = git::Filter::default();
+    drop(activity);
     // ponytail: one discovery reader; use directory workers if enumeration becomes the bottleneck.
     for root in roots {
+        let activity = control.and_then(crate::walk::Control::activity);
+        if control.is_some() && activity.is_none() {
+            return;
+        }
+        if control.is_some_and(|control| control.is_excluded(&root)) {
+            continue;
+        }
         if root
             .components()
             .any(|component| is_git_dir_name(component.as_os_str()))
@@ -120,7 +147,15 @@ pub(crate) fn discover(
         };
         // Finish an ancestor input before nested inputs, preserving each input's depth budget.
         let mut pending = VecDeque::from([(root.clone(), 0, None)]);
+        drop(activity);
         while let Some((path, level, parent_has_cargo)) = pending.pop_front() {
+            let activity = control.and_then(crate::walk::Control::activity);
+            if control.is_some() && activity.is_none() {
+                return;
+            }
+            if control.is_some_and(|control| control.is_excluded(&path)) {
+                continue;
+            }
             if !progress.send(&mut send, false) {
                 return;
             }
@@ -162,6 +197,7 @@ pub(crate) fn discover(
                 match git.is_candidate(&path) {
                     Ok(true) => {
                         candidates.insert(path.clone());
+                        drop(activity);
                         if !send(DiscoveryEvent::Candidate {
                             path,
                             search_root: pattern_root.clone(),
