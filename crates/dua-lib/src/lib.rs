@@ -154,7 +154,11 @@ type Descend = dyn Fn(usize, &Entry) -> bool + Send + Sync;
 /// converting individual directory entries.
 type Batch = Result<Vec<Result<Entry, Error>>, Error>;
 /// Number of directory entries grouped into each metadata job or result batch.
-/// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
+/// Native enumeration uses small chunks to stream entries promptly. Linux metadata jobs use
+/// larger chunks once workers are busy, retaining smaller jobs while idle workers can share them.
+#[cfg(target_os = "linux")]
+const ENTRY_CHUNK_SIZE: usize = 64;
+#[cfg(not(target_os = "linux"))]
 const ENTRY_CHUNK_SIZE: usize = 4;
 /// Keep enough metadata jobs available for thieves without retaining an entire wide directory.
 #[cfg(not(windows))]
@@ -1167,6 +1171,7 @@ fn read_dir_parallel(
             return;
         }
     };
+    let mut chunk_size = metadata_job_size(shared);
     let mut chunk = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut errors = Vec::new();
     for entry in dir_entries {
@@ -1177,7 +1182,7 @@ fn read_dir_parallel(
         match entry {
             Ok(entry) => {
                 chunk.push(entry);
-                if chunk.len() == ENTRY_CHUNK_SIZE {
+                if chunk.len() == chunk_size {
                     schedule_stat_entries(
                         root,
                         &path,
@@ -1187,6 +1192,7 @@ fn read_dir_parallel(
                         worker,
                         shared,
                     );
+                    chunk_size = metadata_job_size(shared);
                 }
             }
             Err(err) => errors.push(Err(Error::at_path(err, Arc::clone(&path)))),
@@ -1215,6 +1221,21 @@ fn read_dir_parallel(
         shared.stop.store(true, AtomicOrdering::Relaxed);
     }
     finish_pending(root, shared);
+}
+
+/// Share metadata latency with idle Linux workers without shrinking batches when they are busy.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn metadata_job_size(shared: &PoolShared) -> usize {
+    if cfg!(target_os = "linux")
+        && shared
+            .idle
+            .iter()
+            .any(|idle| idle.load(AtomicOrdering::Relaxed))
+    {
+        4
+    } else {
+        ENTRY_CHUNK_SIZE
+    }
 }
 
 /// Read a directory in either traversal order.
@@ -2291,6 +2312,132 @@ mod tests {
             Some((7, true))
         );
         assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn small_directory_shares_metadata_before_a_slow_callback_returns() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        for idx in 0..32 {
+            fs::create_dir(dir.path().join(idx.to_string())).unwrap();
+        }
+        let (started_tx, started_rx) = crossbeam::channel::unbounded();
+        let (release_tx, release_rx) = crossbeam::channel::unbounded();
+        let descend: Arc<Descend> = Arc::new(move |_, entry| {
+            if entry.depth == 1 {
+                started_tx.send(thread::current().id()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            true
+        });
+        let options = Options::default();
+        let (next, jobs, next_directory_id) =
+            begin_walks([(0, Entry::from_path(dir.path(), options))], &descend);
+        let pool = start_pool(8, Order::Completion, options, next_directory_id);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !pool
+            .shared
+            .idle
+            .iter()
+            .all(|idle| idle.load(AtomicOrdering::Acquire))
+        {
+            assert!(Instant::now() < deadline, "workers must become idle");
+            thread::sleep(Duration::from_millis(1));
+        }
+        start_jobs(&pool, jobs);
+        let walk = RootWalk {
+            pending: Some(Pending::Initial(next.into_iter())),
+            pool: Some(pool),
+        };
+        let mut workers = HashSet::new();
+        for _ in 0..4 {
+            match started_rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(worker) => {
+                    workers.insert(worker);
+                }
+                Err(_) => break,
+            }
+        }
+        // Release every callback before asserting, including on the regressing implementation.
+        for _ in 0..32 {
+            release_tx.send(()).unwrap();
+        }
+        let entries = walk
+            .filter(|(_, event)| matches!(event, RootEvent::Entry(Ok(_))))
+            .count();
+        assert_eq!(entries, 33);
+        assert!(
+            workers.len() >= 4,
+            "idle workers must share a 32-entry metadata job before its blocked callback returns"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wide_metadata_walk_amortizes_result_transfers() {
+        let dir = tempfile::tempdir().unwrap();
+        let count = 1_024;
+        for idx in 0..count {
+            fs::write(dir.path().join(idx.to_string()), b"metadata").unwrap();
+        }
+
+        let mut walk = walk(dir.path(), 4, Order::Completion, Options::default(), |_| {
+            true
+        });
+        let root = walk.next().unwrap().unwrap();
+        assert_eq!(root.depth, 0);
+        assert_eq!(root.directory_id, Some(DirectoryId::new(0)));
+        assert_eq!(root.parent_directory_id, None);
+
+        let pool = walk.pool.as_ref().unwrap();
+        let mut names = HashSet::new();
+        let mut batches = 0;
+        let mut root_finished = false;
+        loop {
+            match pool
+                .events
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .expect("the metadata walk must finish")
+            {
+                Event::Batch { root_idx, batch } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "entries must precede root completion");
+                    batches += 1;
+                    for entry in batch.unwrap() {
+                        let entry = entry.unwrap();
+                        assert_eq!(entry.depth, 1);
+                        assert_eq!(entry.parent_path.as_ref(), dir.path());
+                        assert_eq!(entry.directory_id, None);
+                        assert_eq!(entry.parent_directory_id, Some(DirectoryId::new(0)));
+                        assert!(entry.file_type.is_file());
+                        assert_eq!(entry.metadata.unwrap().unwrap().len(), 8);
+                        assert!(names.insert(entry.file_name), "entries must be unique");
+                    }
+                }
+                Event::RootFinished { root_idx } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "root completion must be emitted once");
+                    assert_eq!(names.len(), count);
+                    root_finished = true;
+                }
+                Event::Finished => break,
+            }
+        }
+
+        assert!(
+            root_finished,
+            "root completion must precede pool completion"
+        );
+        for idx in 0..count {
+            assert!(names.contains(&OsString::from(idx.to_string())));
+        }
+        assert!(
+            batches <= 32,
+            "a wide local directory must amortize result-channel transfers: \
+             {count} entries required {batches} batches"
+        );
     }
 
     #[test]

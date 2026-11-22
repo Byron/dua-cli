@@ -4,14 +4,23 @@ use crate::{
     tree::metadata_io_error_count,
 };
 use anyhow::{Context, Result};
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 use filesize::PathExt;
 use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{io, path::Path};
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(target_os = "linux")]
+#[allow(clippy::unnecessary_wraps)]
+fn size_on_disk(_entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
+    use std::os::unix::fs::MetadataExt;
+
+    // Linux allocation is already in the metadata; building the entry's path adds no information.
+    Ok(metadata.blocks() * 512)
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 fn size_on_disk(entry: &crate::walk::Entry, metadata: &crate::walk::Metadata) -> io::Result<u64> {
     entry.path().size_on_disk_fast(metadata)
 }
