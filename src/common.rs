@@ -267,6 +267,11 @@ pub struct WalkOptions {
 /// Tells whether an entry found under the root with the given index is left out of the traversal.
 type ExcludeEntry = Arc<dyn Fn(usize, &walk::Entry) -> bool + Send + Sync>;
 
+#[cfg(any(windows, target_os = "macos"))]
+type IndexedRoot = (usize, Result<walk::Entry, walk::Error>);
+#[cfg(not(any(windows, target_os = "macos")))]
+type IndexedRoot = (usize, PathBuf);
+
 /// A root prepared for a filesystem walk.
 pub(crate) struct WalkRoot {
     /// Index used to associate emitted events with the original input path.
@@ -304,6 +309,54 @@ impl WalkOptions {
         walk::MultiWalk,
         impl Fn(usize, &walk::Entry) -> bool + use<>,
     ) {
+        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots);
+        let descend = move |root_idx, entry: &walk::Entry| descend(root_idx, entry);
+        let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options);
+        #[cfg(any(windows, target_os = "macos"))]
+        let walk = builder.start_entries(indexed_roots, descend);
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let walk = builder.start_paths(indexed_roots, descend);
+
+        let include = move |root_idx, entry: &walk::Entry| {
+            (!skip_root || entry.depth > 0) && !is_excluded(root_idx, entry)
+        };
+        (walk, include)
+    }
+
+    /// Reduce entries where metadata is collected, retaining the ordinary exclusion rules.
+    pub(crate) fn visit_from_paths(
+        &self,
+        roots: Vec<WalkRoot>,
+        visit: impl Fn(usize, usize, Vec<Result<walk::Entry, walk::Error>>) + Send + Sync + 'static,
+    ) -> walk::MultiWalk {
+        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots);
+        let descend = move |root_idx, entry: &walk::Entry| descend(root_idx, entry);
+        let builder =
+            walk::MultiWalk::prepare(self.threads, walk::Order::Completion, self.metadata_options)
+                .visit_batches(move |worker_idx, root_idx, mut entries| {
+                    entries.retain(|entry| match entry {
+                        Ok(entry) => !is_excluded(root_idx, entry),
+                        Err(_) => true,
+                    });
+                    if !entries.is_empty() {
+                        visit(worker_idx, root_idx, entries);
+                    }
+                });
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            builder.start_entries(indexed_roots, descend)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
+        {
+            builder.start_paths(indexed_roots, descend)
+        }
+    }
+
+    /// Share root, device, and pattern preparation between streamed and reduced walks.
+    fn prepare_roots(
+        &self,
+        roots: Vec<WalkRoot>,
+    ) -> (Vec<IndexedRoot>, ExcludeEntry, ExcludeEntry) {
         let num_roots = roots
             .iter()
             .map(|root| root.index)
@@ -364,7 +417,7 @@ impl WalkOptions {
             })
         };
         let is_excluded_while_walking = Arc::clone(&is_excluded);
-        let descend = move |root_idx: usize, entry: &walk::Entry| {
+        let descend: ExcludeEntry = Arc::new(move |root_idx: usize, entry: &walk::Entry| {
             (cross_filesystems
                 || entry
                     .metadata
@@ -378,18 +431,9 @@ impl WalkOptions {
                         ignore_directory(path, &ignore_dirs, &cwd)
                     }))
                 && !is_excluded_while_walking(root_idx, entry)
-        };
+        });
 
-        let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options);
-        #[cfg(any(windows, target_os = "macos"))]
-        let walk = builder.start_entries(indexed_roots, descend);
-        #[cfg(not(any(windows, target_os = "macos")))]
-        let walk = builder.start_paths(indexed_roots, descend);
-
-        let include = move |root_idx, entry: &walk::Entry| {
-            (!skip_root || entry.depth > 0) && !is_excluded(root_idx, entry)
-        };
-        (walk, include)
+        (indexed_roots, descend, is_excluded)
     }
 }
 

@@ -2,6 +2,7 @@ use crate::{
     ByteFormat, InodeFilter, Throttle, WalkOptions, WalkResult, WalkRoot, crossdev,
     snapshot::{Replay, Snapshot},
     tree::metadata_io_error_count,
+    walk::RootEvent,
 };
 use anyhow::{Context, Result};
 #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
@@ -10,6 +11,18 @@ use owo_colors::{AnsiColors as Color, OwoColorize};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{io, path::Path};
+
+use {
+    crossbeam::{atomic::AtomicCell, utils::CachePadded},
+    std::{
+        collections::{HashMap, hash_map::Entry as MapEntry},
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering},
+            mpsc::RecvTimeoutError,
+        },
+    },
+};
 
 #[cfg(target_os = "linux")]
 #[allow(clippy::unnecessary_wraps)]
@@ -88,6 +101,230 @@ struct Aggregate {
     errors: u64,
     /// Whether the root is a file, used to distinguish file and directory output styling.
     is_file: bool,
+}
+
+/// The accounting effect of one entry.
+struct EntryContribution {
+    size: Option<u128>,
+    errors: u64,
+    is_file: Option<bool>,
+}
+
+fn entry_contribution(
+    entry: Result<crate::walk::Entry, crate::walk::Error>,
+    options: &WalkOptions,
+    device_id: u64,
+    inodes: &mut InodeFilter,
+) -> EntryContribution {
+    let Ok(entry) = entry else {
+        return EntryContribution {
+            size: None,
+            errors: 1,
+            is_file: None,
+        };
+    };
+    let mut contribution = EntryContribution {
+        size: Some(0),
+        errors: 0,
+        is_file: (entry.depth == 0).then(|| {
+            entry.file_type.is_file() || entry.file_type.is_symlink() && entry.path().is_file()
+        }),
+    };
+    contribution.size = Some(u128::from(match &entry.metadata {
+        Some(Ok(metadata))
+            if (options.count_hard_links || inodes.add(&entry, metadata))
+                && (options.cross_filesystems || crossdev::is_same_device(device_id, metadata)) =>
+        {
+            if options.apparent_size {
+                metadata.len()
+            } else {
+                #[cfg(target_os = "macos")]
+                {
+                    if options.metadata_options.apfs_clone_metadata {
+                        inodes.allocated_size(metadata)
+                    } else {
+                        metadata.allocated_size()
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    size_on_disk(&entry, metadata).unwrap_or_else(|_| {
+                        contribution.errors += 1;
+                        0
+                    })
+                }
+            }
+        }
+        Some(Ok(_)) => 0,
+        Some(Err(_)) | None => {
+            contribution.errors += 1;
+            0
+        }
+    }));
+    contribution
+}
+
+#[derive(Default)]
+struct PartialAggregate {
+    bytes: u128,
+    errors: u64,
+    entries: u64,
+    smallest: Option<u128>,
+    largest: u128,
+    is_file: Option<bool>,
+}
+
+impl PartialAggregate {
+    fn add(&mut self, contribution: EntryContribution) {
+        self.entries += 1;
+        self.errors += contribution.errors;
+        if let Some(is_file) = contribution.is_file {
+            self.is_file = Some(is_file);
+        }
+        if let Some(size) = contribution.size {
+            self.bytes += size;
+            self.largest = self.largest.max(size);
+            self.smallest = Some(self.smallest.map_or(size, |smallest| smallest.min(size)));
+        }
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.bytes += other.bytes;
+        self.errors += other.errors;
+        self.entries += other.entries;
+        self.largest = self.largest.max(other.largest);
+        if let Some(size) = other.smallest {
+            self.smallest = Some(self.smallest.map_or(size, |smallest| smallest.min(size)));
+        }
+        if let Some(is_file) = other.is_file {
+            self.is_file = Some(is_file);
+        }
+    }
+}
+
+/// Workers update their own partials; the consumer reads a root only after it finishes.
+struct ParallelAggregate {
+    workers: Vec<CachePadded<Mutex<HashMap<usize, PartialAggregate>>>>,
+    /// Packed worker membership per root, set once when a worker creates its first partial.
+    contributors: Vec<AtomicUsize>,
+    contributor_words: usize,
+    inodes: Vec<CachePadded<Mutex<InodeFilter>>>,
+    progress_entries: Option<AtomicCell<u64>>,
+}
+
+impl ParallelAggregate {
+    const INODE_SHARDS: usize = 128;
+    const WORKERS_PER_WORD: usize = usize::BITS as usize;
+
+    fn new(options: &WalkOptions, roots: usize, report_progress: bool) -> Self {
+        let threads = options.threads.max(1);
+        let inode_shards = Self::INODE_SHARDS;
+        #[cfg(target_os = "macos")]
+        let inode_shards = if options.metadata_options.apfs_clone_metadata && !options.apparent_size
+        {
+            // Clones share data across distinct inodes and must use the same tracking state.
+            1
+        } else {
+            inode_shards
+        };
+        let contributor_words = threads.div_ceil(Self::WORKERS_PER_WORD);
+        Self {
+            workers: (0..threads)
+                .map(|_| CachePadded::new(Mutex::new(HashMap::new())))
+                .collect(),
+            contributors: (0..roots
+                .checked_mul(contributor_words)
+                .expect("root contributor capacity overflow"))
+                .map(|_| AtomicUsize::new(0))
+                .collect(),
+            contributor_words,
+            inodes: (0..inode_shards)
+                .map(|_| CachePadded::new(Mutex::new(InodeFilter::default())))
+                .collect(),
+            progress_entries: report_progress.then(|| AtomicCell::new(0)),
+        }
+    }
+
+    fn add_batch(
+        &self,
+        worker_idx: usize,
+        root_idx: usize,
+        entries: Vec<Result<crate::walk::Entry, crate::walk::Error>>,
+        options: &WalkOptions,
+        device_id: u64,
+    ) {
+        let mut partial = PartialAggregate::default();
+        let shared_clone_tracking = self.inodes.len() == 1;
+        let mut untracked = InodeFilter::default();
+        for entry in entries {
+            let shard = if options.count_hard_links && !shared_clone_tracking {
+                None
+            } else {
+                entry.as_ref().ok().and_then(|entry| {
+                    if shared_clone_tracking {
+                        return InodeFilter::needs_tracking(entry, options).then_some(0);
+                    }
+                    let metadata = entry.metadata.as_ref()?.as_ref().ok()?;
+                    InodeFilter::hard_link_identity(entry, metadata).map(|(dev, ino)| {
+                        let identity = ino ^ dev.rotate_left(17);
+                        (identity as usize) & (Self::INODE_SHARDS - 1)
+                    })
+                })
+            };
+            let contribution = if let Some(shard) = shard {
+                let mut inodes = self.inodes[shard]
+                    .lock()
+                    .expect("inode shard is not poisoned");
+                entry_contribution(entry, options, device_id, &mut inodes)
+            } else {
+                entry_contribution(entry, options, device_id, &mut untracked)
+            };
+            partial.add(contribution);
+        }
+        if let Some(progress_entries) = &self.progress_entries {
+            progress_entries.fetch_add(partial.entries);
+        }
+        let mut worker = self.workers[worker_idx]
+            .lock()
+            .expect("worker accumulator is not poisoned");
+        match worker.entry(root_idx) {
+            MapEntry::Occupied(mut entry) => entry.get_mut().merge(partial),
+            MapEntry::Vacant(entry) => {
+                entry.insert(partial);
+                let word = root_idx * self.contributor_words + worker_idx / Self::WORKERS_PER_WORD;
+                self.contributors[word].fetch_or(
+                    1 << (worker_idx % Self::WORKERS_PER_WORD),
+                    Ordering::Relaxed,
+                );
+            }
+        }
+    }
+
+    fn finish_root(&self, root_idx: usize) -> PartialAggregate {
+        let mut result = PartialAggregate::default();
+        let first_word = root_idx * self.contributor_words;
+        // Root completion follows every visit, so membership is stable while its partials drain.
+        for (word_idx, contributors) in self.contributors
+            [first_word..first_word + self.contributor_words]
+            .iter()
+            .enumerate()
+        {
+            let mut workers = contributors.swap(0, Ordering::Relaxed);
+            while workers != 0 {
+                let worker_idx =
+                    word_idx * Self::WORKERS_PER_WORD + workers.trailing_zeros() as usize;
+                workers &= workers - 1;
+                if let Some(partial) = self.workers[worker_idx]
+                    .lock()
+                    .expect("worker accumulator is not poisoned")
+                    .remove(&root_idx)
+                {
+                    result.merge(partial);
+                }
+            }
+        }
+        result
+    }
 }
 
 impl Aggregate {
@@ -285,8 +522,6 @@ fn aggregate_inner(
 ) -> Result<(WalkResult, Statistics)> {
     let (mut out, out_supports_colors) = out;
     let output_options = (byte_format, out_supports_colors);
-    #[cfg(target_os = "macos")]
-    let apfs_clone_accounting = walk_options.metadata_options.apfs_clone_metadata;
     let mut res = WalkResult::default();
     let mut stats = Statistics::default();
     let mut smallest_file_in_bytes = None;
@@ -334,83 +569,68 @@ fn aggregate_inner(
             device_id,
         });
     }
-    let mut inodes = InodeFilter::default();
     let mut progress = TraversalProgress::new(err);
     let mut next_output = 0;
 
-    // Shared hard links and, when enabled, cloned data belong to the first root that reaches them.
-    let (mut walk, include) =
-        walk_options.walk_from_paths(roots, false, crate::walk::Order::Completion);
-    while let Some((root_idx, event)) = walk.recv(None)? {
-        let entries = match event {
-            crate::walk::RootEvent::Entries(entries) => entries,
-            crate::walk::RootEvent::Finished => {
-                completed[root_idx] = true;
-                if !sort_by_size_in_bytes {
-                    output_completed(
-                        &mut out,
-                        &aggregates,
-                        &completed,
-                        &mut next_output,
-                        &mut progress,
-                        output_options,
-                    )?;
-                }
-                continue;
+    // Shared hard links and cloned data belong to the first root that reaches them.
+    let parallel = Arc::new(ParallelAggregate::new(
+        &walk_options,
+        num_roots,
+        progress.writer.is_some(),
+    ));
+    let worker_accumulators = Arc::clone(&parallel);
+    let worker_options = walk_options.clone();
+    let mut walk = walk_options.visit_from_paths(roots, move |worker_idx, root_idx, entries| {
+        worker_accumulators.add_batch(
+            worker_idx,
+            root_idx,
+            entries,
+            &worker_options,
+            device_ids[root_idx],
+        );
+    });
+    let timeout = parallel
+        .progress_entries
+        .is_some()
+        .then_some(Duration::from_millis(100));
+    loop {
+        if let Some(entries) = &parallel.progress_entries {
+            progress.update(entries.load());
+        }
+        let (root_idx, event) = match walk.recv(timeout) {
+            Ok(Some(event)) => event,
+            Ok(None) => break,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => {
+                anyhow::bail!("directory worker stopped before aggregation finished");
             }
-            crate::walk::RootEvent::WorkerFailed(error) => return Err(error.into()),
         };
-        for entry in entries {
-            if entry.as_ref().is_ok_and(|entry| !include(root_idx, entry)) {
-                continue;
-            }
-            let aggregate = &mut aggregates[root_idx];
-            stats.entries_traversed += 1;
-            progress.update(stats.entries_traversed);
-            match entry {
-                Ok(entry) => {
-                    if entry.depth == 0 {
-                        aggregate.is_file = entry.file_type.is_file()
-                            || entry.file_type.is_symlink() && entry.path().is_file();
-                    }
-                    let file_size = u128::from(match &entry.metadata {
-                        Some(Ok(m))
-                            if (walk_options.count_hard_links || inodes.add(&entry, m))
-                                && (walk_options.cross_filesystems
-                                    || crossdev::is_same_device(device_ids[root_idx], m)) =>
-                        {
-                            if walk_options.apparent_size {
-                                m.len()
-                            } else {
-                                #[cfg(target_os = "macos")]
-                                if apfs_clone_accounting {
-                                    inodes.allocated_size(m)
-                                } else {
-                                    m.allocated_size()
-                                }
-                                #[cfg(not(target_os = "macos"))]
-                                {
-                                    size_on_disk(&entry, m).unwrap_or_else(|_| {
-                                        aggregate.errors += 1;
-                                        0
-                                    })
-                                }
-                            }
-                        }
-                        Some(Ok(_)) => 0,
-                        Some(Err(_)) | None => {
-                            aggregate.errors += 1;
-                            0
-                        }
-                    });
-                    stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                    smallest_file_in_bytes = smallest_file_in_bytes
-                        .map_or(file_size, |size: u128| size.min(file_size))
-                        .into();
-                    aggregate.bytes += file_size;
-                }
-                Err(_) => aggregate.errors += 1,
-            }
+        if !matches!(event, RootEvent::Finished) {
+            anyhow::bail!("directory worker stopped before aggregation finished");
+        }
+        let partial = parallel.finish_root(root_idx);
+        let aggregate = &mut aggregates[root_idx];
+        aggregate.bytes += partial.bytes;
+        aggregate.errors += partial.errors;
+        if let Some(is_file) = partial.is_file {
+            aggregate.is_file = is_file;
+        }
+        stats.entries_traversed += partial.entries;
+        stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(partial.largest);
+        if let Some(size) = partial.smallest {
+            smallest_file_in_bytes =
+                Some(smallest_file_in_bytes.map_or(size, |smallest: u128| smallest.min(size)));
+        }
+        completed[root_idx] = true;
+        if !sort_by_size_in_bytes {
+            output_completed(
+                &mut out,
+                &aggregates,
+                &completed,
+                &mut next_output,
+                &mut progress,
+                output_options,
+            )?;
         }
     }
 
@@ -580,6 +800,192 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[test]
+    fn finishing_roots_does_not_wait_for_unrelated_workers() {
+        for contributions in [vec![], vec![(0, 3)], vec![(0, 3), (65, 5), (65, 7)]] {
+            let file = tempfile::NamedTempFile::new().unwrap();
+            let options = WalkOptions {
+                threads: 128,
+                count_hard_links: true,
+                apparent_size: true,
+                cross_filesystems: true,
+                ignore_dirs: std::collections::BTreeSet::default(),
+                ignore_patterns: None,
+                metadata_options: crate::TraversalOptions::default(),
+                base_dir: None,
+            };
+            let parallel = Arc::new(ParallelAggregate::new(&options, 8, false));
+            for &(worker, size) in &contributions {
+                std::fs::write(file.path(), vec![0; size]).unwrap();
+                parallel.add_batch(
+                    worker,
+                    7,
+                    vec![crate::walk::Entry::from_path(
+                        file.path(),
+                        options.metadata_options,
+                    )],
+                    &options,
+                    0,
+                );
+            }
+            let unrelated_worker = parallel.workers[127].lock().unwrap();
+            let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+            let consumer = Arc::clone(&parallel);
+            let reader = std::thread::spawn(move || {
+                done_tx.send(consumer.finish_root(7)).unwrap();
+            });
+            let result = done_rx.recv_timeout(Duration::from_secs(1));
+            // Release the lock before asserting, so the original implementation can finish too.
+            drop(unrelated_worker);
+            reader.join().unwrap();
+            let result = result.expect("root completion must not lock unrelated worker maps");
+            assert_eq!(result.entries, contributions.len() as u64);
+            assert_eq!(
+                result.bytes,
+                contributions
+                    .iter()
+                    .map(|&(_, size)| size as u128)
+                    .sum::<u128>()
+            );
+            assert_eq!(result.errors, 0);
+            assert_eq!(
+                result.smallest,
+                contributions.iter().map(|&(_, size)| size as u128).min()
+            );
+            assert_eq!(
+                result.largest,
+                contributions
+                    .iter()
+                    .map(|&(_, size)| size as u128)
+                    .max()
+                    .unwrap_or_default()
+            );
+            assert_eq!(result.is_file, (!contributions.is_empty()).then_some(true));
+            assert_eq!(parallel.finish_root(7).entries, 0);
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn prepared_roots_claim_hardlinks_before_parallel_descendants() {
+        let directory = tempfile::tempdir().unwrap();
+        let tree = directory.path().join("tree");
+        std::fs::create_dir(&tree).unwrap();
+        let original = tree.join("file");
+        let selected_link = directory.path().join("selected-link");
+        std::fs::write(&original, b"contents").unwrap();
+        std::fs::hard_link(&original, &selected_link).unwrap();
+        let directory_size = u128::from(std::fs::symlink_metadata(&tree).unwrap().len());
+        let file_size = 8;
+
+        for threads in [1, 4] {
+            for count_hard_links in [false, true] {
+                let mut out = Vec::new();
+                let (result, stats) = aggregate(
+                    (&mut out, false),
+                    None::<Vec<u8>>,
+                    WalkOptions {
+                        threads,
+                        count_hard_links,
+                        apparent_size: true,
+                        cross_filesystems: true,
+                        ignore_dirs: std::collections::BTreeSet::default(),
+                        ignore_patterns: None,
+                        metadata_options: crate::TraversalOptions::default(),
+                        base_dir: None,
+                    },
+                    true,
+                    false,
+                    ByteFormat::Bytes,
+                    vec![tree.clone(), selected_link.clone()],
+                )
+                .unwrap();
+                // The explicitly prepared file root arrives before its alias in the first
+                // root's descendants, even if a filesystem worker reaches that alias quickly.
+                let tree_size = directory_size + if count_hard_links { file_size } else { 0 };
+                assert_eq!(
+                    byte_counts(&out),
+                    [tree_size, file_size, tree_size + file_size],
+                    "root ownership with {threads} workers and count_hard_links={count_hard_links}"
+                );
+                assert_eq!(result.num_errors, 0);
+                assert_eq!(stats.entries_traversed, 3);
+                assert_eq!(stats.largest_file_in_bytes, directory_size.max(file_size));
+                assert_eq!(
+                    stats.smallest_file_in_bytes,
+                    if count_hard_links {
+                        directory_size.min(file_size)
+                    } else {
+                        0
+                    }
+                );
+            }
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn parallel_aggregation_preserves_hardlink_cycles_and_error_statistics() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first");
+        let second = directory.path().join("second");
+        std::fs::write(&first, b"file").unwrap();
+        std::fs::hard_link(&first, &second).unwrap();
+        let missing = directory.path().join("missing");
+        let options = WalkOptions {
+            threads: 4,
+            count_hard_links: false,
+            apparent_size: true,
+            cross_filesystems: true,
+            ignore_dirs: std::collections::BTreeSet::default(),
+            ignore_patterns: None,
+            metadata_options: crate::TraversalOptions::default(),
+            base_dir: None,
+        };
+        let mut out = Vec::new();
+        let (result, stats) = aggregate(
+            (&mut out, false),
+            None::<Vec<u8>>,
+            options.clone(),
+            true,
+            false,
+            ByteFormat::Bytes,
+            vec![
+                first.clone(),
+                second.clone(),
+                first,
+                second,
+                missing.clone(),
+            ],
+        )
+        .unwrap();
+        #[cfg(unix)]
+        assert_eq!(byte_counts(&out), [4, 0, 4, 0, 0, 8]);
+        #[cfg(windows)]
+        assert_eq!(byte_counts(&out), [4, 0, 0, 0, 0, 4]);
+        assert_eq!(result.num_errors, 1);
+        assert_eq!(stats.entries_traversed, 5);
+        assert_eq!(stats.smallest_file_in_bytes, 0);
+        assert_eq!(stats.largest_file_in_bytes, 4);
+
+        let mut no_metadata = options;
+        no_metadata.metadata_options = no_metadata.metadata_options.skip_metadata();
+        let (result, stats) = aggregate(
+            (Vec::new(), false),
+            None::<Vec<u8>>,
+            no_metadata,
+            false,
+            true,
+            ByteFormat::Bytes,
+            vec![directory.path().to_owned(), missing],
+        )
+        .unwrap();
+        assert_eq!(result.num_errors, 4);
+        assert_eq!(stats.entries_traversed, 4);
+        assert_eq!(stats.smallest_file_in_bytes, 0);
+        assert_eq!(stats.largest_file_in_bytes, 0);
     }
 
     #[test]
@@ -1131,9 +1537,9 @@ mod tests {
         std::fs::write(&ignore_cache, "cache/\n").unwrap();
         std::fs::write(&ignore_both, "cache/\nkept\n").unwrap();
 
-        let aggregate_with = |ignore_from: &[PathBuf]| -> u128 {
+        let aggregate_with = |ignore_from: &[PathBuf]| -> (u128, u64) {
             let mut out = Vec::new();
-            aggregate(
+            let (_, statistics) = aggregate(
                 (&mut out, false),
                 None::<&mut Vec<u8>>,
                 WalkOptions {
@@ -1152,17 +1558,21 @@ mod tests {
                 vec![dir.path().to_owned()],
             )
             .unwrap();
-            byte_counts(&out)
+            let size = byte_counts(&out)
                 .into_iter()
                 .next()
-                .unwrap_or_else(|| panic!("expected a byte count in {out:?}"))
+                .unwrap_or_else(|| panic!("expected a byte count in {out:?}"));
+            (size, statistics.entries_traversed)
         };
 
         // Directory entries have a size of their own that differs per filesystem - 4096 bytes on
         // ext4, next to nothing on APFS - so only differences between runs are compared here.
-        let full = aggregate_with(&[]);
-        let without_cache = aggregate_with(&[ignore_cache]);
-        let without_either = aggregate_with(&[ignore_both]);
+        let (full, full_entries) = aggregate_with(&[]);
+        let (without_cache, without_cache_entries) = aggregate_with(&[ignore_cache]);
+        let (without_either, without_either_entries) = aggregate_with(&[ignore_both]);
+        assert_eq!(full_entries, 4);
+        assert_eq!(without_cache_entries, 2);
+        assert_eq!(without_either_entries, 1);
 
         assert!(
             full >= 4096 + 64,
