@@ -5,7 +5,7 @@ use crossbeam::channel::Receiver;
 use filesize::PathExt;
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt, io,
     num::NonZeroU32,
     path::{Path, PathBuf},
@@ -21,6 +21,8 @@ const FLAG_OCCUPIED: u32 = 1 << 0;
 const FLAG_DIRECTORY: u32 = 1 << 1;
 const FLAG_METADATA_IO_ERROR: u32 = 1 << 2;
 const FLAG_ENTRY_COUNT: u32 = 1 << 3;
+/// The node's size or modification time didn't fit inline, both are stored in `Tree::wide`.
+const FLAG_WIDE: u32 = 1 << 4;
 
 /// Stable index of an entry in a [`Tree`].
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -133,15 +135,19 @@ impl std::ops::Deref for Entry<'_> {
 /// Nodes live contiguously in [`Tree::nodes`], while names live once in the
 /// shared `Tree::names` byte arena and are referenced by `name_start` and
 /// `name_len`. Tree links are 32-bit slot indices, and `flags` packs occupancy,
-/// directory, metadata-error, and optional-entry-count state. This keeps a node
-/// at 64 bytes on supported 64-bit targets and avoids both an owned `PathBuf`
-/// and separate `petgraph` edge storage per entry—the main sources of the
-/// traversal's reduced memory footprint. Removed slots reuse `next_sibling` as
-/// a free-list link so their node storage can be recycled.
+/// directory, metadata-error, optional-entry-count and wide-data state. Sizes and
+/// modification times are stored as 64-bit integers, which covers all sizes below
+/// 16 EiB and all times between the years 1677 and 2262. The rare values outside of
+/// that range are kept in `Tree::wide` instead. This keeps a node at 48 bytes on
+/// supported 64-bit targets and avoids both an owned `PathBuf` and separate
+/// `petgraph` edge storage per entry—the main sources of the traversal's reduced
+/// memory footprint. Removed slots reuse `next_sibling` as a free-list link so
+/// their node storage can be recycled.
 #[derive(Clone)]
 struct TreeNode {
-    size: u128,
-    mtime: SystemTime,
+    size: u64,
+    /// Nanoseconds since [`UNIX_EPOCH`], negative for earlier times.
+    mtime: i64,
     entry_count: u64,
     name_start: u32,
     name_len: u32,
@@ -151,46 +157,93 @@ struct TreeNode {
     flags: u32,
 }
 
+/// The size and modification time of a node that can't store them inline.
+#[derive(Clone, Copy)]
+struct WideData {
+    size: u128,
+    mtime: SystemTime,
+}
+
+/// Return `time` as nanoseconds since [`UNIX_EPOCH`], or `None` if it doesn't fit.
+fn mtime_to_nanos(time: SystemTime) -> Option<i64> {
+    match time.duration_since(UNIX_EPOCH) {
+        Ok(duration) => i64::try_from(duration.as_nanos()).ok(),
+        Err(err) => i64::try_from(err.duration().as_nanos())
+            .ok()
+            .map(|nanos| -nanos),
+    }
+}
+
+/// The inverse of [`mtime_to_nanos()`].
+fn nanos_to_mtime(nanos: i64) -> SystemTime {
+    let duration = Duration::from_nanos(nanos.unsigned_abs());
+    if nanos < 0 {
+        UNIX_EPOCH - duration
+    } else {
+        UNIX_EPOCH + duration
+    }
+}
+
 impl TreeNode {
-    fn new(name_start: u32, name_len: u32, data: EntryData) -> Self {
-        Self {
-            size: data.size,
-            mtime: data.mtime,
-            entry_count: data.entry_count.unwrap_or_default(),
+    /// Create a node, returning the data it couldn't store inline alongside it.
+    fn new(name_start: u32, name_len: u32, data: EntryData) -> (Self, Option<WideData>) {
+        let mut node = Self {
+            size: 0,
+            mtime: 0,
+            entry_count: 0,
             name_start,
             name_len,
             parent: NONE,
             first_child: NONE,
             next_sibling: NONE,
-            flags: FLAG_OCCUPIED
-                | (u32::from(data.is_dir) * FLAG_DIRECTORY)
-                | (u32::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR)
-                | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT),
-        }
+            flags: 0,
+        };
+        let wide = node.set_data(data);
+        (node, wide)
     }
 
     fn is_occupied(&self) -> bool {
         self.flags & FLAG_OCCUPIED != 0
     }
 
-    fn data(&self) -> EntryData {
+    fn is_wide(&self) -> bool {
+        self.flags & FLAG_WIDE != 0
+    }
+
+    /// Return this node's data, with `wide` being its entry in `Tree::wide` if it is wide.
+    fn data(&self, wide: Option<&WideData>) -> EntryData {
+        let (size, mtime) = match wide {
+            Some(wide) => (wide.size, wide.mtime),
+            None => (u128::from(self.size), nanos_to_mtime(self.mtime)),
+        };
         EntryData {
-            size: self.size,
-            mtime: self.mtime,
+            size,
+            mtime,
             entry_count: (self.flags & FLAG_ENTRY_COUNT != 0).then_some(self.entry_count),
             metadata_io_error: self.flags & FLAG_METADATA_IO_ERROR != 0,
             is_dir: self.flags & FLAG_DIRECTORY != 0,
         }
     }
 
-    fn set_data(&mut self, data: EntryData) {
-        self.size = data.size;
-        self.mtime = data.mtime;
+    /// Store `data`, returning what has to be kept in `Tree::wide` as it doesn't fit inline.
+    #[must_use]
+    fn set_data(&mut self, data: EntryData) -> Option<WideData> {
+        let inline = u64::try_from(data.size)
+            .ok()
+            .zip(mtime_to_nanos(data.mtime));
+        let (size, mtime) = inline.unwrap_or_default();
+        self.size = size;
+        self.mtime = mtime;
         self.entry_count = data.entry_count.unwrap_or_default();
         self.flags = FLAG_OCCUPIED
             | (u32::from(data.is_dir) * FLAG_DIRECTORY)
             | (u32::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR)
-            | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT);
+            | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT)
+            | (u32::from(inline.is_none()) * FLAG_WIDE);
+        inline.is_none().then_some(WideData {
+            size: data.size,
+            mtime: data.mtime,
+        })
     }
 }
 
@@ -240,6 +293,8 @@ pub struct Tree {
     free_head: u32,
     /// Number of occupied nodes, which may be smaller than `nodes.len()` after removals.
     len: usize,
+    /// Size and modification time of the few nodes that can't store them inline, by slot.
+    wide: BTreeMap<u32, WideData>,
 }
 
 impl Default for Tree {
@@ -254,6 +309,7 @@ impl fmt::Debug for Tree {
             .field("nodes", &self.nodes.len())
             .field("names", &self.names.len())
             .field("len", &self.len)
+            .field("wide", &self.wide.len())
             .finish()
     }
 }
@@ -267,6 +323,7 @@ impl Tree {
             names: Vec::new(),
             free_head: NONE,
             len: 0,
+            wide: BTreeMap::new(),
         }
     }
 
@@ -330,7 +387,8 @@ impl Tree {
         data: EntryData,
     ) -> Result<TreeIndex, TreeError> {
         let (name_start, name_len) = self.try_append_name(name.as_ref())?;
-        self.try_allocate(TreeNode::new(name_start, name_len, data))
+        let (node, wide) = TreeNode::new(name_start, name_len, data);
+        self.try_allocate(node, wide)
     }
 
     /// Try to add a child to `parent`.
@@ -358,7 +416,8 @@ impl Tree {
             return Err(TreeError::InvalidIndex);
         }
         let (name_start, name_len) = self.try_append_native_name(name)?;
-        let child = self.try_allocate(TreeNode::new(name_start, name_len, data))?;
+        let (node, wide) = TreeNode::new(name_start, name_len, data);
+        let child = self.try_allocate(node, wide)?;
         self.attach(parent, child)?;
         Ok(child)
     }
@@ -413,18 +472,19 @@ impl Tree {
     /// Return an entry view for `index`.
     #[must_use]
     pub fn entry(&self, index: TreeIndex) -> Option<Entry<'_>> {
-        let node = self.node(index)?;
         let name = self.name(index)?;
         Some(Entry {
             name,
-            data: node.data(),
+            data: self.data(index)?,
         })
     }
 
     /// Return a copy of an entry's metadata.
     #[must_use]
     pub fn data(&self, index: TreeIndex) -> Option<EntryData> {
-        self.node(index).map(TreeNode::data)
+        let node = self.node(index)?;
+        let wide = node.is_wide().then(|| &self.wide[&(index.index() as u32)]);
+        Some(node.data(wide))
     }
 
     /// Replace an entry's metadata, returning `false` if the index is missing.
@@ -432,7 +492,17 @@ impl Tree {
         let Some(node) = self.node_mut(index) else {
             return false;
         };
-        node.set_data(data);
+        let was_wide = node.is_wide();
+        let slot = index.index() as u32;
+        match node.set_data(data) {
+            Some(wide) => {
+                self.wide.insert(slot, wide);
+            }
+            None if was_wide => {
+                self.wide.remove(&slot);
+            }
+            None => {}
+        }
         true
     }
 
@@ -443,6 +513,37 @@ impl Tree {
         };
         edit(&mut data);
         self.set_data(index, data)
+    }
+
+    /// Add `size` and `entry_count` to an entry's metadata, returning `false` if the index is
+    /// missing.
+    ///
+    /// This is the same as using [`Tree::update()`] to add to both, but avoids converting the
+    /// whole entry back and forth, as it is called for every ancestor of every new entry.
+    pub(crate) fn add_size_and_entry_count(
+        &mut self,
+        index: TreeIndex,
+        size: u128,
+        entry_count: u64,
+    ) -> bool {
+        let Some(node) = self.node_mut(index) else {
+            return false;
+        };
+        if !node.is_wide()
+            && let Some(sum) = u64::try_from(size)
+                .ok()
+                .and_then(|size| node.size.checked_add(size))
+        {
+            node.size = sum;
+            // Without an entry count, the stored count is zero.
+            node.entry_count += entry_count;
+            node.flags |= FLAG_ENTRY_COUNT;
+            return true;
+        }
+        self.update(index, |entry| {
+            entry.size += size;
+            *entry.entry_count.get_or_insert(0) += entry_count;
+        })
     }
 
     /// Return an entry's arena-backed name.
@@ -543,6 +644,9 @@ impl Tree {
                 child = self.nodes[child as usize].next_sibling;
             }
             let node = &mut self.nodes[index.index()];
+            if node.is_wide() {
+                self.wide.remove(&(index.index() as u32));
+            }
             node.flags = 0;
             node.parent = NONE;
             node.first_child = NONE;
@@ -590,7 +694,11 @@ impl Tree {
             .filter(|node| node.is_occupied())
     }
 
-    fn try_allocate(&mut self, node: TreeNode) -> Result<TreeIndex, TreeError> {
+    fn try_allocate(
+        &mut self,
+        node: TreeNode,
+        wide: Option<WideData>,
+    ) -> Result<TreeIndex, TreeError> {
         let index = if self.free_head == NONE {
             let index = u32::try_from(self.nodes.len()).map_err(|_| TreeError::Capacity)?;
             if index == NONE {
@@ -605,6 +713,9 @@ impl Tree {
             self.nodes[index as usize] = node;
             index
         };
+        if let Some(wide) = wide {
+            self.wide.insert(index, wide);
+        }
         self.len += 1;
         Ok(TreeIndex::from_raw(index))
     }
@@ -1446,10 +1557,11 @@ impl BackgroundTraversal {
                         let mut ancestor = traversal.tree.parent(index);
                         while let Some(ancestor_index) = ancestor {
                             ancestor = traversal.tree.parent(ancestor_index);
-                            traversal.tree.update(ancestor_index, |entry| {
-                                entry.size += file_size;
-                                *entry.entry_count.get_or_insert(0) += entry_count;
-                            });
+                            traversal.tree.add_size_and_entry_count(
+                                ancestor_index,
+                                file_size,
+                                entry_count,
+                            );
                         }
                     }
                     return self
@@ -1493,10 +1605,9 @@ impl BackgroundTraversal {
                 let mut ancestor = Some(parent_index);
                 while let Some(index) = ancestor {
                     ancestor = traversal.tree.parent(index);
-                    traversal.tree.update(index, |entry| {
-                        entry.size += file_size;
-                        *entry.entry_count.get_or_insert(0) += entry_count;
-                    });
+                    traversal
+                        .tree
+                        .add_size_and_entry_count(index, file_size, entry_count);
                 }
 
                 if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
@@ -2665,10 +2776,84 @@ mod tests {
         assert!(matches!(tree.attach(child, root), Err(TreeError::Cycle)));
     }
 
+    #[test]
+    fn tree_keeps_sizes_and_times_that_do_not_fit_inline() {
+        let inline_times = [
+            UNIX_EPOCH,
+            UNIX_EPOCH - Duration::from_nanos(1),
+            UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789),
+            UNIX_EPOCH + Duration::from_nanos(i64::MAX as u64),
+            UNIX_EPOCH - Duration::from_nanos(i64::MAX as u64),
+        ];
+        let wide_times = [
+            // One microsecond past the limit, as Windows stores times in 100 ns steps.
+            UNIX_EPOCH + Duration::from_nanos(i64::MAX as u64) + Duration::from_micros(1),
+            UNIX_EPOCH - Duration::new(i64::MAX as u64 / 1_000_000_000 + 1, 0),
+            UNIX_EPOCH + Duration::new(10_000_000_000, 999_999_900),
+        ];
+        let sizes = [0, u128::from(u64::MAX), u128::from(u64::MAX) + 1, u128::MAX];
+
+        let mut tree = Tree::new();
+        let root = tree.add_root("root", EntryData::default());
+        for mtime in inline_times.into_iter().chain(wide_times) {
+            for size in sizes {
+                let data = EntryData {
+                    size,
+                    mtime,
+                    entry_count: Some(u64::MAX),
+                    metadata_io_error: true,
+                    is_dir: true,
+                };
+                let index = tree.add_child(root, "entry", data);
+                assert_eq!(tree.data(index), Some(data), "{size} at {mtime:?}");
+            }
+        }
+        assert_eq!(
+            tree.wide.len(),
+            inline_times.len() * 2 + wide_times.len() * sizes.len(),
+            "only entries that don't fit are stored on the side"
+        );
+
+        assert_eq!(
+            tree.remove_children(root, &tree.children(root).collect()),
+            (inline_times.len() + wide_times.len()) * sizes.len()
+        );
+        assert!(
+            tree.wide.is_empty(),
+            "removed entries release their wide data"
+        );
+    }
+
+    #[test]
+    fn tree_moves_data_between_inline_and_wide_storage() {
+        let mut tree = Tree::new();
+        let index = tree.add_root("root", EntryData::default());
+
+        assert!(tree.add_size_and_entry_count(index, u128::from(u64::MAX), 1));
+        assert!(tree.wide.is_empty());
+        assert!(tree.add_size_and_entry_count(index, 2, 2));
+        assert_eq!(tree.wide.len(), 1, "overflowing sizes become wide");
+        let data = tree.data(index).unwrap();
+        assert_eq!(data.size, u128::from(u64::MAX) + 2);
+        assert_eq!(data.entry_count, Some(3));
+        assert!(tree.add_size_and_entry_count(index, 1, 1));
+        assert_eq!(tree.data(index).unwrap().size, u128::from(u64::MAX) + 3);
+
+        assert!(tree.set_data(index, EntryData::default()));
+        assert!(
+            tree.wide.is_empty(),
+            "data that fits again is stored inline"
+        );
+        assert_eq!(tree.data(index), Some(EntryData::default()));
+
+        let missing = TreeIndex::from(100_usize);
+        assert!(!tree.add_size_and_entry_count(missing, 1, 1));
+    }
+
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn tree_nodes_and_optional_indices_are_compact() {
-        assert_eq!(std::mem::size_of::<TreeNode>(), 64);
+        assert_eq!(std::mem::size_of::<TreeNode>(), 48);
         assert_eq!(std::mem::size_of::<Option<TreeIndex>>(), 4);
     }
 }
