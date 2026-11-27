@@ -981,7 +981,25 @@ pub enum TraversalEvent {
     RootError(Arc<PathBuf>, usize),
     /// Traversal completed.
     Finished,
+    /// Consecutive [`TraversalEvent::Entry`] events, in the order they were discovered.
+    ///
+    /// Entries are sent in batches to avoid paying for channel synchronization once per entry.
+    /// Use [`TraversalEvent::flatten()`] to handle them one by one.
+    Batch(Vec<TraversalEvent>),
 }
+
+impl TraversalEvent {
+    /// Return the events contained in a [`TraversalEvent::Batch`], or this event alone.
+    pub fn flatten(self) -> impl Iterator<Item = TraversalEvent> {
+        match self {
+            Self::Batch(events) => itertools::Either::Left(events.into_iter()),
+            event => itertools::Either::Right(std::iter::once(event)),
+        }
+    }
+}
+
+/// The largest number of entries the walk dispatcher collects into one [`TraversalEvent::Batch`].
+const MAX_ENTRIES_PER_BATCH: usize = 256;
 
 /// An in-progress traversal which exposes newly obtained entries
 pub struct BackgroundTraversal {
@@ -1275,6 +1293,7 @@ impl BackgroundTraversal {
                         root_paths.push(Arc::new(root_path));
                     }
 
+                    let mut batch = Vec::with_capacity(MAX_ENTRIES_PER_BATCH);
                     for (root, event) in walk_options.iter_from_paths(
                         walk_roots,
                         skip_root,
@@ -1283,19 +1302,29 @@ impl BackgroundTraversal {
                         let crate::walk::RootEvent::Entry(entry) = event else {
                             continue;
                         };
-                        if entry_tx
-                            .send(TraversalEvent::Entry(
-                                entry.map(TraversalEntry),
-                                Arc::clone(&root_paths[root]),
-                                device_ids[root],
-                                root_indices[root],
-                            ))
-                            .is_err()
+                        batch.push(TraversalEvent::Entry(
+                            entry.map(TraversalEntry),
+                            Arc::clone(&root_paths[root]),
+                            device_ids[root],
+                            root_indices[root],
+                        ));
+                        // Send right away if the receiver is idle, so batching only kicks in
+                        // while it is still busy with previous entries.
+                        if (batch.len() >= MAX_ENTRIES_PER_BATCH || entry_tx.is_empty())
+                            && entry_tx
+                                .send(TraversalEvent::Batch(std::mem::replace(
+                                    &mut batch,
+                                    Vec::with_capacity(MAX_ENTRIES_PER_BATCH),
+                                )))
+                                .is_err()
                         {
                             // The channel is closed, this means the user has
                             // requested to quit the app. Abort the walking.
                             return;
                         }
+                    }
+                    if !batch.is_empty() && entry_tx.send(TraversalEvent::Batch(batch)).is_err() {
+                        return;
                     }
                     if entry_tx.send(TraversalEvent::Finished).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
@@ -1687,6 +1716,15 @@ impl BackgroundTraversal {
                 if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
                     return Ok(Some(false));
                 }
+            }
+            TraversalEvent::Batch(events) => {
+                let mut result = None;
+                for event in events {
+                    if let Some(is_finished) = self.integrate_traversal_event(traversal, event) {
+                        result = Some(result.unwrap_or(false) || is_finished);
+                    }
+                }
+                return result;
             }
             TraversalEvent::RootError(root_path, root_idx) => {
                 if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
@@ -2486,8 +2524,12 @@ mod tests {
         )
         .unwrap();
 
-        loop {
-            let event = background.event_rx.recv().unwrap();
+        for event in background
+            .event_rx
+            .clone()
+            .into_iter()
+            .flat_map(TraversalEvent::flatten)
+        {
             let is_file = matches!(
                 &event,
                 TraversalEvent::Entry(Ok(TraversalEntry(entry)), _, _, _)

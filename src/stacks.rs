@@ -46,7 +46,13 @@ pub fn stacks(
     .retain_depth(max_depth.or(Some(0)));
     let mut progress = TraversalProgress::new(err);
 
-    while let Ok(event) = background.event_rx.recv() {
+    // Entries are streamed one by one, as each line needs the entry's own size.
+    for event in background
+        .event_rx
+        .clone()
+        .into_iter()
+        .flat_map(TraversalEvent::flatten)
+    {
         let stack = stream.then(|| stack_path(&event)).flatten();
         let size_before = traversal
             .tree
