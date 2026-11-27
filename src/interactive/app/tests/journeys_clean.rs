@@ -194,6 +194,7 @@ fn clean_groups_siblings_and_marks_only_candidates() -> Result<()> {
             display: app.display,
             state: &app.state,
             config: &app.config,
+            tree: None,
         };
         app.window
             .render(props, buffer.area, &mut buffer, &mut Cursor::default());

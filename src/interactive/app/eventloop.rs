@@ -3,7 +3,7 @@ use crate::interactive::{
     CursorDirection, CursorMode, DisplayOptions, EntryCheck, MarkEntryMode,
     app::navigation::Navigation,
     state::FocussedPane,
-    widgets::{MainWindow, MainWindowProps, glob_search},
+    widgets::{MainWindow, MainWindowProps, TileDirection, glob_search},
 };
 use anyhow::{Context, Result, bail};
 use crossbeam::channel::Receiver;
@@ -67,6 +67,7 @@ impl AppState {
             display,
             state: self,
             config,
+            tree: Some(tree_view.tree()),
         };
 
         let mut cursor = Cursor::default();
@@ -759,7 +760,9 @@ impl AppState {
                     }
                 }
                 Main => {
-                    if keys.open_entry.matches(key) {
+                    if self.treemap && self.process_treemap_key(key, window, keys) {
+                        // Handled as spatial navigation or zoom.
+                    } else if keys.open_entry.matches(key) {
                         self.open_path(
                             self.navigation()
                                 .selected
@@ -807,6 +810,8 @@ impl AppState {
                         self.cycle_count_sorting(&tree_view);
                     } else if keys.toggle_count_column.matches(key) {
                         self.toggle_count_column();
+                    } else if keys.toggle_treemap.matches(key) {
+                        self.treemap = !self.treemap;
                     } else if keys.sort_by_name.matches(key) {
                         self.cycle_name_sorting(&tree_view);
                     } else if keys.cycle_visualization.matches(key) {
@@ -829,6 +834,34 @@ impl AppState {
         self.draw(window, &tree_view, *display, terminal, config)?;
 
         Ok(None)
+    }
+
+    /// Treemap view: move between tiles with arrows or `hjkl`, and enter or leave the tile
+    /// of small entries lumped together. Returns `false` for keys that work as usual.
+    fn process_treemap_key(
+        &mut self,
+        key: KeyEvent,
+        window: &mut MainWindow,
+        keys: &dua::KeysConfig,
+    ) -> bool {
+        let direction = match (key.code, key.modifiers) {
+            (KeyCode::Left | KeyCode::Char('h'), KeyModifiers::NONE) => Some(TileDirection::Left),
+            (KeyCode::Right | KeyCode::Char('l'), KeyModifiers::NONE) => Some(TileDirection::Right),
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => Some(TileDirection::Up),
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => Some(TileDirection::Down),
+            _ => None,
+        };
+        if let Some(direction) = direction {
+            if let Some(next) = window
+                .treemap
+                .neighbour(self.navigation().selected, direction)
+            {
+                self.navigation_mut().select(Some(next));
+            }
+            return true;
+        }
+        (keys.descend.matches(key) && window.treemap.zoom_in(self.navigation().selected))
+            || (keys.ascend.matches(key) && window.treemap.zoom_out())
     }
 
     pub(super) fn refresh(

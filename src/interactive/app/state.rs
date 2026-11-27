@@ -91,6 +91,8 @@ pub struct AppState {
     pub read_only: bool,
     /// Whether the next quit/back action should exit the app.
     pub pending_exit: bool,
+    /// Whether the main pane shows a treemap instead of the entry list.
+    pub treemap: bool,
 }
 
 impl AppState {
@@ -124,6 +126,7 @@ impl AppState {
             allow_entry_check: !read_only,
             read_only,
             pending_exit: false,
+            treemap: false,
         }
     }
 }

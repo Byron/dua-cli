@@ -130,6 +130,8 @@ pub struct HelpText {
     pub disp_show_mtime_2: &'static str,
     pub disp_sort_count: &'static str,
     pub disp_show_count: &'static str,
+    pub disp_treemap: &'static str,
+    pub treemap_hints: &'static str,
     pub disp_sort_name: &'static str,
     pub disp_cycle_bar: &'static str,
 
@@ -195,6 +197,8 @@ const EN: HelpText = HelpText {
     disp_show_mtime_2: "While sorting by mtime: entry, deep newest, deep oldest.",
     disp_sort_count: "Toggle sort by entries descending/ascending.",
     disp_show_count: "Show/hide entry count.",
+    disp_treemap: "Switch between list and treemap view.",
+    treemap_hints: "←↓↑→/hjkl move · ⏎ in · ⌫ out · T list · ? help",
     disp_sort_name: "Toggle sort by name ascending/descending.",
     disp_cycle_bar: "Cycle through percentage display and bar options.",
 
@@ -260,6 +264,8 @@ const JA: HelpText = HelpText {
     disp_show_mtime_2: "mtime で並べ替え中: エントリ、子孫の最新、子孫の最古。",
     disp_sort_count: "エントリ数順（降順/昇順）の並べ替えを切り替える。",
     disp_show_count: "エントリ数の表示/非表示を切り替える。",
+    disp_treemap: "リスト表示とツリーマップ表示を切り替える。",
+    treemap_hints: "←↓↑→/hjkl 移動 · ⏎ 入る · ⌫ 戻る · T リスト · ? ヘルプ",
     disp_sort_name: "名前順（昇順/降順）の並べ替えを切り替える。",
     disp_cycle_bar: "割合表示とバー表示の形式を順に切り替える。",
 
@@ -325,6 +331,8 @@ const KO: HelpText = HelpText {
     disp_show_mtime_2: "mtime 정렬 중: 항목, 하위 항목 중 최신, 하위 항목 중 가장 오래됨.",
     disp_sort_count: "항목 수 기준 내림차순/오름차순 정렬을 전환합니다.",
     disp_show_count: "항목 수를 표시하거나 숨깁니다.",
+    disp_treemap: "목록 보기와 트리맵 보기를 전환합니다.",
+    treemap_hints: "←↓↑→/hjkl 이동 · ⏎ 들어가기 · ⌫ 나가기 · T 목록 · ? 도움말",
     disp_sort_name: "이름 기준 오름차순/내림차순 정렬을 전환합니다.",
     disp_cycle_bar: "백분율 및 막대 표시 옵션을 순환합니다.",
 
@@ -390,6 +398,8 @@ const ZH: HelpText = HelpText {
     disp_show_mtime_2: "按 mtime 排序时：当前条目、子项中最新、子项中最旧。",
     disp_sort_count: "在按条目数降序/升序排序之间切换。",
     disp_show_count: "显示或隐藏条目数。",
+    disp_treemap: "在列表视图和树状图视图之间切换。",
+    treemap_hints: "←↓↑→/hjkl 移动 · ⏎ 进入 · ⌫ 返回 · T 列表 · ? 帮助",
     disp_sort_name: "在按名称升序/降序排序之间切换。",
     disp_cycle_bar: "循环切换百分比和条形图显示选项。",
 
@@ -455,6 +465,8 @@ const DE: HelpText = HelpText {
     disp_show_mtime_2: "mtime-Sortierung: Eintrag, neuester/ältester Untereintrag.",
     disp_sort_count: "Nach Eintragsanzahl ab-/aufsteigend sortieren.",
     disp_show_count: "Eintragsanzahl ein- oder ausblenden.",
+    disp_treemap: "Zwischen Listen- und Treemap-Ansicht wechseln.",
+    treemap_hints: "←↓↑→/hjkl bewegen · ⏎ hinein · ⌫ zurück · T Liste · ? Hilfe",
     disp_sort_name: "Nach Namen auf-/absteigend sortieren.",
     disp_cycle_bar: "Zwischen Prozent- und Balkenanzeige wechseln.",
 

@@ -174,6 +174,7 @@ impl HelpPane {
                     t.disp_show_count,
                     None,
                 );
+                hotkey(keys.toggle_treemap.to_string(), t.disp_treemap, None);
                 hotkey(keys.sort_by_name.to_string(), t.disp_sort_name, None);
                 hotkey(keys.cycle_visualization.to_string(), t.disp_cycle_bar, None);
                 spacer();

@@ -7,7 +7,8 @@ use crate::interactive::{
     state::{AppState, Cursor, FocussedPane},
     widgets::{
         COLOR_MARKED, Entries, EntriesProps, EntryRow, Footer, FooterProps, GlobPane,
-        GlobPaneProps, Header, HelpPane, HelpPaneProps, Language, MarkPane, MarkPaneProps,
+        GlobPaneProps, Header, HelpPane, HelpPaneProps, Language, MarkPane, MarkPaneProps, Treemap,
+        TreemapProps,
     },
 };
 use Constraint::{Length, Max, Min, Percentage};
@@ -32,6 +33,8 @@ pub struct MainWindowProps<'a> {
     pub display: DisplayOptions,
     pub state: &'a AppState,
     pub config: &'a dua::Config,
+    /// The traversal tree, used by the treemap to colour directories by their content.
+    pub tree: Option<&'a dua::traverse::Tree>,
 }
 
 #[derive(Default)]
@@ -42,6 +45,8 @@ pub struct MainWindow {
     pub glob: Option<GlobPane>,
     /// Keep open right-hand panes as a narrow shared sidebar while retaining their contents.
     pub right_panes_minimized: bool,
+    /// Layout and zoom of the treemap view.
+    pub treemap: Treemap,
 }
 
 impl MainWindow {
@@ -61,8 +66,47 @@ impl MainWindow {
             display,
             state,
             config,
+            tree,
         } = props.borrow();
         let language = state.language;
+        let treemap_marked: std::collections::HashSet<_> =
+            self.mark.as_ref().map_or_else(Default::default, |pane| {
+                state
+                    .entries
+                    .iter()
+                    .map(|entry| entry.index)
+                    .filter(|index| pane.marked().contains_key(index))
+                    .collect()
+            });
+        let treemap_props = || TreemapProps {
+            path: current_path,
+            view_root: state.navigation().view_root,
+            entries: &state.entries,
+            selected: state.navigation().selected,
+            marked: treemap_marked.clone(),
+            format: display.byte_format,
+            tree: *tree,
+            status_right: Some(match &state.message {
+                Some(message) => (format!("{message} "), Style::default().fg(Color::LightRed)),
+                None => (
+                    format!("{} ", language.help_text().treemap_hints),
+                    Style::default().fg(Color::Gray),
+                ),
+            }),
+        };
+        let fullscreen_treemap = state.treemap
+            && self.help.is_none()
+            && self.mark.is_none()
+            && self.glob.is_none()
+            && state
+                .clean_hub
+                .as_ref()
+                .is_none_or(|hub| hub.root.is_some());
+        if fullscreen_treemap {
+            let props = treemap_props();
+            self.treemap.render(props, area, buffer, true);
+            return;
+        }
         if let Some(pane) = self.mark.as_mut() {
             let has_focus = state.focussed == Mark;
             if pane.has_focus() != has_focus {
@@ -198,6 +242,15 @@ impl MainWindow {
                 entries_area,
                 buffer,
             );
+        } else if state.treemap {
+            let block = tui::widgets::Block::default()
+                .title(format!(" {} ", current_path.display()))
+                .border_style(entries_style)
+                .borders(tui::widgets::Borders::ALL);
+            let inner = block.inner(entries_area);
+            tui::widgets::Widget::render(block, entries_area, buffer);
+            let treemap_props = treemap_props();
+            self.treemap.render(treemap_props, inner, buffer, false);
         } else {
             self.entries.render(props, entries, entries_area, buffer);
         }
@@ -407,6 +460,7 @@ mod tests {
                 display: DisplayOptions::new(dua::ByteFormat::Bytes),
                 state: &state,
                 config,
+                tree: None,
             },
             area,
             &mut buffer,

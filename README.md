@@ -231,6 +231,12 @@ Use this mode to explore, and/or to delete files and directories to release disk
 Press `]` to minimize or restore the entire right side. `Tab` cycles through visible panes;
 `?` restores and focuses Help when the right side is minimized.
 
+Press `T` to switch between the list and a full-screen treemap of the current directory, in the
+spirit of WinDirStat and QDirStat. Each entry is a tile whose area is proportional to its size;
+files are coloured by extension and directories by the extension that fills most of them.
+Entries too small for a readable tile are grouped into one `+N` tile. Arrow keys or `hjkl` move
+between tiles, `Enter` opens a directory or zooms into the `+N` tile, and `Backspace` goes back.
+
 Please note that great care has been taken to prevent accidental deletions due to a multi-stage
 process, which makes this mode viable for exploration.
 

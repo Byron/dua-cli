@@ -6,6 +6,7 @@ mod help;
 mod i18n;
 mod main;
 mod mark;
+mod treemap;
 mod tui_ext;
 
 pub use entries::*;
@@ -16,6 +17,7 @@ pub use help::*;
 pub use i18n::*;
 pub use main::*;
 pub use mark::*;
+pub use treemap::*;
 
 use tui::style::Color;
 

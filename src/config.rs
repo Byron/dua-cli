@@ -479,6 +479,8 @@ pub struct KeysConfig {
     pub sort_by_count: KeyBindings,
     /// Show or hide the item-count column.
     pub toggle_count_column: KeyBindings,
+    /// Switch between the entry list and the treemap.
+    pub toggle_treemap: KeyBindings,
     /// Sort by name.
     pub sort_by_name: KeyBindings,
     /// Cycle byte visualizations.
@@ -556,6 +558,7 @@ impl Default for KeysConfig {
             cycle_mtime_mode: KeyBindings::defaults(&["M"]),
             sort_by_count: KeyBindings::defaults(&["c"]),
             toggle_count_column: KeyBindings::defaults(&["C"]),
+            toggle_treemap: KeyBindings::defaults(&["T"]),
             sort_by_name: KeyBindings::defaults(&["n"]),
             cycle_visualization: KeyBindings::defaults(&["g", "S"]),
             open_entry: KeyBindings::defaults(&["O"]),
@@ -679,6 +682,7 @@ impl Config {
             "# cycle_mtime_mode = \"M\"\n",
             "# sort_by_count = \"c\"\n",
             "# toggle_count_column = \"C\"\n",
+            "# toggle_treemap = \"T\"\n",
             "# sort_by_name = \"n\"\n",
             "# cycle_visualization = [\"g\", \"S\"]\n",
             "#\n",
@@ -762,6 +766,7 @@ mod tests {
             "cycle_mtime_mode",
             "sort_by_count",
             "toggle_count_column",
+            "toggle_treemap",
             "sort_by_name",
             "cycle_visualization",
             "open_entry",
