@@ -1,14 +1,29 @@
 //! Parallel filesystem traversal backed by a work-stealing worker pool.
 //!
-//! [`walk`] yields the root first, then workers read directories and distribute newly discovered
-//! subdirectories among themselves. [`Order::ParentFirst`] publishes each entry's batch
+//! # [`Walk`] or [`MultiWalk`]
+//!
+//! Use [`walk`] to iterate over a single root. Its [`Walk`] yields one entry or filesystem error
+//! at a time, starting with the root. [`Walk::next_cancellable`] checks a cancellation flag between
+//! entries and while waiting for worker output. On cancellation it discards buffered entries and
+//! joins the workers after their in-flight filesystem calls finish. A deletion tool can combine
+//! this with [`Options::skip_metadata`] to collect only paths and file types before removing anything.
+//! [`Walk::restart`] can reuse the workers after an exhausted directory walk.
+//!
+//! Use [`MultiWalk::prepare`] to receive whole batches or track multiple roots. Start with
+//! [paths](MultiWalkBuilder::start_paths), [prepared entries](MultiWalkBuilder::start_entries), or
+//! [streamed roots](MultiWalkBuilder::stream_roots). [`MultiWalk::recv`] reports a root index
+//! and a [`RootEvent`] for each batch, root completion, or terminal worker failure. With an optional
+//! [batch visitor](MultiWalkBuilder::visit_batches), workers pass their batches directly to the
+//! visitor and `recv` reports completions and worker failures. Fixed root entries are visited on
+//! the calling thread during startup. Use a timed `recv` to check for cancellation between
+//! waits, and drop the walk to stop its workers.
+//!
+//! Both APIs use the same worker scheduling. [`Order::ParentFirst`] publishes each entry's batch
 //! before scheduling its children, while [`Order::Completion`] allows descendant batches to arrive
 //! first when their reads finish sooner. Sibling order is unspecified in both modes.
 //!
-//! The `descend` predicate controls which directories are traversed; rejected directories are
-//! still yielded (but not traversed).
-//! Symbolic links are reported but never followed, and filesystem errors are
-//! returned as iterator items. Dropping the iterator stops and joins its workers.
+//! The `descend` predicate prunes a directory's descendants while keeping the directory entry.
+//! Both APIs report symbolic links without following them.
 //!
 //! # Scheduling
 //!
@@ -17,13 +32,19 @@
 //! metadata batches enqueue accepted child directories. Windows and macOS walks consume native
 //! metadata returned by directory enumeration instead. Multi-threaded macOS walks probe the
 //! initial bulk refills and distribute metadata lookups when those reads spend time waiting.
-//! [`stream_roots`] accepts additional roots while walking, using the same worker pool. Workers
-//! check submitted roots before their local LIFO queues so existing trees cannot starve new roots.
+//! [`MultiWalkBuilder::stream_roots`] accepts additional roots while walking on the same worker pool.
+//! Workers check submitted roots before their local queues so existing trees cannot starve new roots.
 //! Every worker can run available jobs from its local queue or steal from a peer. Each
 //! successful thief wakes another idle worker, ramping up only while work remains stealable. A
 //! worker parks when no queue has work and is unparked when new work arrives or the walk stops. The
-//! last completed job emits the finished event once root submissions are closed; dropping the
-//! iterator stops and joins all workers.
+//! pool emits its final event once all roots finish and root submissions are closed; dropping
+//! the walk stops and joins all workers.
+//!
+//! Linux completion-order metadata walks combine file-only results across directory jobs into
+//! batches of at most 512 entries per worker. Partial batches are published before descent
+//! callbacks or parking. Directory batches, root entries, errors, and parent-first results are
+//! sent directly. Buffered entries keep their root active until they have been published, so
+//! completion cannot overtake them.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -42,9 +63,10 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
-        mpsc::{Receiver, SyncSender, TryRecvError, sync_channel},
+        mpsc::{Receiver, RecvTimeoutError, SyncSender, sync_channel},
     },
     thread,
+    time::{Duration, Instant},
 };
 
 #[cfg(any(not(any(windows, target_os = "macos")), test))]
@@ -149,12 +171,18 @@ impl Iterator for ReadDir {
 /// Decides whether to traverse an entry's children for a given root index.
 /// Returning `false` prunes descendants but still emits the entry itself.
 type Descend = dyn Fn(usize, &Entry) -> bool + Send + Sync;
+type VisitBatch = dyn Fn(usize, usize, Vec<Result<Entry, Error>>) + Send + Sync;
 /// Entries obtained from one directory read.
 /// An outer error means the directory could not be opened; inner errors come from reading or
 /// converting individual directory entries.
 type Batch = Result<Vec<Result<Entry, Error>>, Error>;
+
 /// Number of directory entries grouped into each metadata job or result batch.
-/// Small chunks expose parallel work and stream wide directories while amortizing queue overhead.
+/// Native enumeration uses small chunks to stream entries promptly. Linux metadata jobs use
+/// larger chunks once workers are busy, retaining smaller jobs while idle workers can share them.
+#[cfg(target_os = "linux")]
+const ENTRY_CHUNK_SIZE: usize = 64;
+#[cfg(not(target_os = "linux"))]
 const ENTRY_CHUNK_SIZE: usize = 4;
 /// Keep enough metadata jobs available for thieves without retaining an entire wide directory.
 #[cfg(not(windows))]
@@ -190,7 +218,9 @@ pub struct Options {
     ///
     /// Workers share a queue with this capacity multiplied by the worker count and block when
     /// it is full. Increase this to keep workers busy while the consumer pauses to process entries,
-    /// at the cost of buffering more batches in memory. `0` disables buffering.
+    /// at the cost of buffering more batches in memory. Linux completion-order metadata walks
+    /// also combine up to 512 entries in each worker before sending a batch. `0` disables both
+    /// queue buffering and this worker-local coalescing.
     pub queued_batches_per_worker: usize,
 }
 
@@ -264,11 +294,134 @@ pub struct Entry {
 struct Root {
     /// Root identifier passed to the descent predicate and attached to emitted events.
     index: usize,
-    /// Queued and running jobs for this root; completing the last job emits `RootFinished`.
+    /// Queued and running jobs plus buffered-output guards; the last completion emits
+    /// `RootFinished` after all entries have been sent.
     pending: AtomicUsize,
     /// Shared predicate receiving this root's index and a directory entry.
     /// Returning `false` prunes its children while still yielding the directory itself.
     descend: Arc<Descend>,
+}
+
+/// Coalesce small Linux metadata batches without enlarging the shared result queue.
+/// Each worker buffers only one root, whose completion count includes the buffered batch.
+#[derive(Default)]
+struct Output {
+    /// Identifies the worker to the direct visitor so it can use worker-local state.
+    worker_index: usize,
+    /// The root whose entries are buffered, or `None` when the buffer is empty.
+    /// The buffer holds one pending count so `RootFinished` cannot precede publication.
+    root: Option<Arc<Root>>,
+    /// Successful non-directory entries awaiting a channel send, all from `root`.
+    entries: Vec<Result<Entry, Error>>,
+}
+
+impl Output {
+    const CAPACITY: usize = 512;
+
+    fn coalesces(shared: &PoolShared) -> bool {
+        cfg!(target_os = "linux")
+            && matches!(shared.order, Order::Completion)
+            && !shared.options.skip_metadata
+            && shared.options.queued_batches_per_worker != 0
+            && shared.visitor.is_none()
+    }
+
+    fn send(&mut self, root: &Arc<Root>, batch: Batch, shared: &PoolShared) -> bool {
+        if shared.stop.load(AtomicOrdering::Relaxed) {
+            return false;
+        }
+        if shared.visitor.is_some() {
+            return self.send_direct(root.index, batch, shared);
+        }
+        match batch {
+            Ok(mut entries)
+                if Self::coalesces(shared)
+                    && entries.iter().all(|entry| {
+                        entry.as_ref().is_ok_and(|entry| {
+                            !entry.file_type.is_dir()
+                                && entry.metadata.as_ref().is_some_and(Result::is_ok)
+                        })
+                    }) =>
+            {
+                if entries.is_empty() {
+                    return true;
+                }
+                if (self
+                    .root
+                    .as_ref()
+                    .is_some_and(|buffered| !Arc::ptr_eq(buffered, root))
+                    || self.entries.len() + entries.len() > Self::CAPACITY)
+                    && !self.flush(shared)
+                {
+                    return false;
+                }
+                if self.root.is_none() {
+                    root.pending.fetch_add(1, AtomicOrdering::Relaxed);
+                    self.root = Some(Arc::clone(root));
+                    self.entries = entries;
+                } else {
+                    self.entries.append(&mut entries);
+                }
+                self.entries.len() < Self::CAPACITY || self.flush(shared)
+            }
+            batch => {
+                if !self.flush(shared) {
+                    return false;
+                }
+                self.send_direct(root.index, batch, shared)
+            }
+        }
+    }
+
+    /// Deliver a batch without buffering it or flushing any pending entries.
+    /// If configured, the visitor runs synchronously on this worker and receives a batch-level
+    /// error as a single failed entry. Otherwise, send the batch over the event channel.
+    /// Returns `false` if traversal has stopped when the visitor returns or if the channel
+    /// receiver has disconnected. A disconnection also stops traversal.
+    fn send_direct(&self, root_idx: usize, batch: Batch, shared: &PoolShared) -> bool {
+        if let Some(visitor) = &shared.visitor {
+            visitor(
+                self.worker_index,
+                root_idx,
+                batch.unwrap_or_else(|err| vec![Err(err)]),
+            );
+            return !shared.stop.load(AtomicOrdering::Relaxed);
+        }
+        if shared
+            .events
+            .send(Event::Batch { root_idx, batch })
+            .is_err()
+        {
+            shared.stop.store(true, AtomicOrdering::Relaxed);
+            return false;
+        }
+        true
+    }
+
+    fn flush(&mut self, shared: &PoolShared) -> bool {
+        let Some(root) = self.root.take() else {
+            return !shared.stop.load(AtomicOrdering::Relaxed);
+        };
+        let entries = std::mem::take(&mut self.entries);
+        // Cancellation discards the buffer. Do not send from Drop or wait for a consumer.
+        if shared.stop.load(AtomicOrdering::Relaxed) {
+            return false;
+        }
+        if shared
+            .events
+            .send(Event::Batch {
+                root_idx: root.index,
+                batch: Ok(entries),
+            })
+            .is_err()
+        {
+            shared.stop.store(true, AtomicOrdering::Relaxed);
+            return false;
+        }
+        // Releasing this guard may finish the root, but only after its batch was enqueued.
+        finish_pending(&root, shared);
+        true
+    }
 }
 
 enum Job {
@@ -310,20 +463,27 @@ enum Event {
     RootFinished {
         root_idx: usize,
     },
+    /// A panicking worker makes completion accounting unusable; terminate the entire walk.
+    WorkerFailed {
+        root_idx: usize,
+        error: Error,
+    },
     /// Emitted once after all roots have emitted `RootFinished`; this is the final event.
     Finished,
 }
 
-/// Per-root events exposed by [`RootWalk`].
-/// Unlike internal events, batches are flattened into entries and pool-wide completion ends the iterator
-/// instead of being yielded; `Finished` therefore means only that the associated root completed.
-/// [`RootWalk`] yields `(root_idx, event)`, separating root routing from event meaning. The internal event type
-/// cannot do this uniformly because its `Finished` variant is pool-wide and has no root index.
+/// Output from [`MultiWalk::recv`] for a single traversal root.
 pub enum RootEvent {
-    /// An entry or filesystem error produced while walking the root.
-    Entry(Result<Entry, Error>),
-    /// All entries for the root have been emitted.
+    /// An owned batch of entries and filesystem errors in traversal order.
+    Entries(Vec<Result<Entry, Error>>),
+    /// All entries for the root have been delivered or visited.
     Finished,
+    /// A panic on a worker thread terminated the entire walk in an unwind build.
+    ///
+    /// This includes panics in a batch visitor or descent predicate running on a worker.
+    /// Panics during initial visits propagate on the calling thread.
+    /// Ordinary filesystem errors are delivered with entries, not as worker failures.
+    WorkerFailed(Error),
 }
 
 struct PoolShared {
@@ -332,6 +492,7 @@ struct PoolShared {
     stealers: Vec<Stealer<Job>>,
     stop: AtomicBool,
     events: SyncSender<Event>,
+    visitor: Option<Arc<VisitBatch>>,
     /// Active roots, plus one while a streaming input remains open.
     active_roots: AtomicUsize,
     order: Order,
@@ -349,29 +510,40 @@ struct PoolShared {
 
 struct Pool {
     shared: Arc<PoolShared>,
-    events: Receiver<Event>,
+    events: Option<Receiver<Event>>,
     handles: Vec<thread::JoinHandle<()>>,
 }
 
-/// A multi-root iterator yielding each root index with entry and per-root completion events.
-/// Unlike [`Walk`], it preserves root identity and exposes when each root finishes.
-pub struct RootWalk {
-    /// Initial root events or entries from the current worker batch.
+/// A parallel walk over one or more roots that delivers batches and per-root completion through
+/// [`Self::recv`].
+pub struct MultiWalk {
+    /// Prepared roots and completions that precede worker output.
     pending: Option<Pending>,
     /// See [`Walk::pool`].
     pool: Option<Pool>,
 }
 
-enum Pending {
-    Initial(std::vec::IntoIter<(usize, RootEvent)>),
-    WorkerBatch {
-        root_idx: usize,
-        entries: std::vec::IntoIter<Result<Entry, Error>>,
-    },
+/// Startup configuration for a multi-root walk, created with [`MultiWalk::prepare`].
+#[must_use]
+pub struct MultiWalkBuilder {
+    threads: usize,
+    order: Order,
+    options: Options,
+    visitor: Option<Arc<VisitBatch>>,
 }
 
-/// Submits roots to a running [`RootWalk`] without starting additional workers.
-/// Drop this handle after discovery finishes to allow the iterator to end.
+enum Pending {
+    Initial(std::vec::IntoIter<(usize, InitialEvent)>),
+    InitialFinished(std::vec::IntoIter<usize>),
+}
+
+enum InitialEvent {
+    Entry(Result<Entry, Error>),
+    Finished,
+}
+
+/// Submits roots to a running [`MultiWalk`] without starting additional workers.
+/// Drop this handle after discovery finishes to allow the walk to finish.
 pub struct RootSender {
     shared: Arc<PoolShared>,
     indices: HashSet<usize>,
@@ -380,10 +552,10 @@ pub struct RootSender {
 impl RootSender {
     /// Queue a root and its descent predicate. Metadata is collected by the worker pool.
     ///
-    /// * `index` identifies this root in [`RootWalk`] events and must be unique across all roots
+    /// * `index` identifies this root in [`MultiWalk`] events and must be unique across all roots
     ///   submitted through this sender, including roots that have already finished.
     /// * `path` is the filesystem entry to walk, yielded at depth `0`. Symbolic links are not
-    ///   followed. Filesystem errors are delivered through [`RootWalk`].
+    ///   followed. Filesystem errors are delivered through [`MultiWalk`].
     /// * `descend` decides whether to traverse a directory's children, including the root's.
     ///   Returning `false` still yields the directory itself. The predicate runs on worker
     ///   threads and may be called concurrently for different directories.
@@ -426,30 +598,8 @@ impl Drop for RootSender {
     }
 }
 
-/// Start a fixed-size worker pool that accepts roots while its events are consumed.
-///
-/// The iterator waits during gaps in submissions. It ends only after the sender is dropped
-/// and every submitted root has emitted [`RootEvent::Finished`]. Each root has its own predicate,
-/// allowing callers to retain discovery context without shared mutable lookup tables.
-#[must_use]
-pub fn stream_roots(threads: usize, order: Order, options: Options) -> (RootSender, RootWalk) {
-    let pool = start_pool(threads.max(1), order, options, 0);
-    pool.shared.active_roots.store(1, AtomicOrdering::Relaxed);
-    let sender = RootSender {
-        shared: Arc::clone(&pool.shared),
-        indices: HashSet::new(),
-    };
-    (
-        sender,
-        RootWalk {
-            pending: None,
-            pool: Some(pool),
-        },
-    )
-}
-
 /// A single-root directory iterator whose directory reads happen in parallel.
-/// Unlike `RootWalk`, it yields entries directly and hides root identity and completion events.
+/// It yields individual entries and filesystem errors.
 pub struct Walk {
     /// Entries buffered for delivery.
     ///
@@ -472,7 +622,7 @@ pub struct Walk {
 /// Read a directory using native enumeration, collecting metadata unless
 /// [`Options::skip_metadata`] is set.
 ///
-/// Entries have depth zero so they can be passed directly to [`walk_root_entries`] without
+/// Entries have depth zero so they can be passed directly to [`MultiWalkBuilder::start_entries`] without
 /// querying their paths again. Directory-open errors are returned immediately; later enumeration
 /// errors are yielded by the iterator.
 #[cfg(any(windows, target_os = "macos"))]
@@ -483,9 +633,9 @@ pub fn read_dir(
     ReadDir::open(Arc::from(path), 0, options)
 }
 
-/// Walk `root` without following symlinks.
-/// Unlike `walk_roots`, this yields entries directly for a single root and hides
-/// completion events.
+/// Walk a single root without following symlinks, yielding entries directly.
+///
+/// Use [`MultiWalk`] to walk multiple roots and receive batches and per-root completion events.
 pub fn walk(
     root: &Path,
     threads: usize,
@@ -585,6 +735,8 @@ impl Walk {
         &mut self,
         cancelled: Option<&AtomicBool>,
     ) -> Option<Result<Entry, Error>> {
+        const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
         loop {
             if cancelled.is_some_and(|cancelled| cancelled.load(AtomicOrdering::Relaxed)) {
                 self.next.clear();
@@ -599,12 +751,9 @@ impl Walk {
                 return None;
             }
 
-            let pool = self.pool.as_ref()?;
+            let events = self.pool.as_ref()?.events.as_ref()?;
             let event = if cancelled.is_some() {
-                match pool
-                    .events
-                    .recv_timeout(std::time::Duration::from_millis(100))
-                {
+                match events.recv_timeout(CANCELLATION_POLL_INTERVAL) {
                     Ok(event) => event,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
@@ -612,7 +761,7 @@ impl Walk {
                     }
                 }
             } else {
-                match pool.events.recv() {
+                match events.recv() {
                     Ok(event) => event,
                     Err(_) => {
                         return Some(Err(io::Error::other("directory worker stopped").into()));
@@ -629,6 +778,12 @@ impl Walk {
                     batch: Err(err), ..
                 } => return Some(Err(err)),
                 Event::RootFinished { .. } => {}
+                Event::WorkerFailed { error, .. } => {
+                    self.next.clear();
+                    self.finished = true;
+                    self.pool = None;
+                    return Some(Err(error));
+                }
                 Event::Finished => {
                     self.finished = true;
                     return None;
@@ -646,158 +801,250 @@ impl Iterator for Walk {
     }
 }
 
-/// Walk multiple indexed roots without following symlinks.
-/// Unlike [`walk`], this preserves each root index and yields its completion as a [`RootEvent`].
-///
-/// Each item in `roots` is `(root_index, path)`. `root_index` is a caller-chosen identifier passed
-/// to `descend` and returned with every [`RootEvent`] for that root, unique per root path.
-///
-/// # Panics
-///
-/// Panics if two roots have the same index.
-pub fn walk_roots(
-    roots: impl IntoIterator<Item = (usize, PathBuf)>,
-    threads: usize,
-    order: Order,
-    options: Options,
-    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
-) -> RootWalk {
-    start_root_walk(
-        roots.into_iter().collect(),
-        threads,
-        order,
-        descend,
-        |path: PathBuf| Entry::from_path(&path, options),
-        options,
-    )
-}
-
-/// Walk multiple indexed roots whose entries and metadata have already been collected.
-///
-/// Unlike [`walk_roots`], this reuses each supplied entry without querying its path again. Entry
-/// errors are yielded for their corresponding root, and each root retains its index and completion
-/// event just as it does with [`walk_roots`]. Supplied entries are re-rooted at depth zero before
-/// the predicate runs, and their descendants start at depth one.
-/// The supplied entries retain their metadata; `options` controls metadata for descendants.
-///
-/// # Panics
-///
-/// Panics if two roots have the same index.
-pub fn walk_root_entries(
-    roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
-    threads: usize,
-    order: Order,
-    options: Options,
-    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
-) -> RootWalk {
-    start_root_walk(
-        roots.into_iter().collect(),
-        threads,
-        order,
-        descend,
-        std::convert::identity,
-        options,
-    )
-}
-
-fn start_root_walk<Root>(
-    roots: Vec<(usize, Root)>,
-    threads: usize,
-    order: Order,
-    descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
-    prepare: impl Fn(Root) -> Result<Entry, Error>,
-    options: Options,
-) -> RootWalk {
-    let indices = roots
-        .iter()
-        .map(|(index, _)| *index)
-        .collect::<HashSet<_>>();
-    assert_eq!(indices.len(), roots.len(), "root indices must be unique");
-    let descend: Arc<Descend> = Arc::new(descend);
-    let (initial, root_jobs, next_directory_id) = begin_walks(
-        roots
-            .into_iter()
-            .map(|(root_idx, root)| (root_idx, prepare(root))),
-        &descend,
-    );
-    let pool = if root_jobs.is_empty() {
-        None
-    } else {
-        let pool = start_pool(threads.max(1), order, options, next_directory_id);
-        start_jobs(&pool, root_jobs);
-        Some(pool)
-    };
-    RootWalk {
-        pending: Some(Pending::Initial(initial.into_iter())),
-        pool,
-    }
-}
-
-impl RootWalk {
-    /// Yield the next available event without waiting for more walk output.
-    /// Returns `None` if no event is ready or the walk is complete. Use [`Iterator::next`] to wait.
-    pub fn next_if_ready(&mut self) -> Option<(usize, RootEvent)> {
-        self.next_event(false)
-    }
-
-    fn next_event(&mut self, wait: bool) -> Option<(usize, RootEvent)> {
-        loop {
-            if let Some(pending) = &mut self.pending {
-                let event = match pending {
-                    Pending::Initial(events) => events.next(),
-                    Pending::WorkerBatch { root_idx, entries } => entries
-                        .next()
-                        .map(|entry| (*root_idx, RootEvent::Entry(entry))),
-                };
-                if event.is_some() {
-                    return event;
-                }
-                self.pending = None;
-            }
-            let events = &self.pool.as_ref()?.events;
-            let event = if wait {
-                events.recv().map_err(|_| TryRecvError::Disconnected)
-            } else {
-                events.try_recv()
-            };
-            match event {
-                Ok(Event::Batch {
-                    root_idx,
-                    batch: Ok(entries),
-                }) => {
-                    self.pending = Some(Pending::WorkerBatch {
-                        root_idx,
-                        entries: entries.into_iter(),
-                    });
-                }
-                Ok(Event::Batch {
-                    root_idx,
-                    batch: Err(err),
-                }) => return Some((root_idx, RootEvent::Entry(Err(err)))),
-                Ok(Event::RootFinished { root_idx }) => {
-                    return Some((root_idx, RootEvent::Finished));
-                }
-                Ok(Event::Finished) => {
-                    self.pool = None;
-                    return None;
-                }
-                Err(TryRecvError::Empty) => return None,
-                Err(TryRecvError::Disconnected) => {
-                    return Some((
-                        0,
-                        RootEvent::Entry(Err(io::Error::other("directory worker stopped").into())),
-                    ));
-                }
-            }
+/// Lifecycle
+impl MultiWalk {
+    /// Configure a multi-root walk before starting workers or visiting any roots.
+    pub fn prepare(threads: usize, order: Order, options: Options) -> MultiWalkBuilder {
+        MultiWalkBuilder {
+            threads,
+            order,
+            options,
+            visitor: None,
         }
     }
 }
 
-impl Iterator for RootWalk {
-    type Item = (usize, RootEvent);
+/// Builder
+impl MultiWalkBuilder {
+    /// Consume entry batches using a callback. The resulting walk reports root completions and
+    /// worker failures through [`MultiWalk::recv`].
+    ///
+    /// `visit` receives a worker index in `0..threads.max(1)`, the root index, and the owned batch
+    /// of entries and filesystem errors. Fixed roots are visited during startup on the calling
+    /// thread, with worker index zero. Streamed roots are visited on workers. Worker visits may
+    /// run concurrently, and a root completes after all its visits return. Dropping the walk
+    /// waits for active visits to finish.
+    pub fn visit_batches(
+        mut self,
+        visit: impl Fn(usize, usize, Vec<Result<Entry, Error>>) + Send + Sync + 'static,
+    ) -> Self {
+        self.visitor = Some(Arc::new(visit));
+        self
+    }
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_event(true)
+/// Lifecycle
+impl MultiWalkBuilder {
+    /// Start a walk over indexed paths without following symlinks.
+    ///
+    /// Root metadata is read during startup. The root index identifies its batches and
+    /// completion, and is passed to `descend`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if root indices are duplicated or if an initial callback panics.
+    pub fn start_paths(
+        self,
+        roots: impl IntoIterator<Item = (usize, PathBuf)>,
+        descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+    ) -> MultiWalk {
+        let options = self.options;
+        self.start(roots, descend, |path| Entry::from_path(&path, options))
+    }
+
+    /// Start a walk over indexed, prepared entries and reuse their metadata.
+    ///
+    /// Supplied entries are re-rooted at depth zero before `descend` runs. Their descendants
+    /// start at depth one and use the configured metadata options. Supplied errors are reported
+    /// under their root index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if root indices are duplicated or if an initial callback panics.
+    pub fn start_entries(
+        self,
+        roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
+        descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+    ) -> MultiWalk {
+        self.start(roots, descend, std::convert::identity)
+    }
+
+    /// Start a pool that accepts new roots through [`RootSender::add_root`] during traversal.
+    ///
+    /// Workers can begin processing each root as soon as it is submitted, using that root's own
+    /// descent predicate. Batches and per-root completion events can be delivered while the sender
+    /// is still open.
+    ///
+    /// If no event is ready, [`MultiWalk::recv`] with `None` waits for more work while the sender
+    /// is open, even after all submitted roots have finished. On normal completion, `recv`
+    /// returns `Ok(None)` once the sender is dropped and all submitted roots have finished.
+    #[must_use]
+    pub fn stream_roots(self) -> (RootSender, MultiWalk) {
+        let pool = start_pool_with_visitor(
+            self.threads.max(1),
+            self.order,
+            self.options,
+            0,
+            self.visitor,
+        );
+        pool.shared.active_roots.store(1, AtomicOrdering::Relaxed);
+        let sender = RootSender {
+            shared: Arc::clone(&pool.shared),
+            indices: HashSet::new(),
+        };
+        (
+            sender,
+            MultiWalk {
+                pending: None,
+                pool: Some(pool),
+            },
+        )
+    }
+
+    fn start<Root>(
+        self,
+        roots: impl IntoIterator<Item = (usize, Root)>,
+        descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+        prepare_root: impl Fn(Root) -> Result<Entry, Error>,
+    ) -> MultiWalk {
+        let Self {
+            threads,
+            order,
+            options,
+            visitor,
+        } = self;
+        let roots: Vec<_> = roots.into_iter().collect();
+        assert_eq!(
+            roots
+                .iter()
+                .map(|(index, _)| *index)
+                .collect::<HashSet<_>>()
+                .len(),
+            roots.len(),
+            "root indices must be unique"
+        );
+        let descend: Arc<Descend> = Arc::new(descend);
+        let mut initial = Vec::new();
+        let mut initial_finished = Vec::new();
+        let (root_jobs, next_directory_id) = begin_walks(
+            roots
+                .into_iter()
+                .map(|(root_idx, root)| (root_idx, prepare_root(root))),
+            &descend,
+            |root_idx, entry, finished| {
+                if let Some(visitor) = &visitor {
+                    visitor(0, root_idx, vec![entry]);
+                    if finished {
+                        initial_finished.push(root_idx);
+                    }
+                } else {
+                    initial.push((root_idx, InitialEvent::Entry(entry)));
+                    if finished {
+                        initial.push((root_idx, InitialEvent::Finished));
+                    }
+                }
+            },
+        );
+        let pending = if visitor.is_some() {
+            Pending::InitialFinished(initial_finished.into_iter())
+        } else {
+            Pending::Initial(initial.into_iter())
+        };
+        let pool = if root_jobs.is_empty() {
+            None
+        } else {
+            let pool =
+                start_pool_with_visitor(threads.max(1), order, options, next_directory_id, visitor);
+            start_jobs(&pool, root_jobs);
+            Some(pool)
+        };
+        MultiWalk {
+            pending: Some(pending),
+            pool,
+        }
+    }
+}
+
+impl MultiWalk {
+    /// Receive the next whole batch, completion, or worker failure for a root.
+    ///
+    /// Worker entry vectors are transferred directly and empty batches are skipped.
+    /// With a [batch visitor](MultiWalkBuilder::visit_batches), this reports only root completions
+    /// and terminal worker failures.
+    ///
+    /// Pass `None` to wait indefinitely or `Some(duration)` to wait up to that duration.
+    /// A zero duration polls the channel. If skipping an empty batch exhausts the timeout,
+    /// later events stay queued. `Ok(None)` means the walk has finished.
+    pub fn recv(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Result<Option<(usize, RootEvent)>, RecvTimeoutError> {
+        if let Some(event) = self.next_initial() {
+            return Ok(Some(event));
+        }
+        let wait = timeout.map(|timeout| (Instant::now(), timeout));
+        loop {
+            let Some(events) = self.pool.as_ref().and_then(|pool| pool.events.as_ref()) else {
+                return Ok(None);
+            };
+            let event = if let Some((started, timeout)) = wait {
+                events.recv_timeout(timeout.saturating_sub(started.elapsed()))?
+            } else {
+                events.recv().map_err(|_| RecvTimeoutError::Disconnected)?
+            };
+            if let Some(batch) = self.accept_event(event) {
+                return Ok(Some(batch));
+            }
+            if self.pool.is_some()
+                && wait.is_some_and(|(started, timeout)| started.elapsed() >= timeout)
+            {
+                return Err(RecvTimeoutError::Timeout);
+            }
+        }
+    }
+
+    fn next_initial(&mut self) -> Option<(usize, RootEvent)> {
+        let event = match self.pending.as_mut()? {
+            Pending::Initial(events) => events.next().map(|(root_idx, event)| {
+                let batch = match event {
+                    InitialEvent::Entry(entry) => RootEvent::Entries(vec![entry]),
+                    InitialEvent::Finished => RootEvent::Finished,
+                };
+                (root_idx, batch)
+            }),
+            Pending::InitialFinished(indices) => indices
+                .next()
+                .map(|root_idx| (root_idx, RootEvent::Finished)),
+        };
+        if event.is_none() {
+            self.pending = None;
+        }
+        event
+    }
+
+    fn accept_event(&mut self, event: Event) -> Option<(usize, RootEvent)> {
+        match event {
+            Event::Batch {
+                root_idx,
+                batch: Ok(entries),
+            } => (!entries.is_empty()).then_some((root_idx, RootEvent::Entries(entries))),
+            Event::Batch {
+                root_idx,
+                batch: Err(err),
+            } => Some((root_idx, RootEvent::Entries(vec![Err(err)]))),
+            Event::RootFinished { root_idx } => Some((root_idx, RootEvent::Finished)),
+            Event::WorkerFailed { root_idx, error } => {
+                self.pending = None;
+                if let Some(pool) = &mut self.pool {
+                    pool.disconnect();
+                }
+                Some((root_idx, RootEvent::WorkerFailed(error)))
+            }
+            Event::Finished => {
+                self.pool = None;
+                None
+            }
+        }
     }
 }
 
@@ -871,6 +1118,16 @@ impl Entry {
 }
 
 fn start_pool(threads: usize, order: Order, options: Options, next_directory_id: usize) -> Pool {
+    start_pool_with_visitor(threads, order, options, next_directory_id, None)
+}
+
+fn start_pool_with_visitor(
+    threads: usize,
+    order: Order,
+    options: Options,
+    next_directory_id: usize,
+    visitor: Option<Arc<VisitBatch>>,
+) -> Pool {
     let workers: Vec<_> = (0..threads).map(|_| Worker::new_lifo()).collect();
     let parkers: Vec<_> = (0..threads).map(|_| Parker::new()).collect();
     let (event_tx, event_rx) = sync_channel(
@@ -883,6 +1140,7 @@ fn start_pool(threads: usize, order: Order, options: Options, next_directory_id:
         stealers: workers.iter().map(Worker::stealer).collect(),
         stop: AtomicBool::new(false),
         events: event_tx,
+        visitor,
         active_roots: AtomicUsize::new(0),
         order,
         options,
@@ -902,25 +1160,48 @@ fn start_pool(threads: usize, order: Order, options: Options, next_directory_id:
             let shared = Arc::clone(&shared);
             thread::Builder::new()
                 .name(format!("dua-fs-walk-{idx}"))
-                .spawn(move || worker_loop(idx, worker, parker, shared))
+                .spawn(move || {
+                    let mut root_idx = 0;
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        worker_loop(idx, worker, parker, Arc::clone(&shared), &mut root_idx);
+                    }));
+                    if let Err(payload) = result
+                        && !shared.stop.swap(true, AtomicOrdering::AcqRel)
+                    {
+                        shared.wake_workers();
+                        let message = payload
+                            .downcast_ref::<&str>()
+                            .copied()
+                            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                            .unwrap_or("non-string panic payload");
+                        let error =
+                            io::Error::other(format!("filesystem worker panicked: {message}"));
+                        shared
+                            .events
+                            .send(Event::WorkerFailed {
+                                root_idx,
+                                error: error.into(),
+                            })
+                            .ok();
+                    }
+                })
                 .expect("filesystem worker thread can be spawned")
         })
         .collect();
 
     Pool {
         shared,
-        events: event_rx,
+        events: Some(event_rx),
         handles,
     }
 }
 
-/// Prepare initial root events and directory jobs.
-/// Returns events in input root order, plus jobs requiring a worker pool.
+/// Prepare initial roots and report each entry with whether it needs no further work.
 fn begin_walks(
     roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
     descend: &Arc<Descend>,
-) -> (Vec<(usize, RootEvent)>, Vec<Job>, usize) {
-    let mut events = Vec::new();
+    mut initial: impl FnMut(usize, Result<Entry, Error>, bool),
+) -> (Vec<Job>, usize) {
     let mut jobs = Vec::new();
     let mut next_directory_id = 0;
     for (root_idx, mut entry) in roots {
@@ -956,12 +1237,9 @@ fn begin_walks(
         } else {
             false
         };
-        events.push((root_idx, RootEvent::Entry(entry)));
-        if !has_job {
-            events.push((root_idx, RootEvent::Finished));
-        }
+        initial(root_idx, entry, !has_job);
     }
-    (events, jobs, next_directory_id)
+    (jobs, next_directory_id)
 }
 
 /// Seed an idle pool with one initial job per active root.
@@ -992,11 +1270,25 @@ fn start_jobs(pool: &Pool, root_jobs: Vec<Job>) {
     }
 }
 
-fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<PoolShared>) {
+fn worker_loop(
+    idx: usize,
+    worker: Worker<Job>,
+    parker: Parker,
+    shared: Arc<PoolShared>,
+    root_idx: &mut usize,
+) {
+    let mut output = Output {
+        worker_index: idx,
+        ..Output::default()
+    };
     while !shared.stop.load(AtomicOrdering::Relaxed) {
         let found = if let Some(found) = find_job(&worker, &shared) {
             found
         } else {
+            // A partial batch must reach the consumer before this worker can become idle.
+            if !output.flush(&shared) {
+                break;
+            }
             shared.idle[idx].store(true, AtomicOrdering::Release);
             let Some(found) = find_job(&worker, &shared) else {
                 parker.park();
@@ -1007,22 +1299,33 @@ fn worker_loop(idx: usize, worker: Worker<Job>, parker: Parker, shared: Arc<Pool
             found
         };
         let (job, stolen) = found;
+        match &job {
+            Job::StartRoot { root, .. } | Job::ReadDir { root, .. } => *root_idx = root.index,
+            #[cfg(not(windows))]
+            Job::Stat { root, .. } => *root_idx = root.index,
+            Job::CloseInput => {}
+        }
         if stolen {
             // A successful steal proves peer work is available; wake one more worker so
             // concurrency ramps up only while work remains stealable.
             shared.wake_worker();
         }
-        run_job(job, &worker, &shared);
+        run_job(job, &worker, &shared, &mut output);
+    }
+}
+
+impl Pool {
+    fn disconnect(&mut self) {
+        self.shared.stop.store(true, AtomicOrdering::Relaxed);
+        self.shared.wake_workers();
+        // Workers blocked on the bounded output channel must be released before joining them.
+        drop(self.events.take());
     }
 }
 
 impl Drop for Pool {
     fn drop(&mut self) {
-        self.shared.stop.store(true, AtomicOrdering::Relaxed);
-        self.shared.wake_workers();
-        // Workers blocked on the bounded output channel must be released before joining them.
-        let (_, disconnected) = sync_channel(0);
-        drop(std::mem::replace(&mut self.events, disconnected));
+        self.disconnect();
         for handle in self.handles.drain(..) {
             handle.join().ok();
         }
@@ -1061,7 +1364,22 @@ fn find_job(worker: &Worker<Job>, shared: &PoolShared) -> Option<(Job, bool)> {
     }
 }
 
-fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
+fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared, output: &mut Output) {
+    let flush = match &job {
+        Job::StartRoot { .. } | Job::CloseInput => true,
+        Job::ReadDir { root, .. } => output
+            .root
+            .as_ref()
+            .is_some_and(|buffered| !Arc::ptr_eq(buffered, root)),
+        #[cfg(not(windows))]
+        Job::Stat { root, .. } => output
+            .root
+            .as_ref()
+            .is_some_and(|buffered| !Arc::ptr_eq(buffered, root)),
+    };
+    if flush && !output.flush(shared) {
+        return;
+    }
     match job {
         Job::StartRoot { root, path } => {
             let mut entry = Entry::from_path(&path, shared.options);
@@ -1083,15 +1401,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
             }
             // Root entries precede descendants in either traversal order.
             root.pending.fetch_add(jobs.len(), AtomicOrdering::Relaxed);
-            if shared
-                .events
-                .send(Event::Batch {
-                    root_idx: root.index,
-                    batch: Ok(vec![entry]),
-                })
-                .is_err()
-            {
-                shared.stop.store(true, AtomicOrdering::Relaxed);
+            if !output.send_direct(root.index, Ok(vec![entry]), shared) {
                 return;
             }
             schedule_jobs(jobs, worker, shared);
@@ -1105,12 +1415,36 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
             entry_depth,
         } => {
             #[cfg(any(windows, target_os = "macos"))]
-            read_dir_native(&root, path, directory_id, entry_depth, worker, shared);
+            read_dir_native(
+                &root,
+                path,
+                directory_id,
+                entry_depth,
+                worker,
+                shared,
+                output,
+            );
             #[cfg(not(any(windows, target_os = "macos")))]
             if matches!(shared.order, Order::Completion) {
-                read_dir_parallel(&root, path, directory_id, entry_depth, worker, shared);
+                read_dir_parallel(
+                    &root,
+                    path,
+                    directory_id,
+                    entry_depth,
+                    worker,
+                    shared,
+                    output,
+                );
             } else {
-                read_dir_parent_first(&root, path, directory_id, entry_depth, worker, shared);
+                read_dir_parent_first(
+                    &root,
+                    path,
+                    directory_id,
+                    entry_depth,
+                    worker,
+                    shared,
+                    output,
+                );
             }
         }
         #[cfg(not(windows))]
@@ -1128,6 +1462,7 @@ fn run_job(job: Job, worker: &Worker<Job>, shared: &PoolShared) {
             entries,
             worker,
             shared,
+            output,
         ),
     }
 }
@@ -1145,28 +1480,29 @@ fn read_dir_parallel(
     entry_depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
     if shared.options.skip_metadata {
-        read_dir_inline(root, path, directory_id, entry_depth, worker, shared);
+        read_dir_inline(
+            root,
+            path,
+            directory_id,
+            entry_depth,
+            worker,
+            shared,
+            output,
+        );
         return;
     }
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
         Err(err) => {
-            if shared
-                .events
-                .send(Event::Batch {
-                    root_idx: root.index,
-                    batch: Err(Error::at_path(err, Arc::clone(&path))),
-                })
-                .is_err()
-            {
-                shared.stop.store(true, AtomicOrdering::Relaxed);
-            }
+            output.send(root, Err(Error::at_path(err, Arc::clone(&path))), shared);
             finish_pending(root, shared);
             return;
         }
     };
+    let mut chunk_size = metadata_job_size(shared);
     let mut chunk = Vec::with_capacity(ENTRY_CHUNK_SIZE);
     let mut errors = Vec::new();
     for entry in dir_entries {
@@ -1177,7 +1513,7 @@ fn read_dir_parallel(
         match entry {
             Ok(entry) => {
                 chunk.push(entry);
-                if chunk.len() == ENTRY_CHUNK_SIZE {
+                if chunk.len() == chunk_size {
                     schedule_stat_entries(
                         root,
                         &path,
@@ -1186,7 +1522,9 @@ fn read_dir_parallel(
                         std::mem::replace(&mut chunk, Vec::with_capacity(ENTRY_CHUNK_SIZE)),
                         worker,
                         shared,
+                        output,
                     );
+                    chunk_size = metadata_job_size(shared);
                 }
             }
             Err(err) => errors.push(Err(Error::at_path(err, Arc::clone(&path)))),
@@ -1201,20 +1539,28 @@ fn read_dir_parallel(
             chunk,
             worker,
             shared,
+            output,
         );
     }
-    if !errors.is_empty()
-        && shared
-            .events
-            .send(Event::Batch {
-                root_idx: root.index,
-                batch: Ok(errors),
-            })
-            .is_err()
-    {
-        shared.stop.store(true, AtomicOrdering::Relaxed);
+    if !errors.is_empty() {
+        output.send(root, Ok(errors), shared);
     }
     finish_pending(root, shared);
+}
+
+/// Share metadata latency with idle Linux workers without shrinking batches when they are busy.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn metadata_job_size(shared: &PoolShared) -> usize {
+    if cfg!(target_os = "linux")
+        && shared
+            .idle
+            .iter()
+            .any(|idle| idle.load(AtomicOrdering::Relaxed))
+    {
+        4
+    } else {
+        ENTRY_CHUNK_SIZE
+    }
 }
 
 /// Read a directory in either traversal order.
@@ -1230,11 +1576,12 @@ fn read_dir_native(
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
     let dir_entries = match ReadDir::open(Arc::clone(&path), depth, shared.options) {
         Ok(entries) => entries,
         Err(err) => {
-            publish_directory(root, Err(err), Vec::new(), worker, shared);
+            publish_directory(root, Err(err), Vec::new(), worker, shared, output);
             finish_pending(root, shared);
             return;
         }
@@ -1285,6 +1632,7 @@ fn read_dir_native(
                     std::mem::replace(&mut deferred, Vec::with_capacity(ENTRY_CHUNK_SIZE)),
                     worker,
                     shared,
+                    output,
                 );
             }
             continue;
@@ -1294,6 +1642,7 @@ fn read_dir_native(
         }
         if let Ok(entry) = &entry
             && entry.file_type.is_dir()
+            && output.flush(shared)
             && (root.descend)(root.index, entry)
         {
             jobs.push(Job::ReadDir {
@@ -1317,6 +1666,7 @@ fn read_dir_native(
                 std::mem::take(&mut jobs),
                 worker,
                 shared,
+                output,
             )
         {
             finish_pending(root, shared);
@@ -1324,16 +1674,26 @@ fn read_dir_native(
         }
     }
     if !entries.is_empty() {
-        publish_directory(root, Ok(entries), jobs, worker, shared);
+        publish_directory(root, Ok(entries), jobs, worker, shared, output);
     }
     #[cfg(target_os = "macos")]
     if !deferred.is_empty() {
-        schedule_stat_entries(root, &path, directory_id, depth, deferred, worker, shared);
+        schedule_stat_entries(
+            root,
+            &path,
+            directory_id,
+            depth,
+            deferred,
+            worker,
+            shared,
+            output,
+        );
     }
     finish_pending(root, shared);
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::too_many_arguments)]
 fn schedule_stat_entries(
     root: &Arc<Root>,
     path: &Arc<Path>,
@@ -1342,6 +1702,7 @@ fn schedule_stat_entries(
     entries: Vec<StatEntry>,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
     let job = Job::Stat {
         root: Arc::clone(root),
@@ -1352,7 +1713,7 @@ fn schedule_stat_entries(
     };
     root.pending.fetch_add(1, AtomicOrdering::Relaxed);
     if worker.len() >= MAX_QUEUED_STAT_JOBS {
-        run_job(job, worker, shared);
+        run_job(job, worker, shared, output);
     } else {
         worker.push(job);
         shared.wake_worker();
@@ -1360,6 +1721,7 @@ fn schedule_stat_entries(
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::too_many_arguments)]
 fn stat_entries(
     root: &Arc<Root>,
     path: Arc<Path>,
@@ -1368,12 +1730,15 @@ fn stat_entries(
     entries: Vec<StatEntry>,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
     #[cfg(target_os = "macos")]
     let _ = (path, depth);
     let mut jobs = Vec::new();
+    let mut batch = Vec::with_capacity(entries.len());
     let entries = entries
         .into_iter()
+        .take_while(|_| !shared.stop.load(AtomicOrdering::Relaxed))
         .map(|entry| {
             #[cfg(target_os = "macos")]
             let entry = Ok(entry.read_metadata(shared.options));
@@ -1381,7 +1746,10 @@ fn stat_entries(
             let entry = Entry::from_dir_entry(depth, Arc::clone(&path), entry, shared.options);
             entry.map(|mut entry| {
                 assign_directory_ids(&mut entry, directory_id, shared);
-                if entry.file_type.is_dir() && (root.descend)(root.index, &entry) {
+                if entry.file_type.is_dir()
+                    && output.flush(shared)
+                    && (root.descend)(root.index, &entry)
+                {
                     jobs.push(Job::ReadDir {
                         root: Arc::clone(root),
                         path: Arc::from(entry.path()),
@@ -1394,9 +1762,12 @@ fn stat_entries(
                 }
                 entry
             })
-        })
-        .collect();
-    publish_directory(root, Ok(entries), jobs, worker, shared);
+        });
+    batch.extend(entries);
+    if shared.stop.load(AtomicOrdering::Relaxed) {
+        return;
+    }
+    publish_directory(root, Ok(batch), jobs, worker, shared, output);
     finish_pending(root, shared);
 }
 
@@ -1415,8 +1786,9 @@ fn read_dir_parent_first(
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
-    read_dir_inline(root, path, directory_id, depth, worker, shared);
+    read_dir_inline(root, path, directory_id, depth, worker, shared, output);
 }
 
 /// Convert a directory's entries on the worker that enumerates it, then schedule its children.
@@ -1430,6 +1802,7 @@ fn read_dir_inline(
     depth: usize,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) {
     let dir_entries = match fs::read_dir(&path) {
         Ok(entries) => entries,
@@ -1440,6 +1813,7 @@ fn read_dir_inline(
                 Vec::new(),
                 worker,
                 shared,
+                output,
             );
             finish_pending(root, shared);
             return;
@@ -1455,7 +1829,10 @@ fn read_dir_inline(
                 })
                 .map(|mut entry| {
                     assign_directory_ids(&mut entry, directory_id, shared);
-                    if entry.file_type.is_dir() && (root.descend)(root.index, &entry) {
+                    if entry.file_type.is_dir()
+                        && output.flush(shared)
+                        && (root.descend)(root.index, &entry)
+                    {
                         jobs.push(Job::ReadDir {
                             root: Arc::clone(root),
                             path: Arc::from(entry.path()),
@@ -1470,7 +1847,7 @@ fn read_dir_inline(
                 })
         })
         .collect();
-    publish_directory(root, Ok(entries), jobs, worker, shared);
+    publish_directory(root, Ok(entries), jobs, worker, shared, output);
     finish_pending(root, shared);
 }
 
@@ -1495,56 +1872,40 @@ fn allocate_directory_id(shared: &PoolShared) -> DirectoryId {
 }
 
 /// Publish a directory batch and schedule its accepted child-directory jobs.
-/// `ParentFirst` sends the batch before exposing child jobs; `Completion` exposes child jobs first.
+/// `ParentFirst` and coalesced walks send directory batches before exposing their child jobs.
 /// Child jobs are counted before either action; the caller completes the current job after EOF.
 ///
-/// Returns `true` if the batch was sent and child jobs were scheduled, or `false` if the event
-/// receiver disconnected, in which case traversal is marked to stop.
+/// Returns `true` if the batch was sent or buffered and child jobs were scheduled, or `false`
+/// if traversal stopped or the event receiver disconnected.
 fn publish_directory(
     root: &Arc<Root>,
     batch: Batch,
     jobs: Vec<Job>,
     worker: &Worker<Job>,
     shared: &PoolShared,
+    output: &mut Output,
 ) -> bool {
     root.pending.fetch_add(jobs.len(), AtomicOrdering::Relaxed);
 
-    match shared.order {
-        Order::ParentFirst => {
-            if shared
-                .events
-                .send(Event::Batch {
-                    root_idx: root.index,
-                    batch,
-                })
-                .is_err()
-            {
-                shared.stop.store(true, AtomicOrdering::Relaxed);
-                return false;
-            }
-            schedule_jobs(jobs, worker, shared);
+    if matches!(shared.order, Order::ParentFirst) || !jobs.is_empty() && Output::coalesces(shared) {
+        if !output.send(root, batch, shared) {
+            return false;
         }
-        Order::Completion => {
-            schedule_jobs(jobs, worker, shared);
-            if shared
-                .events
-                .send(Event::Batch {
-                    root_idx: root.index,
-                    batch,
-                })
-                .is_err()
-            {
-                shared.stop.store(true, AtomicOrdering::Relaxed);
-                return false;
-            }
-        }
+        schedule_jobs(jobs, worker, shared);
+        true
+    } else {
+        schedule_jobs(jobs, worker, shared);
+        output.send(root, batch, shared)
     }
-
-    true
 }
 
 /// Complete a job, publishing root completion before releasing its pool-wide count.
 fn finish_pending(root: &Root, shared: &PoolShared) {
+    // An interrupted job may have discarded entries. Leave it pending so other
+    // workers cannot report this root as complete ahead of the terminal error.
+    if shared.stop.load(AtomicOrdering::Relaxed) {
+        return;
+    }
     if root.pending.fetch_sub(1, AtomicOrdering::AcqRel) == 1 {
         shared
             .events
@@ -1571,49 +1932,497 @@ fn schedule_jobs(jobs: Vec<Job>, worker: &Worker<Job>, shared: &PoolShared) {
         shared.wake_worker();
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    #[cfg(target_os = "linux")]
     #[test]
-    fn root_walk_drains_a_batch_before_reporting_completion() {
-        let (roots, mut walk) = stream_roots(1, Order::ParentFirst, Options::default());
-        let events = &roots.shared.events;
-        events
-            .try_send(Event::Batch {
-                root_idx: 2,
-                batch: Ok(Vec::new()),
+    fn discarded_directory_batch_does_not_finish_its_root() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("child")).unwrap();
+        let pool = start_pool(1, Order::ParentFirst, Options::default(), 1);
+        pool.shared.active_roots.store(2, AtomicOrdering::Relaxed);
+        let shared = Arc::clone(&pool.shared);
+        let root = Arc::new(Root {
+            index: 7,
+            pending: AtomicUsize::new(1),
+            descend: Arc::new(move |_, _| {
+                // Model the interval between a peer stopping the pool and sending WorkerFailed.
+                shared.stop.store(true, AtomicOrdering::Relaxed);
+                false
+            }),
+        });
+        run_job(
+            Job::ReadDir {
+                root,
+                path: Arc::from(dir.path()),
+                directory_id: 0,
+                entry_depth: 1,
+            },
+            &Worker::new_lifo(),
+            &pool.shared,
+            &mut Output::default(),
+        );
+        assert!(matches!(
+            pool.events.as_ref().unwrap().try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    #[cfg(panic = "unwind")]
+    fn assert_visitor_panic_terminates_walk(timed: bool) {
+        use std::time::Duration;
+
+        for threads in [1, 4] {
+            for capacity in [0, 2] {
+                let dir = tempfile::tempdir().unwrap();
+                for idx in 0..24 {
+                    fs::write(dir.path().join(idx.to_string()), b"data").unwrap();
+                }
+                let mut walk = visit_roots(
+                    [(7, dir.path().to_owned())],
+                    threads,
+                    Options::default().queued_batches_per_worker(capacity),
+                    |_, _| true,
+                    |_, _, entries| {
+                        assert!(
+                            !entries
+                                .iter()
+                                .any(|entry| entry.as_ref().is_ok_and(|entry| entry.depth > 0)),
+                            "visitor failed"
+                        );
+                    },
+                );
+                let shared = Arc::clone(&walk.pool.as_ref().unwrap().shared);
+                let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+                let reader = thread::spawn(move || {
+                    let result = walk.recv(timed.then_some(Duration::from_millis(250)));
+                    let exhausted = walk.recv(None).unwrap().is_none();
+                    done_tx.send((result, exhausted)).unwrap();
+                });
+                let result = done_rx.recv_timeout(Duration::from_secs(2));
+                if result.is_err() {
+                    // Unblock the original implementation so the failing regression leaves no hung reader.
+                    shared.events.send(Event::Finished).unwrap();
+                }
+                reader.join().unwrap();
+                let (result, exhausted) =
+                    result.expect("worker panic must wake a blocked receiver");
+                let Some((root, RootEvent::WorkerFailed(error))) =
+                    result.expect("worker panic must not be a timeout")
+                else {
+                    panic!("worker panic must produce a terminal error");
+                };
+                assert_eq!(root, 7);
+                assert_eq!(error.io_error().kind(), io::ErrorKind::Other);
+                assert!(error.to_string().contains("visitor failed"));
+                assert!(exhausted, "the worker error must terminate receiving");
+            }
+        }
+    }
+
+    fn visit_roots(
+        roots: impl IntoIterator<Item = (usize, PathBuf)>,
+        threads: usize,
+        options: Options,
+        descend: impl Fn(usize, &Entry) -> bool + Send + Sync + 'static,
+        visit: impl Fn(usize, usize, Vec<Result<Entry, Error>>) + Send + Sync + 'static,
+    ) -> MultiWalk {
+        MultiWalk::prepare(threads, Order::Completion, options)
+            .visit_batches(visit)
+            .start_entries(
+                roots
+                    .into_iter()
+                    .map(|(idx, path)| (idx, Entry::from_path(&path, options))),
+                descend,
+            )
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn visitor_panic_terminates_blocking_walk() {
+        assert_visitor_panic_terminates_walk(false);
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn visitor_panic_terminates_timed_walk() {
+        assert_visitor_panic_terminates_walk(true);
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn visitor_panic_is_reported_while_another_visitor_is_blocked() {
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir().unwrap();
+        for root in ["blocked", "panicking"] {
+            let path = dir.path().join(root);
+            fs::create_dir(&path).unwrap();
+            fs::write(path.join("file"), b"data").unwrap();
+        }
+        let (blocked_tx, blocked_rx) = crossbeam::channel::bounded(1);
+        let (release_tx, release_rx) = crossbeam::channel::bounded::<()>(0);
+        let (panic_tx, panic_rx) = crossbeam::channel::bounded(1);
+        let mut walk = visit_roots(
+            [
+                (0, dir.path().join("blocked")),
+                (1, dir.path().join("panicking")),
+            ],
+            2,
+            Options::default().queued_batches_per_worker(0),
+            |_, _| true,
+            move |_, root, entries| {
+                if entries
+                    .iter()
+                    .any(|entry| entry.as_ref().is_ok_and(|entry| entry.depth > 0))
+                {
+                    if root == 0 {
+                        blocked_tx.send(()).unwrap();
+                        release_rx.recv().ok();
+                    } else if panic_rx.recv().is_ok() {
+                        panic!("visitor failed");
+                    }
+                }
+            },
+        );
+        blocked_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        panic_tx.send(()).unwrap();
+        let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+        let reader = thread::spawn(move || {
+            let event = walk.recv(Some(Duration::from_secs(2)));
+            let exhausted = matches!(walk.recv(Some(Duration::ZERO)), Ok(None));
+            done_tx.send((event, exhausted)).unwrap();
+        });
+        let result = done_rx.recv_timeout(Duration::from_secs(3));
+        drop(release_tx);
+        reader.join().unwrap();
+        let (event, exhausted) =
+            result.expect("failure must be reported before releasing the blocked visitor");
+        let Ok(Some((1, RootEvent::WorkerFailed(error)))) = event else {
+            panic!("the worker panic must be reported as a terminal error");
+        };
+        assert!(error.to_string().contains("visitor failed"));
+        assert!(exhausted);
+    }
+
+    #[test]
+    fn visitors_account_roots_and_errors_before_completion() {
+        let dir = tempfile::tempdir().unwrap();
+        for idx in 0..24 {
+            fs::write(dir.path().join(idx.to_string()), b"metadata").unwrap();
+        }
+        let doomed = dir.path().join("doomed");
+        fs::create_dir(&doomed).unwrap();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let missing = dir.path().join("missing");
+        let initial = Arc::new(AtomicUsize::new(0));
+        let counts = Arc::new(std::array::from_fn::<_, 3, _>(|_| AtomicUsize::new(0)));
+        let errors = Arc::new(std::array::from_fn::<_, 3, _>(|_| AtomicUsize::new(0)));
+        let seen_initial = Arc::clone(&initial);
+        let seen_counts = Arc::clone(&counts);
+        let seen_errors = Arc::clone(&errors);
+        let caller = thread::current().id();
+        let removed = doomed.clone();
+        let mut walk = visit_roots(
+            [
+                (0, dir.path().to_owned()),
+                (1, file.path().to_owned()),
+                (2, missing),
+            ],
+            4,
+            Options::default(),
+            move |_, entry| {
+                if entry.depth == 1 && entry.path() == removed {
+                    fs::remove_dir(&removed).unwrap();
+                }
+                true
+            },
+            move |worker, root, entries| {
+                assert!(worker < 4);
+                for entry in entries {
+                    let is_initial = entry.as_ref().map_or(root == 2, |entry| entry.depth == 0);
+                    if is_initial {
+                        assert_eq!(worker, 0);
+                        assert_eq!(thread::current().id(), caller);
+                        seen_initial.fetch_add(1, AtomicOrdering::SeqCst);
+                    } else {
+                        assert_eq!(seen_initial.load(AtomicOrdering::SeqCst), 3);
+                    }
+                    match entry {
+                        Ok(entry) => {
+                            entry.metadata.unwrap().unwrap();
+                        }
+                        Err(_) => {
+                            seen_errors[root].fetch_add(1, AtomicOrdering::SeqCst);
+                        }
+                    }
+                    seen_counts[root].fetch_add(1, AtomicOrdering::SeqCst);
+                }
+            },
+        );
+        let expected_counts = [27, 1, 1];
+        let expected_errors = [1, 0, 1];
+        let mut completed = HashSet::new();
+        while let Some((root, event)) = walk.recv(Some(std::time::Duration::from_secs(5))).unwrap()
+        {
+            assert!(
+                matches!(event, RootEvent::Finished),
+                "entries must be consumed on workers"
+            );
+            assert!(completed.insert(root));
+            assert_eq!(
+                counts[root].load(AtomicOrdering::SeqCst),
+                expected_counts[root]
+            );
+            assert_eq!(
+                errors[root].load(AtomicOrdering::SeqCst),
+                expected_errors[root]
+            );
+        }
+        assert_eq!(completed.len(), 3);
+    }
+
+    #[test]
+    fn visitor_walk_accounts_initial_entries_during_preparation() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let removed = dir.path().join("removed");
+        fs::write(&removed, b"data").unwrap();
+        let seen = Arc::new(AtomicUsize::new(0));
+        let visits = Arc::clone(&seen);
+        let roots = [
+            (7, file.path().to_owned()),
+            (2, dir.path().to_owned()),
+            (9, removed.clone()),
+        ];
+        let mut walk = MultiWalk::prepare(4, Order::Completion, Options::default())
+            .visit_batches(move |worker, root, entries| {
+                assert_eq!(worker, 0);
+                assert_eq!(entries.len(), 1);
+                match root {
+                    7 => fs::remove_file(&removed).unwrap(),
+                    9 => assert!(
+                        entries[0].is_err(),
+                        "the last root is queried after the first visit"
+                    ),
+                    _ => {}
+                }
+                visits.fetch_add(1, AtomicOrdering::Relaxed);
             })
+            .start_paths(roots, move |root, _| {
+                assert_eq!(root, 2);
+                assert_eq!(seen.load(AtomicOrdering::Relaxed), 1);
+                false
+            });
+        assert!(walk.pool.is_none());
+        assert!(matches!(
+            &walk.pending,
+            Some(Pending::InitialFinished(indices)) if indices.as_slice() == [7, 2, 9]
+        ));
+        assert!(matches!(
+            walk.recv(Some(std::time::Duration::ZERO)),
+            Ok(Some((7, RootEvent::Finished)))
+        ));
+        for root in [2, 9] {
+            assert!(
+                matches!(walk.recv(None).unwrap(), Some((idx, RootEvent::Finished)) if idx == root)
+            );
+        }
+        assert!(walk.recv(None).unwrap().is_none());
+    }
+
+    #[test]
+    fn timed_walk_keeps_queued_events_when_empty_batches_exhaust_the_deadline() {
+        use std::time::Duration;
+
+        let empty_batches = 1_024;
+        let pool = start_pool(
+            1,
+            Order::ParentFirst,
+            Options::default().queued_batches_per_worker(empty_batches + 3),
+            0,
+        );
+        pool.shared
+            .events
+            .try_send(Event::RootFinished { root_idx: 3 })
             .unwrap();
+        for _ in 0..empty_batches {
+            pool.shared
+                .events
+                .try_send(Event::Batch {
+                    root_idx: 7,
+                    batch: Ok(Vec::new()),
+                })
+                .unwrap();
+        }
+        pool.shared
+            .events
+            .try_send(Event::RootFinished { root_idx: 7 })
+            .unwrap();
+        pool.shared.events.try_send(Event::Finished).unwrap();
+        let mut walk = MultiWalk {
+            pending: None,
+            pool: Some(pool),
+        };
+
+        // A zero timeout still polls for an immediately available real event.
+        assert!(matches!(
+            walk.recv(Some(Duration::ZERO)),
+            Ok(Some((3, RootEvent::Finished)))
+        ));
+        // Once that poll yields only an empty batch, an expired deadline must stop draining.
+        assert!(matches!(
+            walk.recv(Some(Duration::ZERO)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        assert!(matches!(
+            walk.recv(Some(Duration::from_secs(1))),
+            Ok(Some((7, RootEvent::Finished)))
+        ));
+        // Consuming final completion must finish the walk even at a zero deadline.
+        assert!(matches!(walk.recv(Some(Duration::ZERO)), Ok(None)));
+        assert!(matches!(walk.recv(Some(Duration::ZERO)), Ok(None)));
+    }
+
+    #[test]
+    fn completion_waits_for_its_visitor_without_blocking_another_root() {
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        for root in ["blocked", "ready"] {
+            fs::create_dir(dir.path().join(root)).unwrap();
+            fs::write(dir.path().join(root).join("file"), b"data").unwrap();
+        }
+        let (started_tx, started_rx) = crossbeam::channel::bounded(1);
+        let (release_tx, release_rx) = crossbeam::channel::bounded(1);
+        let mut walk = visit_roots(
+            [
+                (7, dir.path().join("blocked")),
+                (9, dir.path().join("ready")),
+            ],
+            2,
+            Options::default(),
+            |_, _| true,
+            move |_, root, entries| {
+                if root == 7
+                    && entries
+                        .iter()
+                        .any(|entry| entry.as_ref().is_ok_and(|entry| entry.depth > 0))
+                {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                }
+            },
+        );
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let Some((9, RootEvent::Finished)) = walk.recv(Some(Duration::from_secs(5))).unwrap()
+        else {
+            panic!("a blocked visitor must not finish or prevent a peer root from finishing");
+        };
+        assert!(matches!(
+            walk.recv(Some(Duration::from_millis(20))),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        release_tx.send(()).unwrap();
+        assert!(matches!(
+            walk.recv(Some(Duration::from_secs(5))),
+            Ok(Some((7, RootEvent::Finished)))
+        ));
+        assert!(matches!(walk.recv(Some(Duration::from_secs(5))), Ok(None)));
+    }
+
+    #[test]
+    fn dropping_a_visit_walk_waits_for_active_visitors() {
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("file"), b"data").unwrap();
+        let (started_tx, started_rx) = crossbeam::channel::bounded(1);
+        let (release_tx, release_rx) = crossbeam::channel::bounded(1);
+        let walk = visit_roots(
+            [(0, dir.path().to_owned())],
+            1,
+            Options::default(),
+            |_, _| true,
+            move |_, _, entries| {
+                if entries
+                    .iter()
+                    .any(|entry| entry.as_ref().is_ok_and(|entry| entry.depth > 0))
+                {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                }
+            },
+        );
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+        let dropping = thread::spawn(move || {
+            drop(walk);
+            done_tx.send(()).unwrap();
+        });
+        assert!(done_rx.recv_timeout(Duration::from_millis(20)).is_err());
+        release_tx.send(()).unwrap();
+        done_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        dropping.join().unwrap();
+    }
+
+    #[test]
+    fn multi_walk_forwards_worker_batches_in_order() {
+        let (roots, mut walk) =
+            MultiWalk::prepare(1, Order::ParentFirst, Options::default()).stream_roots();
+        let events = &roots.shared.events;
+        let send_batch = |entries| {
+            events
+                .try_send(Event::Batch {
+                    root_idx: 7,
+                    batch: Ok(entries),
+                })
+                .unwrap();
+        };
+        let errors = || {
+            vec![
+                Err(io::Error::from(io::ErrorKind::NotFound).into()),
+                Err(io::Error::from(io::ErrorKind::PermissionDenied).into()),
+            ]
+        };
+
+        send_batch(Vec::new());
+        let entries = errors();
+        let original = entries.as_ptr();
+        send_batch(entries);
+        let Some((7, RootEvent::Entries(entries))) = walk.recv(None).unwrap() else {
+            panic!("the walk must skip the empty batch and return the worker batch");
+        };
+        assert_eq!(entries.as_ptr(), original);
+        assert_eq!(entries.len(), 2);
+
+        assert!(matches!(
+            &entries[..],
+            [Err(first), Err(second)] if first.io_error().kind() == io::ErrorKind::NotFound
+                && second.io_error().kind() == io::ErrorKind::PermissionDenied
+        ));
+
         events
             .try_send(Event::Batch {
                 root_idx: 7,
-                batch: Ok(vec![
-                    Err(io::Error::from(io::ErrorKind::NotFound).into()),
-                    Err(io::Error::from(io::ErrorKind::PermissionDenied).into()),
-                ]),
+                batch: Err(io::Error::from(io::ErrorKind::NotFound).into()),
             })
             .unwrap();
-
-        assert!(
-            matches!(walk.next_if_ready(), Some((7, RootEvent::Entry(Err(error))))
-            if error.io_error().kind() == io::ErrorKind::NotFound)
-        );
         events
             .try_send(Event::RootFinished { root_idx: 7 })
             .unwrap();
-        events.try_send(Event::Finished).unwrap();
-        assert!(
-            matches!(walk.next(), Some((7, RootEvent::Entry(Err(error))))
-            if error.io_error().kind() == io::ErrorKind::PermissionDenied)
-        );
         assert!(matches!(
-            walk.next_if_ready(),
+            walk.recv(None).unwrap(),
+            Some((7, RootEvent::Entries(entries)))
+                if matches!(&entries[..], [Err(error)] if error.io_error().kind() == io::ErrorKind::NotFound)
+        ));
+        assert!(matches!(
+            walk.recv(None).unwrap(),
             Some((7, RootEvent::Finished))
         ));
-        assert!(walk.next_if_ready().is_none());
+        events.try_send(Event::Finished).unwrap();
+        assert!(walk.recv(None).unwrap().is_none());
     }
 
     #[test]
@@ -1648,16 +2457,21 @@ mod tests {
         fs::create_dir(&fast).unwrap();
         let (started_tx, started_rx) = crossbeam::channel::bounded(1);
         let (release_tx, release_rx) = crossbeam::channel::bounded(1);
-        let (mut roots, walk) = stream_roots(2, Order::ParentFirst, Options::default());
+        let (mut roots, walk) =
+            MultiWalk::prepare(2, Order::ParentFirst, Options::default()).stream_roots();
         assert_eq!(walk.pool.as_ref().unwrap().handles.len(), 2);
         let (finished_tx, finished_rx) = crossbeam::channel::unbounded();
         let reader = thread::spawn(move || {
-            for (index, event) in walk {
-                match event {
-                    RootEvent::Entry(entry) => {
-                        entry.unwrap();
+            let mut walk = walk;
+            while let Some((index, batch)) = walk.recv(None).unwrap() {
+                match batch {
+                    RootEvent::Entries(entries) => {
+                        for entry in entries {
+                            entry.unwrap();
+                        }
                     }
                     RootEvent::Finished => finished_tx.send(index).unwrap(),
+                    RootEvent::WorkerFailed(error) => panic!("worker failed: {error}"),
                 }
             }
         });
@@ -1701,8 +2515,12 @@ mod tests {
         let (release_tx, release_rx) = crossbeam::channel::bounded(1);
         let (order_tx, order_rx) = crossbeam::channel::unbounded();
         let old_order = order_tx.clone();
-        let (mut roots, walk) = stream_roots(1, Order::ParentFirst, Options::default());
-        let reader = thread::spawn(move || walk.for_each(drop));
+        let (mut roots, walk) =
+            MultiWalk::prepare(1, Order::ParentFirst, Options::default()).stream_roots();
+        let reader = thread::spawn(move || {
+            let mut walk = walk;
+            while walk.recv(None).unwrap().is_some() {}
+        });
         roots
             .add_root(0, old, move |entry| {
                 if entry.depth == 1 {
@@ -1734,7 +2552,8 @@ mod tests {
         use std::time::Duration;
 
         let directory = tempfile::tempdir().unwrap();
-        let (mut roots, walk) = stream_roots(1, Order::ParentFirst, Options::default());
+        let (mut roots, walk) =
+            MultiWalk::prepare(1, Order::ParentFirst, Options::default()).stream_roots();
         let (started_tx, started_rx) = crossbeam::channel::unbounded();
         let (release_tx, release_rx) = crossbeam::channel::bounded(1);
         for index in 0..8 {
@@ -1767,10 +2586,12 @@ mod tests {
             .expect("closing input and dropping the walker cannot block on output");
         closer.join().unwrap();
 
-        let (roots, walk) = stream_roots(1, Order::ParentFirst, Options::default());
+        let (roots, mut walk) =
+            MultiWalk::prepare(1, Order::ParentFirst, Options::default()).stream_roots();
         drop(roots);
-        assert_eq!(walk.count(), 0);
-        let (mut roots, walk) = stream_roots(1, Order::ParentFirst, Options::default());
+        assert!(walk.recv(None).unwrap().is_none());
+        let (mut roots, walk) =
+            MultiWalk::prepare(1, Order::ParentFirst, Options::default()).stream_roots();
         roots
             .add_root(usize::MAX, directory.path().to_owned(), |_| true)
             .unwrap();
@@ -1802,11 +2623,8 @@ mod tests {
         }
         for order in [Order::ParentFirst, Order::Completion] {
             let (started_tx, started_rx) = channel();
-            let walk = walk_roots(
+            let walk = MultiWalk::prepare(1, order, Options::default()).start_paths(
                 roots.clone().into_iter().enumerate(),
-                1,
-                order,
-                Options::default(),
                 move |_, entry| {
                     if entry.depth == 0 {
                         true
@@ -2118,32 +2936,30 @@ mod tests {
             fs::create_dir_all(root.join("child")).unwrap();
         }
 
-        let events = walk_roots(
-            roots.iter().cloned().enumerate(),
-            2,
-            Order::Completion,
-            Options::default(),
-            |_, _| true,
-        )
-        .collect::<Vec<_>>();
+        let mut walk = MultiWalk::prepare(2, Order::Completion, Options::default())
+            .start_paths(roots.iter().cloned().enumerate(), |_, _| true);
+        let events = std::iter::from_fn(|| walk.recv(None).unwrap());
         let mut paths = Vec::new();
         let mut last_entry = [0; 2];
         let mut finished = [None; 2];
-        for (position, (root_idx, event)) in events.into_iter().enumerate() {
+        for (position, (root_idx, event)) in events.enumerate() {
             match event {
-                RootEvent::Entry(entry) => {
+                RootEvent::Entries(entries) => {
                     last_entry[root_idx] = position;
-                    paths.push((
-                        root_idx,
-                        entry
-                            .unwrap()
-                            .path()
-                            .strip_prefix(&roots[root_idx])
-                            .unwrap()
-                            .to_owned(),
-                    ));
+                    paths.extend(entries.into_iter().map(|entry| {
+                        (
+                            root_idx,
+                            entry
+                                .unwrap()
+                                .path()
+                                .strip_prefix(&roots[root_idx])
+                                .unwrap()
+                                .to_owned(),
+                        )
+                    }));
                 }
                 RootEvent::Finished => finished[root_idx] = Some(position),
+                RootEvent::WorkerFailed(error) => panic!("worker failed: {error}"),
             }
         }
         paths[roots.len()..].sort();
@@ -2186,20 +3002,18 @@ mod tests {
         .expect("the initial walk should yield the descendant directory");
         assert_eq!(descendant_entry.depth, 1);
 
-        let mut events = walk_root_entries(
-            [(7, Ok(descendant_entry))],
-            2,
-            Order::ParentFirst,
-            Options::default(),
-            |root_idx, entry| {
+        let mut events = MultiWalk::prepare(2, Order::ParentFirst, Options::default())
+            .start_entries([(7, Ok(descendant_entry))], |root_idx, entry| {
                 assert_eq!(root_idx, 7);
                 assert_eq!(entry.depth, 0, "the predicate should see a re-rooted entry");
                 true
-            },
-        );
+            });
 
-        let Some((7, RootEvent::Entry(Ok(mut root)))) = events.next() else {
+        let Some((7, RootEvent::Entries(entries))) = events.recv(None).unwrap() else {
             panic!("the prepared descendant should be emitted as the new root");
+        };
+        let Ok([Ok(mut root)]) = <[_; 1]>::try_from(entries) else {
+            panic!("expected a batch with one entry");
         };
         assert_eq!(root.path(), descendant);
         assert_eq!(
@@ -2207,36 +3021,37 @@ mod tests {
             "the entry originally found at depth 1 must become the new traversal root"
         );
 
-        let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
+        let Some((7, RootEvent::Entries(entries))) = events.recv(None).unwrap() else {
             panic!("the re-rooted directory should emit its child");
+        };
+        let Ok([Ok(entry)]) = <[_; 1]>::try_from(entries) else {
+            panic!("expected a batch with one entry");
         };
         assert_eq!(entry.path(), child);
         assert_eq!(
             entry.depth, 1,
             "the child depth must be relative to the prepared entry used as the new root"
         );
+        assert!(matches!(
+            events.recv(None).unwrap(),
+            Some((7, RootEvent::Finished))
+        ));
         assert_eq!(
-            events
-                .next()
-                .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
-            Some((7, true))
-        );
-        assert_eq!(
-            events.next().map(|(root_idx, _)| root_idx),
+            events.recv(None).unwrap().map(|(root_idx, _)| root_idx),
             None,
             "nothing left after the Finished event"
         );
 
         root.metadata = Some(Err(io::Error::from(io::ErrorKind::PermissionDenied)));
-        let mut events = walk_root_entries(
-            [(7, Ok(root))],
-            2,
-            Order::ParentFirst,
-            Options::default(),
-            |_, _| panic!("a directory with inaccessible metadata must not be descended"),
-        );
-        let Some((7, RootEvent::Entry(Ok(root)))) = events.next() else {
+        let mut events = MultiWalk::prepare(2, Order::ParentFirst, Options::default())
+            .start_entries([(7, Ok(root))], |_, _| {
+                panic!("a directory with inaccessible metadata must not be descended")
+            });
+        let Some((7, RootEvent::Entries(entries))) = events.recv(None).unwrap() else {
             panic!("the prepared directory must retain its metadata error");
+        };
+        let Ok([Ok(root)]) = <[_; 1]>::try_from(entries) else {
+            panic!("expected a batch with one entry");
         };
         let error = root
             .metadata
@@ -2244,13 +3059,14 @@ mod tests {
             .err()
             .expect("the inaccessible root must retain its metadata error");
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(matches!(
+            events.recv(None).unwrap(),
+            Some((7, RootEvent::Finished))
+        ));
         assert_eq!(
-            events
-                .next()
-                .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
-            Some((7, true))
+            events.recv(None).unwrap().map(|(root_idx, _)| root_idx),
+            None
         );
-        assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
     }
 
     #[cfg(any(windows, target_os = "macos"))]
@@ -2270,27 +3086,363 @@ mod tests {
         assert_eq!(entry.path(), path);
         fs::remove_file(&path).unwrap();
 
-        let mut events = walk_root_entries(
-            [(7, Ok(entry))],
-            1,
-            Order::Completion,
-            Options::default(),
-            |_, _| true,
-        );
-        let Some((7, RootEvent::Entry(Ok(entry)))) = events.next() else {
+        let mut events = MultiWalk::prepare(1, Order::Completion, Options::default())
+            .start_entries([(7, Ok(entry))], |_, _| true);
+        let Some((7, RootEvent::Entries(entries))) = events.recv(None).unwrap() else {
             panic!(
                 "prepared root must be yielded without querying its removed path which would fail"
             );
         };
+        let Ok([Ok(entry)]) = <[_; 1]>::try_from(entries) else {
+            panic!("expected a batch with one entry");
+        };
         assert_eq!(entry.path(), path);
         assert_eq!(entry.metadata.unwrap().unwrap().len(), expected_len);
+        assert!(matches!(
+            events.recv(None).unwrap(),
+            Some((7, RootEvent::Finished))
+        ));
         assert_eq!(
-            events
-                .next()
-                .map(|(root_idx, event)| (root_idx, matches!(event, RootEvent::Finished))),
-            Some((7, true))
+            events.recv(None).unwrap().map(|(root_idx, _)| root_idx),
+            None
         );
-        assert_eq!(events.next().map(|(root_idx, _)| root_idx), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn small_directory_shares_metadata_before_a_slow_callback_returns() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        for idx in 0..32 {
+            fs::create_dir(dir.path().join(idx.to_string())).unwrap();
+        }
+        let (started_tx, started_rx) = crossbeam::channel::unbounded();
+        let (release_tx, release_rx) = crossbeam::channel::unbounded();
+        let descend: Arc<Descend> = Arc::new(move |_, entry| {
+            if entry.depth == 1 {
+                started_tx.send(thread::current().id()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            true
+        });
+        let options = Options::default();
+        let mut next = Vec::new();
+        let (jobs, next_directory_id) = begin_walks(
+            [(0, Entry::from_path(dir.path(), options))],
+            &descend,
+            |root_idx, entry, finished| {
+                assert!(!finished);
+                next.push((root_idx, InitialEvent::Entry(entry)));
+            },
+        );
+        let pool = start_pool(8, Order::Completion, options, next_directory_id);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !pool
+            .shared
+            .idle
+            .iter()
+            .all(|idle| idle.load(AtomicOrdering::Acquire))
+        {
+            assert!(Instant::now() < deadline, "workers must become idle");
+            thread::sleep(Duration::from_millis(1));
+        }
+        start_jobs(&pool, jobs);
+        let walk = MultiWalk {
+            pending: Some(Pending::Initial(next.into_iter())),
+            pool: Some(pool),
+        };
+        let mut workers = HashSet::new();
+        for _ in 0..4 {
+            match started_rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(worker) => {
+                    workers.insert(worker);
+                }
+                Err(_) => break,
+            }
+        }
+        // Release every callback before asserting, including on the regressing implementation.
+        for _ in 0..32 {
+            release_tx.send(()).unwrap();
+        }
+        let mut walk = walk;
+        let mut entries = 0;
+        while let Some((_, batch)) = walk.recv(None).unwrap() {
+            match batch {
+                RootEvent::Entries(batch) => {
+                    entries += batch.into_iter().filter(Result::is_ok).count()
+                }
+                RootEvent::Finished => {}
+                RootEvent::WorkerFailed(error) => panic!("worker failed: {error}"),
+            }
+        }
+        assert_eq!(entries, 33);
+        assert!(
+            workers.len() >= 4,
+            "idle workers must share a 32-entry metadata job before its blocked callback returns"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wide_metadata_walk_amortizes_result_transfers() {
+        let dir = tempfile::tempdir().unwrap();
+        let count = 1_024;
+        for idx in 0..count {
+            fs::write(dir.path().join(idx.to_string()), b"metadata").unwrap();
+        }
+
+        let mut walk = walk(dir.path(), 4, Order::Completion, Options::default(), |_| {
+            true
+        });
+        let root = walk.next().unwrap().unwrap();
+        assert_eq!(root.depth, 0);
+        assert_eq!(root.directory_id, Some(DirectoryId::new(0)));
+        assert_eq!(root.parent_directory_id, None);
+
+        let pool = walk.pool.as_ref().unwrap();
+        let mut names = HashSet::new();
+        let mut batches = 0;
+        let mut root_finished = false;
+        loop {
+            match pool
+                .events
+                .as_ref()
+                .unwrap()
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .expect("the metadata walk must finish")
+            {
+                Event::Batch { root_idx, batch } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "entries must precede root completion");
+                    batches += 1;
+                    for entry in batch.unwrap() {
+                        let entry = entry.unwrap();
+                        assert_eq!(entry.depth, 1);
+                        assert_eq!(entry.parent_path.as_ref(), dir.path());
+                        assert_eq!(entry.directory_id, None);
+                        assert_eq!(entry.parent_directory_id, Some(DirectoryId::new(0)));
+                        assert!(entry.file_type.is_file());
+                        assert_eq!(entry.metadata.unwrap().unwrap().len(), 8);
+                        assert!(names.insert(entry.file_name), "entries must be unique");
+                    }
+                }
+                Event::RootFinished { root_idx } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "root completion must be emitted once");
+                    assert_eq!(names.len(), count);
+                    root_finished = true;
+                }
+                Event::WorkerFailed { error, .. } => panic!("metadata worker failed: {error}"),
+                Event::Finished => break,
+            }
+        }
+
+        assert!(
+            root_finished,
+            "root completion must precede pool completion"
+        );
+        for idx in 0..count {
+            assert!(names.contains(&OsString::from(idx.to_string())));
+        }
+        assert!(
+            batches <= 32,
+            "a wide local directory must amortize result-channel transfers: \
+             {count} entries required {batches} batches"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn completion_walk_publishes_a_directory_before_its_child_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let options = Options::default();
+        let entry = Entry::from_path(dir.path(), options).unwrap();
+        let pool = start_pool(1, Order::Completion, options, 1);
+        let worker = Worker::new_lifo();
+        let root = Arc::new(Root {
+            index: 7,
+            pending: AtomicUsize::new(1),
+            descend: Arc::new(|_, _| true),
+        });
+        let child_read = Job::ReadDir {
+            root: Arc::clone(&root),
+            path: Arc::from(dir.path()),
+            directory_id: 0,
+            entry_depth: 1,
+        };
+        assert!(publish_directory(
+            &root,
+            Ok(vec![Ok(entry)]),
+            vec![child_read],
+            &worker,
+            &pool.shared,
+            &mut Output::default(),
+        ));
+        let event = pool.events.as_ref().unwrap().try_recv();
+        let Ok(Event::Batch { root_idx: 7, batch }) = event else {
+            panic!("the directory must be available before the worker runs the queued child read");
+        };
+        let entries = batch.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].as_ref().unwrap().path(), dir.path());
+        assert!(matches!(worker.pop(), Some(Job::ReadDir { .. })));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn completion_walk_coalesces_small_directories_and_preserves_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut expected = HashSet::new();
+        for idx in 0..128 {
+            let relative = PathBuf::from(format!("d{idx:03}"));
+            fs::create_dir(dir.path().join(&relative)).unwrap();
+            expected.insert(relative.clone());
+            for file in 0..4 {
+                let relative = relative.join(file.to_string());
+                fs::write(dir.path().join(&relative), b"file").unwrap();
+                expected.insert(relative);
+            }
+        }
+        let vanishing = dir.path().join("vanishing");
+        fs::create_dir(&vanishing).unwrap();
+        expected.insert(PathBuf::from("vanishing"));
+        let remove_before_read = vanishing.clone();
+        let mut walk = walk(
+            dir.path(),
+            1,
+            Order::Completion,
+            Options::default(),
+            move |entry| {
+                // Metadata is already collected, but the queued child read must fail.
+                if entry.depth == 1 && entry.path() == remove_before_read {
+                    fs::remove_dir(&remove_before_read).unwrap();
+                }
+                true
+            },
+        );
+        assert_eq!(walk.next().unwrap().unwrap().depth, 0);
+        let pool = walk.pool.as_ref().unwrap();
+        let mut paths = HashSet::new();
+        let mut errors = 0;
+        let mut batches = 0;
+        let mut root_finished = false;
+        loop {
+            match pool
+                .events
+                .as_ref()
+                .unwrap()
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .expect("small-directory results and completion must be flushed")
+            {
+                Event::Batch { root_idx, batch } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "entries and errors must precede completion");
+                    batches += 1;
+                    let entries = match batch {
+                        Ok(entries) => entries,
+                        Err(err) => vec![Err(err)],
+                    };
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                let path = entry.path();
+                                let relative = path.strip_prefix(dir.path()).unwrap().to_owned();
+                                assert!(expected.contains(&relative));
+                                assert!(paths.insert(relative), "entries must be unique");
+                                let metadata = entry.metadata.unwrap().unwrap();
+                                if entry.file_type.is_file() {
+                                    assert_eq!(entry.depth, 2);
+                                    assert_eq!(metadata.len(), 4);
+                                } else {
+                                    assert!(entry.file_type.is_dir());
+                                    assert_eq!(entry.depth, 1);
+                                }
+                            }
+                            Err(err) => {
+                                assert_eq!(err.path(), Some(vanishing.as_path()));
+                                assert_eq!(err.io_error().kind(), io::ErrorKind::NotFound);
+                                errors += 1;
+                            }
+                        }
+                    }
+                }
+                Event::RootFinished { root_idx } => {
+                    assert_eq!(root_idx, 0);
+                    assert!(!root_finished, "root completion must be emitted once");
+                    assert_eq!(paths, expected);
+                    assert_eq!(errors, 1);
+                    root_finished = true;
+                }
+                Event::WorkerFailed { error, .. } => panic!("metadata worker failed: {error}"),
+                Event::Finished => {
+                    assert!(
+                        root_finished,
+                        "root completion must precede pool completion"
+                    );
+                    break;
+                }
+            }
+        }
+        assert!(
+            batches < 32,
+            "small directories must share result transfers: 128 directories required {batches} batches"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn completion_walk_keeps_ancestors_visible_to_descend_callbacks() {
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("child/grandchild")).unwrap();
+        let (consumed_tx, consumed_rx) = crossbeam::channel::bounded(1);
+        let released = Arc::new(AtomicBool::new(false));
+        let callback_released = Arc::clone(&released);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let timeout_cancelled = Arc::clone(&cancelled);
+        let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+        let timeout = thread::spawn(move || {
+            if done_rx.recv_timeout(Duration::from_secs(5)).is_err() {
+                timeout_cancelled.store(true, AtomicOrdering::Relaxed);
+            }
+        });
+        let mut walk = walk(
+            dir.path(),
+            1,
+            Order::Completion,
+            Options::default(),
+            move |entry| {
+                if entry.depth == 2 {
+                    callback_released.store(
+                        consumed_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+                        AtomicOrdering::Relaxed,
+                    );
+                }
+                true
+            },
+        );
+        let mut paths = Vec::new();
+        while let Some(entry) = walk.next_cancellable(&cancelled) {
+            let entry = entry.unwrap();
+            if entry.depth == 1 {
+                consumed_tx.try_send(()).unwrap();
+            }
+            paths.push(entry.path().strip_prefix(dir.path()).unwrap().to_owned());
+        }
+        done_tx.send(()).ok();
+        timeout.join().unwrap();
+        assert!(
+            !cancelled.load(AtomicOrdering::Relaxed),
+            "completion output must remain available while the next predicate waits"
+        );
+        assert!(
+            released.load(AtomicOrdering::Relaxed),
+            "the child must reach the consumer before its descendant's predicate times out"
+        );
+        paths.sort();
+        assert_eq!(paths, ["", "child", "child/grandchild"].map(PathBuf::from));
     }
 
     #[test]
@@ -2380,6 +3532,7 @@ mod tests {
         #[cfg(not(target_os = "macos"))]
         let entries = fs::read_dir(dir.path()).unwrap();
         let mut entries = entries.map(Result::unwrap);
+        let mut output = Output::default();
         for _ in 0..=MAX_QUEUED_STAT_JOBS {
             schedule_stat_entries(
                 &root,
@@ -2389,11 +3542,13 @@ mod tests {
                 entries.by_ref().take(ENTRY_CHUNK_SIZE).collect(),
                 &worker,
                 &pool.shared,
+                &mut output,
             );
         }
 
         assert_eq!(worker.len(), MAX_QUEUED_STAT_JOBS);
-        let Event::Batch { root_idx, batch } = pool.events.try_recv().unwrap() else {
+        let Event::Batch { root_idx, batch } = pool.events.as_ref().unwrap().try_recv().unwrap()
+        else {
             panic!("a full queue must process the next metadata batch inline");
         };
         assert_eq!(root_idx, 7);
@@ -2404,6 +3559,41 @@ mod tests {
             assert_eq!(entry.metadata.unwrap().unwrap().len(), 8);
             assert_eq!(entry.parent_directory_id, Some(DirectoryId::new(0)));
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn stopping_during_a_metadata_batch_skips_remaining_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        for child in ["first", "second"] {
+            fs::create_dir(dir.path().join(child)).unwrap();
+        }
+        let (shared_tx, shared_rx) = crossbeam::channel::bounded::<Arc<PoolShared>>(1);
+        let mut walk = walk(
+            dir.path(),
+            1,
+            Order::Completion,
+            Options::default().queued_batches_per_worker(3),
+            move |entry| {
+                let id = entry.directory_id.unwrap().index();
+                if id == 1 {
+                    shared_rx
+                        .recv()
+                        .unwrap()
+                        .stop
+                        .store(true, AtomicOrdering::Relaxed);
+                }
+                id == 0
+            },
+        );
+        let pool = walk.pool.as_mut().unwrap();
+        shared_tx.send(Arc::clone(&pool.shared)).unwrap();
+        pool.handles.pop().unwrap().join().unwrap();
+        assert_eq!(
+            pool.shared.next_directory_id.load(AtomicOrdering::Relaxed),
+            2,
+            "only the first directory should have been converted"
+        );
     }
 
     #[cfg(any(windows, target_os = "macos"))]
@@ -2435,6 +3625,8 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .events
+                    .as_ref()
+                    .unwrap()
                     .recv_timeout(std::time::Duration::from_secs(2))
                 {
                     child_started = batch.as_ref().is_ok_and(|entries| {

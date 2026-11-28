@@ -13,39 +13,44 @@ pub(crate) struct InodeFilter {
 }
 
 impl InodeFilter {
+    /// Identity that must share hard-link accounting across workers or cleanup candidates.
+    pub(crate) fn hard_link_identity(
+        entry: &crate::walk::Entry,
+        metadata: &crate::walk::Metadata,
+    ) -> Option<(u64, u64)> {
+        #[cfg(unix)]
+        {
+            #[cfg(not(target_os = "macos"))]
+            use std::os::unix::fs::MetadataExt;
+            // macOS bulk reads can underreport the number of directory links.
+            (metadata.nlink() > 1 || cfg!(target_os = "macos") && entry.file_type.is_dir())
+                .then(|| (metadata.dev(), metadata.ino()))
+        }
+        #[cfg(windows)]
+        {
+            let _ = entry;
+            metadata.hard_link_id()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (entry, metadata);
+            None
+        }
+    }
+
     /// Whether accepting this entry can affect accounting in another cleanup candidate.
     pub(crate) fn needs_tracking(entry: &crate::walk::Entry, options: &crate::WalkOptions) -> bool {
         let Some(Ok(metadata)) = &entry.metadata else {
             return false;
         };
-        if !options.count_hard_links {
-            #[cfg(unix)]
-            {
-                #[cfg(not(target_os = "macos"))]
-                use std::os::unix::fs::MetadataExt;
-                if metadata.nlink() > 1 {
-                    return true;
-                }
-                #[cfg(target_os = "macos")]
-                if entry.file_type.is_dir() {
-                    return true;
-                }
-            }
-            #[cfg(windows)]
-            if metadata.hard_link_id().is_some() {
-                return true;
-            }
-        }
+        let needs_tracking =
+            !options.count_hard_links && Self::hard_link_identity(entry, metadata).is_some();
         #[cfg(target_os = "macos")]
-        {
-            !options.apparent_size
+        let needs_tracking = needs_tracking
+            || (!options.apparent_size
                 && options.metadata_options.apfs_clone_metadata
-                && metadata.clone_id().is_some()
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            false
-        }
+                && metadata.clone_id().is_some());
+        needs_tracking
     }
 
     #[cfg(unix)]
