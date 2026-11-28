@@ -1,3 +1,4 @@
+use crate::walk::RootEvent;
 use crate::{Throttle, WalkOptions, WalkRoot, crossdev, inodefilter::InodeFilter};
 
 use crossbeam::channel::Receiver;
@@ -986,41 +987,42 @@ pub enum TraversalEvent {
     /// Entries are sent in batches to avoid paying for channel synchronization once per entry.
     /// Use [`TraversalEvent::flatten()`] to handle them one by one.
     Batch(Vec<TraversalEvent>),
+    /// An owned worker batch with context shared by every entry.
+    EntryBatch {
+        /// Entries and errors produced by the worker, in traversal order.
+        entries: Vec<Result<crate::walk::Entry, crate::walk::Error>>,
+        /// The path of the input root.
+        root_path: Arc<PathBuf>,
+        /// The input root's device ID.
+        device_id: u64,
+        /// The root's index in the original input list.
+        root_idx: usize,
+    },
 }
 
 impl TraversalEvent {
-    /// Return the events contained in a [`TraversalEvent::Batch`], or this event alone.
+    /// Yield each entry in a batch, or yield this event by itself.
     pub fn flatten(self) -> impl Iterator<Item = TraversalEvent> {
+        use itertools::Either::{Left, Right};
+
         match self {
-            Self::Batch(events) => itertools::Either::Left(events.into_iter()),
-            event => itertools::Either::Right(std::iter::once(event)),
+            Self::Batch(events) => Left(Left(events.into_iter())),
+            Self::EntryBatch {
+                entries,
+                root_path,
+                device_id,
+                root_idx,
+            } => Right(entries.into_iter().map(move |entry| {
+                Self::Entry(
+                    entry.map(TraversalEntry),
+                    Arc::clone(&root_path),
+                    device_id,
+                    root_idx,
+                )
+            })),
+            event => Left(Right(std::iter::once(event))),
         }
     }
-}
-
-/// The largest number of entries the walk dispatcher collects into one [`TraversalEvent::Batch`].
-const MAX_ENTRIES_PER_BATCH: usize = 256;
-/// Cap queued walk entries even when every message contains a full batch.
-const MAX_QUEUED_WALK_ENTRIES: usize = 1024;
-
-fn dispatch_walk_entries(
-    mut walk: crate::walk::RootWalk,
-    entry_tx: &crossbeam::channel::Sender<TraversalEvent>,
-    mut to_entry_event: impl FnMut((usize, crate::walk::RootEvent)) -> Option<TraversalEvent>,
-) -> bool {
-    while let Some(first) = walk.next() {
-        // Only the first event may need to wait for the walker. Bound the drain even when
-        // many of the ready events are filtered out.
-        let batch: Vec<_> = std::iter::once(first)
-            .chain(std::iter::from_fn(|| walk.next_if_ready()))
-            .take(MAX_ENTRIES_PER_BATCH)
-            .filter_map(&mut to_entry_event)
-            .collect();
-        if !batch.is_empty() && entry_tx.send(TraversalEvent::Batch(batch)).is_err() {
-            return false;
-        }
-    }
-    true
 }
 
 /// An in-progress traversal which exposes newly obtained entries
@@ -1265,8 +1267,7 @@ impl BackgroundTraversal {
         preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
     ) -> anyhow::Result<BackgroundTraversal> {
         let num_roots = input.len();
-        let (entry_tx, entry_rx) =
-            crossbeam::channel::bounded(MAX_QUEUED_WALK_ENTRIES / MAX_ENTRIES_PER_BATCH);
+        let (entry_tx, entry_rx) = crossbeam::channel::bounded(4);
         let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
@@ -1316,26 +1317,41 @@ impl BackgroundTraversal {
                         root_paths.push(Arc::new(root_path));
                     }
 
-                    let (walk, include) = walk_options.walk_from_paths(
+                    let (mut walk, include) = walk_options.walk_from_paths(
                         walk_roots,
                         skip_root,
                         crate::walk::Order::ParentFirst,
                     );
-                    if !dispatch_walk_entries(walk, &entry_tx, |event| {
-                        if !include(&event) {
-                            return None;
-                        }
-                        let (root, crate::walk::RootEvent::Entry(entry)) = event else {
-                            return None;
+                    loop {
+                        let (root, batch) = match walk.recv(None) {
+                            Ok(Some(batch)) => batch,
+                            Ok(None) => break,
+                            Err(error) => {
+                                log::error!("Filesystem worker channel stopped: {error}");
+                                return;
+                            }
                         };
-                        Some(TraversalEvent::Entry(
-                            entry.map(TraversalEntry),
-                            Arc::clone(&root_paths[root]),
-                            device_ids[root],
-                            root_indices[root],
-                        ))
-                    }) {
-                        return;
+                        let mut entries = match batch {
+                            RootEvent::Entries(entries) => entries,
+                            RootEvent::Finished => continue,
+                            RootEvent::WorkerFailed(error) => vec![Err(error)],
+                        };
+                        entries.retain(|entry| match entry {
+                            Ok(entry) => include(root, entry),
+                            Err(_) => true,
+                        });
+                        if !entries.is_empty()
+                            && entry_tx
+                                .send(TraversalEvent::EntryBatch {
+                                    entries,
+                                    root_path: Arc::clone(&root_paths[root]),
+                                    device_id: device_ids[root],
+                                    root_idx: root_indices[root],
+                                })
+                                .is_err()
+                        {
+                            return;
+                        }
                     }
                     if entry_tx.send(TraversalEvent::Finished).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
@@ -1477,10 +1493,6 @@ impl BackgroundTraversal {
     ///
     /// Panics if the event stream violates traversal invariants, such as emitting a child before
     /// its parent.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "keep traversal event handling in one place"
-    )]
     pub fn integrate_traversal_event(
         &mut self,
         traversal: &mut Traversal,
@@ -1551,182 +1563,27 @@ impl BackgroundTraversal {
                 return Ok(Some(false));
             }
             TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
-                self.stats.entries_traversed += 1;
-                let is_clean = self.clean_stages.contains_key(&root_idx);
-                let mut data = EntryData::default();
-                let Ok(TraversalEntry(entry)) = entry else {
-                    if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
-                        stage.valid = false;
-                    }
-                    self.stats.io_errors += 1;
-                    self.record_error_on_root(traversal, root_idx, &root_path)?;
-                    return Ok(self
-                        .throttle
-                        .as_ref()
-                        .is_some_and(|t| t.can_update())
-                        .then_some(false));
-                };
-                let walk_depth = entry.depth;
-                let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
-                    root_path.as_path()
-                } else {
-                    Path::new(&entry.file_name)
-                };
-
-                let mut file_size = 0u128;
-                let mut mtime: SystemTime = UNIX_EPOCH;
-                let mut has_mtime = false;
-                data.is_dir = entry.file_type.is_dir();
-                if let Some(Ok(m)) = &entry.metadata {
-                    if self.walk_options.count_hard_links
-                        || (is_clean || self.inodes.add(&entry, m))
-                            && (self.walk_options.cross_filesystems
-                                || crossdev::is_same_device(device_id, m))
-                    {
-                        if self.walk_options.apparent_size {
-                            file_size = u128::from(m.len());
-                        } else {
-                            file_size = u128::from(
-                                size_on_disk(
-                                    &entry.parent_path,
-                                    name,
-                                    m,
-                                    data.is_dir,
-                                    &self.walk_options,
-                                    (!is_clean).then_some(&mut self.inodes),
-                                )
-                                .unwrap_or_else(|_| {
-                                    self.stats.io_errors += 1;
-                                    data.metadata_io_error = true;
-                                    0
-                                }),
-                            );
-                        }
-                    } else {
-                        data.entry_count = Some(0);
-                    }
-
-                    if let Ok(modified) = m.modified() {
-                        mtime = modified;
-                        has_mtime = true;
-                    } else {
-                        self.stats.io_errors += 1;
-                        data.metadata_io_error = true;
-                    }
-                } else {
-                    self.stats.io_errors += 1;
-                    data.metadata_io_error = true;
+                return self.integrate_entry(traversal, entry, &root_path, device_id, root_idx);
+            }
+            TraversalEvent::EntryBatch {
+                entries,
+                root_path,
+                device_id,
+                root_idx,
+            } => {
+                let mut redraw = false;
+                for entry in entries {
+                    redraw |= self
+                        .integrate_entry(
+                            traversal,
+                            entry.map(TraversalEntry),
+                            &root_path,
+                            device_id,
+                            root_idx,
+                        )?
+                        .is_some();
                 }
-
-                data.mtime = mtime;
-                data.size = file_size;
-                if data.metadata_io_error
-                    && let Some(stage) = self.clean_stages.get_mut(&root_idx)
-                {
-                    stage.valid = false;
-                }
-                if data.is_dir {
-                    data.entry_count = Some(1);
-                }
-                let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
-                let preexisting = if self.preexisting_nodes.is_empty() {
-                    None
-                } else {
-                    self.preexisting_nodes.remove(&entry.path())
-                };
-                if let Some((index, needs_metadata)) = preexisting {
-                    if let Some(directory_id) = entry.directory_id {
-                        self.set_directory_node(directory_id.index(), index);
-                    }
-                    if needs_metadata && let Some(mut existing) = traversal.tree.data(index) {
-                        existing.size = existing
-                            .size
-                            .checked_add(file_size)
-                            .ok_or(TreeError::MetadataOverflow)?;
-                        existing.entry_count = Some(
-                            existing
-                                .entry_count
-                                .unwrap_or(0)
-                                .checked_add(entry_count)
-                                .ok_or(TreeError::MetadataOverflow)?,
-                        );
-                        if has_mtime {
-                            existing.mtime = data.mtime;
-                        }
-                        existing.metadata_io_error |= data.metadata_io_error;
-                        existing.is_dir = data.is_dir;
-                        traversal.tree.try_set_data(index, existing)?;
-
-                        let mut ancestor = traversal.tree.parent(index);
-                        while let Some(ancestor_index) = ancestor {
-                            ancestor = traversal.tree.parent(ancestor_index);
-                            traversal.tree.try_add_size_and_entry_count(
-                                ancestor_index,
-                                file_size,
-                                entry_count,
-                            )?;
-                        }
-                    }
-                    return Ok(self
-                        .throttle
-                        .as_ref()
-                        .is_some_and(|t| t.can_update())
-                        .then_some(false));
-                }
-                let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
-
-                let parent_index = if walk_depth == 0 {
-                    self.integration_root(root_idx)
-                } else {
-                    let parent_id = entry
-                        .parent_directory_id
-                        .expect("non-root entries have a parent directory identifier");
-                    if self.skip_root && walk_depth == 1 {
-                        self.set_directory_node(parent_id.index(), self.root_idx);
-                    }
-                    self.nodes_by_directory
-                        .get(parent_id.index())
-                        .copied()
-                        .flatten()
-                        .expect("parent entries are emitted before their children")
-                };
-                let mut retained_node = None;
-                if retain_entry {
-                    let entry_index = traversal.tree.try_add_child(parent_index, name, data)?;
-                    retained_node = Some(entry_index);
-                    if walk_depth == 0 {
-                        self.root_nodes[root_idx] = Some(entry_index);
-                    }
-                }
-                if let Some(directory_id) = entry.directory_id {
-                    self.set_directory_node(
-                        directory_id.index(),
-                        retained_node.unwrap_or(parent_index),
-                    );
-                }
-
-                let mut ancestor = Some(parent_index);
-                while let Some(index) = ancestor {
-                    ancestor = traversal.tree.parent(index);
-                    traversal
-                        .tree
-                        .try_add_size_and_entry_count(index, file_size, entry_count)?;
-                }
-
-                if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
-                    self.clean_stages
-                        .get_mut(&root_idx)
-                        .expect("candidate has started")
-                        .deferred_inodes
-                        .push((
-                            retained_node.expect("clean retains all entries"),
-                            entry,
-                            file_size,
-                        ));
-                }
-                if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
-                    return Ok(Some(false));
-                }
+                return Ok(redraw.then_some(false));
             }
             TraversalEvent::Batch(events) => {
                 let mut result = None;
@@ -1760,6 +1617,194 @@ impl BackgroundTraversal {
         }
         Ok(None)
     }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "keep entry accounting and tree integration together"
+    )]
+    fn integrate_entry(
+        &mut self,
+        traversal: &mut Traversal,
+        entry: Result<TraversalEntry, crate::walk::Error>,
+        root_path: &Path,
+        device_id: u64,
+        root_idx: usize,
+    ) -> Result<Option<bool>, TreeError> {
+        self.stats.entries_traversed += 1;
+        let is_clean = self.clean_stages.contains_key(&root_idx);
+        let mut data = EntryData::default();
+        let Ok(TraversalEntry(entry)) = entry else {
+            if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
+                stage.valid = false;
+            }
+            self.stats.io_errors += 1;
+            self.record_error_on_root(traversal, root_idx, root_path)?;
+            return Ok(self
+                .throttle
+                .as_ref()
+                .is_some_and(|t| t.can_update())
+                .then_some(false));
+        };
+        let walk_depth = entry.depth;
+        let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
+            root_path
+        } else {
+            Path::new(&entry.file_name)
+        };
+
+        let mut file_size = 0u128;
+        let mut mtime: SystemTime = UNIX_EPOCH;
+        let mut has_mtime = false;
+        data.is_dir = entry.file_type.is_dir();
+        if let Some(Ok(m)) = &entry.metadata {
+            if self.walk_options.count_hard_links
+                || (is_clean || self.inodes.add(&entry, m))
+                    && (self.walk_options.cross_filesystems
+                        || crossdev::is_same_device(device_id, m))
+            {
+                if self.walk_options.apparent_size {
+                    file_size = u128::from(m.len());
+                } else {
+                    file_size = u128::from(
+                        size_on_disk(
+                            &entry.parent_path,
+                            name,
+                            m,
+                            data.is_dir,
+                            &self.walk_options,
+                            (!is_clean).then_some(&mut self.inodes),
+                        )
+                        .unwrap_or_else(|_| {
+                            self.stats.io_errors += 1;
+                            data.metadata_io_error = true;
+                            0
+                        }),
+                    );
+                }
+            } else {
+                data.entry_count = Some(0);
+            }
+
+            if let Ok(modified) = m.modified() {
+                mtime = modified;
+                has_mtime = true;
+            } else {
+                self.stats.io_errors += 1;
+                data.metadata_io_error = true;
+            }
+        } else {
+            self.stats.io_errors += 1;
+            data.metadata_io_error = true;
+        }
+
+        data.mtime = mtime;
+        data.size = file_size;
+        if data.metadata_io_error
+            && let Some(stage) = self.clean_stages.get_mut(&root_idx)
+        {
+            stage.valid = false;
+        }
+        if data.is_dir {
+            data.entry_count = Some(1);
+        }
+        let entry_count = u64::from(data.is_dir || data.entry_count != Some(0));
+        let preexisting = if self.preexisting_nodes.is_empty() {
+            None
+        } else {
+            self.preexisting_nodes.remove(&entry.path())
+        };
+        if let Some((index, needs_metadata)) = preexisting {
+            if let Some(directory_id) = entry.directory_id {
+                self.set_directory_node(directory_id.index(), index);
+            }
+            if needs_metadata && let Some(mut existing) = traversal.tree.data(index) {
+                existing.size = existing
+                    .size
+                    .checked_add(file_size)
+                    .ok_or(TreeError::MetadataOverflow)?;
+                existing.entry_count = Some(
+                    existing
+                        .entry_count
+                        .unwrap_or(0)
+                        .checked_add(entry_count)
+                        .ok_or(TreeError::MetadataOverflow)?,
+                );
+                if has_mtime {
+                    existing.mtime = data.mtime;
+                }
+                existing.metadata_io_error |= data.metadata_io_error;
+                existing.is_dir = data.is_dir;
+                traversal.tree.try_set_data(index, existing)?;
+
+                let mut ancestor = traversal.tree.parent(index);
+                while let Some(ancestor_index) = ancestor {
+                    ancestor = traversal.tree.parent(ancestor_index);
+                    traversal.tree.try_add_size_and_entry_count(
+                        ancestor_index,
+                        file_size,
+                        entry_count,
+                    )?;
+                }
+            }
+            return Ok(self
+                .throttle
+                .as_ref()
+                .is_some_and(|t| t.can_update())
+                .then_some(false));
+        }
+        let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
+
+        let parent_index = if walk_depth == 0 {
+            self.integration_root(root_idx)
+        } else {
+            let parent_id = entry
+                .parent_directory_id
+                .expect("non-root entries have a parent directory identifier");
+            if self.skip_root && walk_depth == 1 {
+                self.set_directory_node(parent_id.index(), self.root_idx);
+            }
+            self.nodes_by_directory
+                .get(parent_id.index())
+                .copied()
+                .flatten()
+                .expect("parent entries are emitted before their children")
+        };
+        let mut retained_node = None;
+        if retain_entry {
+            let entry_index = traversal.tree.try_add_child(parent_index, name, data)?;
+            retained_node = Some(entry_index);
+            if walk_depth == 0 {
+                self.root_nodes[root_idx] = Some(entry_index);
+            }
+        }
+        if let Some(directory_id) = entry.directory_id {
+            self.set_directory_node(directory_id.index(), retained_node.unwrap_or(parent_index));
+        }
+
+        let mut ancestor = Some(parent_index);
+        while let Some(index) = ancestor {
+            ancestor = traversal.tree.parent(index);
+            traversal
+                .tree
+                .try_add_size_and_entry_count(index, file_size, entry_count)?;
+        }
+
+        if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
+            self.clean_stages
+                .get_mut(&root_idx)
+                .expect("candidate has started")
+                .deferred_inodes
+                .push((
+                    retained_node.expect("clean retains all entries"),
+                    entry,
+                    file_size,
+                ));
+        }
+        if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
+            return Ok(Some(false));
+        }
+        Ok(None)
+    }
 }
 
 struct CleanCandidate {
@@ -1784,16 +1829,20 @@ impl CleanCandidate {
         })
     }
 
-    fn forward_entry(
+    fn forward_entries(
         &self,
         options: &WalkOptions,
         cwd: &Path,
         index: usize,
-        entry: Result<crate::walk::Entry, crate::walk::Error>,
+        mut entries: Vec<Result<crate::walk::Entry, crate::walk::Error>>,
         tx: &crossbeam::channel::Sender<TraversalEvent>,
     ) -> bool {
-        if self.accepted.load(Ordering::Relaxed) {
-            if let Ok(entry) = &entry {
+        let received = entries.len();
+        entries.retain(|entry| {
+            if !self.accepted.load(Ordering::Relaxed) {
+                return false;
+            }
+            if let Ok(entry) = entry {
                 let entry_path = entry.path();
                 let excluded = options.ignore_dirs.contains(entry_path.as_path())
                     || options.ignore_patterns.as_ref().is_some_and(|patterns| {
@@ -1825,31 +1874,38 @@ impl CleanCandidate {
                         entry_path.display()
                     );
                     self.accepted.store(false, Ordering::Relaxed);
+                    return false;
                 }
             }
-            if self.accepted.load(Ordering::Relaxed) {
-                let failed = entry
-                    .as_ref()
-                    .map_or(true, |entry| !matches!(&entry.metadata, Some(Ok(_))));
-                if failed {
-                    self.accepted.store(false, Ordering::Relaxed);
-                }
-                return tx
-                    .send(TraversalEvent::Entry(
-                        entry.map(TraversalEntry),
-                        Arc::clone(&self.path),
-                        self.device,
-                        index,
-                    ))
-                    .is_ok();
+            if entry
+                .as_ref()
+                .map_or(true, |entry| !matches!(&entry.metadata, Some(Ok(_))))
+            {
+                self.accepted.store(false, Ordering::Relaxed);
             }
+            true
+        });
+        let rejected = received - entries.len();
+        if !entries.is_empty()
+            && tx
+                .send(TraversalEvent::EntryBatch {
+                    entries,
+                    root_path: Arc::clone(&self.path),
+                    device_id: self.device,
+                    root_idx: index,
+                })
+                .is_err()
+        {
+            return false;
         }
         // Rejected candidates can still have jobs in flight. Count them while those jobs drain.
-        tx.send(TraversalEvent::DiscoveryProgress {
-            entries: 1,
-            io_errors: 0,
-        })
-        .is_ok()
+        rejected == 0
+            || tx
+                .send(TraversalEvent::DiscoveryProgress {
+                    entries: rejected as u64,
+                    io_errors: 0,
+                })
+                .is_ok()
     }
 }
 
@@ -1861,11 +1917,12 @@ fn walk_clean_candidates(
 ) {
     std::thread::scope(|scope| {
         // One discovery reader and a shared sizing pool, within the existing I/O thread budget.
-        let (mut roots, walk) = crate::walk::stream_roots(
+        let (mut roots, mut walk) = crate::walk::MultiWalk::prepare(
             options.threads - 1,
             crate::walk::Order::ParentFirst,
             options.metadata_options,
-        );
+        )
+        .stream_roots();
         let (candidate_tx, candidate_rx) = crossbeam::channel::bounded(32);
         // Bound active candidate staging, not just the queue waiting to reach the walker.
         let (slot_tx, slot_rx) = crossbeam::channel::bounded(32);
@@ -1941,7 +1998,20 @@ fn walk_clean_candidates(
         }
         let cwd = std::env::current_dir().unwrap_or_default();
         let mut candidates = HashMap::new();
-        for (index, event) in walk {
+        loop {
+            let (index, event) = match walk.recv(None) {
+                Ok(Some(event)) => event,
+                Ok(None) => break,
+                Err(error) => {
+                    log::error!("Cleanup worker channel stopped: {error}");
+                    let _ = tx.send(TraversalEvent::DiscoveryProgress {
+                        entries: 0,
+                        io_errors: 1,
+                    });
+                    cancelled.store(true, Ordering::Relaxed);
+                    break;
+                }
+            };
             if cancelled.load(Ordering::Relaxed) {
                 break;
             }
@@ -1966,10 +2036,20 @@ fn walk_clean_candidates(
                 break;
             }
             let keep_going = match event {
-                crate::walk::RootEvent::Entry(entry) => {
-                    candidates[&index].forward_entry(options, &cwd, index, entry, tx)
+                RootEvent::Entries(entries) => {
+                    candidates[&index].forward_entries(options, &cwd, index, entries, tx)
                 }
-                crate::walk::RootEvent::Finished => {
+                RootEvent::WorkerFailed(error) => {
+                    let _ = candidates[&index].forward_entries(
+                        options,
+                        &cwd,
+                        index,
+                        vec![Err(error)],
+                        tx,
+                    );
+                    false
+                }
+                RootEvent::Finished => {
                     let candidate = candidates.remove(&index).expect("root has started");
                     let sent = tx
                         .send(TraversalEvent::CandidateFinished(
@@ -2037,17 +2117,22 @@ fn walk_clean_candidate(
         device_id: candidate.device,
     }];
     let cwd = std::env::current_dir().unwrap_or_default();
-    for (_, event) in unfiltered.iter_from_paths(roots, false, crate::walk::Order::ParentFirst) {
+    let (mut walk, _) = unfiltered.walk_from_paths(roots, false, crate::walk::Order::ParentFirst);
+    loop {
         if cancelled.load(Ordering::Relaxed) {
             return false;
         }
-        if let crate::walk::RootEvent::Entry(entry) = event {
-            if !candidate.forward_entry(options, &cwd, index, entry, tx) {
-                return false;
-            }
-            if !candidate.accepted.load(Ordering::Relaxed) {
-                break;
-            }
+        let entries = match walk.recv(None) {
+            Ok(Some((_, RootEvent::Entries(entries)))) => entries,
+            Ok(Some((_, RootEvent::WorkerFailed(error)))) => vec![Err(error)],
+            Ok(None | Some((_, RootEvent::Finished))) => break,
+            Err(error) => vec![Err(io::Error::other(error).into())],
+        };
+        if !candidate.forward_entries(options, &cwd, index, entries, tx) {
+            return false;
+        }
+        if !candidate.accepted.load(Ordering::Relaxed) {
+            break;
         }
     }
     tx.send(TraversalEvent::CandidateFinished(
@@ -2108,57 +2193,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dispatch_flushes_a_partial_batch_before_waiting() {
-        use crate::walk::{Order, RootEvent, stream_roots};
-
+    fn dispatch_forwards_worker_batches_after_filtering() {
+        const ENTRIES: usize = 300;
         let directory = tempfile::tempdir().unwrap();
-        let path = Arc::new(directory.path().join("ready"));
-        std::fs::write(&*path, b"data").unwrap();
-        let (mut roots, walk) =
-            stream_roots(1, Order::ParentFirst, crate::TraversalOptions::default());
-        roots.add_root(0, (*path).clone(), |_| true).unwrap();
+        for index in 0..ENTRIES {
+            std::fs::write(directory.path().join(index.to_string()), b"").unwrap();
+        }
+        std::fs::write(directory.path().join("excluded"), b"").unwrap();
+        let patterns = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(patterns.path(), "excluded\n").unwrap();
+        let mut options = clean_walk_options();
+        options.ignore_patterns =
+            crate::IgnorePatterns::from_files(&[patterns.path().to_owned()]).unwrap();
 
-        let (entry_tx, entry_rx) = crossbeam::channel::bounded(2);
-        entry_tx
-            .send(TraversalEvent::RootError(
-                Arc::new(directory.path().join("missing")),
-                1,
-            ))
-            .unwrap();
-        let (root_finished_tx, root_finished_rx) = crossbeam::channel::bounded(1);
-        let dispatcher = std::thread::spawn(move || {
-            dispatch_walk_entries(walk, &entry_tx, |(root, event)| match event {
-                RootEvent::Entry(entry) => Some(TraversalEvent::Entry(
-                    entry.map(TraversalEntry),
-                    Arc::clone(&path),
-                    0,
-                    root,
-                )),
-                RootEvent::Finished => {
-                    root_finished_tx.send(()).unwrap();
-                    None
+        let traversal = Traversal::new();
+        let root = directory.path().to_owned();
+        let background = BackgroundTraversal::start(
+            traversal.root_index,
+            &options,
+            vec![root.clone()],
+            Some(std::slice::from_ref(&root)),
+            true,
+            false,
+        )
+        .unwrap();
+        let mut total = 0;
+        let mut largest_batch = 0;
+        loop {
+            match background
+                .event_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+            {
+                TraversalEvent::EntryBatch {
+                    entries,
+                    root_path,
+                    root_idx: 0,
+                    ..
+                } => {
+                    assert_eq!(root_path.as_path(), directory.path());
+                    assert!(entries.iter().all(|entry| {
+                        entry
+                            .as_ref()
+                            .is_ok_and(|entry| entry.file_name != "excluded")
+                    }));
+                    total += entries.len();
+                    largest_batch = largest_batch.max(entries.len());
                 }
-            })
-        });
-
-        // Keep the first message queued until the dispatcher has seen the root's last event.
-        // Keep the root sender open so the walker has to wait for more input.
-        let timeout = Duration::from_secs(2);
-        let root_finished = root_finished_rx.recv_timeout(timeout);
-        let previous = entry_rx.recv().unwrap();
-        let batch = entry_rx.recv_timeout(timeout);
-        drop(roots);
-        assert!(dispatcher.join().unwrap());
-
-        root_finished.unwrap();
-        assert!(matches!(previous, TraversalEvent::RootError(_, 1)));
-        let Ok(TraversalEvent::Batch(entries)) = batch else {
-            panic!("the dispatcher must send the partial batch while the walk is still waiting");
-        };
-        assert!(matches!(
-            entries.as_slice(),
-            [TraversalEvent::Entry(Ok(_), _, _, 0)]
-        ));
+                TraversalEvent::Finished => break,
+                _ => panic!("the dispatcher must forward worker batches"),
+            }
+        }
+        assert_eq!(total, ENTRIES);
+        if cfg!(target_os = "linux") {
+            assert_eq!(largest_batch, ENTRIES);
+        }
     }
 
     fn clean_walk_options() -> WalkOptions {

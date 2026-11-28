@@ -1,7 +1,3 @@
-#[cfg(any(windows, target_os = "macos"))]
-use crate::walk::walk_root_entries as walk_roots;
-#[cfg(not(any(windows, target_os = "macos")))]
-use crate::walk::walk_roots;
 use crate::{crossdev, walk};
 use anyhow::Context;
 use byte_unit::{Byte, Unit, UnitType};
@@ -299,24 +295,14 @@ impl WalkOptions {
         ignore_directory(path, &self.ignore_dirs, cwd)
     }
 
-    pub(crate) fn iter_from_paths(
-        &self,
-        roots: Vec<WalkRoot>,
-        skip_root: bool,
-        order: walk::Order,
-    ) -> impl Iterator<Item = (usize, walk::RootEvent)> + use<> {
-        let (walk, include) = self.walk_from_paths(roots, skip_root, order);
-        walk.filter(include)
-    }
-
     pub(crate) fn walk_from_paths(
         &self,
         roots: Vec<WalkRoot>,
         skip_root: bool,
         order: walk::Order,
     ) -> (
-        walk::RootWalk,
-        impl Fn(&(usize, walk::RootEvent)) -> bool + use<>,
+        walk::MultiWalk,
+        impl Fn(usize, &walk::Entry) -> bool + use<>,
     ) {
         let num_roots = roots
             .iter()
@@ -394,19 +380,14 @@ impl WalkOptions {
                 && !is_excluded_while_walking(root_idx, entry)
         };
 
-        let walk = walk_roots(
-            indexed_roots,
-            self.threads,
-            order,
-            self.metadata_options,
-            descend,
-        );
+        let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options);
+        #[cfg(any(windows, target_os = "macos"))]
+        let walk = builder.start_entries(indexed_roots, descend);
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let walk = builder.start_paths(indexed_roots, descend);
 
-        let include = move |(root_idx, event): &(usize, walk::RootEvent)| match event {
-            walk::RootEvent::Entry(Ok(entry)) => {
-                (!skip_root || entry.depth > 0) && !is_excluded(*root_idx, entry)
-            }
-            walk::RootEvent::Entry(Err(_)) | walk::RootEvent::Finished => true,
+        let include = move |root_idx, entry: &walk::Entry| {
+            (!skip_root || entry.depth > 0) && !is_excluded(root_idx, entry)
         };
         (walk, include)
     }
@@ -680,24 +661,20 @@ mod tests {
             base_dir: None,
         };
 
-        let paths = options
-            .iter_from_paths(
-                vec![WalkRoot {
-                    index: 0,
-                    pattern_root: None,
-                    path: root.path().to_owned(),
-                    #[cfg(any(windows, target_os = "macos"))]
-                    entry: None,
-                    device_id: crossdev::init(root.path()).unwrap(),
-                }],
-                false,
-                walk::Order::Completion,
-            )
-            .filter_map(|(_, event)| match event {
-                walk::RootEvent::Entry(entry) => Some(entry.unwrap().path()),
-                walk::RootEvent::Finished => None,
-            })
-            .collect::<Vec<_>>();
+        let paths = walk_entries(
+            &options,
+            vec![WalkRoot {
+                index: 0,
+                pattern_root: None,
+                path: root.path().to_owned(),
+                #[cfg(any(windows, target_os = "macos"))]
+                entry: None,
+                device_id: crossdev::init(root.path()).unwrap(),
+            }],
+        )
+        .into_iter()
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
 
         assert!(paths.contains(&child));
     }
@@ -885,24 +862,20 @@ mod tests {
             base_dir: None,
         };
 
-        let paths = options
-            .iter_from_paths(
-                vec![WalkRoot {
-                    index: 0,
-                    path: nested,
-                    #[cfg(any(windows, target_os = "macos"))]
-                    entry: None,
-                    pattern_root: Some(root.path().to_owned()),
-                    device_id: 0,
-                }],
-                false,
-                walk::Order::Completion,
-            )
-            .filter_map(|(_, event)| match event {
-                walk::RootEvent::Entry(entry) => Some(entry.unwrap().file_name),
-                walk::RootEvent::Finished => None,
-            })
-            .collect::<Vec<_>>();
+        let paths = walk_entries(
+            &options,
+            vec![WalkRoot {
+                index: 0,
+                path: nested,
+                #[cfg(any(windows, target_os = "macos"))]
+                entry: None,
+                pattern_root: Some(root.path().to_owned()),
+                device_id: 0,
+            }],
+        )
+        .into_iter()
+        .map(|entry| entry.file_name)
+        .collect::<Vec<_>>();
 
         assert!(!paths.iter().any(|path| path == "secret"));
         assert!(paths.iter().any(|path| path == "visible"));
@@ -931,26 +904,22 @@ mod tests {
             metadata_options: crate::TraversalOptions::default(),
         };
 
-        let names = options
-            .iter_from_paths(
-                vec![WalkRoot {
-                    index: 0,
-                    // Walkers derive the pattern root from the input path itself, but
-                    // `base_dir` takes precedence in matching.
-                    pattern_root: Some(sub.clone()),
-                    path: sub,
-                    #[cfg(any(windows, target_os = "macos"))]
-                    entry: None,
-                    device_id: 0,
-                }],
-                false,
-                walk::Order::Completion,
-            )
-            .filter_map(|(_, event)| match event {
-                walk::RootEvent::Entry(entry) => Some(entry.unwrap().file_name),
-                walk::RootEvent::Finished => None,
-            })
-            .collect::<Vec<_>>();
+        let names = walk_entries(
+            &options,
+            vec![WalkRoot {
+                index: 0,
+                // Walkers derive the pattern root from the input path itself, but
+                // `base_dir` takes precedence in matching.
+                pattern_root: Some(sub.clone()),
+                path: sub,
+                #[cfg(any(windows, target_os = "macos"))]
+                entry: None,
+                device_id: 0,
+            }],
+        )
+        .into_iter()
+        .map(|entry| entry.file_name)
+        .collect::<Vec<_>>();
 
         assert!(!names.iter().any(|name| name == "ignored.txt"));
         assert!(names.iter().any(|name| name == "kept.txt"));
@@ -978,6 +947,24 @@ mod tests {
             .unwrap()
     }
 
+    fn walk_entries(options: &WalkOptions, roots: Vec<WalkRoot>) -> Vec<walk::Entry> {
+        let (mut walk, include) = options.walk_from_paths(roots, false, walk::Order::Completion);
+        let mut accepted = Vec::new();
+        while let Some((root_idx, batch)) = walk.recv(None).unwrap() {
+            match batch {
+                walk::RootEvent::Entries(entries) => accepted.extend(
+                    entries
+                        .into_iter()
+                        .map(Result::unwrap)
+                        .filter(|entry| include(root_idx, entry)),
+                ),
+                walk::RootEvent::Finished => {}
+                walk::RootEvent::WorkerFailed(error) => panic!("worker failed: {error}"),
+            }
+        }
+        accepted
+    }
+
     fn walk_with_patterns(root: &Path, contents: &str) -> Vec<PathBuf> {
         let options = WalkOptions {
             threads: 2,
@@ -990,26 +977,20 @@ mod tests {
             base_dir: None,
         };
 
-        let mut paths = options
-            .iter_from_paths(
-                vec![WalkRoot {
-                    index: 0,
-                    pattern_root: Some(root.to_owned()),
-                    path: root.to_owned(),
-                    #[cfg(any(windows, target_os = "macos"))]
-                    entry: None,
-                    device_id: crossdev::init(root).unwrap(),
-                }],
-                false,
-                walk::Order::Completion,
-            )
-            .filter_map(|(_, event)| match event {
-                walk::RootEvent::Entry(entry) => {
-                    Some(entry.unwrap().path().strip_prefix(root).unwrap().to_owned())
-                }
-                walk::RootEvent::Finished => None,
-            })
-            .collect::<Vec<_>>();
+        let mut paths = walk_entries(
+            &options,
+            vec![WalkRoot {
+                index: 0,
+                pattern_root: Some(root.to_owned()),
+                path: root.to_owned(),
+                #[cfg(any(windows, target_os = "macos"))]
+                entry: None,
+                device_id: crossdev::init(root).unwrap(),
+            }],
+        )
+        .into_iter()
+        .map(|entry| entry.path().strip_prefix(root).unwrap().to_owned())
+        .collect::<Vec<_>>();
         paths.sort();
         paths
     }

@@ -339,11 +339,11 @@ fn aggregate_inner(
     let mut next_output = 0;
 
     // Shared hard links and, when enabled, cloned data belong to the first root that reaches them.
-    for (root_idx, event) in
-        walk_options.iter_from_paths(roots, false, crate::walk::Order::Completion)
-    {
-        let entry = match event {
-            crate::walk::RootEvent::Entry(entry) => entry,
+    let (mut walk, include) =
+        walk_options.walk_from_paths(roots, false, crate::walk::Order::Completion);
+    while let Some((root_idx, event)) = walk.recv(None)? {
+        let entries = match event {
+            crate::walk::RootEvent::Entries(entries) => entries,
             crate::walk::RootEvent::Finished => {
                 completed[root_idx] = true;
                 if !sort_by_size_in_bytes {
@@ -358,53 +358,59 @@ fn aggregate_inner(
                 }
                 continue;
             }
+            crate::walk::RootEvent::WorkerFailed(error) => return Err(error.into()),
         };
-        let aggregate = &mut aggregates[root_idx];
-        stats.entries_traversed += 1;
-        progress.update(stats.entries_traversed);
-        match entry {
-            Ok(entry) => {
-                if entry.depth == 0 {
-                    aggregate.is_file = entry.file_type.is_file()
-                        || entry.file_type.is_symlink() && entry.path().is_file();
-                }
-                let file_size = u128::from(match &entry.metadata {
-                    Some(Ok(m))
-                        if (walk_options.count_hard_links || inodes.add(&entry, m))
-                            && (walk_options.cross_filesystems
-                                || crossdev::is_same_device(device_ids[root_idx], m)) =>
-                    {
-                        if walk_options.apparent_size {
-                            m.len()
-                        } else {
-                            #[cfg(target_os = "macos")]
-                            if apfs_clone_accounting {
-                                inodes.allocated_size(m)
+        for entry in entries {
+            if entry.as_ref().is_ok_and(|entry| !include(root_idx, entry)) {
+                continue;
+            }
+            let aggregate = &mut aggregates[root_idx];
+            stats.entries_traversed += 1;
+            progress.update(stats.entries_traversed);
+            match entry {
+                Ok(entry) => {
+                    if entry.depth == 0 {
+                        aggregate.is_file = entry.file_type.is_file()
+                            || entry.file_type.is_symlink() && entry.path().is_file();
+                    }
+                    let file_size = u128::from(match &entry.metadata {
+                        Some(Ok(m))
+                            if (walk_options.count_hard_links || inodes.add(&entry, m))
+                                && (walk_options.cross_filesystems
+                                    || crossdev::is_same_device(device_ids[root_idx], m)) =>
+                        {
+                            if walk_options.apparent_size {
+                                m.len()
                             } else {
-                                m.allocated_size()
-                            }
-                            #[cfg(not(target_os = "macos"))]
-                            {
-                                size_on_disk(&entry, m).unwrap_or_else(|_| {
-                                    aggregate.errors += 1;
-                                    0
-                                })
+                                #[cfg(target_os = "macos")]
+                                if apfs_clone_accounting {
+                                    inodes.allocated_size(m)
+                                } else {
+                                    m.allocated_size()
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    size_on_disk(&entry, m).unwrap_or_else(|_| {
+                                        aggregate.errors += 1;
+                                        0
+                                    })
+                                }
                             }
                         }
-                    }
-                    Some(Ok(_)) => 0,
-                    Some(Err(_)) | None => {
-                        aggregate.errors += 1;
-                        0
-                    }
-                });
-                stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
-                smallest_file_in_bytes = smallest_file_in_bytes
-                    .map_or(file_size, |size: u128| size.min(file_size))
-                    .into();
-                aggregate.bytes += file_size;
+                        Some(Ok(_)) => 0,
+                        Some(Err(_)) | None => {
+                            aggregate.errors += 1;
+                            0
+                        }
+                    });
+                    stats.largest_file_in_bytes = stats.largest_file_in_bytes.max(file_size);
+                    smallest_file_in_bytes = smallest_file_in_bytes
+                        .map_or(file_size, |size: u128| size.min(file_size))
+                        .into();
+                    aggregate.bytes += file_size;
+                }
+                Err(_) => aggregate.errors += 1,
             }
-            Err(_) => aggregate.errors += 1,
         }
     }
 
