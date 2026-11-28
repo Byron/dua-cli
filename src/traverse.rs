@@ -13,6 +13,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -1000,6 +1001,53 @@ pub enum TraversalEvent {
     },
 }
 
+#[derive(Default)]
+struct AncestorUpdates {
+    parent: Option<TreeIndex>,
+    bytes: u128,
+    entries: u64,
+}
+
+impl AncestorUpdates {
+    fn add(
+        &mut self,
+        tree: &mut Tree,
+        parent: TreeIndex,
+        bytes: u128,
+        entries: u64,
+    ) -> Result<(), TreeError> {
+        if self.parent.is_some_and(|previous| previous != parent) {
+            self.flush(tree)?;
+        }
+        let bytes = self
+            .bytes
+            .checked_add(bytes)
+            .ok_or(TreeError::MetadataOverflow)?;
+        let entries = self
+            .entries
+            .checked_add(entries)
+            .ok_or(TreeError::MetadataOverflow)?;
+        self.parent = Some(parent);
+        self.bytes = bytes;
+        self.entries = entries;
+        Ok(())
+    }
+
+    fn flush(&mut self, tree: &mut Tree) -> Result<(), TreeError> {
+        let Self {
+            parent,
+            bytes,
+            entries,
+        } = std::mem::take(self);
+        let mut ancestor = parent;
+        while let Some(index) = ancestor {
+            ancestor = tree.parent(index);
+            tree.try_add_size_and_entry_count(index, bytes, entries)?;
+        }
+        Ok(())
+    }
+}
+
 impl TraversalEvent {
     /// Yield each entry in a batch, or yield this event by itself.
     pub fn flatten(self) -> impl Iterator<Item = TraversalEvent> {
@@ -1317,43 +1365,59 @@ impl BackgroundTraversal {
                         root_paths.push(Arc::new(root_path));
                     }
 
-                    let (mut walk, include) = walk_options.walk_from_paths(
-                        walk_roots,
-                        skip_root,
-                        crate::walk::Order::ParentFirst,
-                    );
-                    loop {
-                        let (root, batch) = match walk.recv(None) {
-                            Ok(Some(batch)) => batch,
-                            Ok(None) => break,
-                            Err(error) => {
-                                log::error!("Filesystem worker channel stopped: {error}");
-                                return;
-                            }
-                        };
-                        let mut entries = match batch {
-                            RootEvent::Entries(entries) => entries,
-                            RootEvent::Finished => continue,
-                            RootEvent::WorkerFailed(error) => vec![Err(error)],
-                        };
-                        entries.retain(|entry| match entry {
-                            Ok(entry) => include(root, entry),
-                            Err(_) => true,
-                        });
-                        if !entries.is_empty()
-                            && entry_tx
+                    let send_batch = Arc::new({
+                        let entry_tx = entry_tx.clone();
+                        move |root: usize, entries| {
+                            entry_tx
                                 .send(TraversalEvent::EntryBatch {
                                     entries,
                                     root_path: Arc::clone(&root_paths[root]),
                                     device_id: device_ids[root],
                                     root_idx: root_indices[root],
                                 })
-                                .is_err()
+                                .is_ok()
+                        }
+                    });
+                    let cancelled = Arc::new(AtomicBool::new(false));
+                    let mut walk = walk_options.visit_from_paths(
+                        walk_roots,
+                        skip_root,
+                        crate::walk::Order::ParentFirst,
                         {
-                            return;
+                            let send_batch = Arc::clone(&send_batch);
+                            let cancelled = Arc::clone(&cancelled);
+                            move |_, root, entries| {
+                                if !cancelled.load(Ordering::Relaxed) && !send_batch(root, entries)
+                                {
+                                    cancelled.store(true, Ordering::Relaxed);
+                                }
+                            }
+                        },
+                    );
+                    while !cancelled.load(Ordering::Relaxed) {
+                        match walk.recv(Some(Duration::from_millis(100))) {
+                            Ok(None) => break,
+                            Ok(Some((_, RootEvent::Finished))) | Err(RecvTimeoutError::Timeout) => {
+                            }
+                            Ok(Some((root, RootEvent::WorkerFailed(error)))) => {
+                                if !send_batch(root, vec![Err(error)]) {
+                                    return;
+                                }
+                            }
+                            Ok(Some((_, RootEvent::Entries(_)))) => {
+                                unreachable!("visitor consumes entry batches")
+                            }
+                            Err(error) => {
+                                log::error!("Filesystem worker channel stopped: {error}");
+                                return;
+                            }
                         }
                     }
-                    if entry_tx.send(TraversalEvent::Finished).is_err() {
+                    // Active visits can still be publishing batches after a worker failure.
+                    drop(walk);
+                    if !cancelled.load(Ordering::Relaxed)
+                        && entry_tx.send(TraversalEvent::Finished).is_err()
+                    {
                         log::error!("Failed to send TraversalEvents::Finished event");
                     }
                 }
@@ -1563,7 +1627,13 @@ impl BackgroundTraversal {
                 return Ok(Some(false));
             }
             TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
-                return self.integrate_entry(traversal, entry, &root_path, device_id, root_idx);
+                return self.integrate_entries(
+                    traversal,
+                    std::iter::once(entry),
+                    &root_path,
+                    device_id,
+                    root_idx,
+                );
             }
             TraversalEvent::EntryBatch {
                 entries,
@@ -1571,19 +1641,13 @@ impl BackgroundTraversal {
                 device_id,
                 root_idx,
             } => {
-                let mut redraw = false;
-                for entry in entries {
-                    redraw |= self
-                        .integrate_entry(
-                            traversal,
-                            entry.map(TraversalEntry),
-                            &root_path,
-                            device_id,
-                            root_idx,
-                        )?
-                        .is_some();
-                }
-                return Ok(redraw.then_some(false));
+                return self.integrate_entries(
+                    traversal,
+                    entries.into_iter().map(|entry| entry.map(TraversalEntry)),
+                    &root_path,
+                    device_id,
+                    root_idx,
+                );
             }
             TraversalEvent::Batch(events) => {
                 let mut result = None;
@@ -1618,6 +1682,38 @@ impl BackgroundTraversal {
         Ok(None)
     }
 
+    fn integrate_entries(
+        &mut self,
+        traversal: &mut Traversal,
+        mut entries: impl ExactSizeIterator<Item = Result<TraversalEntry, crate::walk::Error>>,
+        root_path: &Path,
+        device_id: u64,
+        root_idx: usize,
+    ) -> Result<Option<bool>, TreeError> {
+        if entries.len() == 0 {
+            return Ok(None);
+        }
+        let mut updates = AncestorUpdates::default();
+        // Worker batches normally contain siblings, so their totals share one ancestor chain.
+        let integrated = entries.try_for_each(|entry| {
+            self.integrate_entry(
+                traversal,
+                entry,
+                root_path,
+                device_id,
+                root_idx,
+                &mut updates,
+            )
+        });
+        updates.flush(&mut traversal.tree)?;
+        integrated?;
+        Ok(self
+            .throttle
+            .as_ref()
+            .is_some_and(|t| t.can_update())
+            .then_some(false))
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "keep entry accounting and tree integration together"
@@ -1629,21 +1725,19 @@ impl BackgroundTraversal {
         root_path: &Path,
         device_id: u64,
         root_idx: usize,
-    ) -> Result<Option<bool>, TreeError> {
+        updates: &mut AncestorUpdates,
+    ) -> Result<(), TreeError> {
         self.stats.entries_traversed += 1;
         let is_clean = self.clean_stages.contains_key(&root_idx);
         let mut data = EntryData::default();
         let Ok(TraversalEntry(entry)) = entry else {
+            updates.flush(&mut traversal.tree)?;
             if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
                 stage.valid = false;
             }
             self.stats.io_errors += 1;
             self.record_error_on_root(traversal, root_idx, root_path)?;
-            return Ok(self
-                .throttle
-                .as_ref()
-                .is_some_and(|t| t.can_update())
-                .then_some(false));
+            return Ok(());
         };
         let walk_depth = entry.depth;
         let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
@@ -1714,6 +1808,7 @@ impl BackgroundTraversal {
             self.preexisting_nodes.remove(&entry.path())
         };
         if let Some((index, needs_metadata)) = preexisting {
+            updates.flush(&mut traversal.tree)?;
             if let Some(directory_id) = entry.directory_id {
                 self.set_directory_node(directory_id.index(), index);
             }
@@ -1736,21 +1831,11 @@ impl BackgroundTraversal {
                 existing.is_dir = data.is_dir;
                 traversal.tree.try_set_data(index, existing)?;
 
-                let mut ancestor = traversal.tree.parent(index);
-                while let Some(ancestor_index) = ancestor {
-                    ancestor = traversal.tree.parent(ancestor_index);
-                    traversal.tree.try_add_size_and_entry_count(
-                        ancestor_index,
-                        file_size,
-                        entry_count,
-                    )?;
+                if let Some(parent) = traversal.tree.parent(index) {
+                    updates.add(&mut traversal.tree, parent, file_size, entry_count)?;
                 }
             }
-            return Ok(self
-                .throttle
-                .as_ref()
-                .is_some_and(|t| t.can_update())
-                .then_some(false));
+            return Ok(());
         }
         let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
 
@@ -1781,13 +1866,7 @@ impl BackgroundTraversal {
             self.set_directory_node(directory_id.index(), retained_node.unwrap_or(parent_index));
         }
 
-        let mut ancestor = Some(parent_index);
-        while let Some(index) = ancestor {
-            ancestor = traversal.tree.parent(index);
-            traversal
-                .tree
-                .try_add_size_and_entry_count(index, file_size, entry_count)?;
-        }
+        updates.add(&mut traversal.tree, parent_index, file_size, entry_count)?;
 
         if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
             self.clean_stages
@@ -1800,10 +1879,7 @@ impl BackgroundTraversal {
                     file_size,
                 ));
         }
-        if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
-            return Ok(Some(false));
-        }
-        Ok(None)
+        Ok(())
     }
 }
 
@@ -2193,22 +2269,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dispatch_forwards_worker_batches_after_filtering() {
+    fn traversal_updates_totals_after_each_filtered_worker_batch() {
         const ENTRIES: usize = 300;
+        const CONTENT: &[u8] = b"data";
         let directory = tempfile::tempdir().unwrap();
         for index in 0..ENTRIES {
-            std::fs::write(directory.path().join(index.to_string()), b"").unwrap();
+            std::fs::write(directory.path().join(index.to_string()), CONTENT).unwrap();
         }
-        std::fs::write(directory.path().join("excluded"), b"").unwrap();
+        std::fs::write(directory.path().join("excluded"), CONTENT).unwrap();
         let patterns = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(patterns.path(), "excluded\n").unwrap();
         let mut options = clean_walk_options();
         options.ignore_patterns =
             crate::IgnorePatterns::from_files(&[patterns.path().to_owned()]).unwrap();
 
-        let traversal = Traversal::new();
+        let mut traversal = Traversal::new();
         let root = directory.path().to_owned();
-        let background = BackgroundTraversal::start(
+        let mut background = BackgroundTraversal::start(
             traversal.root_index,
             &options,
             vec![root.clone()],
@@ -2220,11 +2297,11 @@ mod tests {
         let mut total = 0;
         let mut largest_batch = 0;
         loop {
-            match background
+            let event = background
                 .event_rx
                 .recv_timeout(Duration::from_secs(5))
-                .unwrap()
-            {
+                .unwrap();
+            match &event {
                 TraversalEvent::EntryBatch {
                     entries,
                     root_path,
@@ -2240,8 +2317,17 @@ mod tests {
                     total += entries.len();
                     largest_batch = largest_batch.max(entries.len());
                 }
-                TraversalEvent::Finished => break,
-                _ => panic!("the dispatcher must forward worker batches"),
+                TraversalEvent::Finished => {}
+                _ => panic!("the traversal must forward worker batches"),
+            }
+            let finished = background
+                .integrate_traversal_event(&mut traversal, event)
+                .unwrap();
+            let root_data = traversal.tree.data(traversal.root_index).unwrap();
+            assert_eq!(root_data.size, (total * CONTENT.len()) as u128);
+            assert_eq!(root_data.entry_count, Some(total as u64));
+            if finished == Some(true) {
+                break;
             }
         }
         assert_eq!(total, ENTRIES);

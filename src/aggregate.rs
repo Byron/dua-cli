@@ -580,15 +580,20 @@ fn aggregate_inner(
     ));
     let worker_accumulators = Arc::clone(&parallel);
     let worker_options = walk_options.clone();
-    let mut walk = walk_options.visit_from_paths(roots, move |worker_idx, root_idx, entries| {
-        worker_accumulators.add_batch(
-            worker_idx,
-            root_idx,
-            entries,
-            &worker_options,
-            device_ids[root_idx],
-        );
-    });
+    let mut walk = walk_options.visit_from_paths(
+        roots,
+        false,
+        crate::walk::Order::Completion,
+        move |worker_idx, root_idx, entries| {
+            worker_accumulators.add_batch(
+                worker_idx,
+                root_idx,
+                entries,
+                &worker_options,
+                device_ids[root_idx],
+            );
+        },
+    );
     let timeout = parallel
         .progress_entries
         .is_some()

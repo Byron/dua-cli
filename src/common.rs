@@ -323,25 +323,26 @@ impl WalkOptions {
         (walk, include)
     }
 
-    /// Reduce entries where metadata is collected, retaining the ordinary exclusion rules.
+    /// Visit entry batches where metadata is collected, applying the ordinary exclusion rules.
     pub(crate) fn visit_from_paths(
         &self,
         roots: Vec<WalkRoot>,
+        skip_root: bool,
+        order: walk::Order,
         visit: impl Fn(usize, usize, Vec<Result<walk::Entry, walk::Error>>) + Send + Sync + 'static,
     ) -> walk::MultiWalk {
         let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots);
         let descend = move |root_idx, entry: &walk::Entry| descend(root_idx, entry);
-        let builder =
-            walk::MultiWalk::prepare(self.threads, walk::Order::Completion, self.metadata_options)
-                .visit_batches(move |worker_idx, root_idx, mut entries| {
-                    entries.retain(|entry| match entry {
-                        Ok(entry) => !is_excluded(root_idx, entry),
-                        Err(_) => true,
-                    });
-                    if !entries.is_empty() {
-                        visit(worker_idx, root_idx, entries);
-                    }
+        let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options)
+            .visit_batches(move |worker_idx, root_idx, mut entries| {
+                entries.retain(|entry| match entry {
+                    Ok(entry) => (!skip_root || entry.depth > 0) && !is_excluded(root_idx, entry),
+                    Err(_) => true,
                 });
+                if !entries.is_empty() {
+                    visit(worker_idx, root_idx, entries);
+                }
+            });
         #[cfg(any(windows, target_os = "macos"))]
         {
             builder.start_entries(indexed_roots, descend)
