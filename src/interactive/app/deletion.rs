@@ -16,7 +16,11 @@ use crate::interactive::widgets::MarkMode;
 #[derive(Debug)]
 pub(super) enum DeletionEvent {
     /// The path was removed, or disappeared after the directory walk found it.
-    Removed { target: usize, path: PathBuf },
+    Removed {
+        target: usize,
+        path: PathBuf,
+        succeeded: bool,
+    },
     /// Work on this target stopped, possibly because cancellation was requested.
     TargetFinished { target: usize, errors: usize },
     Finished {
@@ -105,7 +109,7 @@ fn delete_paths(
                 let mut stats = RemovalStats::default();
                 if trash::delete(&path).is_ok() {
                     stats.entries = 1;
-                    publish_removed(&path, target, events, cancel);
+                    publish_removed(&path, target, true, events, cancel);
                 } else {
                     stats.errors = 1;
                 }
@@ -235,10 +239,10 @@ fn record_removal(
     match result {
         Ok(()) => {
             stats.entries += 1;
-            publish_removed(path, target, events, cancel);
+            publish_removed(path, target, true, events, cancel);
         }
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            publish_removed(path, target, events, cancel);
+            publish_removed(path, target, false, events, cancel);
         }
         Err(_) => stats.errors += 1,
     }
@@ -247,6 +251,7 @@ fn record_removal(
 fn publish_removed(
     path: &Path,
     target: usize,
+    succeeded: bool,
     events: &Sender<DeletionEvent>,
     cancel: &AtomicBool,
 ) {
@@ -254,6 +259,7 @@ fn publish_removed(
         .send(DeletionEvent::Removed {
             target,
             path: path.to_owned(),
+            succeeded,
         })
         .is_err()
     {
@@ -293,7 +299,10 @@ mod tests {
         let events = finish(&mut task);
 
         assert_finished(&events, 1, 0, false);
-        assert!(matches!(&events[0], DeletionEvent::Removed { target: 0, path } if *path == file));
+        assert!(matches!(
+            &events[0],
+            DeletionEvent::Removed { target: 0, path, succeeded: true } if *path == file
+        ));
         assert!(!file.exists());
     }
 
@@ -313,7 +322,11 @@ mod tests {
         let removed = events
             .iter()
             .filter_map(|event| match event {
-                DeletionEvent::Removed { target: 0, path } => Some(path),
+                DeletionEvent::Removed {
+                    target: 0,
+                    path,
+                    succeeded: true,
+                } => Some(path),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -385,7 +398,7 @@ mod tests {
         );
         assert!(matches!(
             receive.recv().unwrap(),
-            DeletionEvent::Removed { target: 4, path: removed } if removed == path
+            DeletionEvent::Removed { target: 4, path: removed, succeeded: false } if removed == path
         ));
         assert_eq!((stats.entries, stats.errors), (0, 0));
     }

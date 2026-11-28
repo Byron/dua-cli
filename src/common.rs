@@ -305,13 +305,19 @@ impl WalkOptions {
         roots: Vec<WalkRoot>,
         skip_root: bool,
         order: walk::Order,
+        control: Option<walk::Control>,
     ) -> (
         walk::MultiWalk,
         impl Fn(usize, &walk::Entry) -> bool + use<>,
     ) {
-        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots);
+        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots, control.as_ref());
         let descend = move |root_idx, entry: &walk::Entry| descend(root_idx, entry);
         let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options);
+        let builder = if let Some(control) = control {
+            builder.with_control(control)
+        } else {
+            builder
+        };
         #[cfg(any(windows, target_os = "macos"))]
         let walk = builder.start_entries(indexed_roots, descend);
         #[cfg(not(any(windows, target_os = "macos")))]
@@ -329,9 +335,10 @@ impl WalkOptions {
         roots: Vec<WalkRoot>,
         skip_root: bool,
         order: walk::Order,
+        control: Option<walk::Control>,
         visit: impl Fn(usize, usize, Vec<Result<walk::Entry, walk::Error>>) + Send + Sync + 'static,
     ) -> walk::MultiWalk {
-        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots);
+        let (indexed_roots, descend, is_excluded) = self.prepare_roots(roots, control.as_ref());
         let descend = move |root_idx, entry: &walk::Entry| descend(root_idx, entry);
         let builder = walk::MultiWalk::prepare(self.threads, order, self.metadata_options)
             .visit_batches(move |worker_idx, root_idx, mut entries| {
@@ -343,6 +350,11 @@ impl WalkOptions {
                     visit(worker_idx, root_idx, entries);
                 }
             });
+        let builder = if let Some(control) = control {
+            builder.with_control(control)
+        } else {
+            builder
+        };
         #[cfg(any(windows, target_os = "macos"))]
         {
             builder.start_entries(indexed_roots, descend)
@@ -357,7 +369,10 @@ impl WalkOptions {
     fn prepare_roots(
         &self,
         roots: Vec<WalkRoot>,
+        control: Option<&walk::Control>,
     ) -> (Vec<IndexedRoot>, ExcludeEntry, ExcludeEntry) {
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let _ = control;
         let num_roots = roots
             .iter()
             .map(|root| root.index)
@@ -374,13 +389,17 @@ impl WalkOptions {
                 device_ids[root.index] = root.device_id;
                 root_paths[root.index] = root.pattern_root;
                 #[cfg(any(windows, target_os = "macos"))]
-                indexed_roots.push((
-                    root.index,
-                    root.entry.map_or_else(
-                        || walk::Entry::from_path(&root.path, self.metadata_options),
-                        Ok,
-                    ),
-                ));
+                if let Some(entry) = root.entry {
+                    indexed_roots.push((root.index, Ok(entry)));
+                } else {
+                    let activity = control.and_then(walk::Control::activity);
+                    if control.is_none_or(|control| {
+                        activity.is_some() && !control.is_excluded(&root.path)
+                    }) {
+                        let entry = walk::Entry::from_path(&root.path, self.metadata_options);
+                        indexed_roots.push((root.index, entry));
+                    }
+                }
                 #[cfg(not(any(windows, target_os = "macos")))]
                 indexed_roots.push((root.index, root.path));
                 (device_ids, root_paths, indexed_roots)
@@ -993,7 +1012,8 @@ mod tests {
     }
 
     fn walk_entries(options: &WalkOptions, roots: Vec<WalkRoot>) -> Vec<walk::Entry> {
-        let (mut walk, include) = options.walk_from_paths(roots, false, walk::Order::Completion);
+        let (mut walk, include) =
+            options.walk_from_paths(roots, false, walk::Order::Completion, None);
         let mut accepted = Vec::new();
         while let Some((root_idx, batch)) = walk.recv(None).unwrap() {
             match batch {

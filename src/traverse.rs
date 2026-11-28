@@ -11,9 +11,8 @@ use std::{
     num::NonZeroU32,
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
-        mpsc::RecvTimeoutError,
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -1093,7 +1092,88 @@ pub struct BackgroundTraversal {
     /// Receiver used to obtain traversal events from the worker thread.
     pub event_rx: Receiver<TraversalEvent>,
     clean_stages: HashMap<usize, CleanStage>,
-    _cancelled: Option<CancelOnDrop>,
+    _cancelled: CancelOnDrop,
+    control: Arc<ScanControl>,
+}
+
+#[derive(Default)]
+struct ScanControl {
+    walk: crate::walk::Control,
+    output: Mutex<ScanOutput>,
+    output_changed: Condvar,
+}
+
+#[derive(Default)]
+struct ScanOutput {
+    paused: bool,
+    publishing: bool,
+}
+
+struct Publishing<'a>(&'a ScanControl);
+
+impl Drop for Publishing<'_> {
+    fn drop(&mut self) {
+        self.0.output.lock().unwrap().publishing = false;
+        self.0.output_changed.notify_all();
+    }
+}
+
+impl ScanControl {
+    fn publishing(&self) -> Option<Publishing<'_>> {
+        let mut output = self.output.lock().unwrap();
+        loop {
+            if self.walk.status() == crate::walk::Status::Finished {
+                return None;
+            }
+            if !output.paused && !output.publishing {
+                output.publishing = true;
+                return Some(Publishing(self));
+            }
+            output = self.output_changed.wait(output).unwrap();
+        }
+    }
+
+    fn send(&self, tx: &crossbeam::channel::Sender<TraversalEvent>, event: TraversalEvent) -> bool {
+        let Some(_publishing) = self.publishing() else {
+            return false;
+        };
+        tx.send(event).is_ok()
+    }
+
+    fn pause_output(&self) -> bool {
+        let mut output = self.output.lock().unwrap();
+        if self.walk.status() != crate::walk::Status::Paused {
+            return false;
+        }
+        // Stop new sends even if an in-flight send still needs to be drained.
+        let newly_paused = !std::mem::replace(&mut output.paused, true);
+        let drained = !output.publishing;
+        drop(output);
+        if newly_paused {
+            log::debug!("Scan workers paused; draining published entries");
+        }
+        drained
+    }
+
+    fn resume(&self) {
+        let mut output = self.output.lock().unwrap();
+        self.walk.resume();
+        output.paused = false;
+        self.output_changed.notify_all();
+    }
+
+    fn cancel(&self) {
+        let _output = self.output.lock().unwrap();
+        self.walk.cancel();
+        self.output_changed.notify_all();
+    }
+
+    fn removed(&self, entry: Result<&crate::walk::Entry, &crate::walk::Error>) -> bool {
+        match entry {
+            Ok(entry) => self.walk.is_excluded(&entry.path()),
+            Err(error) => error.path().is_some_and(|path| self.walk.is_excluded(path)),
+        }
+    }
 }
 
 struct CleanStage {
@@ -1104,11 +1184,17 @@ struct CleanStage {
     valid: bool,
 }
 
-struct CancelOnDrop(Arc<AtomicBool>);
+struct CancelOnDrop {
+    cancelled: Option<Arc<AtomicBool>>,
+    control: Arc<ScanControl>,
+}
 
 impl Drop for CancelOnDrop {
     fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
+        if let Some(cancelled) = &self.cancelled {
+            cancelled.store(true, Ordering::Relaxed);
+        }
+        self.control.cancel();
     }
 }
 
@@ -1125,6 +1211,7 @@ impl CleanInput {
     fn discover(
         self,
         options: WalkOptions,
+        control: &crate::walk::Control,
         mut send: impl FnMut(crate::clean::DiscoveryEvent) -> bool,
     ) {
         match self {
@@ -1133,7 +1220,14 @@ impl CleanInput {
                 depth,
                 pattern_root,
             } => {
-                crate::clean::discover(paths, options, depth, pattern_root, send);
+                crate::clean::discover_with_control(
+                    paths,
+                    options,
+                    depth,
+                    pattern_root,
+                    Some(control),
+                    send,
+                );
             }
             Self::Refresh(candidates) => {
                 let mut keep_going = true;
@@ -1141,11 +1235,12 @@ impl CleanInput {
                     if !keep_going {
                         break;
                     }
-                    crate::clean::discover(
+                    crate::clean::discover_with_control(
                         vec![path],
                         options.clone(),
                         Some(0),
                         Some(search_root),
+                        Some(control),
                         |event| {
                             keep_going = send(event);
                             keep_going
@@ -1193,16 +1288,18 @@ impl BackgroundTraversal {
     ) -> anyhow::Result<Self> {
         let (entry_tx, event_rx) = crossbeam::channel::bounded(100);
         let cancelled = Arc::new(AtomicBool::new(false));
+        let control = Arc::new(ScanControl::default());
         std::thread::Builder::new()
             .name("dua-clean-dispatcher".into())
             .spawn({
                 let walk_options = walk_options.clone();
                 let cancelled = Arc::clone(&cancelled);
+                let control = Arc::clone(&control);
                 move || {
                     use crate::clean::DiscoveryEvent;
                     if walk_options.threads <= 1 {
                         let mut index = 0;
-                        input.discover(walk_options.clone(), |event| {
+                        input.discover(walk_options.clone(), &control.walk, |event| {
                             if cancelled.load(Ordering::Relaxed) {
                                 return false;
                             }
@@ -1215,19 +1312,27 @@ impl BackgroundTraversal {
                                         index,
                                         &entry_tx,
                                         &cancelled,
+                                        &control,
                                     );
                                     index += 1;
                                     keep_going
                                 }
-                                DiscoveryEvent::Progress { entries, io_errors } => entry_tx
-                                    .send(TraversalEvent::DiscoveryProgress { entries, io_errors })
-                                    .is_ok(),
+                                DiscoveryEvent::Progress { entries, io_errors } => control.send(
+                                    &entry_tx,
+                                    TraversalEvent::DiscoveryProgress { entries, io_errors },
+                                ),
                             }
                         });
                     } else {
-                        walk_clean_candidates(input, &walk_options, &entry_tx, &cancelled);
+                        walk_clean_candidates(
+                            input,
+                            &walk_options,
+                            &entry_tx,
+                            &cancelled,
+                            &control,
+                        );
                     }
-                    let _ = entry_tx.send(TraversalEvent::Finished);
+                    control.send(&entry_tx, TraversalEvent::Finished);
                 }
             })?;
         Ok(Self {
@@ -1244,7 +1349,11 @@ impl BackgroundTraversal {
             preexisting_nodes: HashMap::new(),
             event_rx,
             clean_stages: HashMap::new(),
-            _cancelled: Some(CancelOnDrop(cancelled)),
+            _cancelled: CancelOnDrop {
+                cancelled: Some(cancelled),
+                control: Arc::clone(&control),
+            },
+            control,
         })
     }
 
@@ -1317,10 +1426,12 @@ impl BackgroundTraversal {
         let num_roots = input.len();
         let (entry_tx, entry_rx) = crossbeam::channel::bounded(4);
         let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
+        let control = Arc::new(ScanControl::default());
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
             .spawn({
                 let walk_options = walk_options.clone();
+                let control = Arc::clone(&control);
                 move || {
                     let (mut root_paths, mut root_indices, mut device_ids, mut walk_roots) = (
                         Vec::with_capacity(input.len()),
@@ -1329,15 +1440,21 @@ impl BackgroundTraversal {
                         Vec::with_capacity(input.len()),
                     );
                     for (root_idx, root_path) in input.into_iter().enumerate() {
+                        let Some(_activity) = control.walk.activity() else {
+                            return;
+                        };
+                        if control.walk.is_excluded(&root_path) {
+                            continue;
+                        }
                         log::info!("Walking {}", root_path.display());
                         let device_id = if walk_options.cross_filesystems {
                             0
                         } else {
                             let Ok(device_id) = crossdev::init(&root_path) else {
-                                if entry_tx
-                                    .send(TraversalEvent::RootError(Arc::new(root_path), root_idx))
-                                    .is_err()
-                                {
+                                if !control.send(
+                                    &entry_tx,
+                                    TraversalEvent::RootError(Arc::new(root_path), root_idx),
+                                ) {
                                     return;
                                 }
                                 continue;
@@ -1365,42 +1482,36 @@ impl BackgroundTraversal {
                         root_paths.push(Arc::new(root_path));
                     }
 
-                    let send_batch = Arc::new({
-                        let entry_tx = entry_tx.clone();
-                        move |root: usize, entries| {
-                            entry_tx
-                                .send(TraversalEvent::EntryBatch {
-                                    entries,
-                                    root_path: Arc::clone(&root_paths[root]),
-                                    device_id: device_ids[root],
-                                    root_idx: root_indices[root],
-                                })
-                                .is_ok()
-                        }
-                    });
-                    let cancelled = Arc::new(AtomicBool::new(false));
+                    let batch_event =
+                        Arc::new(move |root: usize, entries| TraversalEvent::EntryBatch {
+                            entries,
+                            root_path: Arc::clone(&root_paths[root]),
+                            device_id: device_ids[root],
+                            root_idx: root_indices[root],
+                        });
                     let mut walk = walk_options.visit_from_paths(
                         walk_roots,
                         skip_root,
                         crate::walk::Order::ParentFirst,
+                        Some(control.walk.clone()),
                         {
-                            let send_batch = Arc::clone(&send_batch);
-                            let cancelled = Arc::clone(&cancelled);
+                            let batch_event = Arc::clone(&batch_event);
+                            let entry_tx = entry_tx.clone();
+                            let control = Arc::clone(&control);
                             move |_, root, entries| {
-                                if !cancelled.load(Ordering::Relaxed) && !send_batch(root, entries)
-                                {
-                                    cancelled.store(true, Ordering::Relaxed);
+                                // The walk counts the entire visit as active, including this send.
+                                if entry_tx.send(batch_event(root, entries)).is_err() {
+                                    control.cancel();
                                 }
                             }
                         },
                     );
-                    while !cancelled.load(Ordering::Relaxed) {
-                        match walk.recv(Some(Duration::from_millis(100))) {
+                    loop {
+                        match walk.recv(None) {
                             Ok(None) => break,
-                            Ok(Some((_, RootEvent::Finished))) | Err(RecvTimeoutError::Timeout) => {
-                            }
+                            Ok(Some((_, RootEvent::Finished))) => {}
                             Ok(Some((root, RootEvent::WorkerFailed(error)))) => {
-                                if !send_batch(root, vec![Err(error)]) {
+                                if !control.send(&entry_tx, batch_event(root, vec![Err(error)])) {
                                     return;
                                 }
                             }
@@ -1415,8 +1526,8 @@ impl BackgroundTraversal {
                     }
                     // Active visits can still be publishing batches after a worker failure.
                     drop(walk);
-                    if !cancelled.load(Ordering::Relaxed)
-                        && entry_tx.send(TraversalEvent::Finished).is_err()
+                    if control.walk.status() != crate::walk::Status::Finished
+                        && !control.send(&entry_tx, TraversalEvent::Finished)
                     {
                         log::error!("Failed to send TraversalEvents::Finished event");
                     }
@@ -1437,7 +1548,11 @@ impl BackgroundTraversal {
             preexisting_nodes,
             event_rx: entry_rx,
             clean_stages: HashMap::new(),
-            _cancelled: None,
+            _cancelled: CancelOnDrop {
+                cancelled: None,
+                control: Arc::clone(&control),
+            },
+            control,
         })
     }
 
@@ -1445,6 +1560,47 @@ impl BackgroundTraversal {
     #[must_use]
     pub fn root_nodes(&self) -> Option<Vec<TreeIndex>> {
         self.root_nodes.iter().copied().collect()
+    }
+
+    /// Request a pause before the next filesystem jobs start.
+    pub fn pause(&self) {
+        self.control.walk.pause();
+    }
+
+    /// Stop publication once workers are quiet; keep consuming events until this returns true.
+    #[must_use]
+    pub fn pause_for_deletion(&self) -> bool {
+        self.control.pause_output() && self.event_rx.is_empty()
+    }
+
+    /// Resume filesystem work and publication after deletion has completed.
+    pub fn resume(&self) {
+        self.control.resume();
+    }
+
+    /// Retain a confirmed removal path so resumed work cannot rediscover it.
+    pub fn forget_removed_path(&self, path: PathBuf) {
+        self.control.walk.exclude_path(path);
+    }
+
+    /// Clear side-table indices before their removed tree slots can be reused.
+    #[must_use]
+    pub fn forget_removed_nodes(&mut self, removed: &HashSet<TreeIndex>) -> bool {
+        if removed.contains(&self.root_idx) {
+            return false;
+        }
+        for node in self
+            .nodes_by_directory
+            .iter_mut()
+            .chain(self.root_nodes.iter_mut())
+        {
+            if node.is_some_and(|node| removed.contains(&node)) {
+                *node = None;
+            }
+        }
+        self.preexisting_nodes
+            .retain(|_, (node, _)| !removed.contains(node));
+        true
     }
 
     /// Keep tree nodes through `depth`, while still aggregating all sizes, or retain all nodes when
@@ -1464,7 +1620,7 @@ impl BackgroundTraversal {
         if self.skip_root {
             return Ok(());
         }
-        // Entry errors carry no descendant path, so report them on the corresponding root.
+        // Keep surviving traversal errors on the corresponding input root.
         if let Some(root) = self.root_nodes[root_idx] {
             traversal
                 .tree
@@ -1659,6 +1815,9 @@ impl BackgroundTraversal {
                 return Ok(result);
             }
             TraversalEvent::RootError(root_path, root_idx) => {
+                if self.control.walk.is_excluded(&root_path) {
+                    return Ok(None);
+                }
                 if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
                     stage.valid = false;
                 }
@@ -1694,8 +1853,14 @@ impl BackgroundTraversal {
             return Ok(None);
         }
         let mut updates = AncestorUpdates::default();
+        let has_exclusions = self.control.walk.has_exclusions();
+        let mut any_entries = false;
         // Worker batches normally contain siblings, so their totals share one ancestor chain.
         let integrated = entries.try_for_each(|entry| {
+            if has_exclusions && self.control.removed(entry.as_ref().map(|entry| &entry.0)) {
+                return Ok(());
+            }
+            any_entries = true;
             self.integrate_entry(
                 traversal,
                 entry,
@@ -1707,11 +1872,10 @@ impl BackgroundTraversal {
         });
         updates.flush(&mut traversal.tree)?;
         integrated?;
-        Ok(self
-            .throttle
-            .as_ref()
-            .is_some_and(|t| t.can_update())
-            .then_some(false))
+        Ok(
+            (any_entries && self.throttle.as_ref().is_some_and(|t| t.can_update()))
+                .then_some(false),
+        )
     }
 
     #[expect(
@@ -1912,7 +2076,11 @@ impl CleanCandidate {
         index: usize,
         mut entries: Vec<Result<crate::walk::Entry, crate::walk::Error>>,
         tx: &crossbeam::channel::Sender<TraversalEvent>,
+        control: &ScanControl,
     ) -> bool {
+        if control.walk.has_exclusions() {
+            entries.retain(|entry| !control.removed(entry.as_ref()));
+        }
         let received = entries.len();
         entries.retain(|entry| {
             if !self.accepted.load(Ordering::Relaxed) {
@@ -1990,6 +2158,7 @@ fn walk_clean_candidates(
     options: &WalkOptions,
     tx: &crossbeam::channel::Sender<TraversalEvent>,
     cancelled: &Arc<AtomicBool>,
+    control: &Arc<ScanControl>,
 ) {
     std::thread::scope(|scope| {
         // One discovery reader and a shared sizing pool, within the existing I/O thread budget.
@@ -1998,6 +2167,7 @@ fn walk_clean_candidates(
             crate::walk::Order::ParentFirst,
             options.metadata_options,
         )
+        .with_control(control.walk.clone())
         .stream_roots();
         let (candidate_tx, candidate_rx) = crossbeam::channel::bounded(32);
         // Bound active candidate staging, not just the queue waiting to reach the walker.
@@ -2009,15 +2179,20 @@ fn walk_clean_candidates(
             .name("dua-clean-discovery".into())
             .spawn_scoped(scope, move || {
                 let mut index = 0;
-                input.discover(options.clone(), |event| {
+                input.discover(options.clone(), &control.walk, |event| {
                     if cancelled.load(Ordering::Relaxed) {
                         return false;
                     }
                     match event {
-                        crate::clean::DiscoveryEvent::Progress { entries, io_errors } => tx
-                            .send(TraversalEvent::DiscoveryProgress { entries, io_errors })
-                            .is_ok(),
+                        crate::clean::DiscoveryEvent::Progress { entries, io_errors } => control
+                            .send(tx, TraversalEvent::DiscoveryProgress { entries, io_errors }),
                         crate::clean::DiscoveryEvent::Candidate { path, search_root } => {
+                            let Some(activity) = control.walk.activity() else {
+                                return false;
+                            };
+                            if control.walk.is_excluded(&path) {
+                                return true;
+                            }
                             let candidate =
                                 match CleanCandidate::new(options, path.clone(), search_root) {
                                     Ok(candidate) => candidate,
@@ -2026,14 +2201,16 @@ fn walk_clean_candidates(
                                             "Could not inspect cleanup root {}: {err}",
                                             path.display()
                                         );
-                                        return tx
-                                            .send(TraversalEvent::DiscoveryProgress {
+                                        return control.send(
+                                            tx,
+                                            TraversalEvent::DiscoveryProgress {
                                                 entries: 0,
                                                 io_errors: 1,
-                                            })
-                                            .is_ok();
+                                            },
+                                        );
                                     }
                                 };
+                            drop(activity);
                             if slot_rx.recv().is_err() {
                                 return false;
                             }
@@ -2066,10 +2243,13 @@ fn walk_clean_candidates(
             });
         if let Err(err) = discovery {
             log::error!("Could not start cleanup discovery: {err}");
-            let _ = tx.send(TraversalEvent::DiscoveryProgress {
-                entries: 0,
-                io_errors: 1,
-            });
+            control.send(
+                tx,
+                TraversalEvent::DiscoveryProgress {
+                    entries: 0,
+                    io_errors: 1,
+                },
+            );
             return;
         }
         let cwd = std::env::current_dir().unwrap_or_default();
@@ -2080,10 +2260,13 @@ fn walk_clean_candidates(
                 Ok(None) => break,
                 Err(error) => {
                     log::error!("Cleanup worker channel stopped: {error}");
-                    let _ = tx.send(TraversalEvent::DiscoveryProgress {
-                        entries: 0,
-                        io_errors: 1,
-                    });
+                    control.send(
+                        tx,
+                        TraversalEvent::DiscoveryProgress {
+                            entries: 0,
+                            io_errors: 1,
+                        },
+                    );
                     cancelled.store(true, Ordering::Relaxed);
                     break;
                 }
@@ -2091,6 +2274,9 @@ fn walk_clean_candidates(
             if cancelled.load(Ordering::Relaxed) {
                 break;
             }
+            let Some(_publishing) = control.publishing() else {
+                break;
+            };
             // Discovery queues context before submitting a root, so it is available even when
             // another root's metadata finishes first.
             while !candidates.contains_key(&index) {
@@ -2113,7 +2299,7 @@ fn walk_clean_candidates(
             }
             let keep_going = match event {
                 RootEvent::Entries(entries) => {
-                    candidates[&index].forward_entries(options, &cwd, index, entries, tx)
+                    candidates[&index].forward_entries(options, &cwd, index, entries, tx, control)
                 }
                 RootEvent::WorkerFailed(error) => {
                     let _ = candidates[&index].forward_entries(
@@ -2122,6 +2308,7 @@ fn walk_clean_candidates(
                         index,
                         vec![Err(error)],
                         tx,
+                        control,
                     );
                     false
                 }
@@ -2155,29 +2342,35 @@ fn walk_clean_candidate(
     index: usize,
     tx: &crossbeam::channel::Sender<TraversalEvent>,
     cancelled: &AtomicBool,
+    control: &ScanControl,
 ) -> bool {
     if cancelled.load(Ordering::Relaxed) {
         return false;
+    }
+    let Some(activity) = control.walk.activity() else {
+        return false;
+    };
+    if control.walk.is_excluded(&path) {
+        return true;
     }
     let candidate = match CleanCandidate::new(options, path, search_root) {
         Ok(candidate) => candidate,
         Err(err) => {
             log::debug!("Could not inspect cleanup root: {err}");
-            return tx
-                .send(TraversalEvent::DiscoveryProgress {
+            return control.send(
+                tx,
+                TraversalEvent::DiscoveryProgress {
                     entries: 0,
                     io_errors: 1,
-                })
-                .is_ok();
+                },
+            );
         }
     };
-    if tx
-        .send(TraversalEvent::CandidateStarted(
-            index,
-            candidate.search_root.clone(),
-        ))
-        .is_err()
-    {
+    drop(activity);
+    if !control.send(
+        tx,
+        TraversalEvent::CandidateStarted(index, candidate.search_root.clone()),
+    ) {
         return false;
     }
     // Inspect exclusions as well: deleting their containing candidate would delete them too.
@@ -2193,7 +2386,12 @@ fn walk_clean_candidate(
         device_id: candidate.device,
     }];
     let cwd = std::env::current_dir().unwrap_or_default();
-    let (mut walk, _) = unfiltered.walk_from_paths(roots, false, crate::walk::Order::ParentFirst);
+    let (mut walk, _) = unfiltered.walk_from_paths(
+        roots,
+        false,
+        crate::walk::Order::ParentFirst,
+        Some(control.walk.clone()),
+    );
     loop {
         if cancelled.load(Ordering::Relaxed) {
             return false;
@@ -2204,18 +2402,20 @@ fn walk_clean_candidate(
             Ok(None | Some((_, RootEvent::Finished))) => break,
             Err(error) => vec![Err(io::Error::other(error).into())],
         };
-        if !candidate.forward_entries(options, &cwd, index, entries, tx) {
+        let Some(_publishing) = control.publishing() else {
+            return false;
+        };
+        if !candidate.forward_entries(options, &cwd, index, entries, tx, control) {
             return false;
         }
         if !candidate.accepted.load(Ordering::Relaxed) {
             break;
         }
     }
-    tx.send(TraversalEvent::CandidateFinished(
-        index,
-        candidate.accepted.load(Ordering::Relaxed),
-    ))
-    .is_ok()
+    control.send(
+        tx,
+        TraversalEvent::CandidateFinished(index, candidate.accepted.load(Ordering::Relaxed)),
+    )
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -2347,6 +2547,181 @@ mod tests {
             metadata_options: crate::TraversalOptions::default(),
             base_dir: None,
         }
+    }
+
+    #[test]
+    fn pause_handoff_and_resume_do_not_wait_for_a_full_output_channel() {
+        let control = Arc::new(ScanControl::default());
+        let (tx, rx) = crossbeam::channel::bounded(0);
+        let (started_tx, started_rx) = crossbeam::channel::bounded(0);
+        let publisher = std::thread::spawn({
+            let control = Arc::clone(&control);
+            move || {
+                let _publishing = control.publishing().unwrap();
+                started_tx.send(()).unwrap();
+                tx.send(()).unwrap();
+            }
+        });
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        control.walk.pause();
+        assert!(
+            !control.pause_output(),
+            "drain the publisher before completing the pause"
+        );
+        assert!(
+            control.output.lock().unwrap().paused,
+            "buffered results must wait while the current send drains"
+        );
+        let (done_tx, done_rx) = crossbeam::channel::bounded(1);
+        let resumer = std::thread::spawn({
+            let control = Arc::clone(&control);
+            move || {
+                control.resume();
+                done_tx.send(()).unwrap();
+            }
+        });
+        done_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        rx.recv().unwrap();
+        publisher.join().unwrap();
+        resumer.join().unwrap();
+    }
+
+    #[test]
+    fn pause_handoff_completes_with_another_result_waiting_to_publish() {
+        let control = Arc::new(ScanControl::default());
+        let (events_tx, events_rx) = crossbeam::channel::bounded(0);
+        let (started_tx, started_rx) = crossbeam::channel::bounded(0);
+        let publisher = std::thread::spawn({
+            let control = Arc::clone(&control);
+            move || {
+                let publishing = control.publishing().unwrap();
+                started_tx.send(()).unwrap();
+                events_tx.send(TraversalEvent::Finished).unwrap();
+                drop(publishing);
+                started_tx.send(()).unwrap();
+                control.send(&events_tx, TraversalEvent::Finished)
+            }
+        });
+        let timeout = Duration::from_secs(5);
+        started_rx.recv_timeout(timeout).unwrap();
+        control.walk.pause();
+        assert!(!control.pause_output());
+        events_rx.recv_timeout(timeout).unwrap();
+        started_rx.recv_timeout(timeout).unwrap();
+        assert!(control.pause_output());
+        assert!(events_rx.try_recv().is_err());
+        control.resume();
+        events_rx.recv_timeout(timeout).unwrap();
+        assert!(publisher.join().unwrap());
+    }
+
+    #[test]
+    fn dropping_a_paused_clean_scan_releases_discovery_and_sizing() {
+        let directory = tempfile::tempdir().unwrap();
+        for index in 0..80 {
+            let path = directory
+                .path()
+                .join(format!("project-{index}/node_modules"));
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(path.join("payload"), b"cache").unwrap();
+        }
+        for threads in [1, 4] {
+            let mut options = clean_walk_options();
+            options.threads = threads;
+            let scan = BackgroundTraversal::start_clean(
+                TreeIndex::default(),
+                &options,
+                vec![directory.path().to_owned()],
+                None,
+                None,
+            )
+            .unwrap();
+            let events = scan.event_rx.clone();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while events.len() < 100 {
+                assert!(
+                    Instant::now() < deadline,
+                    "cleanup did not fill its output queue"
+                );
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            scan.pause();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !scan.pause_for_deletion() {
+                assert!(Instant::now() < deadline, "cleanup did not pause");
+                let _ = events.recv_timeout(Duration::from_millis(10));
+            }
+            drop(scan);
+            assert!(
+                matches!(
+                    events.recv_timeout(Duration::from_secs(5)),
+                    Err(crossbeam::channel::RecvTimeoutError::Disconnected)
+                ),
+                "cancelled cleanup threads release their output channel"
+            );
+        }
+    }
+
+    #[test]
+    fn removed_path_errors_are_ignored_while_unrelated_errors_are_recorded() {
+        let directory = tempfile::tempdir().unwrap();
+        let root_path = Arc::new(directory.path().to_owned());
+        let mut traversal = Traversal::new();
+        let mut scan = BackgroundTraversal::start(
+            traversal.root_index,
+            &clean_walk_options(),
+            vec![root_path.as_ref().clone()],
+            None,
+            false,
+            true,
+        )
+        .unwrap();
+        loop {
+            let event = scan.event_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            if scan
+                .integrate_traversal_event(&mut traversal, event)
+                .unwrap()
+                == Some(true)
+            {
+                break;
+            }
+        }
+        let root = scan.root_nodes().unwrap()[0];
+        let removed = root_path.join("removed");
+        scan.forget_removed_path(removed.clone());
+        let mut entries = Vec::new();
+        for path in [removed.clone(), removed.join("child")] {
+            entries.push(crate::walk::Entry::from_path(
+                &path,
+                crate::TraversalOptions::default(),
+            ));
+            scan.integrate_traversal_event(
+                &mut traversal,
+                TraversalEvent::RootError(Arc::new(path), 0),
+            )
+            .unwrap();
+        }
+        scan.integrate_traversal_event(
+            &mut traversal,
+            TraversalEvent::EntryBatch {
+                entries,
+                root_path: Arc::clone(&root_path),
+                device_id: 0,
+                root_idx: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(scan.stats.io_errors, 0);
+        assert!(!traversal.tree.data(root).unwrap().metadata_io_error);
+        let unrelated = root_path.join("unrelated");
+        let error = crate::walk::Entry::from_path(&unrelated, crate::TraversalOptions::default());
+        scan.integrate_traversal_event(
+            &mut traversal,
+            TraversalEvent::Entry(error.map(TraversalEntry), root_path, 0, 0),
+        )
+        .unwrap();
+        assert_eq!(scan.stats.io_errors, 1);
+        assert!(traversal.tree.data(root).unwrap().metadata_io_error);
     }
 
     #[test]

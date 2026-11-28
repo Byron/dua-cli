@@ -543,7 +543,7 @@ pub struct UiText {
     pub snapshots_read_only: &'static str,
     pub traversal_running: &'static str,
     pub deletion_running: &'static str,
-    pub deletion_queued: &'static str,
+    pub pausing_scan: &'static str,
     pub cancelling_deletion: &'static str,
     pub no_cleanup_candidates: &'static str,
     pub cleanup_candidates_already_marked: &'static str,
@@ -667,13 +667,17 @@ impl Language {
         }
     }
 
-    pub fn deletion_progress(self, count: usize, removed: &str, trash: bool) -> String {
+    pub fn deletion_progress(self, count: Option<usize>, removed: &str, trash: bool) -> String {
+        let singular = count == Some(1);
+        let count = count.map_or_else(|| "?".into(), |count| count.to_string());
         match (self, trash) {
             (Language::English, false) => {
-                format!("Deleted {count} items ({removed})...")
+                let label = if singular { "item" } else { "items" };
+                format!("Deleted {count} {label} ({removed})...")
             }
             (Language::English, true) => {
-                format!("Trashed {count} items ({removed})...")
+                let label = if singular { "item" } else { "items" };
+                format!("Trashed {count} {label} ({removed})...")
             }
             (Language::Japanese, false) => format!("{count} 件を削除 ({removed})..."),
             (Language::Japanese, true) => {
@@ -689,12 +693,22 @@ impl Language {
             }
             (Language::German, false) => format!(
                 "{count} {} gelöscht ({removed})...",
-                if count == 1 { "Eintrag" } else { "Einträge" }
+                if singular { "Eintrag" } else { "Einträge" }
             ),
             (Language::German, true) => {
-                let label = if count == 1 { "Eintrag" } else { "Einträge" };
+                let label = if singular { "Eintrag" } else { "Einträge" };
                 format!("{count} {label} in den Papierkorb verschoben ({removed})...")
             }
+        }
+    }
+
+    pub fn scanned_removal_size(self, size: &str) -> String {
+        match self {
+            Language::English => format!("{size} scanned"),
+            Language::Japanese => format!("スキャン済み {size}"),
+            Language::Korean => format!("스캔된 {size}"),
+            Language::Chinese => format!("已扫描 {size}"),
+            Language::German => format!("{size} erfasst"),
         }
     }
 
@@ -773,11 +787,13 @@ impl Language {
     pub fn notification_summary(
         self,
         action: &str,
-        entries: u64,
+        entries: Option<u64>,
         bytes: &str,
         elapsed: &str,
         errors: u64,
     ) -> String {
+        let singular = entries == Some(1);
+        let entries = entries.map_or_else(|| "?".into(), |entries| entries.to_string());
         let errors = match (self, errors) {
             (_, 0) => String::new(),
             (Language::English, count) => format!(", {count} errors"),
@@ -807,7 +823,7 @@ impl Language {
                 t.notification_finished
             ),
             Language::German => {
-                let label = if entries == 1 { "Eintrag" } else { "Einträge" };
+                let label = if singular { "Eintrag" } else { "Einträge" };
                 format!(
                     "{action} {}: {entries} {label}, {bytes} in {elapsed}{errors}",
                     t.notification_finished
@@ -865,7 +881,7 @@ const EN_UI: UiText = UiText {
     snapshots_read_only: "Snapshots are read-only",
     traversal_running: "Traversal already running",
     deletion_running: "Deletion in progress; changes are disabled",
-    deletion_queued: "Deletion queued; waiting for the scan to finish",
+    pausing_scan: "Pausing the scan before deletion...",
     cancelling_deletion: "Cancelling deletion...",
     no_cleanup_candidates: "No cleanup candidates in view",
     cleanup_candidates_already_marked: "Cleanup candidates are already marked",
@@ -929,7 +945,7 @@ const JA_UI: UiText = UiText {
     snapshots_read_only: "スナップショットは読み取り専用です",
     traversal_running: "スキャンはすでに実行中です",
     deletion_running: "削除中のため変更できません",
-    deletion_queued: "削除を予約しました。スキャン完了を待っています",
+    pausing_scan: "削除の前にスキャンを一時停止しています...",
     cancelling_deletion: "削除を中止しています...",
     no_cleanup_candidates: "現在の表示にクリーンアップ候補はありません",
     cleanup_candidates_already_marked: "クリーンアップ候補はすでにマーク済みです",
@@ -993,7 +1009,7 @@ const KO_UI: UiText = UiText {
     snapshots_read_only: "스냅샷은 읽기 전용입니다",
     traversal_running: "스캔이 이미 실행 중입니다",
     deletion_running: "삭제 중에는 변경할 수 없습니다",
-    deletion_queued: "삭제 예약됨; 스캔이 끝날 때까지 기다리는 중",
+    pausing_scan: "삭제 전에 스캔을 일시 중지하는 중...",
     cancelling_deletion: "삭제 취소 중...",
     no_cleanup_candidates: "현재 보기에 정리 후보가 없습니다",
     cleanup_candidates_already_marked: "정리 후보가 이미 표시되어 있습니다",
@@ -1057,7 +1073,7 @@ const ZH_UI: UiText = UiText {
     snapshots_read_only: "快照为只读",
     traversal_running: "扫描已在进行",
     deletion_running: "正在删除，暂时无法更改",
-    deletion_queued: "删除已排队，等待扫描完成",
+    pausing_scan: "正在暂停扫描以进行删除...",
     cancelling_deletion: "正在取消删除...",
     no_cleanup_candidates: "当前视图中没有清理候选项",
     cleanup_candidates_already_marked: "清理候选项已标记",
@@ -1121,7 +1137,7 @@ const DE_UI: UiText = UiText {
     snapshots_read_only: "Snapshots sind schreibgeschützt",
     traversal_running: "Scan läuft bereits",
     deletion_running: "Löschung läuft; Änderungen sind gesperrt",
-    deletion_queued: "Löschung vorgemerkt; wartet auf das Scan-Ende",
+    pausing_scan: "Scan wird vor der Löschung angehalten...",
     cancelling_deletion: "Löschung wird abgebrochen...",
     no_cleanup_candidates: "Keine Bereinigungskandidaten in der Ansicht",
     cleanup_candidates_already_marked: "Bereinigungskandidaten sind bereits markiert",
@@ -1245,7 +1261,7 @@ mod tests {
             Language::German,
         ] {
             for trash in [false, true] {
-                let progress = language.deletion_progress(42, "123 MB", trash);
+                let progress = language.deletion_progress(Some(42), "123 MB", trash);
                 assert!(progress.contains("42"));
                 assert!(progress.contains("123 MB"));
             }
@@ -1375,7 +1391,7 @@ mod tests {
             assert_eq!(
                 language.notification_summary(
                     language.ui_text().notification_scan,
-                    42,
+                    Some(42),
                     "2.00 MB",
                     "1.2s",
                     2,

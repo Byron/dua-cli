@@ -73,8 +73,8 @@ impl MainWindow {
         let (entries_style, help_style, mark_style, glob_style) = pane_border_style(state.focussed);
         let (header_area, content_area, footer_area) = main_window_layout(area);
 
-        let safety_notice = if state.queued_deletion.is_some() {
-            Some(language.ui_text().deletion_queued)
+        let safety_notice = if state.pending_deletion.is_some() {
+            Some(language.ui_text().pausing_scan)
         } else {
             mark_safety_notice(state.read_only, state.is_deleting(), &config.keys, language)
         };
@@ -217,11 +217,9 @@ impl MainWindow {
                 total_bytes: *total_bytes,
                 format: display.byte_format,
                 message: state.message.clone(),
-                traversal_stats: (state.scan.is_some() || !state.received_events).then_some((
-                    *entries_traversed,
-                    *start,
-                    *elapsed,
-                )),
+                traversal_stats: (!state.is_deleting()
+                    && (state.scan.is_some() || !state.received_events))
+                    .then_some((*entries_traversed, *start, *elapsed)),
                 sort_mode: state.sorting,
                 pending_exit: state.pending_exit,
                 keys: &config.keys,

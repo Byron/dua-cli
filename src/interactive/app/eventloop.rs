@@ -452,6 +452,18 @@ impl AppState {
     where
         B: Backend,
     {
+        if self.pending_deletion.is_some()
+            && self
+                .scan
+                .as_ref()
+                .is_none_or(|scan| scan.active_traversal.pause_for_deletion())
+        {
+            let mode = self.pending_deletion.take().expect("pending deletion");
+            let tree = self.tree_view(traversal);
+            self.delete_marked(window, &tree, *display, mode)?;
+            self.refresh_screen(window, traversal, display, terminal, config)?;
+            return Ok(None);
+        }
         if let Some(deletion) = &self.deletion {
             let input = if deletion.input_closed {
                 crossbeam::channel::never()
@@ -504,7 +516,7 @@ impl AppState {
             crossbeam::select! {
                 recv(events) -> event => {
                     let Ok(event) = event else {
-                        self.queued_deletion = None;
+                        self.exit_after_deletion();
                         return Ok(Some(WalkResult { num_errors: self.stats.io_errors }));
                     };
                     let res = self.process_terminal_event(
@@ -567,10 +579,6 @@ impl AppState {
                                 self.navigation_mut().view_root = view;
                             }
                         }
-                        if is_finished && let Some(mode) = self.queued_deletion.take() {
-                            let tree = self.tree_view(traversal);
-                            self.start_deletion(window, &tree, *display, mode)?;
-                        }
                         self.update_state_during_traversal(traversal, previous_selection.as_ref(), is_finished);
                         self.refresh_screen(window, traversal, display, terminal, config)?;
                         if is_finished {
@@ -592,12 +600,14 @@ impl AppState {
                         }
                     }
                 },
-                default(std::time::Duration::from_secs(1)) => {
-                    // Keep progress visible while discovery or filesystem I/O is waiting.
-                    self.stats = active_traversal.stats;
-                    let previous_selection = previous_selection.clone();
-                    self.update_state_during_traversal(traversal, previous_selection.as_ref(), false);
-                    self.refresh_screen(window, traversal, display, terminal, config)?;
+                default(if self.pending_deletion.is_some() { std::time::Duration::from_millis(20) } else { std::time::Duration::from_secs(1) }) => {
+                    if self.pending_deletion.is_none() {
+                        // Keep scan progress visible while discovery or filesystem I/O is waiting.
+                        self.stats = active_traversal.stats;
+                        let previous_selection = previous_selection.clone();
+                        self.update_state_during_traversal(traversal, previous_selection.as_ref(), false);
+                        self.refresh_screen(window, traversal, display, terminal, config)?;
+                    }
                 }
             }
         } else {
