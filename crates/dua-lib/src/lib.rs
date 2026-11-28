@@ -356,10 +356,18 @@ struct Pool {
 /// A multi-root iterator yielding each root index with entry and per-root completion events.
 /// Unlike [`Walk`], it preserves root identity and exposes when each root finishes.
 pub struct RootWalk {
-    /// Entries buffered for delivery, by root index.
-    next: Vec<(usize, RootEvent)>,
+    /// Initial root events or entries from the current worker batch.
+    pending: Option<Pending>,
     /// See [`Walk::pool`].
     pool: Option<Pool>,
+}
+
+enum Pending {
+    Initial(std::vec::IntoIter<(usize, RootEvent)>),
+    WorkerBatch {
+        root_idx: usize,
+        entries: std::vec::IntoIter<Result<Entry, Error>>,
+    },
 }
 
 /// Submits roots to a running [`RootWalk`] without starting additional workers.
@@ -434,7 +442,7 @@ pub fn stream_roots(threads: usize, order: Order, options: Options) -> (RootSend
     (
         sender,
         RootWalk {
-            next: Vec::new(),
+            pending: None,
             pool: Some(pool),
         },
     )
@@ -706,7 +714,7 @@ fn start_root_walk<Root>(
         .collect::<HashSet<_>>();
     assert_eq!(indices.len(), roots.len(), "root indices must be unique");
     let descend: Arc<Descend> = Arc::new(descend);
-    let (next, root_jobs, next_directory_id) = begin_walks(
+    let (initial, root_jobs, next_directory_id) = begin_walks(
         roots
             .into_iter()
             .map(|(root_idx, root)| (root_idx, prepare(root))),
@@ -719,7 +727,10 @@ fn start_root_walk<Root>(
         start_jobs(&pool, root_jobs);
         Some(pool)
     };
-    RootWalk { next, pool }
+    RootWalk {
+        pending: Some(Pending::Initial(initial.into_iter())),
+        pool,
+    }
 }
 
 impl RootWalk {
@@ -731,8 +742,17 @@ impl RootWalk {
 
     fn next_event(&mut self, wait: bool) -> Option<(usize, RootEvent)> {
         loop {
-            if let Some(entry) = self.next.pop() {
-                return Some(entry);
+            if let Some(pending) = &mut self.pending {
+                let event = match pending {
+                    Pending::Initial(events) => events.next(),
+                    Pending::WorkerBatch { root_idx, entries } => entries
+                        .next()
+                        .map(|entry| (*root_idx, RootEvent::Entry(entry))),
+                };
+                if event.is_some() {
+                    return event;
+                }
+                self.pending = None;
             }
             let events = &self.pool.as_ref()?.events;
             let event = if wait {
@@ -744,12 +764,12 @@ impl RootWalk {
                 Ok(Event::Batch {
                     root_idx,
                     batch: Ok(entries),
-                }) => self.next.extend(
-                    entries
-                        .into_iter()
-                        .rev()
-                        .map(|entry| (root_idx, RootEvent::Entry(entry))),
-                ),
+                }) => {
+                    self.pending = Some(Pending::WorkerBatch {
+                        root_idx,
+                        entries: entries.into_iter(),
+                    });
+                }
                 Ok(Event::Batch {
                     root_idx,
                     batch: Err(err),
@@ -895,12 +915,12 @@ fn start_pool(threads: usize, order: Order, options: Options, next_directory_id:
 }
 
 /// Prepare initial root events and directory jobs.
-/// Returns events in stack order for [`RootWalk::next`] to pop, plus jobs requiring a worker pool.
+/// Returns events in input root order, plus jobs requiring a worker pool.
 fn begin_walks(
     roots: impl IntoIterator<Item = (usize, Result<Entry, Error>)>,
     descend: &Arc<Descend>,
 ) -> (Vec<(usize, RootEvent)>, Vec<Job>, usize) {
-    let mut next = Vec::new();
+    let mut events = Vec::new();
     let mut jobs = Vec::new();
     let mut next_directory_id = 0;
     for (root_idx, mut entry) in roots {
@@ -936,13 +956,12 @@ fn begin_walks(
         } else {
             false
         };
-        next.push((root_idx, RootEvent::Entry(entry)));
+        events.push((root_idx, RootEvent::Entry(entry)));
         if !has_job {
-            next.push((root_idx, RootEvent::Finished));
+            events.push((root_idx, RootEvent::Finished));
         }
     }
-    next.reverse();
-    (next, jobs, next_directory_id)
+    (events, jobs, next_directory_id)
 }
 
 /// Seed an idle pool with one initial job per active root.
@@ -1559,6 +1578,45 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
+    fn root_walk_drains_a_batch_before_reporting_completion() {
+        let (roots, mut walk) = stream_roots(1, Order::ParentFirst, Options::default());
+        let events = &roots.shared.events;
+        events
+            .try_send(Event::Batch {
+                root_idx: 2,
+                batch: Ok(Vec::new()),
+            })
+            .unwrap();
+        events
+            .try_send(Event::Batch {
+                root_idx: 7,
+                batch: Ok(vec![
+                    Err(io::Error::from(io::ErrorKind::NotFound).into()),
+                    Err(io::Error::from(io::ErrorKind::PermissionDenied).into()),
+                ]),
+            })
+            .unwrap();
+
+        assert!(
+            matches!(walk.next_if_ready(), Some((7, RootEvent::Entry(Err(error))))
+            if error.io_error().kind() == io::ErrorKind::NotFound)
+        );
+        events
+            .try_send(Event::RootFinished { root_idx: 7 })
+            .unwrap();
+        events.try_send(Event::Finished).unwrap();
+        assert!(
+            matches!(walk.next(), Some((7, RootEvent::Entry(Err(error))))
+            if error.io_error().kind() == io::ErrorKind::PermissionDenied)
+        );
+        assert!(matches!(
+            walk.next_if_ready(),
+            Some((7, RootEvent::Finished))
+        ));
+        assert!(walk.next_if_ready().is_none());
+    }
+
+    #[test]
     fn result_queue_capacity_is_configurable_per_worker() {
         for threads in [1, 2] {
             for (options, batches) in [
@@ -2088,13 +2146,13 @@ mod tests {
                 RootEvent::Finished => finished[root_idx] = Some(position),
             }
         }
-        paths.sort();
+        paths[roots.len()..].sort();
         assert_eq!(
             paths,
             [
                 (0, PathBuf::new()),
-                (0, PathBuf::from("child")),
                 (1, PathBuf::new()),
+                (0, PathBuf::from("child")),
                 (1, PathBuf::from("child")),
             ]
         );
