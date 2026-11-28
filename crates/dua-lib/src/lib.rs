@@ -42,7 +42,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
-        mpsc::{Receiver, SyncSender, sync_channel},
+        mpsc::{Receiver, SyncSender, TryRecvError, sync_channel},
     },
     thread,
 };
@@ -722,15 +722,25 @@ fn start_root_walk<Root>(
     RootWalk { next, pool }
 }
 
-impl Iterator for RootWalk {
-    type Item = (usize, RootEvent);
+impl RootWalk {
+    /// Yield the next available event without waiting for more walk output.
+    /// Returns `None` if no event is ready or the walk is complete. Use [`Iterator::next`] to wait.
+    pub fn next_if_ready(&mut self) -> Option<(usize, RootEvent)> {
+        self.next_event(false)
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next_event(&mut self, wait: bool) -> Option<(usize, RootEvent)> {
         loop {
             if let Some(entry) = self.next.pop() {
                 return Some(entry);
             }
-            match self.pool.as_ref()?.events.recv() {
+            let events = &self.pool.as_ref()?.events;
+            let event = if wait {
+                events.recv().map_err(|_| TryRecvError::Disconnected)
+            } else {
+                events.try_recv()
+            };
+            match event {
                 Ok(Event::Batch {
                     root_idx,
                     batch: Ok(entries),
@@ -751,7 +761,8 @@ impl Iterator for RootWalk {
                     self.pool = None;
                     return None;
                 }
-                Err(_) => {
+                Err(TryRecvError::Empty) => return None,
+                Err(TryRecvError::Disconnected) => {
                     return Some((
                         0,
                         RootEvent::Entry(Err(io::Error::other("directory worker stopped").into())),
@@ -759,6 +770,14 @@ impl Iterator for RootWalk {
                 }
             }
         }
+    }
+}
+
+impl Iterator for RootWalk {
+    type Item = (usize, RootEvent);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_event(true)
     }
 }
 

@@ -304,6 +304,19 @@ impl WalkOptions {
         skip_root: bool,
         order: walk::Order,
     ) -> impl Iterator<Item = (usize, walk::RootEvent)> + use<> {
+        let (walk, include) = self.walk_from_paths(roots, skip_root, order);
+        walk.filter(include)
+    }
+
+    pub(crate) fn walk_from_paths(
+        &self,
+        roots: Vec<WalkRoot>,
+        skip_root: bool,
+        order: walk::Order,
+    ) -> (
+        walk::RootWalk,
+        impl Fn(&(usize, walk::RootEvent)) -> bool + use<>,
+    ) {
         let num_roots = roots
             .iter()
             .map(|root| root.index)
@@ -384,12 +397,13 @@ impl WalkOptions {
             descend,
         );
 
-        walk.filter(move |(root_idx, event)| match event {
+        let include = move |(root_idx, event): &(usize, walk::RootEvent)| match event {
             walk::RootEvent::Entry(Ok(entry)) => {
                 (!skip_root || entry.depth > 0) && !is_excluded(*root_idx, entry)
             }
             walk::RootEvent::Entry(Err(_)) | walk::RootEvent::Finished => true,
-        })
+        };
+        (walk, include)
     }
 }
 

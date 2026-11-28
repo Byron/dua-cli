@@ -336,9 +336,11 @@ fn simple_user_journey_read_only() -> Result<()> {
     {
         assert!(app.state.scan.is_none(), "no refresh in progress");
 
+        let previous_scan_start = app.state.stats.start;
         app.process_events(&mut terminal, into_codes("R"))?;
+        // Small scans may already be done when the input is exhausted.
         assert!(
-            app.state.scan.is_some(),
+            app.state.scan.is_some() || app.state.stats.start != previous_scan_start,
             "'R' refreshes all entries in the view"
         );
 
@@ -357,9 +359,11 @@ fn simple_user_journey_read_only() -> Result<()> {
             "it moves the cursor down and selects the next item based on the current sort mode"
         );
 
+        let previous_scan_start = app.state.stats.start;
         app.process_events(&mut terminal, into_codes("r"))?;
+        // Small scans may already be done when the input is exhausted.
         assert!(
-            app.state.scan.is_some(),
+            app.state.scan.is_some() || app.state.stats.start != previous_scan_start,
             "'r' refreshes all entries in the view"
         );
 

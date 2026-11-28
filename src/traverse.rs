@@ -981,6 +981,46 @@ pub enum TraversalEvent {
     RootError(Arc<PathBuf>, usize),
     /// Traversal completed.
     Finished,
+    /// Consecutive [`TraversalEvent::Entry`] events, in the order they were discovered.
+    ///
+    /// Entries are sent in batches to avoid paying for channel synchronization once per entry.
+    /// Use [`TraversalEvent::flatten()`] to handle them one by one.
+    Batch(Vec<TraversalEvent>),
+}
+
+impl TraversalEvent {
+    /// Return the events contained in a [`TraversalEvent::Batch`], or this event alone.
+    pub fn flatten(self) -> impl Iterator<Item = TraversalEvent> {
+        match self {
+            Self::Batch(events) => itertools::Either::Left(events.into_iter()),
+            event => itertools::Either::Right(std::iter::once(event)),
+        }
+    }
+}
+
+/// The largest number of entries the walk dispatcher collects into one [`TraversalEvent::Batch`].
+const MAX_ENTRIES_PER_BATCH: usize = 256;
+/// Cap queued walk entries even when every message contains a full batch.
+const MAX_QUEUED_WALK_ENTRIES: usize = 1024;
+
+fn dispatch_walk_entries(
+    mut walk: crate::walk::RootWalk,
+    entry_tx: &crossbeam::channel::Sender<TraversalEvent>,
+    mut to_entry_event: impl FnMut((usize, crate::walk::RootEvent)) -> Option<TraversalEvent>,
+) -> bool {
+    while let Some(first) = walk.next() {
+        // Only the first event may need to wait for the walker. Bound the drain even when
+        // many of the ready events are filtered out.
+        let batch: Vec<_> = std::iter::once(first)
+            .chain(std::iter::from_fn(|| walk.next_if_ready()))
+            .take(MAX_ENTRIES_PER_BATCH)
+            .filter_map(&mut to_entry_event)
+            .collect();
+        if !batch.is_empty() && entry_tx.send(TraversalEvent::Batch(batch)).is_err() {
+            return false;
+        }
+    }
+    true
 }
 
 /// An in-progress traversal which exposes newly obtained entries
@@ -1225,7 +1265,8 @@ impl BackgroundTraversal {
         preexisting_nodes: HashMap<PathBuf, (TreeIndex, bool)>,
     ) -> anyhow::Result<BackgroundTraversal> {
         let num_roots = input.len();
-        let (entry_tx, entry_rx) = crossbeam::channel::bounded(100);
+        let (entry_tx, entry_rx) =
+            crossbeam::channel::bounded(MAX_QUEUED_WALK_ENTRIES / MAX_ENTRIES_PER_BATCH);
         let pattern_roots = pattern_roots.map(<[PathBuf]>::to_owned);
         std::thread::Builder::new()
             .name("dua-fs-walk-dispatcher".to_string())
@@ -1275,27 +1316,26 @@ impl BackgroundTraversal {
                         root_paths.push(Arc::new(root_path));
                     }
 
-                    for (root, event) in walk_options.iter_from_paths(
+                    let (walk, include) = walk_options.walk_from_paths(
                         walk_roots,
                         skip_root,
                         crate::walk::Order::ParentFirst,
-                    ) {
-                        let crate::walk::RootEvent::Entry(entry) = event else {
-                            continue;
-                        };
-                        if entry_tx
-                            .send(TraversalEvent::Entry(
-                                entry.map(TraversalEntry),
-                                Arc::clone(&root_paths[root]),
-                                device_ids[root],
-                                root_indices[root],
-                            ))
-                            .is_err()
-                        {
-                            // The channel is closed, this means the user has
-                            // requested to quit the app. Abort the walking.
-                            return;
+                    );
+                    if !dispatch_walk_entries(walk, &entry_tx, |event| {
+                        if !include(&event) {
+                            return None;
                         }
+                        let (root, crate::walk::RootEvent::Entry(entry)) = event else {
+                            return None;
+                        };
+                        Some(TraversalEvent::Entry(
+                            entry.map(TraversalEntry),
+                            Arc::clone(&root_paths[root]),
+                            device_ids[root],
+                            root_indices[root],
+                        ))
+                    }) {
+                        return;
                     }
                     if entry_tx.send(TraversalEvent::Finished).is_err() {
                         log::error!("Failed to send TraversalEvents::Finished event");
@@ -1688,6 +1728,15 @@ impl BackgroundTraversal {
                     return Ok(Some(false));
                 }
             }
+            TraversalEvent::Batch(events) => {
+                let mut result = None;
+                for event in events {
+                    if let Some(is_finished) = self.integrate_traversal_event(traversal, event)? {
+                        result = Some(result.unwrap_or(false) || is_finished);
+                    }
+                }
+                return Ok(result);
+            }
             TraversalEvent::RootError(root_path, root_idx) => {
                 if let Some(stage) = self.clean_stages.get_mut(&root_idx) {
                     stage.valid = false;
@@ -2057,6 +2106,60 @@ fn size_on_disk(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dispatch_flushes_a_partial_batch_before_waiting() {
+        use crate::walk::{Order, RootEvent, stream_roots};
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = Arc::new(directory.path().join("ready"));
+        std::fs::write(&*path, b"data").unwrap();
+        let (mut roots, walk) =
+            stream_roots(1, Order::ParentFirst, crate::TraversalOptions::default());
+        roots.add_root(0, (*path).clone(), |_| true).unwrap();
+
+        let (entry_tx, entry_rx) = crossbeam::channel::bounded(2);
+        entry_tx
+            .send(TraversalEvent::RootError(
+                Arc::new(directory.path().join("missing")),
+                1,
+            ))
+            .unwrap();
+        let (root_finished_tx, root_finished_rx) = crossbeam::channel::bounded(1);
+        let dispatcher = std::thread::spawn(move || {
+            dispatch_walk_entries(walk, &entry_tx, |(root, event)| match event {
+                RootEvent::Entry(entry) => Some(TraversalEvent::Entry(
+                    entry.map(TraversalEntry),
+                    Arc::clone(&path),
+                    0,
+                    root,
+                )),
+                RootEvent::Finished => {
+                    root_finished_tx.send(()).unwrap();
+                    None
+                }
+            })
+        });
+
+        // Keep the first message queued until the dispatcher has seen the root's last event.
+        // Keep the root sender open so the walker has to wait for more input.
+        let timeout = Duration::from_secs(2);
+        let root_finished = root_finished_rx.recv_timeout(timeout);
+        let previous = entry_rx.recv().unwrap();
+        let batch = entry_rx.recv_timeout(timeout);
+        drop(roots);
+        assert!(dispatcher.join().unwrap());
+
+        root_finished.unwrap();
+        assert!(matches!(previous, TraversalEvent::RootError(_, 1)));
+        let Ok(TraversalEvent::Batch(entries)) = batch else {
+            panic!("the dispatcher must send the partial batch while the walk is still waiting");
+        };
+        assert!(matches!(
+            entries.as_slice(),
+            [TraversalEvent::Entry(Ok(_), _, _, 0)]
+        ));
+    }
 
     fn clean_walk_options() -> WalkOptions {
         WalkOptions {
@@ -2486,8 +2589,12 @@ mod tests {
         )
         .unwrap();
 
-        loop {
-            let event = background.event_rx.recv().unwrap();
+        for event in background
+            .event_rx
+            .clone()
+            .into_iter()
+            .flat_map(TraversalEvent::flatten)
+        {
             let is_file = matches!(
                 &event,
                 TraversalEvent::Entry(Ok(TraversalEntry(entry)), _, _, _)
@@ -2514,9 +2621,10 @@ mod tests {
                     nested_size >= 7,
                     "nested directory size should include its 7-byte file, got {nested_size}"
                 );
-                break;
+                return;
             }
         }
+        panic!("traversal ended before emitting nested/file");
     }
 
     #[test]
