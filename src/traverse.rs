@@ -5,7 +5,7 @@ use crossbeam::channel::Receiver;
 use filesize::PathExt;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt, io,
     num::NonZeroU32,
     path::{Path, PathBuf},
@@ -21,8 +21,8 @@ const FLAG_OCCUPIED: u32 = 1 << 0;
 const FLAG_DIRECTORY: u32 = 1 << 1;
 const FLAG_METADATA_IO_ERROR: u32 = 1 << 2;
 const FLAG_ENTRY_COUNT: u32 = 1 << 3;
-/// The node's size or modification time didn't fit inline, both are stored in `Tree::wide`.
-const FLAG_WIDE: u32 = 1 << 4;
+const FLAG_WIDE_SIZE: u32 = 1 << 4;
+const FLAG_WIDE_MTIME: u32 = 1 << 5;
 
 /// Stable index of an entry in a [`Tree`].
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -157,20 +157,25 @@ struct TreeNode {
     flags: u32,
 }
 
-/// The size and modification time of a node that can't store them inline.
+/// The parts of a node's metadata that may need more space than the inline fields.
 #[derive(Clone, Copy)]
 struct WideData {
-    size: u128,
+    size_high: u64,
     mtime: SystemTime,
 }
 
-/// Return `time` as nanoseconds since [`UNIX_EPOCH`], or `None` if it doesn't fit.
+/// Return `time` as a signed nanosecond offset from [`UNIX_EPOCH`], or `None`
+/// if the offset doesn't fit in an `i64`.
+///
+/// For a time before the epoch, negate the unsigned distance before narrowing
+/// so that `i64::MIN` fits.
 fn mtime_to_nanos(time: SystemTime) -> Option<i64> {
     match time.duration_since(UNIX_EPOCH) {
         Ok(duration) => i64::try_from(duration.as_nanos()).ok(),
-        Err(err) => i64::try_from(err.duration().as_nanos())
-            .ok()
-            .map(|nanos| -nanos),
+        Err(err) => {
+            let nanos = i128::try_from(err.duration().as_nanos()).ok()?;
+            i64::try_from(-nanos).ok()
+        }
     }
 }
 
@@ -207,18 +212,31 @@ impl TreeNode {
     }
 
     fn is_wide(&self) -> bool {
-        self.flags & FLAG_WIDE != 0
+        self.flags & (FLAG_WIDE_SIZE | FLAG_WIDE_MTIME) != 0
+    }
+
+    fn has_wide_size(&self) -> bool {
+        self.flags & FLAG_WIDE_SIZE != 0
+    }
+
+    fn size(&self, wide: Option<&WideData>) -> u128 {
+        let low = u128::from(self.size);
+        if self.has_wide_size() {
+            (u128::from(wide.expect("wide size exists").size_high) << 64) | low
+        } else {
+            low
+        }
     }
 
     /// Return this node's data, with `wide` being its entry in `Tree::wide` if it is wide.
     fn data(&self, wide: Option<&WideData>) -> EntryData {
-        let (size, mtime) = match wide {
-            Some(wide) => (wide.size, wide.mtime),
-            None => (u128::from(self.size), nanos_to_mtime(self.mtime)),
-        };
         EntryData {
-            size,
-            mtime,
+            size: self.size(wide),
+            mtime: if self.flags & FLAG_WIDE_MTIME != 0 {
+                wide.expect("wide timestamp exists").mtime
+            } else {
+                nanos_to_mtime(self.mtime)
+            },
             entry_count: (self.flags & FLAG_ENTRY_COUNT != 0).then_some(self.entry_count),
             metadata_io_error: self.flags & FLAG_METADATA_IO_ERROR != 0,
             is_dir: self.flags & FLAG_DIRECTORY != 0,
@@ -228,20 +246,19 @@ impl TreeNode {
     /// Store `data`, returning what has to be kept in `Tree::wide` as it doesn't fit inline.
     #[must_use]
     fn set_data(&mut self, data: EntryData) -> Option<WideData> {
-        let inline = u64::try_from(data.size)
-            .ok()
-            .zip(mtime_to_nanos(data.mtime));
-        let (size, mtime) = inline.unwrap_or_default();
-        self.size = size;
-        self.mtime = mtime;
+        let size_high = (data.size >> 64) as u64;
+        let mtime = mtime_to_nanos(data.mtime);
+        self.size = data.size as u64;
+        self.mtime = mtime.unwrap_or_default();
         self.entry_count = data.entry_count.unwrap_or_default();
         self.flags = FLAG_OCCUPIED
             | (u32::from(data.is_dir) * FLAG_DIRECTORY)
             | (u32::from(data.metadata_io_error) * FLAG_METADATA_IO_ERROR)
             | (u32::from(data.entry_count.is_some()) * FLAG_ENTRY_COUNT)
-            | (u32::from(inline.is_none()) * FLAG_WIDE);
-        inline.is_none().then_some(WideData {
-            size: data.size,
+            | (u32::from(size_high != 0) * FLAG_WIDE_SIZE)
+            | (u32::from(mtime.is_none()) * FLAG_WIDE_MTIME);
+        self.is_wide().then_some(WideData {
+            size_high,
             mtime: data.mtime,
         })
     }
@@ -254,6 +271,8 @@ pub enum TreeError {
     Allocation(std::collections::TryReserveError),
     /// A name or node index exceeded the tree's `u32` storage limit.
     Capacity,
+    /// An aggregate size or entry count exceeded the metadata's numeric range.
+    MetadataOverflow,
     /// A supplied node index does not exist.
     InvalidIndex,
     /// The child already belongs to another parent.
@@ -267,6 +286,7 @@ impl fmt::Display for TreeError {
         match self {
             Self::Allocation(err) => err.fmt(f),
             Self::Capacity => f.write_str("tree exceeds its u32 storage limit"),
+            Self::MetadataOverflow => f.write_str("tree size or entry count overflowed"),
             Self::InvalidIndex => f.write_str("tree index does not exist"),
             Self::AlreadyAttached => f.write_str("tree node already has a parent"),
             Self::Cycle => f.write_str("tree attachment would create a cycle"),
@@ -293,8 +313,8 @@ pub struct Tree {
     free_head: u32,
     /// Number of occupied nodes, which may be smaller than `nodes.len()` after removals.
     len: usize,
-    /// Size and modification time of the few nodes that can't store them inline, by slot.
-    wide: BTreeMap<u32, WideData>,
+    /// Overflow metadata, initialized on demand so `Tree::new` can stay const.
+    wide: Option<HashMap<TreeIndex, WideData>>,
 }
 
 impl Default for Tree {
@@ -309,7 +329,7 @@ impl fmt::Debug for Tree {
             .field("nodes", &self.nodes.len())
             .field("names", &self.names.len())
             .field("len", &self.len)
-            .field("wide", &self.wide.len())
+            .field("wide", &self.wide.as_ref().map_or(0, HashMap::len))
             .finish()
     }
 }
@@ -323,7 +343,7 @@ impl Tree {
             names: Vec::new(),
             free_head: NONE,
             len: 0,
-            wide: BTreeMap::new(),
+            wide: None,
         }
     }
 
@@ -387,8 +407,7 @@ impl Tree {
         data: EntryData,
     ) -> Result<TreeIndex, TreeError> {
         let (name_start, name_len) = self.try_append_name(name.as_ref())?;
-        let (node, wide) = TreeNode::new(name_start, name_len, data);
-        self.try_allocate(node, wide)
+        self.try_add_node(name_start, name_len, data)
     }
 
     /// Try to add a child to `parent`.
@@ -416,8 +435,7 @@ impl Tree {
             return Err(TreeError::InvalidIndex);
         }
         let (name_start, name_len) = self.try_append_native_name(name)?;
-        let (node, wide) = TreeNode::new(name_start, name_len, data);
-        let child = self.try_allocate(node, wide)?;
+        let child = self.try_add_node(name_start, name_len, data)?;
         self.attach(parent, child)?;
         Ok(child)
     }
@@ -483,67 +501,84 @@ impl Tree {
     #[must_use]
     pub fn data(&self, index: TreeIndex) -> Option<EntryData> {
         let node = self.node(index)?;
-        let wide = node.is_wide().then(|| &self.wide[&(index.index() as u32)]);
+        let wide = node.is_wide().then(|| self.wide_data(index));
         Some(node.data(wide))
     }
 
-    /// Replace an entry's metadata, returning `false` if the index is missing.
-    pub fn set_data(&mut self, index: TreeIndex, data: EntryData) -> bool {
-        let Some(node) = self.node_mut(index) else {
-            return false;
-        };
-        let was_wide = node.is_wide();
-        let slot = index.index() as u32;
-        match node.set_data(data) {
-            Some(wide) => {
-                self.wide.insert(slot, wide);
-            }
-            None if was_wide => {
-                self.wide.remove(&slot);
-            }
-            None => {}
-        }
-        true
+    /// Return an entry's size without reading its timestamp.
+    pub(crate) fn size(&self, index: TreeIndex) -> Option<u128> {
+        let node = self.node(index)?;
+        let wide = node.has_wide_size().then(|| self.wide_data(index));
+        Some(node.size(wide))
     }
 
-    /// Mutate an entry's metadata, returning `false` if the index is missing.
-    pub fn update(&mut self, index: TreeIndex, edit: impl FnOnce(&mut EntryData)) -> bool {
+    /// Replace an entry's metadata, returning `Ok(false)` if the index is missing.
+    pub fn try_set_data(&mut self, index: TreeIndex, data: EntryData) -> Result<bool, TreeError> {
+        let Some(node) = self.node(index) else {
+            return Ok(false);
+        };
+        let mut node = node.clone();
+        let was_wide = node.is_wide();
+        if let Some(wide) = node.set_data(data) {
+            self.try_insert_wide(index, wide)?;
+        } else if was_wide && let Some(wide) = &mut self.wide {
+            wide.remove(&index);
+        }
+        self.nodes[index.index()] = node;
+        Ok(true)
+    }
+
+    /// Mutate an entry's metadata, returning `Ok(false)` without calling `edit` if the index is missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage for the updated metadata cannot be allocated.
+    pub fn try_update(
+        &mut self,
+        index: TreeIndex,
+        edit: impl FnOnce(&mut EntryData),
+    ) -> Result<bool, TreeError> {
         let Some(mut data) = self.data(index) else {
-            return false;
+            return Ok(false);
         };
         edit(&mut data);
-        self.set_data(index, data)
+        self.try_set_data(index, data)
     }
 
-    /// Add `size` and `entry_count` to an entry's metadata, returning `false` if the index is
-    /// missing.
-    ///
-    /// This is the same as using [`Tree::update()`] to add to both, but avoids converting the
-    /// whole entry back and forth, as it is called for every ancestor of every new entry.
-    pub(crate) fn add_size_and_entry_count(
+    /// Add `size` and `entry_count` to an entry's metadata, returning `Ok(false)` if the index is
+    /// missing. Update inline sizes directly because this runs for every ancestor of each new entry.
+    pub(crate) fn try_add_size_and_entry_count(
         &mut self,
         index: TreeIndex,
         size: u128,
         entry_count: u64,
-    ) -> bool {
-        let Some(node) = self.node_mut(index) else {
-            return false;
+    ) -> Result<bool, TreeError> {
+        let Some(node) = self.node(index) else {
+            return Ok(false);
         };
-        if !node.is_wide()
+        // Without an entry count, the stored count is zero.
+        let entry_count = node
+            .entry_count
+            .checked_add(entry_count)
+            .ok_or(TreeError::MetadataOverflow)?;
+        if !node.has_wide_size()
             && let Some(sum) = u64::try_from(size)
                 .ok()
                 .and_then(|size| node.size.checked_add(size))
         {
+            let node = &mut self.nodes[index.index()];
             node.size = sum;
-            // Without an entry count, the stored count is zero.
-            node.entry_count += entry_count;
+            node.entry_count = entry_count;
             node.flags |= FLAG_ENTRY_COUNT;
-            return true;
+            return Ok(true);
         }
-        self.update(index, |entry| {
-            entry.size += size;
-            *entry.entry_count.get_or_insert(0) += entry_count;
-        })
+        let mut data = node.data(node.is_wide().then(|| self.wide_data(index)));
+        data.size = data
+            .size
+            .checked_add(size)
+            .ok_or(TreeError::MetadataOverflow)?;
+        data.entry_count = Some(entry_count);
+        self.try_set_data(index, data)
     }
 
     /// Return an entry's arena-backed name.
@@ -645,7 +680,7 @@ impl Tree {
             }
             let node = &mut self.nodes[index.index()];
             if node.is_wide() {
-                self.wide.remove(&(index.index() as u32));
+                self.wide.as_mut().expect("wide data exists").remove(&index);
             }
             node.flags = 0;
             node.parent = NONE;
@@ -688,10 +723,30 @@ impl Tree {
             .filter(|node| node.is_occupied())
     }
 
-    fn node_mut(&mut self, index: TreeIndex) -> Option<&mut TreeNode> {
-        self.nodes
-            .get_mut(index.index())
-            .filter(|node| node.is_occupied())
+    fn wide_data(&self, index: TreeIndex) -> &WideData {
+        &self.wide.as_ref().expect("wide data exists")[&index]
+    }
+
+    fn try_insert_wide(&mut self, index: TreeIndex, data: WideData) -> Result<(), TreeError> {
+        let wide = self.wide.get_or_insert_with(HashMap::new);
+        if let Some(existing) = wide.get_mut(&index) {
+            *existing = data;
+        } else {
+            wide.try_reserve(1)?;
+            wide.insert(index, data);
+        }
+        Ok(())
+    }
+
+    fn try_add_node(
+        &mut self,
+        name_start: u32,
+        name_len: u32,
+        data: EntryData,
+    ) -> Result<TreeIndex, TreeError> {
+        let (node, wide) = TreeNode::new(name_start, name_len, data);
+        self.try_allocate(node, wide)
+            .inspect_err(|_| self.names.truncate(name_start as usize))
     }
 
     fn try_allocate(
@@ -699,25 +754,29 @@ impl Tree {
         node: TreeNode,
         wide: Option<WideData>,
     ) -> Result<TreeIndex, TreeError> {
-        let index = if self.free_head == NONE {
+        let append = self.free_head == NONE;
+        let slot = if append {
             let index = u32::try_from(self.nodes.len()).map_err(|_| TreeError::Capacity)?;
             if index == NONE {
                 return Err(TreeError::Capacity);
             }
             self.nodes.try_reserve(1)?;
-            self.nodes.push(node);
             index
         } else {
-            let index = self.free_head;
-            self.free_head = self.nodes[index as usize].next_sibling;
-            self.nodes[index as usize] = node;
-            index
+            self.free_head
         };
+        let index = TreeIndex::from_raw(slot);
         if let Some(wide) = wide {
-            self.wide.insert(index, wide);
+            self.try_insert_wide(index, wide)?;
+        }
+        if append {
+            self.nodes.push(node);
+        } else {
+            self.free_head = self.nodes[index.index()].next_sibling;
+            self.nodes[index.index()] = node;
         }
         self.len += 1;
-        Ok(TreeIndex::from_raw(index))
+        Ok(index)
     }
 
     fn try_append_name(&mut self, name: &Path) -> Result<(u32, u32), TreeError> {
@@ -1281,40 +1340,35 @@ impl BackgroundTraversal {
         traversal: &mut Traversal,
         root_idx: usize,
         root_path: &Path,
-    ) {
+    ) -> Result<(), TreeError> {
         if self.skip_root {
-            return;
+            return Ok(());
         }
         // Entry errors carry no descendant path, so report them on the corresponding root.
         if let Some(root) = self.root_nodes[root_idx] {
             traversal
                 .tree
-                .update(root, |entry| entry.metadata_io_error = true);
-            return;
+                .try_update(root, |entry| entry.metadata_io_error = true)?;
+            return Ok(());
         }
         let name = if self.use_root_path {
-            root_path.to_owned()
-        } else {
             root_path
-                .file_name()
-                .unwrap_or(root_path.as_os_str())
-                .into()
+        } else {
+            Path::new(root_path.file_name().unwrap_or(root_path.as_os_str()))
         };
-        let node = traversal.tree.add_child(
-            self.integration_root(root_idx),
+        let parent = self.integration_root(root_idx);
+        let node = traversal.tree.try_add_child(
+            parent,
             name,
             EntryData {
                 metadata_io_error: true,
                 is_dir: true,
                 ..EntryData::default()
             },
-        );
-        traversal
-            .tree
-            .update(self.integration_root(root_idx), |entry| {
-                *entry.entry_count.get_or_insert(0) += 1;
-            });
+        )?;
+        traversal.tree.try_add_size_and_entry_count(parent, 0, 1)?;
         self.root_nodes[root_idx] = Some(node);
+        Ok(())
     }
 
     fn set_directory_node(&mut self, directory_id: usize, node: TreeIndex) {
@@ -1334,7 +1388,7 @@ impl BackgroundTraversal {
         &mut self,
         traversal: &mut Traversal,
         entries: Vec<(TreeIndex, crate::walk::Entry, u128)>,
-    ) {
+    ) -> Result<(), TreeError> {
         for (node, entry, original_size) in entries {
             let metadata = entry
                 .metadata
@@ -1354,25 +1408,25 @@ impl BackgroundTraversal {
             };
             let removed_bytes = original_size - size;
             let removed_entry = u64::from(!counted && !entry.file_type.is_dir());
-            traversal.tree.update(node, |data| {
+            traversal.tree.try_update(node, |data| {
                 data.size -= removed_bytes;
                 if removed_entry != 0 {
                     data.entry_count = Some(0);
                 }
-            });
+            })?;
             let mut ancestor = traversal.tree.parent(node);
             while let Some(index) = ancestor {
-                traversal.tree.update(index, |data| {
+                traversal.tree.try_update(index, |data| {
                     data.size -= removed_bytes;
                     *data.entry_count.get_or_insert(0) -= removed_entry;
-                });
+                })?;
                 ancestor = traversal.tree.parent(index);
             }
         }
+        Ok(())
     }
 
-    /// Integrate `event` into traversal `t` so its information is represented by it.
-    /// This builds the traversal tree from a directory-walk.
+    /// Integrate a directory-walk `event` into the traversal tree.
     ///
     /// Returns
     /// * `Some(true)` if the traversal is finished
@@ -1381,26 +1435,26 @@ impl BackgroundTraversal {
     ///
     /// # Panics
     ///
-    /// Panics if a child entry arrives before its parent, violating the parent-first traversal
-    /// invariant.
+    /// Panics if the event stream violates traversal invariants, such as emitting a child before
+    /// its parent.
     #[expect(
         clippy::too_many_lines,
-        reason = "event integration keeps tree updates atomic"
+        reason = "keep traversal event handling in one place"
     )]
     pub fn integrate_traversal_event(
         &mut self,
         traversal: &mut Traversal,
         event: TraversalEvent,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, TreeError> {
         match event {
             TraversalEvent::DiscoveryProgress { entries, io_errors } => {
                 self.stats.entries_traversed += entries;
                 self.stats.io_errors += io_errors;
-                return self
+                return Ok(self
                     .throttle
                     .as_ref()
                     .is_some_and(|t| t.can_update())
-                    .then_some(false);
+                    .then_some(false));
             }
             TraversalEvent::CandidateStarted(candidate_index, search_root) => {
                 if self.clean_stages.is_empty() {
@@ -1408,7 +1462,7 @@ impl BackgroundTraversal {
                 }
                 self.root_nodes
                     .resize(self.root_nodes.len().max(candidate_index + 1), None);
-                let staging_root = traversal.tree.add_root("", EntryData::default());
+                let staging_root = traversal.tree.try_add_root("", EntryData::default())?;
                 assert!(
                     self.clean_stages
                         .insert(
@@ -1430,30 +1484,31 @@ impl BackgroundTraversal {
                     .expect("candidate has started");
                 let candidate = self.root_nodes[candidate_index];
                 if let Some(candidate) = candidate.filter(|_| accepted && stage.valid) {
-                    self.commit_clean_inodes(traversal, stage.deferred_inodes);
+                    self.commit_clean_inodes(traversal, stage.deferred_inodes)?;
                     traversal.clean_search_roots.insert(
                         traversal
                             .tree
                             .name(candidate)
-                            .expect("staged root exists")
+                            .ok_or(TreeError::InvalidIndex)?
                             .into_owned(),
                         stage.search_root,
                     );
                     traversal.tree.detach(candidate);
-                    traversal
+                    traversal.tree.attach(traversal.root_index, candidate)?;
+                    let data = traversal
                         .tree
-                        .attach(traversal.root_index, candidate)
-                        .expect("staged root is detached");
-                    let data = traversal.tree.data(candidate).expect("staged root exists");
-                    traversal.tree.update(traversal.root_index, |root| {
-                        root.size += data.size;
-                        *root.entry_count.get_or_insert(0) += data.entry_count.unwrap_or(0);
-                    });
+                        .data(candidate)
+                        .ok_or(TreeError::InvalidIndex)?;
+                    traversal.tree.try_add_size_and_entry_count(
+                        traversal.root_index,
+                        data.size,
+                        data.entry_count.unwrap_or(0),
+                    )?;
                 } else {
                     self.root_nodes[candidate_index] = None;
                 }
                 traversal.tree.remove_subtree(stage.staging_root);
-                return Some(false);
+                return Ok(Some(false));
             }
             TraversalEvent::Entry(entry, root_path, device_id, root_idx) => {
                 self.stats.entries_traversed += 1;
@@ -1464,12 +1519,12 @@ impl BackgroundTraversal {
                         stage.valid = false;
                     }
                     self.stats.io_errors += 1;
-                    self.record_error_on_root(traversal, root_idx, &root_path);
-                    return self
+                    self.record_error_on_root(traversal, root_idx, &root_path)?;
+                    return Ok(self
                         .throttle
                         .as_ref()
                         .is_some_and(|t| t.can_update())
-                        .then_some(false);
+                        .then_some(false));
                 };
                 let walk_depth = entry.depth;
                 let name = if !self.skip_root && walk_depth == 0 && self.use_root_path {
@@ -1543,32 +1598,40 @@ impl BackgroundTraversal {
                     if let Some(directory_id) = entry.directory_id {
                         self.set_directory_node(directory_id.index(), index);
                     }
-                    if needs_metadata {
-                        traversal.tree.update(index, |existing| {
-                            existing.size += file_size;
-                            *existing.entry_count.get_or_insert(0) += entry_count;
-                            if has_mtime {
-                                existing.mtime = data.mtime;
-                            }
-                            existing.metadata_io_error |= data.metadata_io_error;
-                            existing.is_dir = data.is_dir;
-                        });
+                    if needs_metadata && let Some(mut existing) = traversal.tree.data(index) {
+                        existing.size = existing
+                            .size
+                            .checked_add(file_size)
+                            .ok_or(TreeError::MetadataOverflow)?;
+                        existing.entry_count = Some(
+                            existing
+                                .entry_count
+                                .unwrap_or(0)
+                                .checked_add(entry_count)
+                                .ok_or(TreeError::MetadataOverflow)?,
+                        );
+                        if has_mtime {
+                            existing.mtime = data.mtime;
+                        }
+                        existing.metadata_io_error |= data.metadata_io_error;
+                        existing.is_dir = data.is_dir;
+                        traversal.tree.try_set_data(index, existing)?;
 
                         let mut ancestor = traversal.tree.parent(index);
                         while let Some(ancestor_index) = ancestor {
                             ancestor = traversal.tree.parent(ancestor_index);
-                            traversal.tree.add_size_and_entry_count(
+                            traversal.tree.try_add_size_and_entry_count(
                                 ancestor_index,
                                 file_size,
                                 entry_count,
-                            );
+                            )?;
                         }
                     }
-                    return self
+                    return Ok(self
                         .throttle
                         .as_ref()
                         .is_some_and(|t| t.can_update())
-                        .then_some(false);
+                        .then_some(false));
                 }
                 let retain_entry = self.retained_depth.is_none_or(|depth| walk_depth <= depth);
 
@@ -1589,7 +1652,7 @@ impl BackgroundTraversal {
                 };
                 let mut retained_node = None;
                 if retain_entry {
-                    let entry_index = traversal.tree.add_child(parent_index, name, data);
+                    let entry_index = traversal.tree.try_add_child(parent_index, name, data)?;
                     retained_node = Some(entry_index);
                     if walk_depth == 0 {
                         self.root_nodes[root_idx] = Some(entry_index);
@@ -1607,7 +1670,7 @@ impl BackgroundTraversal {
                     ancestor = traversal.tree.parent(index);
                     traversal
                         .tree
-                        .add_size_and_entry_count(index, file_size, entry_count);
+                        .try_add_size_and_entry_count(index, file_size, entry_count)?;
                 }
 
                 if is_clean && InodeFilter::needs_tracking(&entry, &self.walk_options) {
@@ -1622,7 +1685,7 @@ impl BackgroundTraversal {
                         ));
                 }
                 if self.throttle.as_ref().is_some_and(|t| t.can_update()) {
-                    return Some(false);
+                    return Ok(Some(false));
                 }
             }
             TraversalEvent::RootError(root_path, root_idx) => {
@@ -1630,23 +1693,23 @@ impl BackgroundTraversal {
                     stage.valid = false;
                 }
                 self.stats.io_errors += 1;
-                self.record_error_on_root(traversal, root_idx, &root_path);
+                self.record_error_on_root(traversal, root_idx, &root_path)?;
             }
             TraversalEvent::Finished => {
                 self.throttle = None;
                 let root_size = traversal
                     .tree
                     .data(self.root_idx)
-                    .expect("traversal root exists")
+                    .ok_or(TreeError::InvalidIndex)?
                     .size;
                 self.nodes_by_directory.clear();
                 self.stats.total_bytes = Some(root_size);
                 self.stats.elapsed = Some(self.stats.start.elapsed());
 
-                return Some(true);
+                return Ok(Some(true));
             }
         }
-        None
+        Ok(None)
     }
 }
 
@@ -2031,14 +2094,17 @@ mod tests {
         .unwrap();
         while background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             != Some(true)
         {}
 
         for index in 0..2 {
-            background.integrate_traversal_event(
-                &mut traversal,
-                TraversalEvent::CandidateStarted(index, directory.path().to_owned()),
-            );
+            background
+                .integrate_traversal_event(
+                    &mut traversal,
+                    TraversalEvent::CandidateStarted(index, directory.path().to_owned()),
+                )
+                .unwrap();
         }
         for (index, path) in paths[..2].iter().enumerate() {
             for entry in crate::walk::walk(
@@ -2048,30 +2114,36 @@ mod tests {
                 options.metadata_options,
                 |_| true,
             ) {
-                background.integrate_traversal_event(
-                    &mut traversal,
-                    TraversalEvent::Entry(
-                        entry.map(TraversalEntry),
-                        Arc::new(path.clone()),
-                        0,
-                        index,
-                    ),
-                );
+                background
+                    .integrate_traversal_event(
+                        &mut traversal,
+                        TraversalEvent::Entry(
+                            entry.map(TraversalEntry),
+                            Arc::new(path.clone()),
+                            0,
+                            index,
+                        ),
+                    )
+                    .unwrap();
             }
         }
         assert_eq!(traversal.tree.children(traversal.root_index).count(), 0);
         background
-            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(1, true));
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(1, true))
+            .unwrap();
         let fast = background.root_nodes[1].unwrap();
         let payload = traversal.tree.children(fast).next().unwrap();
         assert_eq!(traversal.tree.data(payload).unwrap().size, 7);
         assert_eq!(traversal.tree.children(traversal.root_index).count(), 1);
         background
-            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(0, false));
-        background.integrate_traversal_event(
-            &mut traversal,
-            TraversalEvent::CandidateStarted(2, directory.path().to_owned()),
-        );
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(0, false))
+            .unwrap();
+        background
+            .integrate_traversal_event(
+                &mut traversal,
+                TraversalEvent::CandidateStarted(2, directory.path().to_owned()),
+            )
+            .unwrap();
         for entry in crate::walk::walk(
             &paths[2],
             1,
@@ -2079,13 +2151,21 @@ mod tests {
             options.metadata_options,
             |_| true,
         ) {
-            background.integrate_traversal_event(
-                &mut traversal,
-                TraversalEvent::Entry(entry.map(TraversalEntry), Arc::new(paths[2].clone()), 0, 2),
-            );
+            background
+                .integrate_traversal_event(
+                    &mut traversal,
+                    TraversalEvent::Entry(
+                        entry.map(TraversalEntry),
+                        Arc::new(paths[2].clone()),
+                        0,
+                        2,
+                    ),
+                )
+                .unwrap();
         }
         background
-            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(2, true));
+            .integrate_traversal_event(&mut traversal, TraversalEvent::CandidateFinished(2, true))
+            .unwrap();
         let last = background.root_nodes[2].unwrap();
         let payload = traversal.tree.children(last).next().unwrap();
         assert_eq!(
@@ -2127,7 +2207,11 @@ mod tests {
                     .event_rx
                     .recv_timeout(Duration::from_secs(5))
                     .expect("scan makes progress");
-                if background.integrate_traversal_event(&mut traversal, event) == Some(true) {
+                if background
+                    .integrate_traversal_event(&mut traversal, event)
+                    .unwrap()
+                    == Some(true)
+                {
                     break;
                 }
             }
@@ -2166,7 +2250,9 @@ mod tests {
             if matches!(&event, TraversalEvent::CandidateFinished(_, true)) {
                 published += 1;
             }
-            let finished = background.integrate_traversal_event(&mut traversal, event);
+            let finished = background
+                .integrate_traversal_event(&mut traversal, event)
+                .unwrap();
             assert_eq!(
                 traversal.tree.children(traversal.root_index).count(),
                 published,
@@ -2234,6 +2320,7 @@ mod tests {
             .unwrap();
             while background
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                .unwrap()
                 != Some(true)
             {}
             assert_eq!(traversal.clean_search_roots.len(), 2);
@@ -2273,6 +2360,7 @@ mod tests {
             .unwrap();
             while background
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                .unwrap()
                 != Some(true)
             {}
             assert_eq!(traversal.tree.len(), 1, "protect the {marker} worktree");
@@ -2295,6 +2383,7 @@ mod tests {
         .unwrap();
         while background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             != Some(true)
         {}
         assert_eq!(traversal.tree.len(), 1);
@@ -2322,6 +2411,7 @@ mod tests {
         .unwrap();
         while background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             != Some(true)
         {}
         let roots = traversal
@@ -2363,6 +2453,7 @@ mod tests {
         .unwrap();
         while background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             != Some(true)
         {}
         assert_eq!(traversal.tree.len(), 1);
@@ -2402,7 +2493,9 @@ mod tests {
                 TraversalEvent::Entry(Ok(TraversalEntry(entry)), _, _, _)
                     if entry.file_name == "file"
             );
-            background.integrate_traversal_event(&mut traversal, event);
+            background
+                .integrate_traversal_event(&mut traversal, event)
+                .unwrap();
             if is_file {
                 let root_size = traversal.tree.data(traversal.root_index).unwrap().size;
                 assert!(
@@ -2452,6 +2545,7 @@ mod tests {
 
         while !background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             .unwrap_or(false)
         {}
 
@@ -2494,6 +2588,7 @@ mod tests {
 
             while !background
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                .unwrap()
                 .unwrap_or(false)
             {}
 
@@ -2540,18 +2635,22 @@ mod tests {
 
         while background.root_nodes[0].is_none() {
             let event = background.event_rx.recv().unwrap();
-            background.integrate_traversal_event(&mut traversal, event);
+            background
+                .integrate_traversal_event(&mut traversal, event)
+                .unwrap();
         }
         let root = background.root_nodes[0].unwrap();
-        background.integrate_traversal_event(
-            &mut traversal,
-            TraversalEvent::Entry(
-                Err(io::Error::other("unreadable descendant").into()),
-                Arc::new(root_path),
-                0,
-                0,
-            ),
-        );
+        background
+            .integrate_traversal_event(
+                &mut traversal,
+                TraversalEvent::Entry(
+                    Err(io::Error::other("unreadable descendant").into()),
+                    Arc::new(root_path),
+                    0,
+                    0,
+                ),
+            )
+            .unwrap();
 
         assert_eq!(background.stats.io_errors, 1);
         assert!(
@@ -2591,6 +2690,7 @@ mod tests {
 
             while !background
                 .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+                .unwrap()
                 .unwrap_or(false)
             {}
             traversal.tree.data(traversal.root_index).unwrap().size
@@ -2642,6 +2742,7 @@ mod tests {
 
         while !background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             .unwrap_or(false)
         {}
 
@@ -2778,17 +2879,18 @@ mod tests {
 
     #[test]
     fn tree_keeps_sizes_and_times_that_do_not_fit_inline() {
+        let earliest_inline_time = UNIX_EPOCH - Duration::from_nanos(i64::MIN.unsigned_abs());
         let inline_times = [
             UNIX_EPOCH,
             UNIX_EPOCH - Duration::from_nanos(1),
             UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789),
             UNIX_EPOCH + Duration::from_nanos(i64::MAX as u64),
-            UNIX_EPOCH - Duration::from_nanos(i64::MAX as u64),
+            earliest_inline_time,
         ];
         let wide_times = [
             // One microsecond past the limit, as Windows stores times in 100 ns steps.
             UNIX_EPOCH + Duration::from_nanos(i64::MAX as u64) + Duration::from_micros(1),
-            UNIX_EPOCH - Duration::new(i64::MAX as u64 / 1_000_000_000 + 1, 0),
+            earliest_inline_time - Duration::from_micros(1),
             UNIX_EPOCH + Duration::new(10_000_000_000, 999_999_900),
         ];
         let sizes = [0, u128::from(u64::MAX), u128::from(u64::MAX) + 1, u128::MAX];
@@ -2806,10 +2908,20 @@ mod tests {
                 };
                 let index = tree.add_child(root, "entry", data);
                 assert_eq!(tree.data(index), Some(data), "{size} at {mtime:?}");
+                assert_eq!(tree.size(index), Some(size));
+                let node = tree.node(index).unwrap();
+                assert_eq!(node.has_wide_size(), size > u128::from(u64::MAX));
+                if !node.has_wide_size() {
+                    assert_eq!(u128::from(node.size), size);
+                }
+                assert_eq!(
+                    node.flags & FLAG_WIDE_MTIME != 0,
+                    wide_times.contains(&mtime)
+                );
             }
         }
         assert_eq!(
-            tree.wide.len(),
+            tree.wide.as_ref().unwrap().len(),
             inline_times.len() * 2 + wide_times.len() * sizes.len(),
             "only entries that don't fit are stored on the side"
         );
@@ -2819,7 +2931,7 @@ mod tests {
             (inline_times.len() + wide_times.len()) * sizes.len()
         );
         assert!(
-            tree.wide.is_empty(),
+            tree.wide.as_ref().unwrap().is_empty(),
             "removed entries release their wide data"
         );
     }
@@ -2828,26 +2940,91 @@ mod tests {
     fn tree_moves_data_between_inline_and_wide_storage() {
         let mut tree = Tree::new();
         let index = tree.add_root("root", EntryData::default());
+        assert!(tree.wide.is_none());
+        let mtime = UNIX_EPOCH + Duration::from_secs(10_000_000_000);
+        assert!(tree.try_update(index, |entry| entry.mtime = mtime).unwrap());
 
-        assert!(tree.add_size_and_entry_count(index, u128::from(u64::MAX), 1));
-        assert!(tree.wide.is_empty());
-        assert!(tree.add_size_and_entry_count(index, 2, 2));
-        assert_eq!(tree.wide.len(), 1, "overflowing sizes become wide");
+        assert!(
+            tree.try_add_size_and_entry_count(index, u128::from(u64::MAX), 1)
+                .unwrap()
+        );
+        assert!(!tree.node(index).unwrap().has_wide_size());
+        assert_eq!(tree.size(index), Some(u128::from(u64::MAX)));
+        assert!(tree.try_add_size_and_entry_count(index, 2, 2).unwrap());
+        assert!(tree.node(index).unwrap().has_wide_size());
+        assert_eq!(tree.wide.as_ref().unwrap().len(), 1);
         let data = tree.data(index).unwrap();
         assert_eq!(data.size, u128::from(u64::MAX) + 2);
         assert_eq!(data.entry_count, Some(3));
-        assert!(tree.add_size_and_entry_count(index, 1, 1));
+        assert_eq!(data.mtime, mtime);
+        assert!(tree.try_add_size_and_entry_count(index, 1, 1).unwrap());
         assert_eq!(tree.data(index).unwrap().size, u128::from(u64::MAX) + 3);
 
-        assert!(tree.set_data(index, EntryData::default()));
+        assert!(tree.try_set_data(index, EntryData::default()).unwrap());
         assert!(
-            tree.wide.is_empty(),
+            tree.wide.as_ref().unwrap().is_empty(),
             "data that fits again is stored inline"
         );
         assert_eq!(tree.data(index), Some(EntryData::default()));
 
         let missing = TreeIndex::from(100_usize);
-        assert!(!tree.add_size_and_entry_count(missing, 1, 1));
+        assert!(!tree.try_set_data(missing, EntryData::default()).unwrap());
+        assert!(
+            !tree
+                .try_update(missing, |_| panic!("missing entries are not edited"))
+                .unwrap()
+        );
+        assert!(!tree.try_add_size_and_entry_count(missing, 1, 1).unwrap());
+    }
+
+    #[test]
+    fn ancestor_updates_leave_metadata_unchanged_on_overflow() {
+        let mut tree = Tree::new();
+        for (size, count) in [(7, u64::MAX), (u128::MAX, 7)] {
+            let data = EntryData {
+                size,
+                entry_count: Some(count),
+                ..EntryData::default()
+            };
+            let index = tree.add_root("root", data);
+            assert!(matches!(
+                tree.try_add_size_and_entry_count(index, 1, 1),
+                Err(TreeError::MetadataOverflow)
+            ));
+            assert_eq!(tree.data(index), Some(data));
+        }
+    }
+
+    #[test]
+    fn ancestor_updates_propagate_overflow_to_traversal_callers() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut traversal = Traversal::new();
+        traversal
+            .tree
+            .try_update(traversal.root_index, |root| {
+                root.entry_count = Some(u64::MAX);
+            })
+            .unwrap();
+        let mut background = BackgroundTraversal::start(
+            traversal.root_index,
+            &clean_walk_options(),
+            vec![directory.path().to_owned()],
+            None,
+            false,
+            true,
+        )
+        .unwrap();
+        loop {
+            let event = background.event_rx.recv().unwrap();
+            match background.integrate_traversal_event(&mut traversal, event) {
+                Err(error) => {
+                    assert!(matches!(error, TreeError::MetadataOverflow));
+                    break;
+                }
+                Ok(Some(true)) => panic!("the traversal finished without reporting overflow"),
+                Ok(_) => {}
+            }
+        }
     }
 
     #[cfg(target_pointer_width = "64")]

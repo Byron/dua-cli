@@ -929,10 +929,13 @@ mod mark_pane_tests {
             .tree
             .add_child(root, "replacement", EntryData::default());
         assert_eq!(replacement, stale, "exercise a recycled tree index");
-        view.traversal.tree.update(survivor, |data| {
-            data.size = 28;
-            data.entry_count = Some(1);
-        });
+        view.traversal
+            .tree
+            .try_update(survivor, |data| {
+                data.size = 28;
+                data.entry_count = Some(1);
+            })
+            .unwrap();
 
         pane.reconcile(&view);
         assert_eq!(pane.marked.len(), 1);

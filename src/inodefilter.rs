@@ -37,13 +37,15 @@ impl InodeFilter {
             }
         }
         #[cfg(target_os = "macos")]
-        if !options.apparent_size
-            && options.metadata_options.apfs_clone_metadata
-            && metadata.clone_id().is_some()
         {
-            return true;
+            !options.apparent_size
+                && options.metadata_options.apfs_clone_metadata
+                && metadata.clone_id().is_some()
         }
-        false
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
     }
 
     #[cfg(unix)]

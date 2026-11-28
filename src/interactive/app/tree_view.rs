@@ -1,6 +1,6 @@
 use super::{EntryDataBundle, SortMode, sorted_entries};
 use crate::interactive::{EntryCheck, path_of};
-use dua::traverse::{Traversal, Tree, TreeIndex};
+use dua::traverse::{Traversal, Tree, TreeError, TreeIndex};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -132,7 +132,7 @@ impl TreeView<'_> {
             .sum()
     }
 
-    pub fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) {
+    pub fn recompute_sizes_recursively(&mut self, mut index: TreeIndex) -> Result<(), TreeError> {
         loop {
             let (size_of_children, item_count) = self
                 .tree()
@@ -145,13 +145,13 @@ impl TreeView<'_> {
                 .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
                 .unwrap_or_default();
 
-            self.traversal.tree.update(index, |entry| {
+            self.traversal.tree.try_update(index, |entry| {
                 entry.size = size_of_children;
                 entry.entry_count = Some(item_count);
-            });
+            })?;
 
             match self.fs_parent_of(index) {
-                None => break,
+                None => return Ok(()),
                 Some(parent) => index = parent,
             }
         }

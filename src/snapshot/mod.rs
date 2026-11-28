@@ -473,10 +473,11 @@ pub fn read(reader: impl Read) -> Result<Snapshot> {
 
     traversal
         .tree
-        .update(traversal.root_index, |synthetic_root| {
+        .try_update(traversal.root_index, |synthetic_root| {
             synthetic_root.size = summary.total_size;
             synthetic_root.entry_count = (!roots.is_empty()).then_some(summary.total_entries);
-        });
+        })
+        .map_err(|err| anyhow!("could not update snapshot root: {err}"))?;
 
     Ok(Snapshot { traversal, roots })
 }
