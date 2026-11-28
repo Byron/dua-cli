@@ -134,7 +134,7 @@ fn deletion_ticks_update_deleted_bytes_without_input_and_keep_failed_marks() -> 
     while let Some(index) = ancestor {
         app.traversal
             .tree
-            .update(index, |entry| entry.size = entry.size - scanned + 81);
+            .try_update(index, |entry| entry.size = entry.size - scanned + 81)?;
         ancestor = app.traversal.tree.parent(index);
     }
     app.state.stats.total_bytes = app.state.stats.total_bytes.map(|size| size - scanned + 81);

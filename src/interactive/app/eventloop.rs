@@ -255,7 +255,7 @@ impl AppState {
                 )
                 .expect("root exists");
             tree.tree_mut()
-                .update(old_root, |entry| entry.is_dir = true);
+                .try_update(old_root, |entry| entry.is_dir = true)?;
             let children = tree.tree().children(old_root).collect::<Vec<_>>();
             for child in children {
                 let name = tree
@@ -275,7 +275,7 @@ impl AppState {
                 .rename(old_root, &parent)
                 .expect("root exists");
             tree.tree_mut()
-                .update(old_root, |entry| entry.is_dir = true);
+                .try_update(old_root, |entry| entry.is_dir = true)?;
             for (path, index) in &preexisting {
                 tree.tree_mut()
                     .rename(
@@ -287,7 +287,7 @@ impl AppState {
             }
         }
 
-        tree.recompute_sizes_recursively(new_root);
+        tree.recompute_sizes_recursively(new_root)?;
         tree.traversal.root_index = new_root;
         self.navigation.tree_root = new_root;
         self.navigation.view_root = new_root;
@@ -329,9 +329,14 @@ impl AppState {
         Ok(())
     }
 
-    fn recompute_sizes_recursively(&mut self, traversal: &mut Traversal, node_index: TreeIndex) {
+    fn recompute_sizes_recursively(
+        &mut self,
+        traversal: &mut Traversal,
+        node_index: TreeIndex,
+    ) -> Result<()> {
         let mut tree_view = self.tree_view(traversal);
-        tree_view.recompute_sizes_recursively(node_index);
+        tree_view.recompute_sizes_recursively(node_index)?;
+        Ok(())
     }
 
     fn refresh_screen<B>(
@@ -517,7 +522,7 @@ impl AppState {
                 recv(&active_traversal.event_rx) -> event => {
                     let event = event.context("Filesystem traversal stopped unexpectedly")?;
 
-                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event) {
+                    if let Some(is_finished) = active_traversal.integrate_traversal_event(traversal, event)? {
                         self.stats = active_traversal.stats;
                         let previous_selection = previous_selection.clone();
                         let previous_cleanup_view = previous_cleanup_view.clone();
@@ -534,7 +539,7 @@ impl AppState {
                                         )
                                 })
                                 .transpose()?;
-                            self.recompute_sizes_recursively(traversal, root_index);
+                            self.recompute_sizes_recursively(traversal, root_index)?;
                             if let Some((path, roots, compression_level)) = export {
                                 write_snapshot_atomically(
                                     &path,
@@ -940,7 +945,7 @@ impl AppState {
         self.navigation.bookmarks.clear();
         tree.traversal
             .remove_children(parent_index, &indices.into_iter().collect());
-        tree.recompute_sizes_recursively(parent_index);
+        tree.recompute_sizes_recursively(parent_index)?;
         if let Some(navigation) = self.glob_navigation.as_mut() {
             navigation.bookmarks.clear();
             navigation.matches = navigation

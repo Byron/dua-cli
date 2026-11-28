@@ -295,12 +295,12 @@ impl AppState {
             deletion.entries_removed += tree.traversal.remove_children(parent, &children);
         }
         for (index, (bytes, count)) in deltas {
-            tree.tree_mut().update(index, |entry| {
+            tree.tree_mut().try_update(index, |entry| {
                 entry.size = entry.size.saturating_sub(bytes);
                 if let Some(entries) = &mut entry.entry_count {
                     *entries = entries.saturating_sub(count);
                 }
-            });
+            })?;
         }
         if let Some(pane) = &mut window.mark {
             pane.reconcile(&tree);

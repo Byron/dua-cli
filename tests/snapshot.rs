@@ -432,6 +432,35 @@ fn writer_rejects_duplicate_and_non_root_inputs() {
 }
 
 #[test]
+fn synthetic_root_total_can_exceed_u64() {
+    let mut traversal = Traversal::new();
+    let root = traversal.root_index;
+    let first = add(
+        &mut traversal,
+        root,
+        "first",
+        EntryData {
+            size: u128::from(u64::MAX),
+            ..EntryData::default()
+        },
+    );
+    let second = add(
+        &mut traversal,
+        root,
+        "second",
+        EntryData {
+            size: 1,
+            ..EntryData::default()
+        },
+    );
+    let snapshot = read(Cursor::new(encoded(&traversal, &[first, second]))).unwrap();
+    let root = snapshot.traversal.root_index;
+    let data = snapshot.traversal.tree.data(root).unwrap();
+    assert_eq!(data.size, u128::from(u64::MAX) + 1);
+    assert_eq!(data.entry_count, Some(2));
+}
+
+#[test]
 fn rejects_synthetic_root_overflow() {
     for (first, second) in [
         (

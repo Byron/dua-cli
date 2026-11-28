@@ -53,7 +53,7 @@ pub fn stacks(
             .data(traversal.root_index)
             .context("traversal root is missing")?
             .size;
-        let finished = background.integrate_traversal_event(&mut traversal, event) == Some(true);
+        let finished = background.integrate_traversal_event(&mut traversal, event)? == Some(true);
         let own_size = traversal
             .tree
             .data(traversal.root_index)
@@ -357,6 +357,7 @@ mod tests {
         .unwrap();
         while background
             .integrate_traversal_event(&mut traversal, background.event_rx.recv().unwrap())
+            .unwrap()
             != Some(true)
         {}
 

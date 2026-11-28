@@ -52,7 +52,7 @@ pub fn aggregate_tree(
 
     while let Ok(event) = background.event_rx.recv() {
         let finished = background
-            .integrate_traversal_event(&mut traversal, event)
+            .integrate_traversal_event(&mut traversal, event)?
             .unwrap_or(false);
         progress.update(background.stats.entries_traversed);
         if finished {
@@ -175,15 +175,11 @@ fn write_aggregate_tree(
     num_errors: u64,
 ) -> io::Result<()> {
     if sort_by_size_in_bytes {
-        roots.sort_by_key(|root| traversal.tree.data(*root).map(|entry| entry.size));
+        roots.sort_by_key(|root| traversal.tree.size(*root));
     }
     let mut total = 0u128;
     for root in roots.iter() {
-        total += traversal
-            .tree
-            .data(*root)
-            .expect("traversal roots exist")
-            .size;
+        total += traversal.tree.size(*root).expect("traversal roots exist");
         write_subtree(
             out,
             &traversal.tree,
@@ -258,7 +254,7 @@ fn sorted_children(tree: &Tree, index: TreeIndex, sort_by_size_in_bytes: bool) -
     // Children are linked newest-first, so undo that to recover discovery order.
     children.reverse();
     if sort_by_size_in_bytes {
-        children.sort_by_key(|child| tree.data(*child).map(|entry| entry.size));
+        children.sort_by_key(|child| tree.size(*child));
     }
     children
 }
@@ -481,6 +477,7 @@ mod tests {
             "small",
             EntryData {
                 size: 2,
+                mtime: std::time::UNIX_EPOCH + std::time::Duration::from_secs(10_000_000_000),
                 ..EntryData::default()
             },
         );
